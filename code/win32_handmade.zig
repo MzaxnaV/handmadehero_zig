@@ -51,7 +51,7 @@ fn Win32LoadXinput() void {
 
         if (win32.GetProcAddress(XInputLibrary, "XInputSetState")) |fun| {
             // NO TYPESAFETY TO WARN YOU, BEWARE :D
-            XInputSetState = @ptrCast(@TypeOf(XInputSetState), fun); 
+            XInputSetState = @ptrCast(@TypeOf(XInputSetState), fun);
         }
     }
 }
@@ -68,9 +68,6 @@ fn Win32GetWindowDimenstion(windowHandle: win32.HWND) win32_window_dimension {
 }
 
 fn RenderWeirdGradient(buffer: *win32_offscreen_buffer, xOffset: i32, yOffset: i32) void {
-    // var width = bitmapWidth;
-    // var height = bitmapHeight;
-
     var row = @ptrCast([*]u8, buffer.memory);
 
     var y: u32 = 0;
@@ -139,7 +136,7 @@ fn Win32WindowProc(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM,
     switch (message) {
         win32.WM_CLOSE => globalRunning = false, // TODO: handle this with a message to a user?
 
-        win32.WM_ACTIVATEAPP => win32.OutputDebugStringA("WM_ACTIVATEAPP\n"),
+        win32.WM_ACTIVATEAPP => win32.OutputDebugStringW(win32.L("WM_ACTIVATEAPP\n")),
 
         win32.WM_DESTROY => globalRunning = false, // TODO: handle this as an error = recreate window?
 
@@ -182,7 +179,6 @@ fn Win32WindowProc(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM,
 }
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
-    _ = hInstance;
     Win32LoadXinput();
 
     Win32ResizeDIBSection(&globalBackBuffer, 1280, 720);
@@ -214,61 +210,51 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             globalRunning = false;
                         }
 
-                        // TODO: should we poll this more frequently
-                        var controllerIndex: std.os.windows.DWORD = 0;
-                        while (controllerIndex < win32.XUSER_MAX_COUNT) : (controllerIndex += 1) {
-                            var controllerState = win32.XINPUT_STATE{ .dwPacketNumber = 0, .Gamepad = win32.XINPUT_GAMEPAD{
-                                .wButtons = 0,
-                                .bLeftTrigger = 0,
-                                .bRightTrigger = 0,
-                                .sThumbLX = 0,
-                                .sThumbLY = 0,
-                                .sThumbRX = 0,
-                                .sThumbRY = 0,
-                            } };
-                            if (XInputGetState(controllerIndex, &controllerState) == @enumToInt(win32.ERROR_SUCCESS)) {
-                                // This controller is plugged in
-                                // TODO: see if ControllerState.dwPacketNumber increments too rapidly
-                                const pad = &controllerState.Gamepad;
-                                // const up = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_UP);
-                                // const down = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_DOWN);
-                                // const left = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_LEFT);
-                                // const right = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_RIGHT);
-                                // const start = (pad.wButtons & win32.XINPUT_GAMEPAD_START);
-                                // const back = (pad.wButtons & win32.XINPUT_GAMEPAD_BACK);
-                                // const leftShoulder = (pad.wButtons & win32.XINPUT_GAMEPAD_LEFT_SHOULDER);
-                                // const rightShoulder = (pad.wButtons & win32.XINPUT_GAMEPAD_RIGHT_SHOULDER);
-                                const aButton = (pad.wButtons & win32.XINPUT_GAMEPAD_A);
-                                // const bButton = (pad.wButtons & win32.XINPUT_GAMEPAD_B);
-                                // const xButton = (pad.wButtons & win32.XINPUT_GAMEPAD_X);
-                                // const yButton = (pad.wButtons & win32.XINPUT_GAMEPAD_Y);
-
-                                // const stickX = pad.sThumbLX;
-                                // const stickY = pad.sThumbLY;
-
-                                if (aButton != 0) {
-                                    yOffset += 2;
-                                }
-                            } else {
-                                // This controller is not available
-                            }
-                        }
-                        var vibration = win32.XINPUT_VIBRATION{
-                            .wLeftMotorSpeed = 60000,
-                            .wRightMotorSpeed = 60000,
-                        };
-
-                        _ = XInputSetState(0, &vibration);
-
                         _ = win32.TranslateMessage(&message);
                         _ = win32.DispatchMessage(&message);
                     }
+
+                    // TODO: should we poll this more frequently
+                    var controllerIndex: std.os.windows.DWORD = 0;
+                    while (controllerIndex < win32.XUSER_MAX_COUNT) : (controllerIndex += 1) {
+                        var controllerState: win32.XINPUT_STATE = undefined;
+                        if (XInputGetState(controllerIndex, &controllerState) == @enumToInt(win32.ERROR_SUCCESS)) {
+                            // This controller is plugged in
+                            // TODO: see if ControllerState.dwPacketNumber increments too rapidly
+                            const pad = &controllerState.Gamepad;
+                            // const up = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_UP);
+                            // const down = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_DOWN);
+                            // const left = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_LEFT);
+                            // const right = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_RIGHT);
+                            // const start = (pad.wButtons & win32.XINPUT_GAMEPAD_START);
+                            // const back = (pad.wButtons & win32.XINPUT_GAMEPAD_BACK);
+                            // const leftShoulder = (pad.wButtons & win32.XINPUT_GAMEPAD_LEFT_SHOULDER);
+                            // const rightShoulder = (pad.wButtons & win32.XINPUT_GAMEPAD_RIGHT_SHOULDER);
+                            // const aButton = (pad.wButtons & win32.XINPUT_GAMEPAD_A);
+                            // const bButton = (pad.wButtons & win32.XINPUT_GAMEPAD_B);
+                            // const xButton = (pad.wButtons & win32.XINPUT_GAMEPAD_X);
+                            // const yButton = (pad.wButtons & win32.XINPUT_GAMEPAD_Y);
+
+                            const stickX = pad.sThumbLX;
+                            const stickY = pad.sThumbLY;
+
+                            xOffset += stickX >> 12;
+                            yOffset += stickY >> 12;
+                        } else {
+                            // This controller is not available
+                        }
+                    }
+                    // var vibration = win32.XINPUT_VIBRATION{
+                    //     .wLeftMotorSpeed = 60000,
+                    //     .wRightMotorSpeed = 60000,
+                    // };
+
+                    // _ = XInputSetState(0, &vibration);
 
                     RenderWeirdGradient(&globalBackBuffer, xOffset, yOffset);
 
                     const dimension = Win32GetWindowDimenstion(windowHandle);
                     Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
-                    xOffset += 1;
                 }
             }
         } else {
