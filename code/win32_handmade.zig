@@ -2,10 +2,13 @@ const std = @import("std");
 const WINAPI = std.os.windows.WINAPI;
 
 const win32 = struct {
-    usingnamespace @import("win32").graphics.gdi;
     usingnamespace @import("win32").foundation;
+    usingnamespace @import("win32").graphics.gdi;
+    usingnamespace @import("win32").media.audio;
+    usingnamespace @import("win32").media.audio.direct_sound;
     usingnamespace @import("win32").system.diagnostics.debug;
     usingnamespace @import("win32").system.memory;
+    usingnamespace @import("win32").system.com;
     usingnamespace @import("win32").system.library_loader;
     usingnamespace @import("win32").ui.input.keyboard_and_mouse;
     usingnamespace @import("win32").ui.input.xbox_controller;
@@ -44,15 +47,98 @@ var XInputSetState: fn (u32, ?*win32.XINPUT_VIBRATION) callconv(WINAPI) isize = 
 
 fn Win32LoadXinput() void {
     if (win32.LoadLibraryW(win32.L("xinput1_4.dll"))) |XInputLibrary| {
-        if (win32.GetProcAddress(XInputLibrary, "XInputGetState")) |fun| {
+        if (win32.GetProcAddress(XInputLibrary, "XInputGetState")) |fp| {
             // NO TYPESAFETY TO WARN YOU, BEWARE :D
-            XInputGetState = @ptrCast(@TypeOf(XInputGetState), fun);
+            XInputGetState = @ptrCast(@TypeOf(XInputGetState), fp);
         }
 
-        if (win32.GetProcAddress(XInputLibrary, "XInputSetState")) |fun| {
+        if (win32.GetProcAddress(XInputLibrary, "XInputSetState")) |fp| {
             // NO TYPESAFETY TO WARN YOU, BEWARE :D
-            XInputSetState = @ptrCast(@TypeOf(XInputSetState), fun);
+            XInputSetState = @ptrCast(@TypeOf(XInputSetState), fp);
         }
+    } else {
+        // TODO: diagnostic
+    }
+}
+
+var DirectSoundCreate: fn (?*const win32.Guid, ?*?*win32.IDirectSound, ?*win32.IUnknown) callconv(WINAPI) i32 = undefined;
+
+fn Win32LoadDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) void {
+    if (win32.LoadLibraryW(win32.L("dsound.dll"))) |DSoundLibrary| {
+        if (win32.GetProcAddress(DSoundLibrary, "DirectSoundCreate")) |fp| {
+            DirectSoundCreate = @ptrCast(@TypeOf(DirectSoundCreate), fp);
+
+            var dS: ?*win32.IDirectSound = undefined;
+            if (win32.SUCCEEDED(DirectSoundCreate(null, &dS, null))) {
+                if (dS) |directSound| {
+                    var waveFormat = win32.WAVEFORMATEX{
+                        .wFormatTag = win32.WAVE_FORMAT_PCM,
+                        .nChannels = 2,
+                        .nSamplesPerSec = samplesPerSecond,
+                        .nAvgBytesPerSec = undefined,
+                        .nBlockAlign = undefined,
+                        .wBitsPerSample = 16,
+                        .cbSize = 0,
+                    };
+                    waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
+                    waveFormat.nBlockAlign = (waveFormat.nChannels * waveFormat.wBitsPerSample) / 8;
+
+                    const GUID_NULL = win32.Guid.initString("00000000-0000-0000-0000-000000000000");
+                    if (win32.SUCCEEDED(directSound.vtable.SetCooperativeLevel(directSound, window, win32.DSSCL_PRIORITY))) {
+                        var bufferDescription = win32.DSBUFFERDESC{ // https://docs.microsoft.com/en-us/previous-versions/windows/desktop/ee416820(v=vs.85)#remarks
+                            .dwSize = @sizeOf(win32.DSBUFFERDESC),
+                            .dwFlags = win32.DSBCAPS_PRIMARYBUFFER,
+                            .dwBufferBytes = 0,
+                            .dwReserved = 0,
+                            .lpwfxFormat = null,
+                            .guid3DAlgorithm = GUID_NULL,
+                        };
+
+                        var pB: ?*win32.IDirectSoundBuffer = undefined;
+                        if (win32.SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &pB, null))) {
+                            if (pB) |primaryBuffer| {
+                                if (win32.SUCCEEDED(primaryBuffer.vtable.SetFormat(primaryBuffer, &waveFormat))) {
+                                    // we have finally set the format
+                                    win32.OutputDebugStringW(win32.L("Primary buffer format was set\n"));
+                                } else {
+                                    // TODO: diagnostic
+                                }
+                            }
+                        } else {
+                            // TODO: diagnostic
+                        }
+                    } else {
+                        // TODO: diagnostic
+                    }
+
+                    // DSBCAPS_GETCURRENTPOSITION2?
+                    var bufferDescription = win32.DSBUFFERDESC{ // https://docs.microsoft.com/en-us/previous-versions/windows/desktop/ee416820(v=vs.85)#remarks
+                        .dwSize = @sizeOf(win32.DSBUFFERDESC),
+                        .dwFlags = 0,
+                        .dwBufferBytes = bufferSize,
+                        .dwReserved = 0,
+                        .lpwfxFormat = &waveFormat,
+                        .guid3DAlgorithm = GUID_NULL,
+                    };
+
+                    // Create a secondary buffer
+                    var sB: ?*win32.IDirectSoundBuffer = undefined;
+                    if (win32.SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &sB, null))) {
+                        if (sB) |secondaryBuffer| {
+                            _ = secondaryBuffer;
+                            win32.OutputDebugStringW(win32.L("Secondary buffer created successfully\n"));
+                        }
+                    } else {
+                        // TODO: diagnostic
+                    }
+                }
+            } else {
+
+                // TODO: diagnostic
+            }
+        }
+    } else {
+        // TODO: diagnostic
     }
 }
 
@@ -106,7 +192,7 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: i32, height: i3
     buffer.info.bmiHeader.biCompression = win32.BI_RGB;
 
     const bitmapMemorySize = @intCast(usize, bytesPerPixel * (buffer.width * buffer.height));
-    buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, win32.MEM_COMMIT, win32.PAGE_READWRITE);
+    buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT)), win32.PAGE_READWRITE);
     buffer.pitch = @intCast(usize, width) * bytesPerPixel;
 
     // TODO: probably clear this to black
@@ -161,6 +247,11 @@ fn Win32WindowProc(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM,
                     else => {},
                 }
             }
+
+            var altKeyWasDown = ((lParam & (1 << 29)) != 0);
+            if ((vkCode == win32.VK_F4) and altKeyWasDown) {
+                globalRunning = false;
+            }
         },
 
         win32.WM_PAINT => {
@@ -201,6 +292,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             if (win32.GetDC(windowHandle)) |deviceContext| {
                 var xOffset: i32 = 0;
                 var yOffset: i32 = 0;
+
+                Win32LoadDSound(windowHandle, 48000, 48000 * @sizeOf(i16) * 2);
 
                 globalRunning = true;
                 while (globalRunning) {
