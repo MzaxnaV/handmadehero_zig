@@ -5,9 +5,10 @@ const win32 = struct {
     usingnamespace @import("win32").media.audio;
     usingnamespace @import("win32").media.audio.direct_sound;
     usingnamespace @import("win32").system.diagnostics.debug;
-    usingnamespace @import("win32").system.memory;
     usingnamespace @import("win32").system.com;
     usingnamespace @import("win32").system.library_loader;
+    usingnamespace @import("win32").system.memory;
+    usingnamespace @import("win32").system.performance;
     usingnamespace @import("win32").ui.input.keyboard_and_mouse;
     usingnamespace @import("win32").ui.input.xbox_controller;
     usingnamespace @import("win32").ui.windows_and_messaging;
@@ -291,7 +292,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
             const region1SampleCount = region1Size / soundOutput.bytesPerSample;
             var sampleIndex: DWORD = 0;
             while (sampleIndex < region1SampleCount) : (sampleIndex += 1) {
-                const sineValue = std.math.sin(soundOutput.tSine);
+                const sineValue:f32 = std.math.sin(soundOutput.tSine);
                 const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, soundOutput.toneVolume));
                 sampleOut.* = sampleValue;
                 sampleOut += 1;
@@ -308,7 +309,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
             const region2SampleCount = region2Size / soundOutput.bytesPerSample;
             var sampleIndex: DWORD = 0;
             while (sampleIndex < region2SampleCount) : (sampleIndex += 1) {
-                const sineValue = std.math.sin(soundOutput.tSine);
+                const sineValue:f32 = std.math.sin(soundOutput.tSine);
                 const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, soundOutput.toneVolume));
                 sampleOut.* = sampleValue;
                 sampleOut += 1;
@@ -324,7 +325,28 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
     }
 }
 
+pub extern "USER32" fn wsprintfW(
+    param0: ?win32.PWSTR,
+    param1: ?[*:0]const u16,
+    ...
+) callconv(@import("std").os.windows.WINAPI) i32;
+
+inline fn rdtsc() u64 {
+    var low: u32 = undefined;
+    var high: u32 = undefined;
+
+    low = asm ("rdtsc" : [low] "={eax}" (->u32));
+    high = asm ("movl %%edx, %[high]" : [high] "=r" (->u32));
+
+    return (@intCast(u64, (high)) << 32) | @intCast(u64, low);
+}
+
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
+
+    var perfCountFrequencyResult : win32.LARGE_INTEGER = undefined;
+    _ = win32.QueryPerformanceCounter(&perfCountFrequencyResult);
+    var perfCountFrequency = perfCountFrequencyResult.QuadPart;
+
     Win32LoadXinput();
 
     Win32ResizeDIBSection(&globalBackBuffer, 1280, 720);
@@ -356,9 +378,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                 Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.secondaryBufferSize);
                 Win32FillSoundBuffer(&soundOutput, 0, soundOutput.latencySampleCount * soundOutput.bytesPerSample);
-                var soundIsPlaying: bool = false;
+                _ = globalSecondaryBuffer.vtable.Play(globalSecondaryBuffer, 0, 0, win32.DSBPLAY_LOOPING);
 
                 globalRunning = true;
+
+                var lastCounter: win32.LARGE_INTEGER = undefined;
+                _ = win32.QueryPerformanceCounter(&lastCounter);
+                var lastCycleCount = rdtsc();
+
                 while (globalRunning) {
                     var message: win32.MSG = undefined;
                     while (win32.PeekMessage(&message, null, 0, 0, win32.PM_REMOVE) != 0) {
@@ -430,13 +457,34 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite);
                     }
 
-                    if (!soundIsPlaying) {
-                        _ = globalSecondaryBuffer.vtable.Play(globalSecondaryBuffer, 0, 0, win32.DSBPLAY_LOOPING);
-                        soundIsPlaying = true;
-                    }
-
                     const dimension = Win32GetWindowDimenstion(windowHandle);
                     Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
+
+                    var endCycleCount = rdtsc();
+                    var endCounter: win32.LARGE_INTEGER = undefined;
+                    _ = win32.QueryPerformanceCounter(&endCounter);
+
+                    // TODO: display the value here
+                    const cyclesElapsed = endCycleCount - lastCycleCount;
+                    const counterElapsed = endCounter.QuadPart - lastCounter.QuadPart;
+                    
+                    const msPerFrame = @divTrunc(1000 *counterElapsed, perfCountFrequency);
+                    const fps = @divTrunc(perfCountFrequency, counterElapsed);
+                    const mcpf = cyclesElapsed / (1000 * 1000); 
+
+                    const msPerFrame_f = @intToFloat(f32, 1000 * counterElapsed)/ @intToFloat(f32, perfCountFrequency);
+                    const fps_f = @intToFloat(f32, perfCountFrequency) / @intToFloat(f32, counterElapsed);
+                    const mcpf_f = @intToFloat(f32, cyclesElapsed) / (1000.0 * 1000.0);
+
+                    var buffer: [256]u16 = undefined;
+
+                    std.debug.print("{} ms/f, {} FPS, {} Mc/f\n", .{ msPerFrame_f, fps_f, mcpf_f});
+                    _ = wsprintfW(&buffer, win32.L("%dms/f, %dFPS, %dMc/f\n"), msPerFrame, fps, mcpf);
+                    _ = win32.OutputDebugStringW(&buffer);
+
+                    lastCounter = endCounter;
+                    lastCycleCount = endCycleCount;
+
                 }
             }
         } else {
