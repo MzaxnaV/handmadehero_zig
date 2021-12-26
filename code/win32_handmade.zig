@@ -292,7 +292,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
             const region1SampleCount = region1Size / soundOutput.bytesPerSample;
             var sampleIndex: DWORD = 0;
             while (sampleIndex < region1SampleCount) : (sampleIndex += 1) {
-                const sineValue:f32 = std.math.sin(soundOutput.tSine);
+                const sineValue = std.math.sin(soundOutput.tSine);
                 const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, soundOutput.toneVolume));
                 sampleOut.* = sampleValue;
                 sampleOut += 1;
@@ -309,7 +309,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
             const region2SampleCount = region2Size / soundOutput.bytesPerSample;
             var sampleIndex: DWORD = 0;
             while (sampleIndex < region2SampleCount) : (sampleIndex += 1) {
-                const sineValue:f32 = std.math.sin(soundOutput.tSine);
+                const sineValue = std.math.sin(soundOutput.tSine);
                 const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, soundOutput.toneVolume));
                 sampleOut.* = sampleValue;
                 sampleOut += 1;
@@ -329,7 +329,7 @@ pub extern "USER32" fn wsprintfW(
     param0: ?win32.PWSTR,
     param1: ?[*:0]const u16,
     ...
-) callconv(@import("std").os.windows.WINAPI) i32;
+) callconv(WINAPI) i32;
 
 inline fn rdtsc() u64 {
     var low: u32 = undefined;
@@ -467,7 +467,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     // TODO: display the value here
                     const cyclesElapsed = endCycleCount - lastCycleCount;
                     const counterElapsed = endCounter.QuadPart - lastCounter.QuadPart;
-                    
+
                     const msPerFrame = @divTrunc(1000 *counterElapsed, perfCountFrequency);
                     const fps = @divTrunc(perfCountFrequency, counterElapsed);
                     const mcpf = cyclesElapsed / (1000 * 1000); 
