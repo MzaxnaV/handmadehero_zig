@@ -17,7 +17,7 @@ const win32 = struct {
     usingnamespace @import("win32").zig;
 };
 
-const win32_offscreen_buffer = struct { info: win32.BITMAPINFO, memory: ?*c_void, width: i32, height: i32, pitch: usize };
+const win32_offscreen_buffer = struct { info: win32.BITMAPINFO, memory: ?*anyopaque, width: i32, height: i32, pitch: usize };
 
 const win32_window_dimension = struct { width: i32, height: i32 };
 
@@ -374,9 +374,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             bytesToWrite = playCursor - byteToLock;
                         }
 
-                        var region1: ?*c_void = undefined;
+                        var region1: ?*anyopaque = undefined;
                         var region1Size: std.os.windows.DWORD = undefined;
-                        var region2: ?*c_void = undefined;
+                        var region2: ?*anyopaque = undefined;
                         var region2Size: std.os.windows.DWORD = undefined;
 
                         if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
