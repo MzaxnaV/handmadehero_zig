@@ -332,19 +332,22 @@ pub extern "USER32" fn wsprintfW(
 ) callconv(WINAPI) i32;
 
 inline fn rdtsc() u64 {
-    var low: u32 = undefined;
-    var high: u32 = undefined;
+    var low: u64 = 0;
+    var high: u64 = 0;
 
-    low = asm ("rdtsc" : [low] "={eax}" (->u32));
-    high = asm ("movl %%edx, %[high]" : [high] "=r" (->u32));
+    asm volatile(
+        "rdtsc"
+        : [low] "={eax}" (low),
+        [high] "={edx}" (high)        
+    );
 
-    return (@intCast(u64, (high)) << 32) | @intCast(u64, low);
+    return (@as(u64, high) << 32) | @as(u64, low);
 }
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
 
     var perfCountFrequencyResult : win32.LARGE_INTEGER = undefined;
-    _ = win32.QueryPerformanceCounter(&perfCountFrequencyResult);
+    _ = win32.QueryPerformanceFrequency(&perfCountFrequencyResult);
     var perfCountFrequency = perfCountFrequencyResult.QuadPart;
 
     Win32LoadXinput();
@@ -468,7 +471,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     const cyclesElapsed = endCycleCount - lastCycleCount;
                     const counterElapsed = endCounter.QuadPart - lastCounter.QuadPart;
 
-                    const msPerFrame = @divTrunc(1000 *counterElapsed, perfCountFrequency);
+                    const msPerFrame = @divTrunc(1000 * counterElapsed, perfCountFrequency);
                     const fps = @divTrunc(perfCountFrequency, counterElapsed);
                     const mcpf = cyclesElapsed / (1000 * 1000); 
 
@@ -478,8 +481,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                     var buffer: [256]u16 = undefined;
 
-                    std.debug.print("{} ms/f, {} FPS, {} Mc/f\n", .{ msPerFrame_f, fps_f, mcpf_f});
-                    _ = wsprintfW(&buffer, win32.L("%dms/f, %dFPS, %dMc/f\n"), msPerFrame, fps, mcpf);
+                    std.debug.print("{d: >6.2} ms/f, {d: >6.2} FPS, {d: >6.2} Mc/f : {d: ^6.2}GHz\n", .{ msPerFrame_f, fps_f, mcpf_f, (fps_f * mcpf_f) / 1000.0});
+                    _ = wsprintfW(&buffer, win32.L("%d: ms/f, %d: FPS, %d: Mc/f\n"), msPerFrame, fps, mcpf);
                     _ = win32.OutputDebugStringW(&buffer);
 
                     lastCounter = endCounter;

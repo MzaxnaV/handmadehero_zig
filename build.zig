@@ -1,9 +1,11 @@
 const std = @import("std");
 
 pub fn build(b: *std.build.Builder) void {
-    var exe = b.addExecutable("win32_handmade", "code/win32_handmade.zig");
-    exe.setTarget(b.standardTargetOptions(.{}));
-    exe.setBuildMode(b.standardReleaseOptions());
+    const mode = b.standardReleaseOptions();
+    const target = b.standardTargetOptions(.{});
+    const exe = b.addExecutable("win32_handmade", "code/win32_handmade.zig");
+    exe.setTarget(target);
+    exe.setBuildMode(mode);
     exe.setOutputDir("build");
     exe.addPackage(.{
         .name = "win32",
