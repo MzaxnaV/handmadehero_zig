@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const win32 = struct {
     usingnamespace @import("win32").foundation;
     usingnamespace @import("win32").graphics.gdi;
@@ -15,6 +16,10 @@ const win32 = struct {
 
     usingnamespace @import("win32").zig;
 };
+
+const IGNORE = true;
+
+const game = @import("handmade.zig");
 
 const WINAPI = std.os.windows.WINAPI;
 const DWORD = std.os.windows.DWORD;
@@ -157,26 +162,6 @@ fn Win32GetWindowDimenstion(windowHandle: win32.HWND) win32_window_dimension {
     return result;
 }
 
-fn RenderWeirdGradient(buffer: *win32_offscreen_buffer, xOffset: i32, yOffset: i32) void {
-    var row = @ptrCast([*]u8, buffer.memory);
-
-    var y: u32 = 0;
-    while (y < buffer.height) : (y += 1) {
-        var x: u32 = 0;
-        var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
-        while (x < buffer.width) : (x += 1) {
-            // Pixel in memory: BB GG RR xx
-            // Little endian arch: 0x xxRRGGBB
-            var blue = x + @intCast(u32, xOffset);
-            var green = y + @intCast(u32, yOffset);
-
-            pixel.* = (green << 8) | blue;
-            pixel += 1;
-        }
-        row += buffer.pitch;
-    }
-}
-
 fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: i32, height: i32) void {
     // TODO: Bullet proof this.
     // Maybe don't free	first, free after, then free first if that failes.
@@ -280,7 +265,6 @@ const win32_sound_output = struct { samplesPerSecond: u32, toneHz: u32, toneVolu
 
 fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, bytesToWrite: DWORD) void {
     // TODO: more strenous test :)
-    // TODO: switch to a sine wave
     var region1: ?*anyopaque = undefined;
     var region1Size: DWORD = undefined;
     var region2: ?*anyopaque = undefined;
@@ -332,8 +316,8 @@ pub extern "USER32" fn wsprintfW(
 ) callconv(WINAPI) i32;
 
 inline fn rdtsc() u64 {
-    var low: u64 = 0;
-    var high: u64 = 0;
+    var low: u64 = undefined;
+    var high: u64 = undefined;
 
     asm volatile(
         "rdtsc"
@@ -341,7 +325,7 @@ inline fn rdtsc() u64 {
         [high] "={edx}" (high)        
     );
 
-    return (@as(u64, high) << 32) | @as(u64, low);
+    return (high << 32) | low;
 }
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
@@ -433,23 +417,25 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             // This controller is not available
                         }
                     }
-                    // var vibration = win32.XINPUT_VIBRATION{
-                    //     .wLeftMotorSpeed = 60000,
-                    //     .wRightMotorSpeed = 60000,
-                    // };
 
-                    // _ = XInputSetState(0, &vibration);
+                    var buffer = game.offscreen_buffer {
+                        .memory = globalBackBuffer.memory,
+                        .width = globalBackBuffer.width, 
+                        .height = globalBackBuffer.height, 
+                        .pitch = globalBackBuffer.pitch 
+                    };
 
-                    RenderWeirdGradient(&globalBackBuffer, xOffset, yOffset);
+                    game.UpdateAndRender(&buffer, xOffset, yOffset);
 
                     var playCursor: DWORD = undefined;
                     var writeCursor: DWORD = undefined;
 
                     if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor))) {
                         const byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) % soundOutput.secondaryBufferSize;
+
                         const targetCursor = (playCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) % soundOutput.secondaryBufferSize;
                         var bytesToWrite: DWORD = undefined;
-                        // TODO: change this to use a lower latency offset from the playcursor when we actually start using sound effects
+
                         if (byteToLock > targetCursor) {
                             bytesToWrite = soundOutput.secondaryBufferSize - byteToLock;
                             bytesToWrite += targetCursor;
@@ -464,6 +450,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
 
                     var endCycleCount = rdtsc();
+
                     var endCounter: win32.LARGE_INTEGER = undefined;
                     _ = win32.QueryPerformanceCounter(&endCounter);
 
@@ -475,15 +462,18 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     const fps = @divTrunc(perfCountFrequency, counterElapsed);
                     const mcpf = cyclesElapsed / (1000 * 1000); 
 
-                    const msPerFrame_f = @intToFloat(f32, 1000 * counterElapsed)/ @intToFloat(f32, perfCountFrequency);
-                    const fps_f = @intToFloat(f32, perfCountFrequency) / @intToFloat(f32, counterElapsed);
-                    const mcpf_f = @intToFloat(f32, cyclesElapsed) / (1000.0 * 1000.0);
+                    if (!IGNORE)
+                    {
+                        var strbuf: [256]u16 = undefined;
+                        _ = wsprintfW(&strbuf, win32.L("%d: ms/f, %d: FPS, %d: Mc/f\n"), msPerFrame, fps, mcpf);
+                        _ = win32.OutputDebugStringW(&strbuf);
+                    }
 
-                    var buffer: [256]u16 = undefined;
+                    // const msPerFrame_f = @intToFloat(f32, 1000 * counterElapsed)/ @intToFloat(f32, perfCountFrequency);
+                    // const fps_f = @intToFloat(f32, perfCountFrequency) / @intToFloat(f32, counterElapsed);
+                    // const mcpf_f = @intToFloat(f32, cyclesElapsed) / (1000.0 * 1000.0);
 
-                    std.debug.print("{d: >6.2} ms/f, {d: >6.2} FPS, {d: >6.2} Mc/f : {d: ^6.2}GHz\n", .{ msPerFrame_f, fps_f, mcpf_f, (fps_f * mcpf_f) / 1000.0});
-                    _ = wsprintfW(&buffer, win32.L("%d: ms/f, %d: FPS, %d: Mc/f\n"), msPerFrame, fps, mcpf);
-                    _ = win32.OutputDebugStringW(&buffer);
+                    // std.debug.print("{d: >6.2} ms/f, {d: >6.2} FPS, {d: >6.2} Mc/f : {d: ^6.2}GHz\n", .{ msPerFrame_f, fps_f, mcpf_f, (fps_f * mcpf_f) / 1000.0});
 
                     lastCounter = endCounter;
                     lastCycleCount = endCycleCount;
