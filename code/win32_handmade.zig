@@ -17,14 +17,12 @@ const win32 = struct {
     usingnamespace @import("win32").zig;
 };
 
-const IGNORE = true;
-
 const game = @import("handmade.zig");
 
 const WINAPI = std.os.windows.WINAPI;
 const DWORD = std.os.windows.DWORD;
 
-const PI32 = 3.14159265359;
+const IGNORE = true;
 
 const win32_offscreen_buffer = struct { info: win32.BITMAPINFO, memory: ?*anyopaque, width: i32, height: i32, pitch: usize };
 const win32_window_dimension = struct { width: i32, height: i32 };
@@ -263,7 +261,37 @@ fn Win32WindowProc(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM,
 
 const win32_sound_output = struct { samplesPerSecond: u32, toneHz: u32, toneVolume: i16, runningSampleIndex: u32, wavePeriod: u32, bytesPerSample: u32, secondaryBufferSize: u32, tSine: f32, latencySampleCount: u32 };
 
-fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, bytesToWrite: DWORD) void {
+fn Win32ClearBuffer(soundOutput: *win32_sound_output) void
+{
+    var region1: ?*anyopaque = undefined;
+    var region1Size: DWORD = undefined;
+    var region2: ?*anyopaque = undefined;
+    var region2Size: DWORD = undefined;
+
+    if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, 0, soundOutput.secondaryBufferSize, &region1, &region1Size, &region2, &region2Size, 0))) {
+        if (region1) |ptr| {
+            var destSample = @ptrCast([*]u8,  ptr);
+            var byteIndex: DWORD = 0;
+            while (byteIndex < region1Size) : (byteIndex += 1) {
+                destSample.* = 0;
+                destSample += 1;
+            }
+        }
+
+        if (region2) |ptr| {
+            var destSample = @ptrCast([*]u8,  ptr);
+            var byteIndex: DWORD = 0;
+            while (byteIndex < region2Size) : (byteIndex += 1) {
+                destSample.* = 0;
+                destSample += 1;
+            }
+        }
+
+        _ = globalSecondaryBuffer.vtable.Unlock(globalSecondaryBuffer, region1, region1Size, region2, region2Size);
+    }
+}
+
+fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, bytesToWrite: DWORD, sourceBuffer: *game.sound_output_buffer) void {
     // TODO: more strenous test :)
     var region1: ?*anyopaque = undefined;
     var region1Size: DWORD = undefined;
@@ -272,35 +300,35 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
 
     if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
         if (region1) |ptr| {
-            var sampleOut = @ptrCast([*]i16, @alignCast(@alignOf(i16), ptr));
             const region1SampleCount = region1Size / soundOutput.bytesPerSample;
+            var destSample = @ptrCast([*]i16, @alignCast(@alignOf(i16), ptr));
+            var sourceSample = sourceBuffer.samples;
             var sampleIndex: DWORD = 0;
             while (sampleIndex < region1SampleCount) : (sampleIndex += 1) {
-                const sineValue = std.math.sin(soundOutput.tSine);
-                const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, soundOutput.toneVolume));
-                sampleOut.* = sampleValue;
-                sampleOut += 1;
-                sampleOut.* = sampleValue;
-                sampleOut += 1;
+                destSample.* = sourceSample[0];
+                destSample += 1;
+                sourceSample += 1;
+                destSample.* = sourceSample[0];
+                destSample += 1;
+                sourceSample += 1;
 
-                soundOutput.tSine += 2.0 * PI32 * 1.0 / @intToFloat(f32, soundOutput.wavePeriod);
                 soundOutput.runningSampleIndex += 1;
             }
         }
 
         if (region2) |ptr| {
-            var sampleOut = @ptrCast([*]i16, @alignCast(@alignOf(i16), ptr));
             const region2SampleCount = region2Size / soundOutput.bytesPerSample;
+            var destSample = @ptrCast([*]i16, @alignCast(@alignOf(i16), ptr));
+            var sourceSample = sourceBuffer.samples;
             var sampleIndex: DWORD = 0;
             while (sampleIndex < region2SampleCount) : (sampleIndex += 1) {
-                const sineValue = std.math.sin(soundOutput.tSine);
-                const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, soundOutput.toneVolume));
-                sampleOut.* = sampleValue;
-                sampleOut += 1;
-                sampleOut.* = sampleValue;
-                sampleOut += 1;
+                destSample.* = sourceSample[0];
+                destSample += 1;
+                sourceSample += 1;
+                destSample.* = sourceSample[0];
+                destSample += 1;
+                sourceSample += 1;
 
-                soundOutput.tSine += 2.0 * PI32 * 1.0 / @intToFloat(f32, soundOutput.wavePeriod);
                 soundOutput.runningSampleIndex += 1;
             }
         }
@@ -364,10 +392,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 soundOutput.latencySampleCount = soundOutput.samplesPerSecond / 15; //(15 - fps)
 
                 Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.secondaryBufferSize);
-                Win32FillSoundBuffer(&soundOutput, 0, soundOutput.latencySampleCount * soundOutput.bytesPerSample);
+                Win32ClearBuffer(&soundOutput);
                 _ = globalSecondaryBuffer.vtable.Play(globalSecondaryBuffer, 0, 0, win32.DSBPLAY_LOOPING);
 
                 globalRunning = true;
+
+                // TODO: pool with bitmap VirtualAlloc
+
+                var samples = @ptrCast([*]i16, @alignCast(@alignOf(i16), win32.VirtualAlloc(null, soundOutput.secondaryBufferSize, @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) |  @enumToInt(win32.MEM_COMMIT)), win32.PAGE_READWRITE)));
 
                 var lastCounter: win32.LARGE_INTEGER = undefined;
                 _ = win32.QueryPerformanceCounter(&lastCounter);
@@ -418,23 +450,19 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    var buffer = game.offscreen_buffer {
-                        .memory = globalBackBuffer.memory,
-                        .width = globalBackBuffer.width, 
-                        .height = globalBackBuffer.height, 
-                        .pitch = globalBackBuffer.pitch 
-                    };
-
-                    game.UpdateAndRender(&buffer, xOffset, yOffset);
-
-                    var playCursor: DWORD = undefined;
-                    var writeCursor: DWORD = undefined;
-
+                    var byteToLock: DWORD = 0;
+                    var targetCursor: DWORD = 0;
+                    var bytesToWrite: DWORD = 0;
+                    var playCursor: DWORD = 0;
+                    var writeCursor: DWORD = 0;
+                    var soundIsValid = false;
+                    // TODO: tighten up sound logic so we know where we should be writing to and can anticipate the time spent in the game update
                     if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor))) {
-                        const byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) % soundOutput.secondaryBufferSize;
+                        soundIsValid = true;
 
-                        const targetCursor = (playCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) % soundOutput.secondaryBufferSize;
-                        var bytesToWrite: DWORD = undefined;
+                        byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) % soundOutput.secondaryBufferSize;
+
+                        targetCursor = (playCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) % soundOutput.secondaryBufferSize;
 
                         if (byteToLock > targetCursor) {
                             bytesToWrite = soundOutput.secondaryBufferSize - byteToLock;
@@ -442,8 +470,25 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         } else {
                             bytesToWrite = targetCursor - byteToLock;
                         }
+                    }
 
-                        Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite);
+                    var soundBuffer = game.sound_output_buffer {
+                        .samplesPerSecond = soundOutput.samplesPerSecond,
+                        .sampleCount = @divTrunc(bytesToWrite , soundOutput.bytesPerSample),
+                        .samples = samples
+                    };
+
+                    var buffer = game.offscreen_buffer {
+                        .memory = globalBackBuffer.memory,
+                        .width = globalBackBuffer.width,
+                        .height = globalBackBuffer.height,
+                        .pitch = globalBackBuffer.pitch
+                    };
+
+                    game.UpdateAndRender(&buffer, xOffset, yOffset, &soundBuffer, soundOutput.toneHz);
+
+                    if (soundIsValid) {
+                        Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuffer);
                     }
 
                     const dimension = Win32GetWindowDimenstion(windowHandle);
