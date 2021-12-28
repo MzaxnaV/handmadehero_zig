@@ -24,28 +24,43 @@ const DWORD = std.os.windows.DWORD;
 
 const IGNORE = true;
 
-const win32_offscreen_buffer = struct { info: win32.BITMAPINFO, memory: ?*anyopaque, width: i32, height: i32, pitch: usize };
-const win32_window_dimension = struct { width: i32, height: i32 };
+const win32_offscreen_buffer = struct {
+    info: win32.BITMAPINFO,
+    memory: ?*anyopaque,
+    width: i32,
+    height: i32,
+    pitch: usize,
+};
+const win32_window_dimension = struct {
+    width: i32,
+    height: i32,
+};
 
 pub var globalRunning: bool = undefined;
-pub var globalBackBuffer = win32_offscreen_buffer{ .info = win32.BITMAPINFO{ .bmiHeader = win32.BITMAPINFOHEADER{
-    .biSize = @sizeOf(win32.BITMAPINFOHEADER),
-    .biWidth = 0,
-    .biHeight = 0,
-    .biPlanes = 0,
-    .biBitCount = 0,
-    .biCompression = 0,
-    .biSizeImage = 0,
-    .biXPelsPerMeter = 0,
-    .biYPelsPerMeter = 0,
-    .biClrUsed = 0,
-    .biClrImportant = 0,
-}, .bmiColors = [1]win32.RGBQUAD{win32.RGBQUAD{
-    .rgbBlue = 0,
-    .rgbGreen = 0,
-    .rgbRed = 0,
-    .rgbReserved = 0,
-}} }, .memory = undefined, .width = 0, .height = 0, .pitch = 0 };
+pub var globalBackBuffer = win32_offscreen_buffer{
+    .info = win32.BITMAPINFO{ .bmiHeader = win32.BITMAPINFOHEADER{
+        .biSize = @sizeOf(win32.BITMAPINFOHEADER),
+        .biWidth = 0,
+        .biHeight = 0,
+        .biPlanes = 0,
+        .biBitCount = 0,
+        .biCompression = 0,
+        .biSizeImage = 0,
+        .biXPelsPerMeter = 0,
+        .biYPelsPerMeter = 0,
+        .biClrUsed = 0,
+        .biClrImportant = 0,
+    }, .bmiColors = [1]win32.RGBQUAD{win32.RGBQUAD{
+        .rgbBlue = 0,
+        .rgbGreen = 0,
+        .rgbRed = 0,
+        .rgbReserved = 0,
+    }} },
+    .memory = undefined,
+    .width = 0,
+    .height = 0,
+    .pitch = 0,
+};
 pub var globalSecondaryBuffer: *win32.IDirectSoundBuffer = undefined;
 
 var XInputGetState: fn (u32, ?*win32.XINPUT_STATE) callconv(WINAPI) isize = undefined;
@@ -91,7 +106,11 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                     waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
 
                     const GUID_NULL = win32.Guid.initString("00000000-0000-0000-0000-000000000000");
-                    if (win32.SUCCEEDED(directSound.vtable.SetCooperativeLevel(directSound, window, win32.DSSCL_PRIORITY))) {
+                    if (win32.SUCCEEDED(directSound.vtable.SetCooperativeLevel(
+                        directSound,
+                        window,
+                        win32.DSSCL_PRIORITY,
+                    ))) {
                         var bufferDescription = win32.DSBUFFERDESC{ // https://docs.microsoft.com/en-us/previous-versions/windows/desktop/ee416820(v=vs.85)#remarks
                             .dwSize = @sizeOf(win32.DSBUFFERDESC),
                             .dwFlags = win32.DSBCAPS_PRIMARYBUFFER,
@@ -119,7 +138,8 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                     }
 
                     // DSBCAPS_GETCURRENTPOSITION2?
-                    var bufferDescription = win32.DSBUFFERDESC{ // https://docs.microsoft.com/en-us/previous-versions/windows/desktop/ee416820(v=vs.85)#remarks
+                    // https://docs.microsoft.com/en-us/previous-versions/windows/desktop/ee416820(v=vs.85)#remarks
+                    var bufferDescription = win32.DSBUFFERDESC{
                         .dwSize = @sizeOf(win32.DSBUFFERDESC),
                         .dwFlags = 0,
                         .dwBufferBytes = bufferSize,
@@ -179,7 +199,12 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: i32, height: i3
     buffer.info.bmiHeader.biCompression = win32.BI_RGB;
 
     const bitmapMemorySize = @intCast(usize, bytesPerPixel * (buffer.width * buffer.height));
-    buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT)), win32.PAGE_READWRITE);
+    buffer.memory = win32.VirtualAlloc(
+        null,
+        bitmapMemorySize,
+        @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT)),
+        win32.PAGE_READWRITE,
+    );
     buffer.pitch = @intCast(usize, width) * bytesPerPixel;
 
     // TODO: probably clear this to black
@@ -261,8 +286,7 @@ fn Win32WindowProc(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM,
 
 const win32_sound_output = struct { samplesPerSecond: u32, toneHz: u32, toneVolume: i16, runningSampleIndex: u32, wavePeriod: u32, bytesPerSample: u32, secondaryBufferSize: u32, tSine: f32, latencySampleCount: u32 };
 
-fn Win32ClearBuffer(soundOutput: *win32_sound_output) void
-{
+fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
     var region1: ?*anyopaque = undefined;
     var region1Size: DWORD = undefined;
     var region2: ?*anyopaque = undefined;
@@ -270,7 +294,7 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void
 
     if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, 0, soundOutput.secondaryBufferSize, &region1, &region1Size, &region2, &region2Size, 0))) {
         if (region1) |ptr| {
-            var destSample = @ptrCast([*]u8,  ptr);
+            var destSample = @ptrCast([*]u8, ptr);
             var byteIndex: DWORD = 0;
             while (byteIndex < region1Size) : (byteIndex += 1) {
                 destSample.* = 0;
@@ -279,7 +303,7 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void
         }
 
         if (region2) |ptr| {
-            var destSample = @ptrCast([*]u8,  ptr);
+            var destSample = @ptrCast([*]u8, ptr);
             var byteIndex: DWORD = 0;
             while (byteIndex < region2Size) : (byteIndex += 1) {
                 destSample.* = 0;
@@ -304,13 +328,10 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
             var destSample = @ptrCast([*]i16, @alignCast(@alignOf(i16), ptr));
             var sourceSample = sourceBuffer.samples;
             var sampleIndex: DWORD = 0;
+
             while (sampleIndex < region1SampleCount) : (sampleIndex += 1) {
-                destSample.* = sourceSample[0];
-                destSample += 1;
-                sourceSample += 1;
-                destSample.* = sourceSample[0];
-                destSample += 1;
-                sourceSample += 1;
+                destSample[2 * sampleIndex] = sourceSample[2 * sampleIndex];
+                destSample[2 * sampleIndex + 1] = sourceSample[2 * sampleIndex + 1];
 
                 soundOutput.runningSampleIndex += 1;
             }
@@ -321,13 +342,10 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
             var destSample = @ptrCast([*]i16, @alignCast(@alignOf(i16), ptr));
             var sourceSample = sourceBuffer.samples;
             var sampleIndex: DWORD = 0;
+
             while (sampleIndex < region2SampleCount) : (sampleIndex += 1) {
-                destSample.* = sourceSample[0];
-                destSample += 1;
-                sourceSample += 1;
-                destSample.* = sourceSample[0];
-                destSample += 1;
-                sourceSample += 1;
+                destSample[2 * sampleIndex] = sourceSample[2 * sampleIndex];
+                destSample[2 * sampleIndex + 1] = sourceSample[2 * sampleIndex + 1];
 
                 soundOutput.runningSampleIndex += 1;
             }
@@ -340,25 +358,23 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
 pub extern "USER32" fn wsprintfW(
     param0: ?win32.PWSTR,
     param1: ?[*:0]const u16,
-    ...
+    ...,
 ) callconv(WINAPI) i32;
 
 inline fn rdtsc() u64 {
     var low: u64 = undefined;
     var high: u64 = undefined;
 
-    asm volatile(
-        "rdtsc"
+    asm volatile ("rdtsc"
         : [low] "={eax}" (low),
-        [high] "={edx}" (high)        
+          [high] "={edx}" (high),
     );
 
     return (high << 32) | low;
 }
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
-
-    var perfCountFrequencyResult : win32.LARGE_INTEGER = undefined;
+    var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;
     _ = win32.QueryPerformanceFrequency(&perfCountFrequencyResult);
     var perfCountFrequency = perfCountFrequencyResult.QuadPart;
 
@@ -380,12 +396,35 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     };
 
     if (win32.RegisterClass(&windowclass) != 0) {
-        if (win32.CreateWindowEx(@intToEnum(win32.WINDOW_EX_STYLE, 0), windowclass.lpszClassName, win32.L("HandmadeHero"), @intToEnum(win32.WINDOW_STYLE, @enumToInt(win32.WS_OVERLAPPEDWINDOW) | @enumToInt(win32.WS_VISIBLE)), win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, null, null, hInstance, null)) |windowHandle| {
+        if (win32.CreateWindowEx(
+            @intToEnum(win32.WINDOW_EX_STYLE, 0),
+            windowclass.lpszClassName,
+            win32.L("HandmadeHero"),
+            @intToEnum(win32.WINDOW_STYLE, @enumToInt(win32.WS_OVERLAPPEDWINDOW) | @enumToInt(win32.WS_VISIBLE)),
+            win32.CW_USEDEFAULT,
+            win32.CW_USEDEFAULT,
+            win32.CW_USEDEFAULT,
+            win32.CW_USEDEFAULT,
+            null,
+            null,
+            hInstance,
+            null,
+        )) |windowHandle| {
             if (win32.GetDC(windowHandle)) |deviceContext| {
                 var xOffset: i32 = 0;
                 var yOffset: i32 = 0;
 
-                var soundOutput = win32_sound_output{ .samplesPerSecond = 48000, .toneHz = 256, .toneVolume = 1000, .runningSampleIndex = 0, .wavePeriod = undefined, .bytesPerSample = @sizeOf(i16) * 2, .secondaryBufferSize = undefined, .tSine = 0, .latencySampleCount = undefined };
+                var soundOutput = win32_sound_output{
+                    .samplesPerSecond = 48000,
+                    .toneHz = 256,
+                    .toneVolume = 1000,
+                    .runningSampleIndex = 0,
+                    .wavePeriod = undefined,
+                    .bytesPerSample = @sizeOf(i16) * 2,
+                    .secondaryBufferSize = undefined,
+                    .tSine = 0,
+                    .latencySampleCount = undefined,
+                };
 
                 soundOutput.wavePeriod = soundOutput.samplesPerSecond / soundOutput.toneHz;
                 soundOutput.secondaryBufferSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
@@ -399,7 +438,12 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                 // TODO: pool with bitmap VirtualAlloc
 
-                var samples = @ptrCast([*]i16, @alignCast(@alignOf(i16), win32.VirtualAlloc(null, soundOutput.secondaryBufferSize, @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) |  @enumToInt(win32.MEM_COMMIT)), win32.PAGE_READWRITE)));
+                var samples = @ptrCast([*]i16, @alignCast(@alignOf(i16), win32.VirtualAlloc(
+                    null,
+                    soundOutput.secondaryBufferSize,
+                    @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT)),
+                    win32.PAGE_READWRITE,
+                )));
 
                 var lastCounter: win32.LARGE_INTEGER = undefined;
                 _ = win32.QueryPerformanceCounter(&lastCounter);
@@ -443,7 +487,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             xOffset += @divTrunc(stickX, 4096);
                             yOffset += @divTrunc(stickY, 4096);
 
-                            soundOutput.toneHz = 512 * 256 * @intCast(u32, @divTrunc(stickY , 32000));
+                            soundOutput.toneHz = 512 * 256 * @intCast(u32, @divTrunc(stickY, 32000));
                             soundOutput.wavePeriod = soundOutput.samplesPerSecond / soundOutput.toneHz;
                         } else {
                             // This controller is not available
@@ -472,17 +516,17 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    var soundBuffer = game.sound_output_buffer {
+                    var soundBuffer = game.sound_output_buffer{
                         .samplesPerSecond = soundOutput.samplesPerSecond,
-                        .sampleCount = @divTrunc(bytesToWrite , soundOutput.bytesPerSample),
-                        .samples = samples
+                        .sampleCount = @divTrunc(bytesToWrite, soundOutput.bytesPerSample),
+                        .samples = samples,
                     };
 
-                    var buffer = game.offscreen_buffer {
+                    var buffer = game.offscreen_buffer{
                         .memory = globalBackBuffer.memory,
                         .width = globalBackBuffer.width,
                         .height = globalBackBuffer.height,
-                        .pitch = globalBackBuffer.pitch
+                        .pitch = globalBackBuffer.pitch,
                     };
 
                     game.UpdateAndRender(&buffer, xOffset, yOffset, &soundBuffer, soundOutput.toneHz);
@@ -505,10 +549,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                     const msPerFrame = @divTrunc(1000 * counterElapsed, perfCountFrequency);
                     const fps = @divTrunc(perfCountFrequency, counterElapsed);
-                    const mcpf = cyclesElapsed / (1000 * 1000); 
+                    const mcpf = cyclesElapsed / (1000 * 1000);
 
-                    if (!IGNORE)
-                    {
+                    if (!IGNORE) {
                         var strbuf: [256]u16 = undefined;
                         _ = wsprintfW(&strbuf, win32.L("%d: ms/f, %d: FPS, %d: Mc/f\n"), msPerFrame, fps, mcpf);
                         _ = win32.OutputDebugStringW(&strbuf);
@@ -518,11 +561,13 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     // const fps_f = @intToFloat(f32, perfCountFrequency) / @intToFloat(f32, counterElapsed);
                     // const mcpf_f = @intToFloat(f32, cyclesElapsed) / (1000.0 * 1000.0);
 
-                    // std.debug.print("{d: >6.2} ms/f, {d: >6.2} FPS, {d: >6.2} Mc/f : {d: ^6.2}GHz\n", .{ msPerFrame_f, fps_f, mcpf_f, (fps_f * mcpf_f) / 1000.0});
+                    // std.debug.print(
+                    //     "{d: >6.2} ms/f, {d: >6.2} FPS, {d: >6.2} Mc/f : {d: ^6.2}GHz\n",
+                    //     .{ msPerFrame_f, fps_f, mcpf_f, (fps_f * mcpf_f) / 1000.0 },
+                    // );
 
                     lastCounter = endCounter;
                     lastCycleCount = endCycleCount;
-
                 }
             }
         } else {

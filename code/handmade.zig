@@ -3,26 +3,25 @@ const std = @import("std");
 pub const PI32 = 3.14159265359;
 
 pub const offscreen_buffer = struct {
-    memory: ?*anyopaque, 
-    width: i32, 
-    height: i32, 
-    pitch: usize 
+    memory: ?*anyopaque,
+    width: i32,
+    height: i32,
+    pitch: usize,
 };
 
 pub const sound_output_buffer = struct {
-    samplesPerSecond : u32,
+    samplesPerSecond: u32,
     sampleCount: u32,
-    samples: [*]i16
+    samples: [*]i16,
 };
 
-fn OutputSound(soundBuffer: *sound_output_buffer, toneHz: u32) void
-{
+fn OutputSound(soundBuffer: *sound_output_buffer, toneHz: u32) void {
     const state = struct {
         var tSine: f32 = 0;
     };
 
     const toneVolume = 3000;
-    const wavePeriod = @divTrunc(soundBuffer.samplesPerSecond , toneHz);
+    const wavePeriod = @divTrunc(soundBuffer.samplesPerSecond, toneHz);
 
     var sampleOut = soundBuffer.samples;
     var sampleIndex: u32 = 0;
@@ -58,7 +57,13 @@ fn RenderWeirdGradient(buffer: *offscreen_buffer, xOffset: i32, yOffset: i32) vo
     }
 }
 
-pub fn UpdateAndRender(buffer: *offscreen_buffer, blueOffset: i32, greenOffset: i32, soundBuffer: *sound_output_buffer, toneHz: u32) void {
+pub fn UpdateAndRender(
+    buffer: *offscreen_buffer,
+    blueOffset: i32,
+    greenOffset: i32,
+    soundBuffer: *sound_output_buffer,
+    toneHz: u32,
+) void {
     // TODO:  Allow sample offsets here for more robust platform options
     OutputSound(soundBuffer, toneHz);
     RenderWeirdGradient(buffer, blueOffset, greenOffset);
