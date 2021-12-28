@@ -15,6 +15,41 @@ pub const sound_output_buffer = struct {
     samples: [*]i16,
 };
 
+pub const button_state = packed struct {
+    haltTransitionCount: u32 = 0,
+    // boolean
+    endedDown: u32 = 0,
+};
+
+pub const controller_input = struct {
+    isAnalog: bool = false,
+
+    startX: f32 = 0,
+    startY: f32 = 0,
+
+    minX: f32 = 0,
+    minY: f32 = 0,
+
+    maxX: f32 = 0,
+    maxY: f32 = 0,
+
+    endX: f32 = 0,
+    endY: f32 = 0,
+
+    buttons: packed struct {
+        up: button_state,
+        down: button_state,
+        left: button_state,
+        right: button_state,
+        leftShoulder: button_state,
+        rightShoulder: button_state,
+    },
+};
+
+pub const input = struct {
+    controllers: [4]controller_input,
+};
+
 fn OutputSound(soundBuffer: *sound_output_buffer, toneHz: u32) void {
     const state = struct {
         var tSine: f32 = 0;
@@ -57,14 +92,32 @@ fn RenderWeirdGradient(buffer: *offscreen_buffer, xOffset: i32, yOffset: i32) vo
     }
 }
 
-pub fn UpdateAndRender(
-    buffer: *offscreen_buffer,
-    blueOffset: i32,
-    greenOffset: i32,
-    soundBuffer: *sound_output_buffer,
-    toneHz: u32,
-) void {
+pub fn UpdateAndRender(i: *input, buffer: *offscreen_buffer, soundBuffer: *sound_output_buffer) void {
+
+    const state = struct {
+        var blueOffset:i32 = 0;
+        var greenOffset:i32 = 0;
+        var toneHz:u32 = 256;
+    };
+
+    const input0 = i.controllers[0];
+
+    if (input0.isAnalog)
+    {
+        state.blueOffset += @floatToInt(i32, 4.0 * input0.endX);
+        state.toneHz += 256 + @floatToInt(u32, 120.0 * input0.endY);
+    } else {
+        // Use digital movement tuning
+    }
+
+    // Input.AButtonEndedDown;
+    // Input.NumberOfTransitions;
+    if (input0.buttons.down.endedDown != 0)
+    {
+        state.greenOffset += 1;
+    }
+
     // TODO:  Allow sample offsets here for more robust platform options
-    OutputSound(soundBuffer, toneHz);
-    RenderWeirdGradient(buffer, blueOffset, greenOffset);
+    OutputSound(soundBuffer, state.toneHz);
+    RenderWeirdGradient(buffer, state.blueOffset, state.greenOffset);
 }
