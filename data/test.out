@@ -135,7 +135,7 @@ pub const platform = struct {
 };
 
 // IMPORTANT: These are NOT for doing anything in the shipping game - they are blocking and the write doesn't protect against lost data
-pub const debug_read_file_result = struct {
+pub const debug_read_file_result =  struct {
     contentSize: u32 = 0,
     contents: *anyopaque = undefined,
 };

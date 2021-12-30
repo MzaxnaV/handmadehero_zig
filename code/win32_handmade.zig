@@ -8,6 +8,7 @@ const win32 = struct {
     usingnamespace @import("win32").graphics.gdi;
     usingnamespace @import("win32").media.audio;
     usingnamespace @import("win32").media.audio.direct_sound;
+    usingnamespace @import("win32").storage.file_system;
     usingnamespace @import("win32").system.diagnostics.debug;
     usingnamespace @import("win32").system.com;
     usingnamespace @import("win32").system.library_loader;
@@ -22,10 +23,15 @@ const win32 = struct {
 
 const game = @import("handmade.zig");
 
-// build constants ----------------------------------------------------------------------------------------------------
+// constants ----------------------------------------------------------------------------------------------------------
 
 const IGNORE = @import("build_consts").IGNORE;
 const HANDMADE_INTERNAL = (@import("builtin").mode == std.builtin.Mode.Debug);
+
+const allocationType = @intToEnum(
+    win32.VIRTUAL_ALLOCATION_TYPE,
+    @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT),
+);
 
 // data types ---------------------------------------------------------------------------------------------------------
 
@@ -83,6 +89,12 @@ pub var globalBackBuffer = win32_offscreen_buffer{
 };
 pub var globalSecondaryBuffer: *win32.IDirectSoundBuffer = undefined;
 
+const win32Platform = game.platform{
+    .DEBUGPlatformFreeFileMemory = DEBUGWin32FreeFileMemory,
+    .DEBUGPlatformReadEntireFile = DEBUGWin32ReadEntireFile,
+    .DEBUGPlatformWriteEntireFile = DEBUGWin32WriteEntireFile,
+};
+
 // library defs -------------------------------------------------------------------------------------------------------
 
 pub extern "USER32" fn wsprintfW(
@@ -100,7 +112,78 @@ var DirectSoundCreate: fn (
     ?*win32.IUnknown,
 ) callconv(WINAPI) i32 = undefined;
 
-// local Win32 functions ----------------------------------------------------------------------------------------------------
+// local Win32 functions ----------------------------------------------------------------------------------------------
+
+fn DEBUGWin32FreeFileMemory(memory: *anyopaque) void {
+    _ = win32.VirtualFree(memory, 0, win32.MEM_RELEASE);
+}
+
+fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) game.debug_read_file_result {
+    var result = game.debug_read_file_result{};
+    var fileHandle = win32.CreateFileA(
+        filename,
+        win32.FILE_GENERIC_READ,
+        win32.FILE_SHARE_READ,
+        null,
+        win32.OPEN_EXISTING,
+        win32.SECURITY_ANONYMOUS,
+        null,
+    );
+
+    if (fileHandle != null and fileHandle != win32.INVALID_HANDLE_VALUE) {
+        var fileSize = win32.LARGE_INTEGER{ .QuadPart = 0 };
+        if (win32.GetFileSizeEx(fileHandle, &fileSize) != 0) {
+            var fileSize32 = @intCast(u32, fileSize.QuadPart);
+            if (win32.VirtualAlloc(null, fileSize32, allocationType, win32.PAGE_READWRITE)) |data| {
+                var bytesRead: DWORD = 0;
+                if (win32.ReadFile(fileHandle, data, fileSize32, &bytesRead, null) != 0 and fileSize32 == bytesRead) {
+                    result.contents = data;
+                    result.contentSize = fileSize32;
+                } else {
+                    DEBUGWin32FreeFileMemory(data);
+                }
+            } else {
+                // TODO: Logging
+            }
+        } else {
+            // TODO: logging
+        }
+        _ = win32.CloseHandle(fileHandle);
+    } else {
+        // TODO: logging
+    }
+
+    return result;
+}
+
+fn DEBUGWin32WriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool {
+    var result = false;
+    var fileHandle = win32.CreateFileA(
+        fileName,
+        win32.FILE_GENERIC_WRITE,
+        win32.FILE_SHARE_MODE.NONE,
+        null,
+        win32.CREATE_ALWAYS,
+        win32.SECURITY_ANONYMOUS,
+        null,
+    );
+
+    if (fileHandle != null and fileHandle != win32.INVALID_HANDLE_VALUE) {
+        var bytesWritten: DWORD = 0;
+        if (win32.WriteFile(fileHandle, memory, memorySize, &bytesWritten, null) != 0) {
+            // File written successfully
+            result = (bytesWritten == memorySize);
+        } else {
+            // TODO: logging
+        }
+
+        _ = win32.CloseHandle(fileHandle);
+    } else {
+        // TODO: logging
+    }
+
+    return result;
+}
 
 fn Win32LoadXinput() void {
     if (win32.LoadLibraryW(win32.L("xinput1_4.dll"))) |XInputLibrary| {
@@ -488,8 +571,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                 globalRunning = true;
 
-                const allocationType = @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT));
-
                 if (@ptrCast(?[*]i16, @alignCast(
                     @alignOf(i16),
                     win32.VirtualAlloc(
@@ -686,7 +767,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 .pitch = globalBackBuffer.pitch,
                             };
 
-                            game.UpdateAndRender(&gameMemory, newInput, &buffer, &soundBuffer);
+                            game.UpdateAndRender(&win32Platform, &gameMemory, newInput, &buffer, &soundBuffer);
 
                             if (soundIsValid) {
                                 Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuffer);
