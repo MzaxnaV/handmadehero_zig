@@ -1,6 +1,10 @@
 const std = @import("std");
 
+// constants ----------------------------------------------------------------------------------------------------------
+
 pub const PI32 = 3.14159265359;
+
+// data structure -----------------------------------------------------------------------------------------------------
 
 pub const offscreen_buffer = struct {
     memory: ?*anyopaque,
@@ -50,8 +54,24 @@ pub const input = struct {
     controllers: [4]controller_input,
 };
 
+pub const memory = struct {
+    isInitialized: bool = false,
+    permanentStorageSize: u64,
+    permanentStorage: [*]u8,
+    transientStorageSize: u64,
+    transientStorage: [*]u8,
+};
+
+pub const state = struct {
+    blueOffset: i32,
+    greenOffset: i32,
+    toneHz: u32,
+};
+
+// local functions ----------------------------------------------------------------------------------------------------------
+
 fn OutputSound(soundBuffer: *sound_output_buffer, toneHz: u32) void {
-    const state = struct {
+    const s = struct {
         var tSine: f32 = 0;
     };
 
@@ -61,14 +81,14 @@ fn OutputSound(soundBuffer: *sound_output_buffer, toneHz: u32) void {
     var sampleOut = soundBuffer.samples;
     var sampleIndex: u32 = 0;
     while (sampleIndex < soundBuffer.sampleCount) : (sampleIndex += 1) {
-        const sineValue = std.math.sin(state.tSine);
+        const sineValue = std.math.sin(s.tSine);
         const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume));
         sampleOut.* = sampleValue;
         sampleOut += 1;
         sampleOut.* = sampleValue;
         sampleOut += 1;
 
-        state.tSine += 2.0 * PI32 * 1.0 / @intToFloat(f32, wavePeriod);
+        s.tSine += 2.0 * PI32 * 1.0 / @intToFloat(f32, wavePeriod);
     }
 }
 
@@ -92,32 +112,49 @@ fn RenderWeirdGradient(buffer: *offscreen_buffer, xOffset: i32, yOffset: i32) vo
     }
 }
 
-pub fn UpdateAndRender(i: *input, buffer: *offscreen_buffer, soundBuffer: *sound_output_buffer) void {
+// public functions ---------------------------------------------------------------------------------------------------
 
-    const state = struct {
-        var blueOffset:i32 = 0;
-        var greenOffset:i32 = 0;
-        var toneHz:u32 = 256;
-    };
+pub inline fn KiloBytes(value: u64) u64 {
+    return 1000 * value;
+}
+pub inline fn MegaBytes(value: u64) u64 {
+    return 1000 * KiloBytes(value);
+}
+pub inline fn GigaBytes(value: u64) u64 {
+    return 1000 * MegaBytes(value);
+}
+pub inline fn TeraBytes(value: u64) u64 {
+    return 1000 * GigaBytes(value);
+}
 
-    const input0 = i.controllers[0];
+pub fn UpdateAndRender(gameMemory: *memory, gameInput: *input, buffer: *offscreen_buffer, soundBuffer: *sound_output_buffer) void {
+    std.debug.assert(@sizeOf(state) <= gameMemory.permanentStorageSize);
 
-    if (input0.isAnalog)
-    {
-        state.blueOffset += @floatToInt(i32, 4.0 * input0.endX);
-        state.toneHz += 256 + @floatToInt(u32, 120.0 * input0.endY);
+    const gameState: *state = @ptrCast(*state, @alignCast(@alignOf(state), gameMemory.permanentStorage));
+
+    if (!gameMemory.isInitialized) {
+        gameState.toneHz = 256;
+
+        // TODO: This may be more appropriate to do in the platform layer
+        gameMemory.isInitialized = true;
+    }
+
+    const input0 = gameInput.controllers[0];
+
+    if (input0.isAnalog) {
+        gameState.blueOffset += @floatToInt(i32, 4.0 * input0.endX);
+        gameState.toneHz += 256 + @floatToInt(u32, 120.0 * input0.endY);
     } else {
         // Use digital movement tuning
     }
 
     // Input.AButtonEndedDown;
     // Input.NumberOfTransitions;
-    if (input0.buttons.down.endedDown != 0)
-    {
-        state.greenOffset += 1;
+    if (input0.buttons.down.endedDown != 0) {
+        gameState.greenOffset += 1;
     }
 
     // TODO:  Allow sample offsets here for more robust platform options
-    OutputSound(soundBuffer, state.toneHz);
-    RenderWeirdGradient(buffer, state.blueOffset, state.greenOffset);
+    OutputSound(soundBuffer, gameState.toneHz);
+    RenderWeirdGradient(buffer, gameState.blueOffset, gameState.greenOffset);
 }
