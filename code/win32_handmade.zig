@@ -19,16 +19,8 @@ const win32 = struct {
     usingnamespace @import("win32").ui.input.keyboard_and_mouse;
     usingnamespace @import("win32").ui.input.xbox_controller;
     usingnamespace @import("win32").ui.windows_and_messaging;
-    // usingnamespace @import("win32").ui.shell;
 
     usingnamespace @import("win32").zig;
-
-    pub extern "SHLWAPI" fn wnsprintfW(
-        pszDest: [*:0]u16,
-        cchDest: i32,
-        pszFmt: ?[*:0]const u16,
-        ...,
-    ) callconv(@import("std").os.windows.WINAPI) i32;
 };
 
 const game = @import("handmade.zig");
@@ -43,32 +35,7 @@ const allocationType = @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win3
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
 const win32_offscreen_buffer = struct {
-    info: win32.BITMAPINFO,
-    memory: ?*anyopaque,
-    width: i32 = 0,
-    height: i32 = 0,
-    pitch: usize = 0,
-};
-
-const win32_window_dimension = struct {
-    width: i32 = 0,
-    height: i32 = 0,
-};
-
-const win32_sound_output = struct {
-    samplesPerSecond: u32,
-    runningSampleIndex: u32,
-    bytesPerSample: u32,
-    secondaryBufferSize: u32,
-    tSine: f32,
-    latencySampleCount: u32,
-};
-
-// globals --------------------------------------------------------------------------------------------------------------------------------
-
-pub var globalRunning: bool = undefined;
-pub var globalBackBuffer = win32_offscreen_buffer{
-    .info = win32.BITMAPINFO{
+    info: win32.BITMAPINFO = win32.BITMAPINFO{
         .bmiHeader = win32.BITMAPINFOHEADER{
             .biSize = @sizeOf(win32.BITMAPINFOHEADER),
             .biWidth = 0,
@@ -87,10 +54,37 @@ pub var globalBackBuffer = win32_offscreen_buffer{
             .rgbGreen = 0,
             .rgbRed = 0,
             .rgbReserved = 0,
-        }},
-    },
-    .memory = undefined,
+        }},},
+    memory: ?*anyopaque = undefined,
+    width: i32 = 0,
+    height: i32 = 0,
+    pitch: usize = 0,
+    bytesPerPixe: u32 = 0,
 };
+
+const win32_window_dimension = struct {
+    width: i32 = 0,
+    height: i32 = 0,
+};
+
+const win32_sound_output = struct {
+    samplesPerSecond: u32,
+    runningSampleIndex: u32,
+    bytesPerSample: u32,
+    secondaryBufferSize: DWORD,
+    tSine: f32,
+    latencySampleCount: u32,
+};
+
+const win32_debug_time_marker = struct {
+    playCursor: DWORD = 0,
+    writeCursor: DWORD = 0,
+};
+
+// globals --------------------------------------------------------------------------------------------------------------------------------
+
+pub var globalRunning: bool = undefined;
+pub var globalBackBuffer = win32_offscreen_buffer{};
 pub var globalSecondaryBuffer: *win32.IDirectSoundBuffer = undefined;
 pub var globalPerfCounterFrequency: i64 = undefined;
 
@@ -243,10 +237,9 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                         // TODO: diagnostic
                     }
 
-                    // DSBCAPS_GETCURRENTPOSITION2?
                     var bufferDescription = win32.DSBUFFERDESC{
                         .dwSize = @sizeOf(win32.DSBUFFERDESC),
-                        .dwFlags = 0,
+                        .dwFlags = win32.DSBCAPS_GETCURRENTPOSITION2,
                         .dwBufferBytes = bufferSize,
                         .dwReserved = 0,
                         .lpwfxFormat = &waveFormat,
@@ -295,15 +288,16 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: i32, height: i3
 
     buffer.width = width;
     buffer.height = height;
+
     const bytesPerPixel = 4;
+    buffer.bytesPerPixe = bytesPerPixel;
 
     // NOTE: When the biHeight field is neative, this is clue to windows to treat bitmap
     // as top-down, not bottom-up, meaning that the first three byte of the image are the
     // colour for the top left pixel in the bitmap, not the bottom left
-
     buffer.info.bmiHeader.biSize = @sizeOf(win32.BITMAPINFOHEADER);
     buffer.info.bmiHeader.biWidth = buffer.width;
-    buffer.info.bmiHeader.biHeight = buffer.height;
+    buffer.info.bmiHeader.biHeight = -buffer.height;
     buffer.info.bmiHeader.biPlanes = 1;
     buffer.info.bmiHeader.biBitCount = 32;
     buffer.info.bmiHeader.biCompression = win32.BI_RGB;
@@ -321,7 +315,7 @@ fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: wi
     _ = win32.StretchDIBits(deviceContext, 0, 0, windowWidth, windowHeight, 0, 0, buffer.width, buffer.height, buffer.memory, &buffer.info, win32.DIB_RGB_COLORS, win32.SRCCOPY);
 }
 
-fn Win32WindowProc(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(WINAPI) win32.LRESULT {
+fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(WINAPI) win32.LRESULT {
     var result: win32.LRESULT = 0;
 
     switch (message) {
@@ -344,7 +338,7 @@ fn Win32WindowProc(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM,
             _ = win32.EndPaint(windowHandle, &paint);
         },
 
-        else => result = win32.DefWindowProc(windowHandle, message, wParam, lParam),
+        else => result = win32.DefWindowProcW(windowHandle, message, wParam, lParam),
     }
 
     return result;
@@ -377,17 +371,6 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
 
         _ = globalSecondaryBuffer.vtable.Unlock(globalSecondaryBuffer, region1, region1Size, region2, region2Size);
     }
-}
-
-fn Win32ProcessKeyboardMessage(newState: *game.button_state, isDown: u32) void {
-    std.debug.assert(newState.endedDown != isDown);
-    newState.endedDown = isDown;
-    newState.haltTransitionCount += 1;
-}
-
-fn Win32ProcessXinputDigitalButton(xInputButtonState: DWORD, oldState: *game.button_state, buttonBit: DWORD, newState: *game.button_state) void {
-    newState.endedDown = if (((xInputButtonState & buttonBit) == buttonBit)) 1 else 0;
-    newState.haltTransitionCount = if (oldState.endedDown != newState.endedDown) 1 else 0;
 }
 
 fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, bytesToWrite: DWORD, sourceBuffer: *game.sound_output_buffer) void {
@@ -432,7 +415,30 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
     }
 }
 
-fn Win32MessageLoop(keyboardController: *game.controller_input) void {
+fn Win32ProcessKeyboardMessage(newState: *game.button_state, isDown: u32) void {
+    std.debug.assert(newState.endedDown != isDown);
+    newState.endedDown = isDown;
+    newState.haltTransitionCount += 1;
+}
+
+fn Win32ProcessXinputDigitalButton(xInputButtonState: DWORD, oldState: *game.button_state, buttonBit: DWORD, newState: *game.button_state) void {
+    newState.endedDown = if (((xInputButtonState & buttonBit) == buttonBit)) 1 else 0;
+    newState.haltTransitionCount = if (oldState.endedDown != newState.endedDown) 1 else 0;
+}
+
+fn Win32ProcessXInputStickValue(value: i16, deadZoneThreshold: u32) f32 {
+    var result: f32 = 0;
+
+    if (value < -@intCast(i32, deadZoneThreshold)) {
+        result = @intToFloat(f32, @as(i32, value) + @intCast(i32, deadZoneThreshold)) / (32768.0 - @intToFloat(f32, deadZoneThreshold));
+    } else if (value > deadZoneThreshold) {
+        result = @intToFloat(f32, @as(i32, value) - @intCast(i32, deadZoneThreshold)) / (32767.0 - @intToFloat(f32, deadZoneThreshold));
+    }
+
+    return result;
+}
+
+fn Win32ProcessPendingMessages(keyboardController: *game.controller_input) void {
     var message: win32.MSG = undefined;
     while (win32.PeekMessage(&message, null, 0, 0, win32.PM_REMOVE) != 0) {
         switch (message.message) {
@@ -474,16 +480,42 @@ fn Win32MessageLoop(keyboardController: *game.controller_input) void {
     }
 }
 
-fn Win32ProcessXInputStickValue(value: i16, deadZoneThreshold: u32) f32 {
-    var result: f32 = 0;
-
-    if (value < -@intCast(i32, deadZoneThreshold)) {
-        result = @intToFloat(f32, @as(i32, value) + @intCast(i32, deadZoneThreshold)) / (32768.0 - @intToFloat(f32, deadZoneThreshold));
-    } else if (value > deadZoneThreshold) {
-        result = @intToFloat(f32, @as(i32, value) + @intCast(i32, deadZoneThreshold)) / (32767.0 - @intToFloat(f32, deadZoneThreshold));
+fn Win32DebugDrawVertical(backBuffer: *win32_offscreen_buffer, x: u32, top: u32, bottom: i32, colour: u32) void
+{
+    var pixel: [*]u8 = @ptrCast([*]u8, backBuffer.memory) + x * backBuffer.bytesPerPixe + top * backBuffer.pitch;
+    var y = top;
+    while (y < bottom) : (y += 1) {
+        @ptrCast(*u32, @alignCast(@alignOf(u32), pixel)).* = colour;
+        pixel += backBuffer.pitch;
     }
+}
 
-    return result;
+inline fn Win32DrawSoundBufferMarker(backBuffer: *win32_offscreen_buffer, soundOutput: *win32_sound_output, coeff: f32, padX: u32, top: u32, bottom: i32, value: DWORD, colour: u32) void {
+    std.debug.assert(value < soundOutput.secondaryBufferSize);
+    const xReal32 = coeff * @intToFloat(f32, value);
+    const x = padX + @floatToInt(u32, xReal32);
+
+    Win32DebugDrawVertical(backBuffer, x, top, bottom, colour);
+}
+
+fn Win32DebugSyncDisplay(backBuffer: *win32_offscreen_buffer, markerCount: u32, markers: [*]win32_debug_time_marker, soundOutput: *win32_sound_output, targetSecondsPerFrame: f32) void {
+    // TODO: draw where we're writing our sound
+    const padX = 16;
+    const padY = 16;
+
+    _ = targetSecondsPerFrame;
+
+    const top = padY;
+    const bottom = backBuffer.height - padY;
+
+    const coeff = @intToFloat(f32, (backBuffer.width - 2 * padX)) / @intToFloat(f32, soundOutput.secondaryBufferSize);
+
+    var markerIndex: u32 = 0;
+    while (markerIndex < markerCount) : (markerIndex += 1) {
+        const marker = &markers[markerIndex];
+        Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, marker.playCursor, 0xffffffff);
+        Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, marker.writeCursor, 0xffff0000);
+    }
 }
 
 // inline defs ----------------------------------------------------------------------------------------------------------------------------
@@ -531,7 +563,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             win32.WNDCLASS_STYLES,
             @enumToInt(win32.CS_HREDRAW) | @enumToInt(win32.CS_VREDRAW) | @enumToInt(win32.CS_OWNDC),
         ),
-        .lpfnWndProc = Win32WindowProc,
+        .lpfnWndProc = Win32MainWindowCallback,
         .cbClsExtra = 0,
         .cbWndExtra = 0,
         .hInstance = hInstance,
@@ -542,12 +574,20 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         .lpszClassName = win32.L("HandmadeHeroWindowClass"),
     };
 
+    // TODO: how do we reliably query this on windows?
+    // TODO: Lets think about running non-frame-quantized for audio latency
+    // TODO: Lets use the write cursor delta from the play cursor to adjust the target audio latency
+
+    const framesOfAudioLatency = 3;
     const monitorRefreshHz = 60;
-    const gameUpdateHz = monitorRefreshHz / 2;
-    const targetSecondsPerFrame = 1 / @intToFloat(f32, gameUpdateHz);
+    const gameUpdateHz = @divTrunc(monitorRefreshHz , 2);
+    const targetSecondsPerFrame = 1.0 / @intToFloat(f32, gameUpdateHz);
 
     if (win32.RegisterClass(&windowclass) != 0) {
-        if (win32.CreateWindowEx(@intToEnum(win32.WINDOW_EX_STYLE, 0), windowclass.lpszClassName, win32.L("HandmadeHero"), @intToEnum(win32.WINDOW_STYLE, @enumToInt(win32.WS_OVERLAPPEDWINDOW) | @enumToInt(win32.WS_VISIBLE)), win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, null, null, hInstance, null)) |windowHandle| {
+        if (win32.CreateWindowExW(@intToEnum(win32.WINDOW_EX_STYLE, 0), windowclass.lpszClassName, win32.L("HandmadeHero"), @intToEnum(win32.WINDOW_STYLE, @enumToInt(win32.WS_OVERLAPPEDWINDOW) | @enumToInt(win32.WS_VISIBLE)), win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, null, null, hInstance, null)) |windowHandle| {
+            // NOTE: Since we specified CS_OWNDC, we can just
+            // get one device context and use it forever because we
+            // are not sharing it with anyone.
             if (win32.GetDC(windowHandle)) |deviceContext| {
                 defer _ = win32.ReleaseDC(windowHandle, deviceContext);
                 var soundOutput = win32_sound_output{
@@ -560,13 +600,26 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 };
 
                 soundOutput.secondaryBufferSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
-                soundOutput.latencySampleCount = soundOutput.samplesPerSecond / 15; //(15 - fps)
+                soundOutput.latencySampleCount = framesOfAudioLatency * @divTrunc(soundOutput.samplesPerSecond , gameUpdateHz);
 
                 Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.secondaryBufferSize);
                 Win32ClearBuffer(&soundOutput);
                 _ = globalSecondaryBuffer.vtable.Play(globalSecondaryBuffer, 0, 0, win32.DSBPLAY_LOOPING);
 
                 globalRunning = true;
+
+                if (!IGNORE) {
+                    // NOTE: This tests the PlayCursor/WriteCursor update frequency
+                    // for this machine it was 1920
+                    while (globalRunning)
+                    {
+                        var playCursor: DWORD = 0;
+                        var writeCursor: DWORD = 0;
+                        _ = globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor);
+
+                        std.debug.print("{} {}\n", .{ playCursor, writeCursor });
+                    }
+                }
 
                 if (@ptrCast(?[*]i16, @alignCast(
                     @alignOf(i16),
@@ -609,6 +662,13 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         var oldInput = &inputs[1];
 
                         var lastCounter = Win32GetWallClock();
+
+                        var debugTimeMarkerIndex:u32 = 0;
+                        var debugTimeMarkers = [1]win32_debug_time_marker{ win32_debug_time_marker{} } ** @divTrunc(@intCast(u32, gameUpdateHz), 2);
+
+                        var lastPlayCursor: DWORD = 0;
+                        var soundIsValid = false;
+
                         var lastCycleCount = rdtsc();
 
                         while (globalRunning) {
@@ -625,14 +685,16 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 newKeyboardController.buttons.Get(buttonIndex).endedDown = oldKeyboardController.buttons.Get(buttonIndex).endedDown;
                             }
 
-                            Win32MessageLoop(newKeyboardController);
+                            Win32ProcessPendingMessages(newKeyboardController);
 
+                            // TODO: Need to not poll disconnected controllers to avoid
+                            // xinput frame rate hit on older libraries...
+                            // TODO: Should we poll this more frequently
                             const maxControllerCount = win32.XUSER_MAX_COUNT;
                             if (maxControllerCount > newInput.controllers.len - 1) {
-                                maxControllerCount = newInput.controllers.len - 1; // why are we doing this?
+                                maxControllerCount = newInput.controllers.len - 1;
                             }
 
-                            // TODO: should we poll this more frequently
                             var controllerIndex: DWORD = 0;
                             while (controllerIndex < maxControllerCount) : (controllerIndex += 1) {
                                 const ourControllerIndex = controllerIndex + 1;
@@ -647,6 +709,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                     // TODO: see if ControllerState.dwPacketNumber increments too rapidly
                                     const pad = &controllerState.Gamepad;
 
+                                    // TODO: This is a square deadzone, check XInput to
+                                    // verify that the deadzone is "round" and show how to do
+                                    // round deadzone processing.
                                     newController.stickAverageX = Win32ProcessXInputStickValue(pad.sThumbLX, win32.XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
                                     newController.stickAverageY = Win32ProcessXInputStickValue(pad.sThumbLY, win32.XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
 
@@ -716,19 +781,16 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 }
                             }
 
+                            // NOTE: Compute how much sound to write and where
                             var byteToLock: DWORD = 0;
                             var targetCursor: DWORD = 0;
                             var bytesToWrite: DWORD = 0;
-                            var playCursor: DWORD = 0;
-                            var writeCursor: DWORD = 0;
-                            var soundIsValid = false;
-                            // TODO: tighten up sound logic so we know where we should be writing to and can anticipate the time spent in the game update
-                            if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor))) {
-                                soundIsValid = true;
+
+                            if (soundIsValid) {
 
                                 byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) % soundOutput.secondaryBufferSize;
 
-                                targetCursor = (playCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) % soundOutput.secondaryBufferSize;
+                                targetCursor = (lastPlayCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) % soundOutput.secondaryBufferSize;
 
                                 if (byteToLock > targetCursor) {
                                     bytesToWrite = soundOutput.secondaryBufferSize - byteToLock;
@@ -754,6 +816,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             game.UpdateAndRender(&win32Platform, &gameMemory, newInput, &buffer, &soundBuffer);
 
                             if (soundIsValid) {
+                                if (HANDMADE_INTERNAL) {
+                                    var playCursor: DWORD = 0;
+                                    var writeCursor: DWORD = 0;
+                                    _ = globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor);
+
+                                    std.debug.print("LPC:{} BTL:{} BTW:{} - PC:{} WC:{}\n", .{ lastPlayCursor, byteToLock, bytesToWrite, playCursor, writeCursor });
+
+                                } 
                                 Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuffer);
                             }
 
@@ -779,8 +849,41 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 // TODO: logging
                             }
 
+                            const endCounter: win32.LARGE_INTEGER = Win32GetWallClock();
+                            const msPerFrame = 1000 * Win32GetSecondsElapsed(lastCounter, endCounter);
+                            lastCounter = endCounter;
+
                             const dimension = Win32GetWindowDimenstion(windowHandle);
+
+                            if (HANDMADE_INTERNAL) {
+                                Win32DebugSyncDisplay(&globalBackBuffer, debugTimeMarkers.len, &debugTimeMarkers, &soundOutput, targetSecondsPerFrame);
+                            }
+
                             Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
+
+                            var playCursor: DWORD = 0;
+                            var writeCursor: DWORD = 0;
+
+                            if (win32.SUCCEEDED((globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor)))) {
+                                lastPlayCursor = playCursor;
+                                if (!soundIsValid) {
+                                    soundOutput.runningSampleIndex = @divTrunc(writeCursor, soundOutput.bytesPerSample);
+                                    soundIsValid = true;
+                                }
+                            } else {
+                                soundIsValid = false;
+                            }
+
+                            if (HANDMADE_INTERNAL) {
+                                // NOTE: This is debug code
+                                const marker = &debugTimeMarkers[debugTimeMarkerIndex];
+                                debugTimeMarkerIndex += 1;
+                                if (debugTimeMarkerIndex >= debugTimeMarkers.len) {
+                                    debugTimeMarkerIndex = 0;
+                                }
+                                marker.playCursor = playCursor;
+                                marker.writeCursor = writeCursor;
+                            }
 
                             const temp = newInput;
                             newInput = oldInput;
@@ -791,16 +894,10 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             const cyclesElapsed = endCycleCount - lastCycleCount;
                             lastCycleCount = endCycleCount;
 
-                            const endCounter: win32.LARGE_INTEGER = Win32GetWallClock();
-                            const msPerFrame = 1000 * Win32GetSecondsElapsed(lastCounter, endCounter);
-                            lastCounter = endCounter;
-
                             const fps: f64 = 0;
                             const mcpf = @intToFloat(f64, cyclesElapsed) / (1000 * 1000);
 
-                            var fpsBuffer: [256:0]u16 = undefined;
-                            _ = win32.wnsprintfW(&fpsBuffer, @sizeOf(@TypeOf(fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), msPerFrame, fps, mcpf);
-                            _ = win32.OutputDebugStringW(&fpsBuffer);
+                            std.debug.print("{d:.2}ms/f, {d:.2}f/s, {d:.2}mc/f\n", .{ msPerFrame, fps, mcpf });
                         }
                     } else {
                         // TODO: LOGGING

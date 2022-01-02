@@ -92,7 +92,7 @@ pub const state = struct {
 // local functions ------------------------------------------------------------------------------------------------------------------------
 
 fn OutputSound(soundBuffer: *sound_output_buffer, toneHz: u32) void {
-    const s = struct {
+    const local_persist = struct {
         var tSine: f32 = 0;
     };
 
@@ -102,14 +102,14 @@ fn OutputSound(soundBuffer: *sound_output_buffer, toneHz: u32) void {
     var sampleOut = soundBuffer.samples;
     var sampleIndex: u32 = 0;
     while (sampleIndex < soundBuffer.sampleCount) : (sampleIndex += 1) {
-        const sineValue = std.math.sin(s.tSine);
+        const sineValue = std.math.sin(local_persist.tSine);
         const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume));
         sampleOut.* = sampleValue;
         sampleOut += 1;
         sampleOut.* = sampleValue;
         sampleOut += 1;
 
-        s.tSine += 2.0 * PI32 * 1.0 / @intToFloat(f32, wavePeriod);
+        local_persist.tSine += 2.0 * PI32 * 1.0 / @intToFloat(f32, wavePeriod);
     }
 }
 
