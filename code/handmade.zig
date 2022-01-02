@@ -26,33 +26,53 @@ pub const button_state = packed struct {
     endedDown: u32 = 0,
 };
 
+const input_buttons = struct {
+    moveUp: button_state = button_state{},
+    moveDown: button_state = button_state{},
+    moveLeft: button_state = button_state{},
+    moveRight: button_state = button_state{},
+
+    actionUp: button_state = button_state{},
+    actionDown: button_state = button_state{},
+    actionLeft: button_state = button_state{},
+    actionRight: button_state = button_state{},
+
+    leftShoulder: button_state = button_state{},
+    rightShoulder: button_state = button_state{},
+
+    back: button_state = button_state{},
+    start: button_state = button_state{},
+
+    pub fn Get(self: *input_buttons, index: u8) *button_state {
+        return switch (index) {
+            0 => &self.moveUp,
+            1 => &self.moveDown,
+            2 => &self.moveLeft,
+            3 => &self.moveRight,
+            4 => &self.actionUp,
+            5 => &self.actionDown,
+            6 => &self.actionLeft,
+            7 => &self.actionRight,
+            8 => &self.leftShoulder,
+            9 => &self.rightShoulder,
+            10 => &self.back,
+            11 => &self.start,
+            else => unreachable,
+        };
+    }
+};
+
 pub const controller_input = struct {
     isAnalog: bool = false,
+    isConnected: bool = false,
+    stickAverageX: f32 = 0,
+    stickAverageY: f32 = 0,
 
-    startX: f32 = 0,
-    startY: f32 = 0,
-
-    minX: f32 = 0,
-    minY: f32 = 0,
-
-    maxX: f32 = 0,
-    maxY: f32 = 0,
-
-    endX: f32 = 0,
-    endY: f32 = 0,
-
-    buttons: packed struct {
-        up: button_state,
-        down: button_state,
-        left: button_state,
-        right: button_state,
-        leftShoulder: button_state,
-        rightShoulder: button_state,
-    },
+    buttons: input_buttons = input_buttons{},
 };
 
 pub const input = struct {
-    controllers: [4]controller_input,
+    controllers: [5]controller_input,
 };
 
 pub const memory = struct {
@@ -103,10 +123,11 @@ fn RenderWeirdGradient(buffer: *offscreen_buffer, xOffset: i32, yOffset: i32) vo
         while (x < buffer.width) : (x += 1) {
             // Pixel in memory: BB GG RR xx
             // Little endian arch: 0x xxRRGGBB
-            var blue = x + @intCast(u32, xOffset);
-            var green = y + @intCast(u32, yOffset);
 
-            pixel.* = (green << 8) | blue;
+            var blue: u8 = @truncate(u8, x +% @bitCast(u32, xOffset));
+            var green: u8 = @truncate(u8, y +% @bitCast(u32, yOffset));
+
+            pixel.* = (@as(u32, green) << 8) | @as(u32, blue);
             pixel += 1;
         }
         row += buffer.pitch;
@@ -161,19 +182,26 @@ pub fn UpdateAndRender(callbacks: *const platform, gameMemory: *memory, gameInpu
         gameMemory.isInitialized = true;
     }
 
-    const input0 = gameInput.controllers[0];
+    for (gameInput.controllers) |controller| {
+        if (controller.isAnalog) {
+            // Use analog movement tuning
+            gameState.blueOffset +%= @floatToInt(i32, 4.0 * controller.stickAverageX);
+            gameState.toneHz = 256 + @floatToInt(u32, 120.0 * controller.stickAverageY);
+        } else {
+            // Use digital movement tuning
+            if (controller.buttons.moveLeft.endedDown != 0) {
+                gameState.blueOffset -%= 1;
+            }
+            if (controller.buttons.moveRight.endedDown != 0) {
+                gameState.blueOffset +%= 1;
+            }
+        }
 
-    if (input0.isAnalog) {
-        gameState.blueOffset += @floatToInt(i32, 4.0 * input0.endX);
-        gameState.toneHz += 256 + @floatToInt(u32, 120.0 * input0.endY);
-    } else {
-        // Use digital movement tuning
-    }
-
-    // Input.AButtonEndedDown;
-    // Input.NumberOfTransitions;
-    if (input0.buttons.down.endedDown != 0) {
-        gameState.greenOffset += 1;
+        // Input.AButtonEndedDown;
+        // Input.NumberOfTransitions;
+        if (controller.buttons.actionDown.endedDown != 0) {
+            gameState.greenOffset +%= 1;
+        }
     }
 
     // TODO:  Allow sample offsets here for more robust platform options

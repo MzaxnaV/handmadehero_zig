@@ -113,7 +113,7 @@ fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) game.debug_read_file_result
     if (fileHandle != null and fileHandle != win32.INVALID_HANDLE_VALUE) {
         var fileSize = win32.LARGE_INTEGER{ .QuadPart = 0 };
         if (win32.GetFileSizeEx(fileHandle, &fileSize) != 0) {
-            var fileSize32 = @intCast(u32, fileSize.QuadPart);
+            var fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @intCast(u32, fileSize.QuadPart) else unreachable;
             if (win32.VirtualAlloc(null, fileSize32, allocationType, win32.PAGE_READWRITE)) |data| {
                 var bytesRead: DWORD = 0;
                 if (win32.ReadFile(fileHandle, data, fileSize32, &bytesRead, null) != 0 and fileSize32 == bytesRead) {
@@ -313,21 +313,7 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: i32, height: i3
 fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: win32.HDC, windowWidth: i32, windowHeight: i32) void {
     // TODO: Aespect Ratio correction
     // TODO: Play with Stretch modes
-    _ = win32.StretchDIBits(
-        deviceContext,
-        0,
-        0,
-        windowWidth,
-        windowHeight,
-        0,
-        0,
-        buffer.width,
-        buffer.height,
-        buffer.memory,
-        &buffer.info,
-        win32.DIB_RGB_COLORS,
-        win32.SRCCOPY
-    );
+    _ = win32.StretchDIBits(deviceContext, 0, 0, windowWidth, windowHeight, 0, 0, buffer.width, buffer.height, buffer.memory, &buffer.info, win32.DIB_RGB_COLORS, win32.SRCCOPY);
 }
 
 fn Win32WindowProc(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(WINAPI) win32.LRESULT {
@@ -389,6 +375,7 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
 }
 
 fn Win32ProcessKeyboardMessage(newState: *game.button_state, isDown: u32) void {
+    std.debug.assert(newState.endedDown != isDown);
     newState.endedDown = isDown;
     newState.haltTransitionCount += 1;
 }
@@ -453,19 +440,18 @@ fn Win32MessageLoop(keyboardController: *game.controller_input) void {
 
                 if (wasDown != isDown) {
                     switch (vkCode) {
-                        win32.VK_W,
-                        win32.VK_A,
-                        win32.VK_S,
-                        win32.VK_D,
-                        => {},
-                        win32.VK_Q => Win32ProcessKeyboardMessage(&keyboardController.buttons.leftShoulder, @intCast(u32, @boolToInt(isDown))),
-                        win32.VK_E => Win32ProcessKeyboardMessage(&keyboardController.buttons.rightShoulder, @intCast(u32, @boolToInt(isDown))),
-                        win32.VK_UP => Win32ProcessKeyboardMessage(&keyboardController.buttons.up, @intCast(u32, @boolToInt(isDown))),
-                        win32.VK_LEFT => Win32ProcessKeyboardMessage(&keyboardController.buttons.left, @intCast(u32, @boolToInt(isDown))),
-                        win32.VK_DOWN => Win32ProcessKeyboardMessage(&keyboardController.buttons.down, @intCast(u32, @boolToInt(isDown))),
-                        win32.VK_RIGHT => Win32ProcessKeyboardMessage(&keyboardController.buttons.right, @intCast(u32, @boolToInt(isDown))),
-                        win32.VK_ESCAPE => globalRunning = false,
-                        win32.VK_SPACE => {},
+                        win32.VK_W => Win32ProcessKeyboardMessage(&keyboardController.buttons.moveUp, @as(u32, @boolToInt(isDown))),
+                        win32.VK_A => Win32ProcessKeyboardMessage(&keyboardController.buttons.moveLeft, @as(u32, @boolToInt(isDown))),
+                        win32.VK_S => Win32ProcessKeyboardMessage(&keyboardController.buttons.moveDown, @as(u32, @boolToInt(isDown))),
+                        win32.VK_D => Win32ProcessKeyboardMessage(&keyboardController.buttons.moveRight, @as(u32, @boolToInt(isDown))),
+                        win32.VK_Q => Win32ProcessKeyboardMessage(&keyboardController.buttons.leftShoulder, @as(u32, @boolToInt(isDown))),
+                        win32.VK_E => Win32ProcessKeyboardMessage(&keyboardController.buttons.rightShoulder, @as(u32, @boolToInt(isDown))),
+                        win32.VK_UP => Win32ProcessKeyboardMessage(&keyboardController.buttons.actionUp, @as(u32, @boolToInt(isDown))),
+                        win32.VK_LEFT => Win32ProcessKeyboardMessage(&keyboardController.buttons.actionLeft, @as(u32, @boolToInt(isDown))),
+                        win32.VK_DOWN => Win32ProcessKeyboardMessage(&keyboardController.buttons.actionDown, @as(u32, @boolToInt(isDown))),
+                        win32.VK_RIGHT => Win32ProcessKeyboardMessage(&keyboardController.buttons.actionRight, @as(u32, @boolToInt(isDown))),
+                        win32.VK_ESCAPE => Win32ProcessKeyboardMessage(&keyboardController.buttons.start, @as(u32, @boolToInt(isDown))),
+                        win32.VK_SPACE => Win32ProcessKeyboardMessage(&keyboardController.buttons.back, @as(u32, @boolToInt(isDown))),
                         else => {},
                     }
                 }
@@ -481,6 +467,18 @@ fn Win32MessageLoop(keyboardController: *game.controller_input) void {
             },
         }
     }
+}
+
+fn Win32ProcessXInputStickValue(value: i16, deadZoneThreshold: u32) f32 {
+    var result: f32 = 0;
+
+    if (value < -@intCast(i32, deadZoneThreshold)) {
+        result = @intToFloat(f32, @as(i32, value) + @intCast(i32, deadZoneThreshold)) / (32768.0 - @intToFloat(f32, deadZoneThreshold));
+    } else if (value > deadZoneThreshold) {
+        result = @intToFloat(f32, @as(i32, value) + @intCast(i32, deadZoneThreshold)) / (32767.0 - @intToFloat(f32, deadZoneThreshold));
+    }
+
+    return result;
 }
 
 // inline defs ----------------------------------------------------------------------------------------------------------------------------
@@ -577,16 +575,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             game.input{
                                 .controllers = [1]game.controller_input{
                                     game.controller_input{
-                                        .buttons = .{
-                                            .up = game.button_state{},
-                                            .down = game.button_state{},
-                                            .left = game.button_state{},
-                                            .right = game.button_state{},
-                                            .leftShoulder = game.button_state{},
-                                            .rightShoulder = game.button_state{},
-                                        },
+                                        .buttons = .{},
                                     },
-                                } ** 4,
+                                } ** 5,
                             },
                         } ** 2;
 
@@ -598,85 +589,107 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         var lastCycleCount = rdtsc();
 
                         while (globalRunning) {
-                            const keyboardController: *game.controller_input = &newInput.controllers[0];
+                            const oldKeyboardController: *game.controller_input = &oldInput.controllers[0];
+                            const newKeyboardController: *game.controller_input = &newInput.controllers[0];
                             // TODO: can't zero everything because the up/down state will be wrong
-                            keyboardController.* = game.controller_input{ .buttons = .{
-                                .up = game.button_state{},
-                                .down = game.button_state{},
-                                .left = game.button_state{},
-                                .right = game.button_state{},
-                                .leftShoulder = game.button_state{},
-                                .rightShoulder = game.button_state{},
-                            } };
+                            newKeyboardController.* = game.controller_input{
+                                .isConnected = true,
+                                .buttons = .{},
+                            };
 
-                            Win32MessageLoop(keyboardController);
+                            var buttonIndex: u8 = 0;
+                            while (buttonIndex < 12) : (buttonIndex += 1) { // hardcoded for now
+                                newKeyboardController.buttons.Get(buttonIndex).endedDown = oldKeyboardController.buttons.Get(buttonIndex).endedDown;
+                            }
+
+                            Win32MessageLoop(newKeyboardController);
 
                             const maxControllerCount = win32.XUSER_MAX_COUNT;
-                            if (maxControllerCount < newInput.controllers.len) {
-                                maxControllerCount = newInput.controllers.len; // why are we doing this?
+                            if (maxControllerCount > newInput.controllers.len - 1) {
+                                maxControllerCount = newInput.controllers.len - 1; // why are we doing this?
                             }
 
                             // TODO: should we poll this more frequently
                             var controllerIndex: DWORD = 0;
                             while (controllerIndex < maxControllerCount) : (controllerIndex += 1) {
-                                const oldController = &oldInput.controllers[controllerIndex];
-                                const newController = &newInput.controllers[controllerIndex];
+                                const ourControllerIndex = controllerIndex + 1;
+                                const oldController = &oldInput.controllers[ourControllerIndex];
+                                const newController = &newInput.controllers[ourControllerIndex];
 
                                 var controllerState: win32.XINPUT_STATE = undefined;
                                 if (XInputGetState(controllerIndex, &controllerState) == @enumToInt(win32.ERROR_SUCCESS)) {
+                                    newController.isConnected = true;
+
                                     // This controller is plugged in
                                     // TODO: see if ControllerState.dwPacketNumber increments too rapidly
                                     const pad = &controllerState.Gamepad;
-                                    // const up = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_UP);
-                                    // const down = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_DOWN);
-                                    // const left = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_LEFT);
-                                    // const right = (pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_RIGHT);
-                                    // const start = (pad.wButtons & win32.XINPUT_GAMEPAD_START);
-                                    // const back = (pad.wButtons & win32.XINPUT_GAMEPAD_BACK);
-                                    // const leftShoulder = (pad.wButtons & win32.XINPUT_GAMEPAD_LEFT_SHOULDER);
-                                    // const rightShoulder = (pad.wButtons & win32.XINPUT_GAMEPAD_RIGHT_SHOULDER);
-                                    // const aButton = (pad.wButtons & win32.XINPUT_GAMEPAD_A);
-                                    // const bButton = (pad.wButtons & win32.XINPUT_GAMEPAD_B);
-                                    // const xButton = (pad.wButtons & win32.XINPUT_GAMEPAD_X);
-                                    // const yButton = (pad.wButtons & win32.XINPUT_GAMEPAD_Y);
-                                    newController.isAnalog = true;
-                                    newController.startX = oldController.startX;
-                                    newController.startY = oldController.startY;
 
-                                    // TODO: do deadzone processing
-                                    // const XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE = 7849
-                                    // const XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE = 8689
+                                    newController.stickAverageX = Win32ProcessXInputStickValue(pad.sThumbLX, win32.XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+                                    newController.stickAverageY = Win32ProcessXInputStickValue(pad.sThumbLY, win32.XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
 
-                                    var x: f32 = 0;
-                                    if (pad.sThumbLX < 0) {
-                                        x = @intToFloat(f32, pad.sThumbLX) / 32768.0;
-                                    } else {
-                                        x = @intToFloat(f32, pad.sThumbLX) / 32767.0;
+                                    if (newController.stickAverageX != 0 or newController.stickAverageY != 0) {
+                                        newController.isAnalog = true;
                                     }
 
-                                    newController.minX = x;
-                                    newController.maxX = x;
-                                    newController.endX = x;
-
-                                    var y: f32 = 0;
-                                    if (pad.sThumbLY < 0) {
-                                        x = @intToFloat(f32, pad.sThumbLY) / 32768.0;
-                                    } else {
-                                        x = @intToFloat(f32, pad.sThumbLY) / 32767.0;
+                                    if ((pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_UP) != 0) {
+                                        newController.stickAverageY = 1;
+                                        newController.isAnalog = false;
                                     }
 
-                                    newController.minY = y;
-                                    newController.maxY = y;
-                                    newController.endY = y;
+                                    if ((pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_DOWN) != 0) {
+                                        newController.stickAverageY = -1;
+                                        newController.isAnalog = false;
+                                    }
 
-                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.down, win32.XINPUT_GAMEPAD_A, &newController.buttons.down);
-                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.right, win32.XINPUT_GAMEPAD_B, &newController.buttons.right);
-                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.left, win32.XINPUT_GAMEPAD_X, &newController.buttons.left);
-                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.up, win32.XINPUT_GAMEPAD_Y, &newController.buttons.up);
+                                    if ((pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_LEFT) != 0) {
+                                        newController.stickAverageX = -1;
+                                        newController.isAnalog = false;
+                                    }
+
+                                    if ((pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_RIGHT) != 0) {
+                                        newController.stickAverageX = 1;
+                                        newController.isAnalog = false;
+                                    }
+
+                                    const threshold = 0.5;
+
+                                    Win32ProcessXinputDigitalButton(
+                                        if (newController.stickAverageX < -threshold) 1 else 0,
+                                        &oldController.buttons.moveLeft,
+                                        1,
+                                        &newController.buttons.moveLeft,
+                                    );
+
+                                    Win32ProcessXinputDigitalButton(
+                                        if (newController.stickAverageX > threshold) 1 else 0,
+                                        &oldController.buttons.moveRight,
+                                        1,
+                                        &newController.buttons.moveRight,
+                                    );
+
+                                    Win32ProcessXinputDigitalButton(
+                                        if (newController.stickAverageY < -threshold) 1 else 0,
+                                        &oldController.buttons.moveDown,
+                                        1,
+                                        &newController.buttons.moveDown,
+                                    );
+
+                                    Win32ProcessXinputDigitalButton(
+                                        if (newController.stickAverageY > threshold) 1 else 0,
+                                        &oldController.buttons.moveUp,
+                                        1,
+                                        &newController.buttons.moveUp,
+                                    );
+
+                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.actionDown, win32.XINPUT_GAMEPAD_A, &newController.buttons.actionDown);
+                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.actionRight, win32.XINPUT_GAMEPAD_B, &newController.buttons.actionRight);
+                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.actionLeft, win32.XINPUT_GAMEPAD_X, &newController.buttons.actionLeft);
+                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.actionUp, win32.XINPUT_GAMEPAD_Y, &newController.buttons.actionUp);
                                     Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.leftShoulder, win32.XINPUT_GAMEPAD_LEFT_SHOULDER, &newController.buttons.leftShoulder);
                                     Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.rightShoulder, win32.XINPUT_GAMEPAD_RIGHT_SHOULDER, &newController.buttons.rightShoulder);
                                 } else {
                                     // This controller is not available
+                                    newController.isConnected = false;
                                 }
                             }
 
