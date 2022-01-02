@@ -6,6 +6,7 @@ const DWORD = std.os.windows.DWORD;
 const win32 = struct {
     usingnamespace @import("win32").foundation;
     usingnamespace @import("win32").graphics.gdi;
+    usingnamespace @import("win32").media;
     usingnamespace @import("win32").media.audio;
     usingnamespace @import("win32").media.audio.direct_sound;
     usingnamespace @import("win32").storage.file_system;
@@ -14,11 +15,20 @@ const win32 = struct {
     usingnamespace @import("win32").system.library_loader;
     usingnamespace @import("win32").system.memory;
     usingnamespace @import("win32").system.performance;
+    usingnamespace @import("win32").system.threading;
     usingnamespace @import("win32").ui.input.keyboard_and_mouse;
     usingnamespace @import("win32").ui.input.xbox_controller;
     usingnamespace @import("win32").ui.windows_and_messaging;
+    // usingnamespace @import("win32").ui.shell;
 
     usingnamespace @import("win32").zig;
+
+    pub extern "SHLWAPI" fn wnsprintfW(
+        pszDest: [*:0]u16,
+        cchDest: i32,
+        pszFmt: ?[*:0]const u16,
+        ...,
+    ) callconv(@import("std").os.windows.WINAPI) i32;
 };
 
 const game = @import("handmade.zig");
@@ -82,6 +92,7 @@ pub var globalBackBuffer = win32_offscreen_buffer{
     .memory = undefined,
 };
 pub var globalSecondaryBuffer: *win32.IDirectSoundBuffer = undefined;
+pub var globalPerfCounterFrequency: i64 = undefined;
 
 const win32Platform = game.platform{
     .DEBUGPlatformFreeFileMemory = DEBUGWin32FreeFileMemory,
@@ -90,12 +101,6 @@ const win32Platform = game.platform{
 };
 
 // library defs ---------------------------------------------------------------------------------------------------------------------------
-
-pub extern "USER32" fn wsprintfW(
-    param0: ?win32.PWSTR,
-    param1: ?[*:0]const u16,
-    ...,
-) callconv(WINAPI) i32;
 
 var XInputGetState: fn (u32, ?*win32.XINPUT_STATE) callconv(WINAPI) isize = undefined;
 var XInputSetState: fn (u32, ?*win32.XINPUT_VIBRATION) callconv(WINAPI) isize = undefined;
@@ -483,6 +488,18 @@ fn Win32ProcessXInputStickValue(value: i16, deadZoneThreshold: u32) f32 {
 
 // inline defs ----------------------------------------------------------------------------------------------------------------------------
 
+inline fn Win32GetWallClock() win32.LARGE_INTEGER {
+    var result: win32.LARGE_INTEGER = undefined;
+    _ = win32.QueryPerformanceCounter(&result);
+    return result;
+}
+
+inline fn Win32GetSecondsElapsed(start: win32.LARGE_INTEGER, end: win32.LARGE_INTEGER) f32 {
+    const result = @intToFloat(f32, (end.QuadPart - start.QuadPart)) / @intToFloat(f32, globalPerfCounterFrequency);
+
+    return result;
+}
+
 inline fn rdtsc() u64 {
     var low: u64 = undefined;
     var high: u64 = undefined;
@@ -500,7 +517,10 @@ inline fn rdtsc() u64 {
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
     var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;
     _ = win32.QueryPerformanceFrequency(&perfCountFrequencyResult);
-    var perfCountFrequency = perfCountFrequencyResult.QuadPart;
+    globalPerfCounterFrequency = perfCountFrequencyResult.QuadPart;
+
+    const desiredSchedulerMS = 1;
+    const sleepIsGranular = (win32.timeBeginPeriod(desiredSchedulerMS) == win32.TIMERR_NOERROR);
 
     Win32LoadXinput();
 
@@ -521,6 +541,10 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         .lpszMenuName = null,
         .lpszClassName = win32.L("HandmadeHeroWindowClass"),
     };
+
+    const monitorRefreshHz = 60;
+    const gameUpdateHz = monitorRefreshHz / 2;
+    const targetSecondsPerFrame = 1 / @intToFloat(f32, gameUpdateHz);
 
     if (win32.RegisterClass(&windowclass) != 0) {
         if (win32.CreateWindowEx(@intToEnum(win32.WINDOW_EX_STYLE, 0), windowclass.lpszClassName, win32.L("HandmadeHero"), @intToEnum(win32.WINDOW_STYLE, @enumToInt(win32.WS_OVERLAPPEDWINDOW) | @enumToInt(win32.WS_VISIBLE)), win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, win32.CW_USEDEFAULT, null, null, hInstance, null)) |windowHandle| {
@@ -584,8 +608,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         var newInput = &inputs[0];
                         var oldInput = &inputs[1];
 
-                        var lastCounter: win32.LARGE_INTEGER = undefined;
-                        _ = win32.QueryPerformanceCounter(&lastCounter);
+                        var lastCounter = Win32GetWallClock();
                         var lastCycleCount = rdtsc();
 
                         while (globalRunning) {
@@ -734,44 +757,50 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuffer);
                             }
 
-                            const dimension = Win32GetWindowDimenstion(windowHandle);
-                            Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
+                            const workCounter = Win32GetWallClock();
+                            const workSecondsElapsed = Win32GetSecondsElapsed(lastCounter, workCounter);
 
-                            var endCycleCount = rdtsc();
+                            // TODO: not tested yet, probably buggy
+                            var secondsElapsedForFrame = workSecondsElapsed;
+                            if (secondsElapsedForFrame < targetSecondsPerFrame) {
+                                if (sleepIsGranular) {
+                                    const sleepMS = @floatToInt(DWORD, (1000 * (targetSecondsPerFrame - secondsElapsedForFrame)));
+                                    if (sleepMS > 0) win32.Sleep(sleepMS);
+                                }
 
-                            var endCounter: win32.LARGE_INTEGER = undefined;
-                            _ = win32.QueryPerformanceCounter(&endCounter);
+                                // const testSecondsElapsedForFrame = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+                                // std.debug.assert(testSecondsElapsedForFrame < targetSecondsPerFrame); // this assert fires? o.o
 
-                            // TODO: display the value here
-                            const cyclesElapsed = endCycleCount - lastCycleCount;
-                            const counterElapsed = endCounter.QuadPart - lastCounter.QuadPart;
-
-                            const msPerFrame = @divTrunc(1000 * counterElapsed, perfCountFrequency);
-                            const fps = @divTrunc(perfCountFrequency, counterElapsed);
-                            const mcpf = cyclesElapsed / (1000 * 1000);
-
-                            if (!IGNORE) {
-                                var strbuf: [256]u16 = undefined;
-                                _ = wsprintfW(&strbuf, win32.L("%d: ms/f, %d: FPS, %d: Mc/f\n"), msPerFrame, fps, mcpf);
-                                _ = win32.OutputDebugStringW(&strbuf);
+                                while (secondsElapsedForFrame < targetSecondsPerFrame) {
+                                    secondsElapsedForFrame = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+                                }
+                            } else {
+                                // TODO: missed frame rate!,
+                                // TODO: logging
                             }
 
-                            // const msPerFrame_f = @intToFloat(f32, 1000 * counterElapsed)/ @intToFloat(f32, perfCountFrequency);
-                            // const fps_f = @intToFloat(f32, perfCountFrequency) / @intToFloat(f32, counterElapsed);
-                            // const mcpf_f = @intToFloat(f32, cyclesElapsed) / (1000.0 * 1000.0);
-
-                            // std.debug.print(
-                            //     "{d: >6.2} ms/f, {d: >6.2} FPS, {d: >6.2} Mc/f : {d: ^6.2}GHz\n",
-                            //     .{ msPerFrame_f, fps_f, mcpf_f, (fps_f * mcpf_f) / 1000.0 },
-                            // );
-
-                            lastCounter = endCounter;
-                            lastCycleCount = endCycleCount;
+                            const dimension = Win32GetWindowDimenstion(windowHandle);
+                            Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
 
                             const temp = newInput;
                             newInput = oldInput;
                             oldInput = temp;
                             // TODO: should I clear these here?
+
+                            var endCycleCount = rdtsc();
+                            const cyclesElapsed = endCycleCount - lastCycleCount;
+                            lastCycleCount = endCycleCount;
+
+                            const endCounter: win32.LARGE_INTEGER = Win32GetWallClock();
+                            const msPerFrame = 1000 * Win32GetSecondsElapsed(lastCounter, endCounter);
+                            lastCounter = endCounter;
+
+                            const fps: f64 = 0;
+                            const mcpf = @intToFloat(f64, cyclesElapsed) / (1000 * 1000);
+
+                            var fpsBuffer: [256:0]u16 = undefined;
+                            _ = win32.wnsprintfW(&fpsBuffer, @sizeOf(@TypeOf(fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), msPerFrame, fps, mcpf);
+                            _ = win32.OutputDebugStringW(&fpsBuffer);
                         }
                     } else {
                         // TODO: LOGGING
