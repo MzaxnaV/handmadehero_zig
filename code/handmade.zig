@@ -26,40 +26,25 @@ pub const button_state = packed struct {
     endedDown: u32 = 0,
 };
 
-const input_buttons = struct {
-    moveUp: button_state = button_state{},
-    moveDown: button_state = button_state{},
-    moveLeft: button_state = button_state{},
-    moveRight: button_state = button_state{},
+const input_buttons = extern union {
+    mapped: struct {
+        moveUp: button_state,
+        moveDown: button_state,
+        moveLeft: button_state,
+        moveRight: button_state,
 
-    actionUp: button_state = button_state{},
-    actionDown: button_state = button_state{},
-    actionLeft: button_state = button_state{},
-    actionRight: button_state = button_state{},
+        actionUp: button_state,
+        actionDown: button_state,
+        actionLeft: button_state,
+        actionRight: button_state,
 
-    leftShoulder: button_state = button_state{},
-    rightShoulder: button_state = button_state{},
+        leftShoulder: button_state,
+        rightShoulder: button_state,
 
-    back: button_state = button_state{},
-    start: button_state = button_state{},
-
-    pub fn Get(self: *input_buttons, index: u8) *button_state {
-        return switch (index) {
-            0 => &self.moveUp,
-            1 => &self.moveDown,
-            2 => &self.moveLeft,
-            3 => &self.moveRight,
-            4 => &self.actionUp,
-            5 => &self.actionDown,
-            6 => &self.actionLeft,
-            7 => &self.actionRight,
-            8 => &self.leftShoulder,
-            9 => &self.rightShoulder,
-            10 => &self.back,
-            11 => &self.start,
-            else => unreachable,
-        };
-    }
+        back: button_state,
+        start: button_state,
+    },
+    states: [12]button_state,
 };
 
 pub const controller_input = struct {
@@ -68,7 +53,9 @@ pub const controller_input = struct {
     stickAverageX: f32 = 0,
     stickAverageY: f32 = 0,
 
-    buttons: input_buttons = input_buttons{},
+    buttons: input_buttons = input_buttons{
+        .states = [1]button_state{button_state{}} ** 12,
+    },
 };
 
 pub const input = struct {
@@ -189,17 +176,17 @@ pub fn UpdateAndRender(callbacks: *const platform, gameMemory: *memory, gameInpu
             gameState.toneHz = 256 + @floatToInt(u32, 120.0 * controller.stickAverageY);
         } else {
             // Use digital movement tuning
-            if (controller.buttons.moveLeft.endedDown != 0) {
+            if (controller.buttons.mapped.moveLeft.endedDown != 0) {
                 gameState.blueOffset -%= 1;
             }
-            if (controller.buttons.moveRight.endedDown != 0) {
+            if (controller.buttons.mapped.moveRight.endedDown != 0) {
                 gameState.blueOffset +%= 1;
             }
         }
 
         // Input.AButtonEndedDown;
         // Input.NumberOfTransitions;
-        if (controller.buttons.actionDown.endedDown != 0) {
+        if (controller.buttons.mapped.actionDown.endedDown != 0) {
             gameState.greenOffset +%= 1;
         }
     }

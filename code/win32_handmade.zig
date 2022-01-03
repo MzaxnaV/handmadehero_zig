@@ -54,7 +54,8 @@ const win32_offscreen_buffer = struct {
             .rgbGreen = 0,
             .rgbRed = 0,
             .rgbReserved = 0,
-        }},},
+        }},
+    },
     memory: ?*anyopaque = undefined,
     width: i32 = 0,
     height: i32 = 0,
@@ -451,18 +452,18 @@ fn Win32ProcessPendingMessages(keyboardController: *game.controller_input) void 
 
                 if (wasDown != isDown) {
                     switch (vkCode) {
-                        win32.VK_W => Win32ProcessKeyboardMessage(&keyboardController.buttons.moveUp, @as(u32, @boolToInt(isDown))),
-                        win32.VK_A => Win32ProcessKeyboardMessage(&keyboardController.buttons.moveLeft, @as(u32, @boolToInt(isDown))),
-                        win32.VK_S => Win32ProcessKeyboardMessage(&keyboardController.buttons.moveDown, @as(u32, @boolToInt(isDown))),
-                        win32.VK_D => Win32ProcessKeyboardMessage(&keyboardController.buttons.moveRight, @as(u32, @boolToInt(isDown))),
-                        win32.VK_Q => Win32ProcessKeyboardMessage(&keyboardController.buttons.leftShoulder, @as(u32, @boolToInt(isDown))),
-                        win32.VK_E => Win32ProcessKeyboardMessage(&keyboardController.buttons.rightShoulder, @as(u32, @boolToInt(isDown))),
-                        win32.VK_UP => Win32ProcessKeyboardMessage(&keyboardController.buttons.actionUp, @as(u32, @boolToInt(isDown))),
-                        win32.VK_LEFT => Win32ProcessKeyboardMessage(&keyboardController.buttons.actionLeft, @as(u32, @boolToInt(isDown))),
-                        win32.VK_DOWN => Win32ProcessKeyboardMessage(&keyboardController.buttons.actionDown, @as(u32, @boolToInt(isDown))),
-                        win32.VK_RIGHT => Win32ProcessKeyboardMessage(&keyboardController.buttons.actionRight, @as(u32, @boolToInt(isDown))),
-                        win32.VK_ESCAPE => Win32ProcessKeyboardMessage(&keyboardController.buttons.start, @as(u32, @boolToInt(isDown))),
-                        win32.VK_SPACE => Win32ProcessKeyboardMessage(&keyboardController.buttons.back, @as(u32, @boolToInt(isDown))),
+                        win32.VK_W => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveUp, @as(u32, @boolToInt(isDown))),
+                        win32.VK_A => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveLeft, @as(u32, @boolToInt(isDown))),
+                        win32.VK_S => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveDown, @as(u32, @boolToInt(isDown))),
+                        win32.VK_D => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveRight, @as(u32, @boolToInt(isDown))),
+                        win32.VK_Q => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.leftShoulder, @as(u32, @boolToInt(isDown))),
+                        win32.VK_E => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.rightShoulder, @as(u32, @boolToInt(isDown))),
+                        win32.VK_UP => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionUp, @as(u32, @boolToInt(isDown))),
+                        win32.VK_LEFT => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionLeft, @as(u32, @boolToInt(isDown))),
+                        win32.VK_DOWN => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionDown, @as(u32, @boolToInt(isDown))),
+                        win32.VK_RIGHT => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionRight, @as(u32, @boolToInt(isDown))),
+                        win32.VK_ESCAPE => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.start, @as(u32, @boolToInt(isDown))),
+                        win32.VK_SPACE => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.back, @as(u32, @boolToInt(isDown))),
                         else => {},
                     }
                 }
@@ -480,8 +481,7 @@ fn Win32ProcessPendingMessages(keyboardController: *game.controller_input) void 
     }
 }
 
-fn Win32DebugDrawVertical(backBuffer: *win32_offscreen_buffer, x: u32, top: u32, bottom: i32, colour: u32) void
-{
+fn Win32DebugDrawVertical(backBuffer: *win32_offscreen_buffer, x: u32, top: u32, bottom: i32, colour: u32) void {
     var pixel: [*]u8 = @ptrCast([*]u8, backBuffer.memory) + x * backBuffer.bytesPerPixe + top * backBuffer.pitch;
     var y = top;
     while (y < bottom) : (y += 1) {
@@ -580,7 +580,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
     const framesOfAudioLatency = 3;
     const monitorRefreshHz = 60;
-    const gameUpdateHz = @divTrunc(monitorRefreshHz , 2);
+    const gameUpdateHz = @divTrunc(monitorRefreshHz, 2);
     const targetSecondsPerFrame = 1.0 / @intToFloat(f32, gameUpdateHz);
 
     if (win32.RegisterClass(&windowclass) != 0) {
@@ -600,7 +600,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 };
 
                 soundOutput.secondaryBufferSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
-                soundOutput.latencySampleCount = framesOfAudioLatency * @divTrunc(soundOutput.samplesPerSecond , gameUpdateHz);
+                soundOutput.latencySampleCount = framesOfAudioLatency * @divTrunc(soundOutput.samplesPerSecond, gameUpdateHz);
 
                 Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.secondaryBufferSize);
                 Win32ClearBuffer(&soundOutput);
@@ -611,8 +611,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 if (!IGNORE) {
                     // NOTE: This tests the PlayCursor/WriteCursor update frequency
                     // for this machine it was 1920
-                    while (globalRunning)
-                    {
+                    while (globalRunning) {
                         var playCursor: DWORD = 0;
                         var writeCursor: DWORD = 0;
                         _ = globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor);
@@ -651,9 +650,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         var inputs = [1]game.input{
                             game.input{
                                 .controllers = [1]game.controller_input{
-                                    game.controller_input{
-                                        .buttons = .{},
-                                    },
+                                    game.controller_input{},
                                 } ** 5,
                             },
                         } ** 2;
@@ -663,8 +660,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                         var lastCounter = Win32GetWallClock();
 
-                        var debugTimeMarkerIndex:u32 = 0;
-                        var debugTimeMarkers = [1]win32_debug_time_marker{ win32_debug_time_marker{} } ** @divTrunc(@intCast(u32, gameUpdateHz), 2);
+                        var debugTimeMarkerIndex: u32 = 0;
+                        var debugTimeMarkers = [1]win32_debug_time_marker{win32_debug_time_marker{}} ** @divTrunc(@intCast(u32, gameUpdateHz), 2);
 
                         var lastPlayCursor: DWORD = 0;
                         var soundIsValid = false;
@@ -677,12 +674,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             // TODO: can't zero everything because the up/down state will be wrong
                             newKeyboardController.* = game.controller_input{
                                 .isConnected = true,
-                                .buttons = .{},
                             };
 
                             var buttonIndex: u8 = 0;
                             while (buttonIndex < 12) : (buttonIndex += 1) { // hardcoded for now
-                                newKeyboardController.buttons.Get(buttonIndex).endedDown = oldKeyboardController.buttons.Get(buttonIndex).endedDown;
+                                newKeyboardController.buttons.states[buttonIndex].endedDown = oldKeyboardController.buttons.states[buttonIndex].endedDown;
                             }
 
                             Win32ProcessPendingMessages(newKeyboardController);
@@ -743,38 +739,38 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                                     Win32ProcessXinputDigitalButton(
                                         if (newController.stickAverageX < -threshold) 1 else 0,
-                                        &oldController.buttons.moveLeft,
+                                        &oldController.buttons.mapped.moveLeft,
                                         1,
-                                        &newController.buttons.moveLeft,
+                                        &newController.buttons.mapped.moveLeft,
                                     );
 
                                     Win32ProcessXinputDigitalButton(
                                         if (newController.stickAverageX > threshold) 1 else 0,
-                                        &oldController.buttons.moveRight,
+                                        &oldController.buttons.mapped.moveRight,
                                         1,
-                                        &newController.buttons.moveRight,
+                                        &newController.buttons.mapped.moveRight,
                                     );
 
                                     Win32ProcessXinputDigitalButton(
                                         if (newController.stickAverageY < -threshold) 1 else 0,
-                                        &oldController.buttons.moveDown,
+                                        &oldController.buttons.mapped.moveDown,
                                         1,
-                                        &newController.buttons.moveDown,
+                                        &newController.buttons.mapped.moveDown,
                                     );
 
                                     Win32ProcessXinputDigitalButton(
                                         if (newController.stickAverageY > threshold) 1 else 0,
-                                        &oldController.buttons.moveUp,
+                                        &oldController.buttons.mapped.moveUp,
                                         1,
-                                        &newController.buttons.moveUp,
+                                        &newController.buttons.mapped.moveUp,
                                     );
 
-                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.actionDown, win32.XINPUT_GAMEPAD_A, &newController.buttons.actionDown);
-                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.actionRight, win32.XINPUT_GAMEPAD_B, &newController.buttons.actionRight);
-                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.actionLeft, win32.XINPUT_GAMEPAD_X, &newController.buttons.actionLeft);
-                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.actionUp, win32.XINPUT_GAMEPAD_Y, &newController.buttons.actionUp);
-                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.leftShoulder, win32.XINPUT_GAMEPAD_LEFT_SHOULDER, &newController.buttons.leftShoulder);
-                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.rightShoulder, win32.XINPUT_GAMEPAD_RIGHT_SHOULDER, &newController.buttons.rightShoulder);
+                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.actionDown, win32.XINPUT_GAMEPAD_A, &newController.buttons.mapped.actionDown);
+                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.actionRight, win32.XINPUT_GAMEPAD_B, &newController.buttons.mapped.actionRight);
+                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.actionLeft, win32.XINPUT_GAMEPAD_X, &newController.buttons.mapped.actionLeft);
+                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.actionUp, win32.XINPUT_GAMEPAD_Y, &newController.buttons.mapped.actionUp);
+                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.leftShoulder, win32.XINPUT_GAMEPAD_LEFT_SHOULDER, &newController.buttons.mapped.leftShoulder);
+                                    Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.rightShoulder, win32.XINPUT_GAMEPAD_RIGHT_SHOULDER, &newController.buttons.mapped.rightShoulder);
                                 } else {
                                     // This controller is not available
                                     newController.isConnected = false;
@@ -787,7 +783,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             var bytesToWrite: DWORD = 0;
 
                             if (soundIsValid) {
-
                                 byteToLock = (soundOutput.runningSampleIndex * soundOutput.bytesPerSample) % soundOutput.secondaryBufferSize;
 
                                 targetCursor = (lastPlayCursor + (soundOutput.latencySampleCount * soundOutput.bytesPerSample)) % soundOutput.secondaryBufferSize;
@@ -822,8 +817,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                     _ = globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor);
 
                                     std.debug.print("LPC:{} BTL:{} BTW:{} - PC:{} WC:{}\n", .{ lastPlayCursor, byteToLock, bytesToWrite, playCursor, writeCursor });
-
-                                } 
+                                }
                                 Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuffer);
                             }
 
