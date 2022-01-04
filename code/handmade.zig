@@ -97,6 +97,9 @@ fn OutputSound(soundBuffer: *sound_output_buffer, toneHz: u32) void {
         sampleOut += 1;
 
         local_persist.tSine += 2.0 * PI32 * 1.0 / @intToFloat(f32, wavePeriod);
+        if (local_persist.tSine > 2.0 * PI32) {
+            local_persist.tSine -= 2.0 * PI32;
+        }
     }
 }
 
@@ -148,7 +151,7 @@ pub const debug_read_file_result = struct {
     contents: *anyopaque = undefined,
 };
 
-pub fn UpdateAndRender(callbacks: *const platform, gameMemory: *memory, gameInput: *input, buffer: *offscreen_buffer, soundBuffer: *sound_output_buffer) void {
+pub fn UpdateAndRender(callbacks: *const platform, gameMemory: *memory, gameInput: *input, buffer: *offscreen_buffer) void {
     std.debug.assert(@sizeOf(state) <= gameMemory.permanentStorageSize);
 
     const gameState: *state = @ptrCast(*state, @alignCast(@alignOf(state), gameMemory.permanentStorage));
@@ -163,7 +166,7 @@ pub fn UpdateAndRender(callbacks: *const platform, gameMemory: *memory, gameInpu
             callbacks.DEBUGPlatformFreeFileMemory(file.contents);
         }
 
-        gameState.toneHz = 256;
+        gameState.toneHz = 512;
 
         // TODO: This may be more appropriate to do in the platform layer
         gameMemory.isInitialized = true;
@@ -173,7 +176,7 @@ pub fn UpdateAndRender(callbacks: *const platform, gameMemory: *memory, gameInpu
         if (controller.isAnalog) {
             // Use analog movement tuning
             gameState.blueOffset +%= @floatToInt(i32, 4.0 * controller.stickAverageX);
-            gameState.toneHz = 256 + @floatToInt(u32, 120.0 * controller.stickAverageY);
+            gameState.toneHz = 512 + @floatToInt(u32, 120.0 * controller.stickAverageY);
         } else {
             // Use digital movement tuning
             if (controller.buttons.mapped.moveLeft.endedDown != 0) {
@@ -191,7 +194,14 @@ pub fn UpdateAndRender(callbacks: *const platform, gameMemory: *memory, gameInpu
         }
     }
 
-    // TODO:  Allow sample offsets here for more robust platform options
-    OutputSound(soundBuffer, gameState.toneHz);
     RenderWeirdGradient(buffer, gameState.blueOffset, gameState.greenOffset);
+}
+
+// NOTEAt the moment, this has to be a very fast function, it cannot be
+// more than a millisecond or so.
+// TODO Reduce the pressure on this function's performance by measuring it
+// or asking about it, etc.
+pub fn GetSoundSamples(gameMemory: *memory, soundBuffer: *sound_output_buffer) void {
+    const gameState: *state = @ptrCast(*state, @alignCast(@alignOf(state), gameMemory.permanentStorage));
+    OutputSound(soundBuffer, gameState.toneHz);
 }
