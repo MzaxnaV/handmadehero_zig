@@ -12,7 +12,7 @@
             "preLaunchTask": "Build Zig Project",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build",
+            "cwd": "${workspaceFolder}/data",
             "environment": [],
             "console": "integratedTerminal"
         },
@@ -23,7 +23,7 @@
             "program": "${workspaceFolder}/build/win32_handmade.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build",
+            "cwd": "${workspaceFolder}/data",
             "environment": [],
             "console": "integratedTerminal"
         }

@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const lib_name = "handmade";
+
 pub fn build(b: *std.build.Builder) void {
     const pkgs = struct {
         const win32 = std.build.Pkg{
@@ -18,7 +20,7 @@ pub fn build(b: *std.build.Builder) void {
     const options = b.addOptions();
     options.addOption(bool, "IGNORE", true);
 
-    const lib = b.addSharedLibrary("handmade", "code/handmade.zig", b.version(1, 0, 0));
+    const lib = b.addSharedLibrary(lib_name, "code/handmade.zig", b.version(1, 0, 0));
     lib.setTarget(target);
     lib.setBuildMode(mode);
     lib.addPackage(pkgs.common);

@@ -13,7 +13,7 @@ fn OutputSound(gameState: *common.state, soundBuffer: *common.sound_output_buffe
     var sampleOut = soundBuffer.samples;
     var sampleIndex: u32 = 0;
     while (sampleIndex < soundBuffer.sampleCount) : (sampleIndex += 1) {
-        const sineValue = std.math.sin(gameState.tSine);
+        const sineValue = @sin(gameState.tSine);
         const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume));
         sampleOut.* = sampleValue;
         sampleOut += 1;

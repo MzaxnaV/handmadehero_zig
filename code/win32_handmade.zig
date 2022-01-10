@@ -92,6 +92,15 @@ const win32_debug_time_marker = struct {
     flipWriteCursor: DWORD = 0,
 };
 
+const win32_game_code = struct {
+    gameCodeDLL: ?win32.HINSTANCE = undefined,
+    dllLastWriteTime: win32.FILETIME = undefined,
+    UpdateAndRender: @TypeOf(common.UpdateAndRenderStub) = undefined,
+    GetSoundSamples: @TypeOf(common.GetSoundSamplesStub) = undefined,
+
+    isValid: bool = false,
+};
+
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
 pub var globalRunning: bool = undefined;
@@ -162,19 +171,34 @@ fn DEBUGWin32WriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory: *
     return result;
 }
 
-const win32_game_code = struct {
-    gameCodeDLL: ?win32.HINSTANCE = undefined,
-    UpdateAndRender: @TypeOf(common.UpdateAndRenderStub) = undefined,
-    GetSoundSamples: @TypeOf(common.GetSoundSamplesStub) = undefined,
+fn Win32GetLastWriteTime(fileName: [*:0]const u16) win32.FILETIME {
+    var lastWriteTime: win32.FILETIME = .{
+        .dwLowDateTime = 0,
+        .dwHighDateTime = 0,
+    };
 
-    isValid: bool = false,
-};
+    var findData: win32.WIN32_FIND_DATAW = undefined;
+    const fileHandle = win32.FindFirstFileW(fileName, &findData);
 
-fn Win32LoadGameCode() win32_game_code {
+    if (fileHandle != -1) {
+        lastWriteTime = findData.ftLastWriteTime;
+        _ = win32.FindClose(fileHandle);
+    }
+
+    return lastWriteTime;
+}
+
+fn Win32LoadGameCode(sourceDLLName: [*:0]const u16, tempDLLName: [*:0]const u16) win32_game_code {
+
+    // NOTE: some process holds onto handmade_temp.dll preventing it from being copied, wait for some time
+    win32.Sleep(20);
+
     var result = win32_game_code{};
+    result.dllLastWriteTime = Win32GetLastWriteTime(sourceDLLName);
 
-    _ = win32.CopyFileW(win32.L("handmade.dll"), win32.L("handmade_temp.dll"), win32.FALSE);
-    result.gameCodeDLL = win32.LoadLibraryW(win32.L("handmade_temp.dll"));
+    _ = win32.CopyFileW(sourceDLLName, tempDLLName, win32.FALSE);
+
+    result.gameCodeDLL = win32.LoadLibraryW(tempDLLName);
     if (result.gameCodeDLL) |HANDMADE_DLL| {
         result.isValid = true;
 
@@ -644,9 +668,41 @@ inline fn rdtsc() u64 {
     return (high << 32) | low;
 }
 
+fn CatStrings(sourceA: []const u16, sourceB: []const u16, dest: [:0]u16) void {
+    var i: usize = 0;
+    for (sourceA) |charA, index| {
+        dest[index] = charA;
+        i = index;
+    }
+
+    for (sourceB) |charB, index| {
+        dest[i + index] = charB;
+    }
+}
+
 // main -----------------------------------------------------------------------------------------------------------------------------------
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
+    var exeFileName = [_:0]u16{0} ** win32.MAX_PATH;
+    _ = win32.GetModuleFileNameW(null, &exeFileName, win32.MAX_PATH * @sizeOf([1:0]u16));
+
+    var onePastLastSlashIndex: usize = 0;
+    for (exeFileName) |char, index| {
+        if (char == '\\') onePastLastSlashIndex = index + 2;
+    }
+
+    const sourceGameCodeDLLFileName = win32.L("handmade.dll");
+    var sourceGameCodeDLLFullPath = [_:0]u16{0} ** win32.MAX_PATH;
+
+    CatStrings(exeFileName[0..onePastLastSlashIndex], sourceGameCodeDLLFileName, sourceGameCodeDLLFullPath[0..win32.MAX_COUNTER_PATH :0]);
+
+    std.debug.print("{s}\n\n", .{std.unicode.utf16leToUtf8Alloc(std.heap.page_allocator, &sourceGameCodeDLLFullPath)});
+
+    const tempGameCodeDLLFileName = win32.L("handmade_temp.dll");
+    var tempGameCodeDLLFullPath = [_:0]u16{0} ** win32.MAX_PATH;
+
+    CatStrings(exeFileName[0..onePastLastSlashIndex], tempGameCodeDLLFileName, tempGameCodeDLLFullPath[0..win32.MAX_COUNTER_PATH :0]);
+
     var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;
     _ = win32.QueryPerformanceFrequency(&perfCountFrequencyResult);
     globalPerfCounterFrequency = perfCountFrequencyResult.QuadPart;
@@ -769,7 +825,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         var audioLatencySeconds: f32 = 0;
                         var soundIsValid = false;
 
-                        var gameCode = Win32LoadGameCode();
+                        var gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath);
                         var loadCounter: u32 = 0;
 
                         var lastCycleCount = rdtsc();
@@ -778,7 +834,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             if (loadCounter > 120) {
                                 loadCounter = 0;
                                 Win32UnloadGameCode(&gameCode);
-                                gameCode = Win32LoadGameCode();
+                                gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath);
                             } else {
                                 loadCounter += 1;
                             }
