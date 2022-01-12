@@ -40,4 +40,7 @@ pub fn build(b: *std.build.Builder) void {
     exe.addOptions("build_consts", options);
 
     b.installArtifact(exe);
+
+    const build_lib = b.step("lib", "Build the handmade lib");
+    build_lib.dependOn(&lib.step);
 }

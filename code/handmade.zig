@@ -1,5 +1,6 @@
 const std = @import("std");
 const common = @import("handmade_common");
+const IGNORE = @import("build_consts").IGNORE;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 const HANDMADE_INTERNAL = (@import("builtin").mode == std.builtin.Mode.Debug);
@@ -14,7 +15,7 @@ fn OutputSound(gameState: *common.state, soundBuffer: *common.sound_output_buffe
     var sampleIndex: u32 = 0;
     while (sampleIndex < soundBuffer.sampleCount) : (sampleIndex += 1) {
         const sineValue = @sin(gameState.tSine);
-        const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume));
+        const sampleValue = if (!IGNORE) @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume)) else 0;
         sampleOut.* = sampleValue;
         sampleOut += 1;
         sampleOut.* = sampleValue;
@@ -48,12 +49,32 @@ fn RenderWeirdGradient(buffer: *common.offscreen_buffer, xOffset: i32, yOffset: 
     }
 }
 
+fn RenderPlayer(buffer: *common.offscreen_buffer, playerX: u32, playerY: u32) void {
+    var endOfBuffer = @ptrCast([*]u8, buffer.memory) + buffer.pitch * buffer.height;
+    const colour: u32 = 0xffffffff;
+
+    const top = playerY;
+    const bottom = playerY +% 10;
+    var x = playerX;
+    while (x < playerX +% 10) : (x += 1) {
+        var pixel: [*]u8 = @ptrCast([*]u8, buffer.memory) + x * buffer.bytesPerPixel + top * buffer.pitch;
+        var y = top;
+        while (y < bottom) : (y += 1) {
+            if (@ptrToInt(pixel) >= @ptrToInt(@ptrCast([*]u8, buffer.memory)) and @ptrToInt(pixel + 4) <= @ptrToInt(endOfBuffer)) {
+                (@ptrCast([*]u32, @alignCast(@alignOf(u32), pixel))).* = colour;
+            }
+
+            pixel += buffer.pitch;
+        }
+    }
+}
+
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(gameMemory: *common.memory, gameInput: *common.input, buffer: *common.offscreen_buffer) void {
     std.debug.assert(@sizeOf(common.state) <= gameMemory.permanentStorageSize);
 
-    const gameState: *common.state = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
+    const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
         const fileName = "../code/handmade.zig";
@@ -68,6 +89,10 @@ pub export fn UpdateAndRender(gameMemory: *common.memory, gameInput: *common.inp
         gameState.toneHz = 512;
         gameState.tSine = 0;
 
+        gameState.playerX = 100;
+        gameState.playerY = 100;
+        gameState.tJump = 0;
+
         // TODO: This may be more appropriate to do in the platform layer
         gameMemory.isInitialized = true;
     }
@@ -78,23 +103,40 @@ pub export fn UpdateAndRender(gameMemory: *common.memory, gameInput: *common.inp
             gameState.blueOffset +%= @floatToInt(i32, 4.0 * controller.stickAverageX);
             gameState.toneHz = 512 + @floatToInt(u32, 120.0 * controller.stickAverageY);
         } else {
+            const speed = 5;
             // Use digital movement tuning
             if (controller.buttons.mapped.moveLeft.endedDown != 0) {
                 gameState.blueOffset -%= 1;
+                gameState.playerX -%= speed;
             }
             if (controller.buttons.mapped.moveRight.endedDown != 0) {
                 gameState.blueOffset +%= 1;
+                gameState.playerX +%= speed;
+            }
+
+            if (controller.buttons.mapped.moveUp.endedDown != 0) {
+                gameState.playerY -%= speed;
+            }
+            if (controller.buttons.mapped.moveDown.endedDown != 0) {
+                gameState.playerY +%= speed;
             }
         }
 
         // Input.AButtonEndedDown;
         // Input.NumberOfTransitions;
         if (controller.buttons.mapped.actionDown.endedDown != 0) {
-            gameState.greenOffset +%= 1;
+            gameState.tJump = 4.0;
         }
+
+        if (gameState.tJump > 0) {
+            const jump = 5.0 * @sin(0.5 * common.PI32 * gameState.tJump);
+            gameState.playerY = if (jump > 0) gameState.playerY +% @floatToInt(u32, @fabs(jump)) else gameState.playerY -% @floatToInt(u32, @fabs(jump));
+        }
+        gameState.tJump -= 0.033;
     }
 
     RenderWeirdGradient(buffer, gameState.blueOffset, gameState.greenOffset);
+    RenderPlayer(buffer, gameState.playerX, gameState.playerY);
 }
 
 // NOTEAt the moment, this has to be a very fast function, it cannot be
@@ -102,6 +144,6 @@ pub export fn UpdateAndRender(gameMemory: *common.memory, gameInput: *common.inp
 // TODO Reduce the pressure on this function's performance by measuring it
 // or asking about it, etc.
 pub export fn GetSoundSamples(gameMemory: *common.memory, soundBuffer: *common.sound_output_buffer) void {
-    const gameState: *common.state = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
+    const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
     OutputSound(gameState, soundBuffer, gameState.toneHz);
 }

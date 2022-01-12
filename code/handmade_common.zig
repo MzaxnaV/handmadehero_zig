@@ -6,9 +6,10 @@ pub const PI32 = 3.14159265359;
 
 pub const offscreen_buffer = struct {
     memory: ?*anyopaque,
-    width: i32,
-    height: i32,
+    width: u32,
+    height: u32,
     pitch: usize,
+    bytesPerPixel: u32,
 };
 
 pub const sound_output_buffer = struct {
@@ -77,6 +78,10 @@ pub const state = struct {
     toneHz: u32,
 
     tSine: f32,
+
+    playerX: u32,
+    playerY: u32,
+    tJump: f32,
 };
 
 // IMPORTANT: These are NOT for doing anything in the shipping game - they are blocking and the write doesn't protect against lost data
