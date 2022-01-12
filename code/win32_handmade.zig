@@ -29,6 +29,7 @@ const game = @import("handmade_common");
 
 const IGNORE = @import("build_consts").IGNORE;
 const HANDMADE_INTERNAL = (@import("builtin").mode == std.builtin.Mode.Debug);
+const WIN32_STATE_FILE_NAME_COUNT = win32.MAX_PATH;
 
 const allocationType = @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT));
 
@@ -95,8 +96,8 @@ const win32_debug_time_marker = struct {
 const win32_game_code = struct {
     gameCodeDLL: ?win32.HINSTANCE = undefined,
     dllLastWriteTime: win32.FILETIME = undefined,
-    UpdateAndRender: @TypeOf(game.UpdateAndRenderStub) = undefined,
-    GetSoundSamples: @TypeOf(game.GetSoundSamplesStub) = undefined,
+    UpdateAndRender: ?fn (*game.memory, *game.input, *game.offscreen_buffer) void = null,
+    GetSoundSamples: ?fn (*game.memory, *game.sound_output_buffer) void = null,
 
     isValid: bool = false,
 };
@@ -115,6 +116,9 @@ const win32_state = struct {
 
     playBackHandle: win32.HANDLE,
     inputPlayingIndex: u32 = 0,
+
+    exeFileName: [WIN32_STATE_FILE_NAME_COUNT:0]u16 = undefined,
+    onePastLastEXEFileNameSlashIndex: usize = 0,
 };
 
 // globals --------------------------------------------------------------------------------------------------------------------------------
@@ -190,18 +194,14 @@ fn DEBUGWin32WriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory: *
 // local Win32 functions ------------------------------------------------------------------------------------------------------------------
 
 fn Win32GetLastWriteTime(fileName: [*:0]const u16) win32.FILETIME {
-    const INVALID_HANDLE_VALUE = @as(isize, -1);
     var lastWriteTime: win32.FILETIME = .{
         .dwLowDateTime = 0,
         .dwHighDateTime = 0,
     };
 
-    var findData: win32.WIN32_FIND_DATAW = undefined;
-    const fileHandle = win32.FindFirstFileW(fileName, &findData);
-
-    if (fileHandle != INVALID_HANDLE_VALUE) {
-        lastWriteTime = findData.ftLastWriteTime;
-        _ = win32.FindClose(fileHandle);
+    var data: win32.WIN32_FILE_ATTRIBUTE_DATA = undefined;
+    if (win32.GetFileAttributesExW(fileName, win32.GetFileExInfoStandard, &data) != win32.FALSE) {
+        lastWriteTime = data.ftLastWriteTime;
     }
 
     return lastWriteTime;
@@ -231,8 +231,8 @@ fn Win32LoadGameCode(sourceDLLName: [:0]const u16, tempDLLName: [:0]const u16) w
     }
 
     if (!result.isValid) {
-        result.UpdateAndRender = game.UpdateAndRenderStub;
-        result.GetSoundSamples = game.GetSoundSamplesStub;
+        result.UpdateAndRender = null;
+        result.GetSoundSamples = null;
     }
 
     return result;
@@ -245,8 +245,8 @@ fn Win32UnloadGameCode(gameCode: *win32_game_code) void {
     }
 
     gameCode.isValid = false;
-    gameCode.UpdateAndRender = game.UpdateAndRenderStub;
-    gameCode.GetSoundSamples = game.GetSoundSamplesStub;
+    gameCode.UpdateAndRender = null;
+    gameCode.GetSoundSamples = null;
 }
 
 fn Win32LoadXinput() void {
@@ -403,9 +403,28 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u3
 }
 
 fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: win32.HDC, windowWidth: i32, windowHeight: i32) void {
-    // TODO: Aespect Ratio correction
-    // TODO: Play with Stretch modes
-    _ = win32.StretchDIBits(deviceContext, 0, 0, windowWidth, windowHeight, 0, 0, @intCast(i32, buffer.width), @intCast(i32, buffer.height), buffer.memory, &buffer.info, win32.DIB_RGB_COLORS, win32.SRCCOPY);
+    _ = windowHeight;
+    _ = windowWidth;
+
+    // For prototyping purposes, we're going to always blit
+    // 1-to-1 pixels to make sure we don't introduce artifacts with
+    // stretching while we are learning to code the renderer!
+
+    _ = win32.StretchDIBits(
+        deviceContext,
+        0,
+        0,
+        @intCast(i32, buffer.width),
+        @intCast(i32, buffer.height),
+        0,
+        0,
+        @intCast(i32, buffer.width),
+        @intCast(i32, buffer.height),
+        buffer.memory,
+        &buffer.info,
+        win32.DIB_RGB_COLORS,
+        win32.SRCCOPY,
+    );
 }
 
 fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(WINAPI) win32.LRESULT {
@@ -415,10 +434,12 @@ fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32
         win32.WM_CLOSE => globalRunning = false, // TODO: handle this with a message to a user?
 
         win32.WM_ACTIVATEAPP => {
-            if (wParam == win32.TRUE) {
-                _ = win32.SetLayeredWindowAttributes(windowHandle, @bitCast(u32, win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 }), 255, win32.LWA_ALPHA);
-            } else {
-                _ = win32.SetLayeredWindowAttributes(windowHandle, @bitCast(u32, win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 }), 128, win32.LWA_ALPHA);
+            if (!IGNORE) {
+                if (wParam == win32.TRUE) {
+                    _ = win32.SetLayeredWindowAttributes(windowHandle, @bitCast(u32, win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 }), 255, win32.LWA_ALPHA);
+                } else {
+                    _ = win32.SetLayeredWindowAttributes(windowHandle, @bitCast(u32, win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 }), 128, win32.LWA_ALPHA);
+                }
             }
         },
 
@@ -537,61 +558,70 @@ fn Win32ProcessXInputStickValue(value: i16, deadZoneThreshold: u32) f32 {
     return result;
 }
 
-fn Win32BeginRecordingInput(win32State: *win32_state, inputRecordingIndex: u32) void {
-    win32State.inputRecordingIndex = inputRecordingIndex;
+fn Win32GetInputFileLocation(state: *win32_state, slotIndex: u32, dest: [:0]u16) void {
+    std.debug.assert(slotIndex == 1);
+    Win32BuildEXEPathFileName(state, win32.L("loop_edit.hmi"), dest);
+}
 
-    const fileName = win32.L("foo.hmi");
-    if (win32.CreateFileW(fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null)) |handle| {
-        win32State.recordingHandle = handle;
+fn Win32BeginRecordingInput(state: *win32_state, inputRecordingIndex: u32) void {
+    state.inputRecordingIndex = inputRecordingIndex;
+
+    var fileName = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
+    Win32GetInputFileLocation(state, inputRecordingIndex, fileName[0..WIN32_STATE_FILE_NAME_COUNT :0]);
+
+    if (win32.CreateFileW(&fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null)) |handle| {
+        state.recordingHandle = handle;
     }
 
-    const bytesToWrite = @intCast(DWORD, win32State.totalSize);
+    const bytesToWrite = @intCast(DWORD, state.totalSize);
     var bytesWritten: DWORD = 0;
-    _ = win32.WriteFile(win32State.recordingHandle, win32State.gameMemoryBlock, bytesToWrite, &bytesWritten, null);
+    _ = win32.WriteFile(state.recordingHandle, state.gameMemoryBlock, bytesToWrite, &bytesWritten, null);
 }
 
-fn Win32EndRecordingInput(win32State: *win32_state) void {
-    _ = win32.CloseHandle(win32State.recordingHandle);
-    win32State.inputRecordingIndex = 0;
+fn Win32EndRecordingInput(state: *win32_state) void {
+    _ = win32.CloseHandle(state.recordingHandle);
+    state.inputRecordingIndex = 0;
 }
 
-fn Win32BeginInputPlayBack(win32State: *win32_state, inputPlayingIndex: u32) void {
-    win32State.inputPlayingIndex = inputPlayingIndex;
+fn Win32BeginInputPlayBack(state: *win32_state, inputPlayingIndex: u32) void {
+    state.inputPlayingIndex = inputPlayingIndex;
 
-    const fileName = win32.L("foo.hmi");
-    if (win32.CreateFileW(fileName, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null)) |handle| {
-        win32State.playBackHandle = handle;
+    var fileName = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
+    Win32GetInputFileLocation(state, inputPlayingIndex, fileName[0..WIN32_STATE_FILE_NAME_COUNT :0]);
+
+    if (win32.CreateFileW(&fileName, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null)) |handle| {
+        state.playBackHandle = handle;
     }
 
-    const bytesToRead = @intCast(DWORD, win32State.totalSize);
+    const bytesToRead = @intCast(DWORD, state.totalSize);
     var bytesRead: DWORD = 0;
-    _ = win32.ReadFile(win32State.playBackHandle, win32State.gameMemoryBlock, bytesToRead, &bytesRead, null);
+    _ = win32.ReadFile(state.playBackHandle, state.gameMemoryBlock, bytesToRead, &bytesRead, null);
 }
 
-fn Win32EndInputPlayBack(win32State: *win32_state) void {
-    _ = win32.CloseHandle(win32State.playBackHandle);
-    win32State.inputPlayingIndex = 0;
+fn Win32EndInputPlayBack(state: *win32_state) void {
+    _ = win32.CloseHandle(state.playBackHandle);
+    state.inputPlayingIndex = 0;
 }
 
-fn Win32RecordInput(win32State: *win32_state, newInput: *game.input) void {
+fn Win32RecordInput(state: *win32_state, newInput: *game.input) void {
     var bytesWritten: DWORD = 0;
-    _ = win32.WriteFile(win32State.recordingHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesWritten, null);
+    _ = win32.WriteFile(state.recordingHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesWritten, null);
 }
 
-fn Win32PlayBackInput(win32State: *win32_state, newInput: *game.input) void {
+fn Win32PlayBackInput(state: *win32_state, newInput: *game.input) void {
     var bytesRead: DWORD = 0;
-    if (win32.ReadFile(win32State.playBackHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesRead, null) != win32.FALSE) {
+    if (win32.ReadFile(state.playBackHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesRead, null) != win32.FALSE) {
         if (bytesRead == 0) {
             // We've hit the end of the stream, go back to the beginning
-            const playingIndex = win32State.inputPlayingIndex;
-            Win32EndInputPlayBack(win32State);
-            Win32BeginInputPlayBack(win32State, playingIndex);
-            _ = win32.ReadFile(win32State.playBackHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesRead, null);
+            const playingIndex = state.inputPlayingIndex;
+            Win32EndInputPlayBack(state);
+            Win32BeginInputPlayBack(state, playingIndex);
+            _ = win32.ReadFile(state.playBackHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesRead, null);
         }
     }
 }
 
-fn Win32ProcessPendingMessages(win32State: *win32_state, keyboardController: *game.controller_input) void {
+fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *game.controller_input) void {
     var message: win32.MSG = undefined;
     while (win32.PeekMessage(&message, null, 0, 0, win32.PM_REMOVE) != 0) {
         switch (message.message) {
@@ -626,11 +656,11 @@ fn Win32ProcessPendingMessages(win32State: *win32_state, keyboardController: *ga
                         win32.VK_L => {
                             if (HANDMADE_INTERNAL) {
                                 if (isDown) {
-                                    if (win32State.inputRecordingIndex == 0) {
-                                        Win32BeginRecordingInput(win32State, 1);
+                                    if (state.inputRecordingIndex == 0) {
+                                        Win32BeginRecordingInput(state, 1);
                                     } else {
-                                        Win32EndRecordingInput(win32State);
-                                        Win32BeginInputPlayBack(win32State, 1);
+                                        Win32EndRecordingInput(state);
+                                        Win32BeginInputPlayBack(state, 1);
                                     }
                                 }
                             }
@@ -769,32 +799,39 @@ fn CatStrings(sourceA: []const u16, sourceB: []const u16, dest: [:0]u16) void {
     }
 }
 
+fn Win32GetEXEFileName(gameState: *win32_state) void {
+    const sizeOfFilename = win32.GetModuleFileNameW(null, &gameState.exeFileName, @sizeOf(@TypeOf(gameState.exeFileName)));
+    _ = sizeOfFilename;
+
+    for (gameState.exeFileName) |char, scanIndex| {
+        if (char == '\\') gameState.onePastLastEXEFileNameSlashIndex = scanIndex + 2;
+    }
+}
+
+fn Win32BuildEXEPathFileName(gameState: *win32_state, filename: []const u16, dest: [:0]u16) void {
+    CatStrings(gameState.exeFileName[0..gameState.onePastLastEXEFileNameSlashIndex], filename, dest);
+}
+
 // main -----------------------------------------------------------------------------------------------------------------------------------
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
-    var exeFileName = [_:0]u16{0} ** win32.MAX_PATH;
-    _ = win32.GetModuleFileNameW(null, &exeFileName, win32.MAX_PATH * @sizeOf([1:0]u16));
-
-    var onePastLastSlashIndex: usize = 0;
-    for (exeFileName) |char, scanIndex| {
-        if (char == '\\') onePastLastSlashIndex = scanIndex + 2;
-    }
-
-    const sourceGameCodeDLLFileName = win32.L("handmade.dll");
-    var sourceGameCodeDLLFullPath = [_:0]u16{0} ** win32.MAX_PATH;
-
-    CatStrings(exeFileName[0..onePastLastSlashIndex], sourceGameCodeDLLFileName, sourceGameCodeDLLFullPath[0..win32.MAX_COUNTER_PATH :0]);
-
-    std.debug.print("{s}\n\n", .{std.unicode.utf16leToUtf8Alloc(std.heap.page_allocator, &sourceGameCodeDLLFullPath)});
-
-    const tempGameCodeDLLFileName = win32.L("handmade_temp.dll");
-    var tempGameCodeDLLFullPath = [_:0]u16{0} ** win32.MAX_PATH;
-
-    CatStrings(exeFileName[0..onePastLastSlashIndex], tempGameCodeDLLFileName, tempGameCodeDLLFullPath[0..win32.MAX_COUNTER_PATH :0]);
+    var win32State = win32_state{
+        .gameMemoryBlock = undefined,
+        .recordingHandle = undefined,
+        .playBackHandle = undefined,
+    };
 
     var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;
     _ = win32.QueryPerformanceFrequency(&perfCountFrequencyResult);
     globalPerfCounterFrequency = perfCountFrequencyResult.QuadPart;
+
+    Win32GetEXEFileName(&win32State);
+
+    var sourceGameCodeDLLFullPath = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
+    Win32BuildEXEPathFileName(&win32State, win32.L("handmade.dll"), sourceGameCodeDLLFullPath[0..WIN32_STATE_FILE_NAME_COUNT :0]);
+
+    var tempGameCodeDLLFullPath = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
+    Win32BuildEXEPathFileName(&win32State, win32.L("handmade_temp.dll"), tempGameCodeDLLFullPath[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
     const desiredSchedulerMS = 1;
     const sleepIsGranular = (win32.timeBeginPeriod(desiredSchedulerMS) == win32.TIMERR_NOERROR);
@@ -804,10 +841,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     Win32ResizeDIBSection(&globalBackBuffer, 1280, 720);
 
     const windowclass = win32.WNDCLASS{
-        .style = @intToEnum(
-            win32.WNDCLASS_STYLES,
-            @enumToInt(win32.CS_HREDRAW) | @enumToInt(win32.CS_VREDRAW),
-        ),
+        .style = @intToEnum(win32.WNDCLASS_STYLES, 0), // WS_EX_TOPMOST|WS_EX_LAYERED
         .lpfnWndProc = Win32MainWindowCallback,
         .cbClsExtra = 0,
         .cbWndExtra = 0,
@@ -846,12 +880,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.secondaryBufferSize);
             Win32ClearBuffer(&soundOutput);
             _ = globalSecondaryBuffer.vtable.Play(globalSecondaryBuffer, 0, 0, win32.DSBPLAY_LOOPING);
-
-            var win32State = win32_state{
-                .gameMemoryBlock = undefined,
-                .recordingHandle = undefined,
-                .playBackHandle = undefined,
-            };
 
             globalRunning = true;
 
@@ -962,6 +990,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 var controllerState: win32.XINPUT_STATE = undefined;
                                 if (XInputGetState(controllerIndex, &controllerState) == @enumToInt(win32.ERROR_SUCCESS)) {
                                     newController.isConnected = true;
+                                    newController.isAnalog = oldController.isAnalog;
 
                                     // This controller is plugged in
                                     // TODO: see if ControllerState.dwPacketNumber increments too rapidly
@@ -1057,7 +1086,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 Win32PlayBackInput(&win32State, newInput);
                             }
 
-                            gameCode.UpdateAndRender(&gameMemory, newInput, &buffer);
+                            if (gameCode.UpdateAndRender) |UpdateAndRender| {
+                                UpdateAndRender(&gameMemory, newInput, &buffer);
+                            }
 
                             const audioWallClock = Win32GetWallClock();
                             const fromBeginToAudioSeconds = Win32GetSecondsElapsed(flipWallClock, audioWallClock);
@@ -1089,10 +1120,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                                 const expectedSoundBytesPerFrame = @divTrunc(soundOutput.samplesPerSecond * soundOutput.bytesPerSample, gameUpdateHz);
                                 const secondsLeftUntilFLip = (targetSecondsPerFrame - fromBeginToAudioSeconds);
-                                _ = secondsLeftUntilFLip;
-                                // const expectedBytesUntiFlip = @floatToInt(DWORD, (secondsLeftUntilFLip / targetSecondsPerFrame) * @intToFloat(f32, expectedSoundBytesPerFrame));
-                                // _ = expectedBytesUntiFlip;
-                                const expectedFrameBoundaryByte = playCursor + expectedSoundBytesPerFrame;
+
+                                const expectedBytesUntilFlip = @floatToInt(i32, (secondsLeftUntilFLip / targetSecondsPerFrame) * @intToFloat(f32, expectedSoundBytesPerFrame));
+                                const expectedFrameBoundaryByte = playCursor +% @bitCast(u32, expectedBytesUntilFlip);
 
                                 var safeWriteCursor = writeCursor;
                                 if (safeWriteCursor < playCursor) {
@@ -1126,7 +1156,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                     .samples = samples,
                                 };
 
-                                gameCode.GetSoundSamples(&gameMemory, &soundBuffer);
+                                if (gameCode.GetSoundSamples) |GetSoundSamples| {
+                                    GetSoundSamples(&gameMemory, &soundBuffer);
+                                }
 
                                 if (HANDMADE_INTERNAL) {
                                     const marker: *win32_debug_time_marker = &debugTimeMarkers[debugTimeMarkerIndex];

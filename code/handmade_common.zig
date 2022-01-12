@@ -104,8 +104,3 @@ pub inline fn GigaBytes(value: u64) u64 {
 pub inline fn TeraBytes(value: u64) u64 {
     return 1000 * GigaBytes(value);
 }
-
-// stubs ----------------------------------------------------------------------------------------------------------------------------------
-
-pub fn UpdateAndRenderStub(_: *memory, _: *input, _: *offscreen_buffer) void {}
-pub fn GetSoundSamplesStub(_: *memory, _: *sound_output_buffer) void {}
