@@ -7,72 +7,77 @@ const HANDMADE_INTERNAL = (@import("builtin").mode == std.builtin.Mode.Debug);
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
 
-fn OutputSound(gameState: *common.state, soundBuffer: *common.sound_output_buffer, toneHz: u32) void {
+fn OutputSound(_: *common.state, soundBuffer: *common.sound_output_buffer, toneHz: u32) void {
     const toneVolume = 3000;
+    _ = toneVolume;
     const wavePeriod = @divTrunc(soundBuffer.samplesPerSecond, toneHz);
+    _ = wavePeriod;
 
     var sampleOut = soundBuffer.samples;
     var sampleIndex: u32 = 0;
     while (sampleIndex < soundBuffer.sampleCount) : (sampleIndex += 1) {
-        const sineValue = @sin(gameState.tSine);
-        const sampleValue = if (NOT_IGNORE) @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume)) else 0;
+        // !NOT_IGNORE:
+        // const sineValue = @sin(gameState.tSine);
+        // const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume);
+
+        const sampleValue = 0;
         sampleOut.* = sampleValue;
         sampleOut += 1;
         sampleOut.* = sampleValue;
         sampleOut += 1;
 
-        gameState.tSine += 2.0 * common.PI32 * 1.0 / @intToFloat(f32, wavePeriod);
-        if (gameState.tSine > 2.0 * common.PI32) {
-            gameState.tSine -= 2.0 * common.PI32;
-        }
+        // !NOT_IGNORE:
+        // gameState.tSine += 2.0 * common.PI32 * 1.0 / @intToFloat(f32, wavePeriod);
+        // if (gameState.tSine > 2.0 * common.PI32) {
+        //     gameState.tSine -= 2.0 * common.PI32;
+        // }
     }
 }
 
-fn RenderWeirdGradient(buffer: *common.offscreen_buffer, xOffset: i32, yOffset: i32) void {
-    var row = @ptrCast([*]u8, buffer.memory);
+fn RoundF32ToI32(float32: f32) i32 {
+    const result = @floatToInt(i32, float32 + 0.5);
+    return result;
+}
 
-    var y: u32 = 0;
-    while (y < buffer.height) : (y += 1) {
-        var x: u32 = 0;
+fn DrawRectangle(buffer: *common.offscreen_buffer, fMinX: f32, fMinY: f32, fMaxX: f32, fMaxY: f32, colour: u32) void {
+    var minX = @bitCast(u32, RoundF32ToI32(fMinX));
+    var minY = @bitCast(u32, RoundF32ToI32(fMinY));
+    var maxX = @bitCast(u32, RoundF32ToI32(fMaxX));
+    var maxY = @bitCast(u32, RoundF32ToI32(fMaxY));
+
+    if (fMinX < 0) {
+        minX = 0;
+    }
+
+    if (fMinY < 0) {
+        minY = 0;
+    }
+
+    if (fMaxX > @intToFloat(f32, buffer.width)) {
+        maxX = buffer.width;
+    }
+
+    if (fMaxY > @intToFloat(f32, buffer.height)) {
+        maxY = buffer.width;
+    }
+
+    var row = @ptrCast([*]u8, buffer.memory) + minX * buffer.bytesPerPixel + minY * buffer.pitch;
+
+    var y = minY;
+    while (y < maxY) : (y += 1) {
         var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
-        while (x < buffer.width) : (x += 1) {
-            // Pixel in memory: BB GG RR xx
-            // Little endian arch: 0x xxRRGGBB
-
-            var blue: u8 = @truncate(u8, x +% @bitCast(u32, xOffset));
-            var green: u8 = @truncate(u8, y +% @bitCast(u32, yOffset));
-
-            pixel.* = (@as(u32, green) << 16) | @as(u32, blue);
+        var x = minX;
+        while (x < maxX) : (x += 1) {
+            pixel.* = colour;
             pixel += 1;
         }
         row += buffer.pitch;
     }
 }
 
-fn RenderPlayer(buffer: *common.offscreen_buffer, playerX: u32, playerY: u32) void {
-    var endOfBuffer = @ptrCast([*]u8, buffer.memory) + buffer.pitch * buffer.height;
-    const colour: u32 = 0xffffffff;
-
-    const top = playerY;
-    const bottom = playerY +% 10;
-    var x = playerX;
-    while (x < playerX +% 10) : (x +%= 1) {
-        const pixelLocation = x *% buffer.bytesPerPixel + top *% buffer.pitch;
-        var pixel: [*]u8 = @ptrCast([*]u8, buffer.memory) + pixelLocation;
-        var y = top;
-        while (y < bottom) : (y +%= 1) {
-            if (@ptrToInt(pixel) >= @ptrToInt(@ptrCast([*]u8, buffer.memory)) and @ptrToInt(pixel + 4) <= @ptrToInt(endOfBuffer)) {
-                (@ptrCast([*]u32, @alignCast(@alignOf(u32), pixel))).* = colour;
-            }
-
-            pixel += buffer.pitch;
-        }
-    }
-}
-
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
-pub export fn UpdateAndRender(thread: *common.thread_context, gameMemory: *common.memory, gameInput: *common.input, buffer: *common.offscreen_buffer) void {
+pub export fn UpdateAndRender(_: *common.thread_context, gameMemory: *common.memory, gameInput: *common.input, buffer: *common.offscreen_buffer) void {
     comptime {
         // This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args.len != @typeInfo(common.UpdateAndRenderType).Fn.args.len or
@@ -88,77 +93,20 @@ pub export fn UpdateAndRender(thread: *common.thread_context, gameMemory: *commo
 
     std.debug.assert(@sizeOf(common.state) <= gameMemory.permanentStorageSize);
 
-    const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
+    // const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
+    const gameState = @ptrCast(*common.state, gameMemory.permanentStorage);
+    _ = gameState;
 
     if (!gameMemory.isInitialized) {
-        const fileName = "../code/handmade.zig";
-
-        var file = gameMemory.DEBUGPlatformReadEntireFile(thread, fileName);
-
-        if (file.contentSize > 0) {
-            _ = gameMemory.DEBUGPlatformWriteEntireFile(thread, "test.out", file.contentSize, file.contents);
-            gameMemory.DEBUGPlatformFreeFileMemory(thread, file.contents);
-        }
-
-        gameState.toneHz = 512;
-        gameState.tSine = 0;
-
-        gameState.playerX = 100;
-        gameState.playerY = 100;
-        gameState.tJump = 0;
-
-        // TODO: This may be more appropriate to do in the platform layer
         gameMemory.isInitialized = true;
     }
 
     for (gameInput.controllers) |controller| {
-        if (controller.isAnalog) {
-            // Use analog movement tuning
-            gameState.blueOffset +%= @floatToInt(i32, 4.0 * controller.stickAverageX);
-            gameState.toneHz = @floatToInt(u32, 512.0 + 120.0 * controller.stickAverageY);
-        } else {
-            const speed = 5;
-            // Use digital movement tuning
-            if (controller.buttons.mapped.moveLeft.endedDown != 0) {
-                gameState.blueOffset -%= 1;
-                gameState.playerX -%= speed;
-            }
-            if (controller.buttons.mapped.moveRight.endedDown != 0) {
-                gameState.blueOffset +%= 1;
-                gameState.playerX +%= speed;
-            }
-
-            if (controller.buttons.mapped.moveUp.endedDown != 0) {
-                gameState.playerY -%= speed;
-            }
-            if (controller.buttons.mapped.moveDown.endedDown != 0) {
-                gameState.playerY +%= speed;
-            }
-        }
-
-        // Input.AButtonEndedDown;
-        // Input.NumberOfTransitions;
-        if (controller.buttons.mapped.actionDown.endedDown != 0) {
-            gameState.tJump = 4.0;
-        }
-
-        if (gameState.tJump > 0) {
-            const jump = 5.0 * @sin(0.5 * common.PI32 * gameState.tJump);
-            gameState.playerY = if (jump > 0) gameState.playerY +% @floatToInt(u32, @fabs(jump)) else gameState.playerY -% @floatToInt(u32, @fabs(jump));
-        }
-        gameState.tJump -= 0.033;
+        if (controller.isAnalog) {} else {}
     }
 
-    RenderWeirdGradient(buffer, gameState.blueOffset, gameState.greenOffset);
-    RenderPlayer(buffer, gameState.playerX, gameState.playerY);
-
-    RenderPlayer(buffer, @bitCast(u32, gameInput.mouseX), @bitCast(u32, gameInput.mouseY));
-
-    for (gameInput.mouseButtons) |mouseButton, index| {
-        if (mouseButton.endedDown != 0) {
-            RenderPlayer(buffer, 10 + 20 * @intCast(u32, index), 10);
-        }
-    }
+    DrawRectangle(buffer, 0, 0, @intToFloat(f32, buffer.width), @intToFloat(f32, buffer.height), 0x00ff00ff);
+    DrawRectangle(buffer, 10, 10, 40, 40, 0x0000ffff);
 }
 
 // NOTEAt the moment, this has to be a very fast function, it cannot be
@@ -178,6 +126,28 @@ pub export fn GetSoundSamples(_: *common.thread_context, gameMemory: *common.mem
         }
     }
 
-    const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
-    OutputSound(gameState, soundBuffer, gameState.toneHz);
+    // const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
+    const gameState = @ptrCast(*common.state, gameMemory.permanentStorage);
+    OutputSound(gameState, soundBuffer, 400);
 }
+
+// fn RenderWeirdGradient(buffer: *common.offscreen_buffer, xOffset: i32, yOffset: i32) void {
+//     var row = @ptrCast([*]u8, buffer.memory);
+
+//     var y: u32 = 0;
+//     while (y < buffer.height) : (y += 1) {
+//         var x: u32 = 0;
+//         var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
+//         while (x < buffer.width) : (x += 1) {
+//             // Pixel in memory: BB GG RR xx
+//             // Little endian arch: 0x xxRRGGBB
+
+//             var blue: u8 = @truncate(u8, x +% @bitCast(u32, xOffset));
+//             var green: u8 = @truncate(u8, y +% @bitCast(u32, yOffset));
+
+//             pixel.* = (@as(u32, green) << 16) | @as(u32, blue);
+//             pixel += 1;
+//         }
+//         row += buffer.pitch;
+//     }
+// }

@@ -880,7 +880,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
     Win32LoadXinput();
 
-    Win32ResizeDIBSection(&globalBackBuffer, 1280, 720);
+    Win32ResizeDIBSection(&globalBackBuffer, 960, 540);
 
     const windowclass = win32.WNDCLASSW{
         .style = @intToEnum(win32.WNDCLASS_STYLES, 0), // WS_EX_TOPMOST|WS_EX_LAYERED
@@ -1033,6 +1033,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                     var newInput = &inputs[0];
                     var oldInput = &inputs[1];
+                    newInput.secondsToAdvanceOverUpdate = targetSecondsPerFrame;
 
                     var lastCounter = Win32GetWallClock();
                     var flipWallClock = Win32GetWallClock();

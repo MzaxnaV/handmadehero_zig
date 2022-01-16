@@ -61,11 +61,12 @@ pub const controller_input = struct {
 };
 
 pub const input = struct {
-    mouseButtons: [5]button_state = [1]button_state{ button_state{} } ** 5,
+    mouseButtons: [5]button_state = [1]button_state{button_state{}} ** 5,
     mouseX: i32 = 0,
     mouseY: i32 = 0,
     mouseZ: i32 = 0,
-    controllers: [5]controller_input = [1]controller_input{ controller_input{} } ** 5,
+    secondsToAdvanceOverUpdate: f32 = 0,
+    controllers: [5]controller_input = [1]controller_input{controller_input{}} ** 5,
 };
 
 pub const memory = struct {
@@ -80,17 +81,7 @@ pub const memory = struct {
     DEBUGPlatformWriteEntireFile: fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool = undefined,
 };
 
-pub const state = struct {
-    blueOffset: i32,
-    greenOffset: i32,
-    toneHz: u32,
-
-    tSine: f32,
-
-    playerX: u32,
-    playerY: u32,
-    tJump: f32,
-};
+pub const state = struct {};
 
 // IMPORTANT: These are NOT for doing anything in the shipping game - they are blocking and the write doesn't protect against lost data
 pub const debug_read_file_result = struct {
@@ -115,5 +106,5 @@ pub inline fn TeraBytes(value: u64) u64 {
 
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 
-pub const GetSoundSamplesType = fn(*thread_context, *memory, *sound_output_buffer) void;
-pub const UpdateAndRenderType = fn(*thread_context, *memory, *input, *offscreen_buffer) void;
+pub const GetSoundSamplesType = fn (*thread_context, *memory, *sound_output_buffer) void;
+pub const UpdateAndRenderType = fn (*thread_context, *memory, *input, *offscreen_buffer) void;
