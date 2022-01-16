@@ -4,6 +4,10 @@ pub const PI32 = 3.14159265359;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
+pub const thread_context = struct {
+    placeHolder: u32 = 0,
+};
+
 pub const offscreen_buffer = struct {
     memory: ?*anyopaque,
     width: u32,
@@ -57,7 +61,11 @@ pub const controller_input = struct {
 };
 
 pub const input = struct {
-    controllers: [5]controller_input,
+    mouseButtons: [5]button_state = [1]button_state{ button_state{} } ** 5,
+    mouseX: i32 = 0,
+    mouseY: i32 = 0,
+    mouseZ: i32 = 0,
+    controllers: [5]controller_input = [1]controller_input{ controller_input{} } ** 5,
 };
 
 pub const memory = struct {
@@ -67,9 +75,9 @@ pub const memory = struct {
     transientStorageSize: u64,
     transientStorage: [*]u8,
 
-    DEBUGPlatformFreeFileMemory: fn (*anyopaque) void = undefined,
-    DEBUGPlatformReadEntireFile: fn ([*:0]const u8) debug_read_file_result = undefined,
-    DEBUGPlatformWriteEntireFile: fn ([*:0]const u8, u32, *anyopaque) bool = undefined,
+    DEBUGPlatformFreeFileMemory: fn (*thread_context, *anyopaque) void = undefined,
+    DEBUGPlatformReadEntireFile: fn (*thread_context, [*:0]const u8) debug_read_file_result = undefined,
+    DEBUGPlatformWriteEntireFile: fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool = undefined,
 };
 
 pub const state = struct {
@@ -104,3 +112,8 @@ pub inline fn GigaBytes(value: u64) u64 {
 pub inline fn TeraBytes(value: u64) u64 {
     return 1000 * GigaBytes(value);
 }
+
+// exported functions ---------------------------------------------------------------------------------------------------------------------
+
+pub const GetSoundSamplesType = fn(*thread_context, *memory, *sound_output_buffer) void;
+pub const UpdateAndRenderType = fn(*thread_context, *memory, *input, *offscreen_buffer) void;

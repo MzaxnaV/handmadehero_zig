@@ -18,7 +18,7 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
     const target = b.standardTargetOptions(.{});
     const options = b.addOptions();
-    options.addOption(bool, "IGNORE", true);
+    options.addOption(bool, "NOT_IGNORE", true);
 
     const lib = b.addSharedLibrary(lib_name, "code/handmade.zig", b.version(1, 0, 0));
     lib.setTarget(target);

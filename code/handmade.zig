@@ -1,6 +1,6 @@
 const std = @import("std");
 const common = @import("handmade_common");
-const IGNORE = @import("build_consts").IGNORE;
+const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 const HANDMADE_INTERNAL = (@import("builtin").mode == std.builtin.Mode.Debug);
@@ -15,7 +15,7 @@ fn OutputSound(gameState: *common.state, soundBuffer: *common.sound_output_buffe
     var sampleIndex: u32 = 0;
     while (sampleIndex < soundBuffer.sampleCount) : (sampleIndex += 1) {
         const sineValue = @sin(gameState.tSine);
-        const sampleValue = if (IGNORE) @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume)) else 0;
+        const sampleValue = if (NOT_IGNORE) @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume)) else 0;
         sampleOut.* = sampleValue;
         sampleOut += 1;
         sampleOut.* = sampleValue;
@@ -56,10 +56,11 @@ fn RenderPlayer(buffer: *common.offscreen_buffer, playerX: u32, playerY: u32) vo
     const top = playerY;
     const bottom = playerY +% 10;
     var x = playerX;
-    while (x < playerX +% 10) : (x += 1) {
-        var pixel: [*]u8 = @ptrCast([*]u8, buffer.memory) + x * buffer.bytesPerPixel + top * buffer.pitch;
+    while (x < playerX +% 10) : (x +%= 1) {
+        const pixelLocation = x *% buffer.bytesPerPixel + top *% buffer.pitch;
+        var pixel: [*]u8 = @ptrCast([*]u8, buffer.memory) + pixelLocation;
         var y = top;
-        while (y < bottom) : (y += 1) {
+        while (y < bottom) : (y +%= 1) {
             if (@ptrToInt(pixel) >= @ptrToInt(@ptrCast([*]u8, buffer.memory)) and @ptrToInt(pixel + 4) <= @ptrToInt(endOfBuffer)) {
                 (@ptrCast([*]u32, @alignCast(@alignOf(u32), pixel))).* = colour;
             }
@@ -71,7 +72,20 @@ fn RenderPlayer(buffer: *common.offscreen_buffer, playerX: u32, playerY: u32) vo
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
-pub export fn UpdateAndRender(gameMemory: *common.memory, gameInput: *common.input, buffer: *common.offscreen_buffer) void {
+pub export fn UpdateAndRender(thread: *common.thread_context, gameMemory: *common.memory, gameInput: *common.input, buffer: *common.offscreen_buffer) void {
+    comptime {
+        // This is hacky atm. Need to check as we're using win32.LoadLibrary()
+        if (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args.len != @typeInfo(common.UpdateAndRenderType).Fn.args.len or
+            (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[0].arg_type.? != @typeInfo(common.UpdateAndRenderType).Fn.args[0].arg_type.?) or
+            (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[1].arg_type.? != @typeInfo(common.UpdateAndRenderType).Fn.args[1].arg_type.?) or
+            (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[2].arg_type.? != @typeInfo(common.UpdateAndRenderType).Fn.args[2].arg_type.?) or
+            (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[3].arg_type.? != @typeInfo(common.UpdateAndRenderType).Fn.args[3].arg_type.?) or
+            @typeInfo(@TypeOf(UpdateAndRender)).Fn.return_type.? != @typeInfo(common.UpdateAndRenderType).Fn.return_type.?)
+        {
+            @compileError("Function signature mismatch!");
+        }
+    }
+
     std.debug.assert(@sizeOf(common.state) <= gameMemory.permanentStorageSize);
 
     const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
@@ -79,11 +93,11 @@ pub export fn UpdateAndRender(gameMemory: *common.memory, gameInput: *common.inp
     if (!gameMemory.isInitialized) {
         const fileName = "../code/handmade.zig";
 
-        var file = gameMemory.DEBUGPlatformReadEntireFile(fileName);
+        var file = gameMemory.DEBUGPlatformReadEntireFile(thread, fileName);
 
         if (file.contentSize > 0) {
-            _ = gameMemory.DEBUGPlatformWriteEntireFile("test.out", file.contentSize, file.contents);
-            gameMemory.DEBUGPlatformFreeFileMemory(file.contents);
+            _ = gameMemory.DEBUGPlatformWriteEntireFile(thread, "test.out", file.contentSize, file.contents);
+            gameMemory.DEBUGPlatformFreeFileMemory(thread, file.contents);
         }
 
         gameState.toneHz = 512;
@@ -101,7 +115,7 @@ pub export fn UpdateAndRender(gameMemory: *common.memory, gameInput: *common.inp
         if (controller.isAnalog) {
             // Use analog movement tuning
             gameState.blueOffset +%= @floatToInt(i32, 4.0 * controller.stickAverageX);
-            gameState.toneHz = 512 + @floatToInt(u32, 120.0 * controller.stickAverageY);
+            gameState.toneHz = @floatToInt(u32, 512.0 + 120.0 * controller.stickAverageY);
         } else {
             const speed = 5;
             // Use digital movement tuning
@@ -137,13 +151,33 @@ pub export fn UpdateAndRender(gameMemory: *common.memory, gameInput: *common.inp
 
     RenderWeirdGradient(buffer, gameState.blueOffset, gameState.greenOffset);
     RenderPlayer(buffer, gameState.playerX, gameState.playerY);
+
+    RenderPlayer(buffer, @bitCast(u32, gameInput.mouseX), @bitCast(u32, gameInput.mouseY));
+
+    for (gameInput.mouseButtons) |mouseButton, index| {
+        if (mouseButton.endedDown != 0) {
+            RenderPlayer(buffer, 10 + 20 * @intCast(u32, index), 10);
+        }
+    }
 }
 
 // NOTEAt the moment, this has to be a very fast function, it cannot be
 // more than a millisecond or so.
 // TODO Reduce the pressure on this function's performance by measuring it
 // or asking about it, etc.
-pub export fn GetSoundSamples(gameMemory: *common.memory, soundBuffer: *common.sound_output_buffer) void {
+pub export fn GetSoundSamples(_: *common.thread_context, gameMemory: *common.memory, soundBuffer: *common.sound_output_buffer) void {
+    comptime {
+        // This is hacky atm. Need to check as we're using win32.LoadLibrary()
+        if (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args.len != @typeInfo(common.GetSoundSamplesType).Fn.args.len or
+            (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args[0].arg_type.? != @typeInfo(common.GetSoundSamplesType).Fn.args[0].arg_type.?) or
+            (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args[1].arg_type.? != @typeInfo(common.GetSoundSamplesType).Fn.args[1].arg_type.?) or
+            (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args[2].arg_type.? != @typeInfo(common.GetSoundSamplesType).Fn.args[2].arg_type.?) or
+            @typeInfo(@TypeOf(GetSoundSamples)).Fn.return_type.? != @typeInfo(common.GetSoundSamplesType).Fn.return_type.?)
+        {
+            @compileError("Function signature mismatch!");
+        }
+    }
+
     const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
     OutputSound(gameState, soundBuffer, gameState.toneHz);
 }
