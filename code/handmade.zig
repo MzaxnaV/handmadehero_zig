@@ -39,34 +39,41 @@ fn RoundF32ToI32(float32: f32) i32 {
     return result;
 }
 
-fn DrawRectangle(buffer: *common.offscreen_buffer, fMinX: f32, fMinY: f32, fMaxX: f32, fMaxY: f32, colour: u32) void {
-    var minX = @bitCast(u32, RoundF32ToI32(fMinX));
-    var minY = @bitCast(u32, RoundF32ToI32(fMinY));
-    var maxX = @bitCast(u32, RoundF32ToI32(fMaxX));
-    var maxY = @bitCast(u32, RoundF32ToI32(fMaxY));
+fn RoundF32ToU32(float32: f32) u32 {
+    const result = @floatToInt(u32, float32 + 0.5);
+    return result;
+}
 
-    if (fMinX < 0) {
+fn DrawRectangle(buffer: *common.offscreen_buffer, fMinX: f32, fMinY: f32, fMaxX: f32, fMaxY: f32, r: f32, g: f32, b: f32) void {
+    var minX = @intCast(i32, RoundF32ToI32(fMinX));
+    var minY = @intCast(i32, RoundF32ToI32(fMinY));
+    var maxX = @intCast(i32, RoundF32ToI32(fMaxX));
+    var maxY = @intCast(i32, RoundF32ToI32(fMaxY));
+
+    if (minX < 0) {
         minX = 0;
     }
 
-    if (fMinY < 0) {
+    if (minY < 0) {
         minY = 0;
     }
 
-    if (fMaxX > @intToFloat(f32, buffer.width)) {
-        maxX = buffer.width;
+    if (maxX > @intCast(i32, buffer.width)) {
+        maxX = @intCast(i32, buffer.width);
     }
 
-    if (fMaxY > @intToFloat(f32, buffer.height)) {
-        maxY = buffer.width;
+    if (maxY > @intCast(i32, buffer.height)) {
+        maxY = @intCast(i32, buffer.height);
     }
 
-    var row = @ptrCast([*]u8, buffer.memory) + minX * buffer.bytesPerPixel + minY * buffer.pitch;
+    const colour: u32 = (RoundF32ToU32(r * 255.0) << 16) | (RoundF32ToU32(g * 255.0) << 8) | (RoundF32ToU32(b * 255) << 0);
 
-    var y = minY;
+    var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * buffer.bytesPerPixel + @intCast(u32, minY) * buffer.pitch;
+
+    var y = @bitCast(u32, minY);
     while (y < maxY) : (y += 1) {
         var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
-        var x = minX;
+        var x = @bitCast(u32, minX);
         while (x < maxX) : (x += 1) {
             pixel.* = colour;
             pixel += 1;
@@ -77,7 +84,7 @@ fn DrawRectangle(buffer: *common.offscreen_buffer, fMinX: f32, fMinY: f32, fMaxX
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
-pub export fn UpdateAndRender(_: *common.thread_context, gameMemory: *common.memory, gameInput: *common.input, buffer: *common.offscreen_buffer) void {
+pub export fn UpdateAndRender(thread: *common.thread_context, gameMemory: *common.memory, gameInput: *common.input, buffer: *common.offscreen_buffer) void {
     comptime {
         // This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args.len != @typeInfo(common.UpdateAndRenderType).Fn.args.len or
@@ -91,22 +98,95 @@ pub export fn UpdateAndRender(_: *common.thread_context, gameMemory: *common.mem
         }
     }
 
+    _ = thread;
+
     std.debug.assert(@sizeOf(common.state) <= gameMemory.permanentStorageSize);
 
-    // const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
-    const gameState = @ptrCast(*common.state, gameMemory.permanentStorage);
-    _ = gameState;
+    const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
         gameMemory.isInitialized = true;
     }
 
     for (gameInput.controllers) |controller| {
-        if (controller.isAnalog) {} else {}
+        if (controller.isAnalog) {
+            // Use analog movement tuning
+        } else {
+            // Use digital movement tuning
+
+            var dPlayerX: f32 = 0; // pixels/second
+            var dPlayerY: f32 = 0; // pixels/second
+
+            if (controller.buttons.mapped.moveUp.endedDown != 0) {
+                dPlayerY = -1.0;
+            }
+            if (controller.buttons.mapped.moveDown.endedDown != 0) {
+                dPlayerY = 1.0;
+            }
+            if (controller.buttons.mapped.moveLeft.endedDown != 0) {
+                dPlayerX = -1.0;
+            }
+            if (controller.buttons.mapped.moveRight.endedDown != 0) {
+                dPlayerX = 1.0;
+            }
+
+            dPlayerX *= 64;
+            dPlayerY *= 64;
+
+            gameState.playerX += gameInput.dtForFrame * dPlayerX;
+            gameState.playerX += gameInput.dtForFrame * dPlayerX;
+        }
     }
 
-    DrawRectangle(buffer, 0, 0, @intToFloat(f32, buffer.width), @intToFloat(f32, buffer.height), 0x00ff00ff);
-    DrawRectangle(buffer, 10, 10, 40, 40, 0x0000ffff);
+    const tileMap = [9][17]u32{
+        [_]u32{ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
+        [_]u32{ 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
+        [_]u32{ 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1 },
+        [_]u32{ 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1 },
+        [_]u32{ 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 },
+        [_]u32{ 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1 },
+        [_]u32{ 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1 },
+        [_]u32{ 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
+        [_]u32{ 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
+    };
+
+    const upperLeftX = -30.0;
+    const upperLeftY = 0.0;
+    const tileWidth = 60.0;
+    const tileHeight = 60.0;
+
+    DrawRectangle(buffer, 0, 0, @intToFloat(f32, buffer.width), @intToFloat(f32, buffer.height), 1, 0, 0);
+
+    var row: u32 = 0;
+    while (row < tileMap.len) : (row += 1) {
+        var col: u32 = 0;
+        while (col < tileMap[0].len) : (col += 1) {
+            const tileID = tileMap[row][col];
+            var grey: f32 = 0.5;
+            switch (tileID) {
+                1 => grey = 1,
+                else => {},
+            }
+
+            const minX = upperLeftX + @intToFloat(f32, col) * tileWidth;
+            const minY = upperLeftY + @intToFloat(f32, row) * tileHeight;
+            const maxX = minX + tileWidth;
+            const maxY = minY + tileHeight;
+
+            DrawRectangle(buffer, minX, minY, maxX, maxY, grey, grey, grey);
+        }
+    }
+
+    const playerR = 1.0;
+    const playerG = 1.0;
+    const playerB = 0.0;
+
+    const playerWidth = 0.7 * tileWidth;
+    const playerHeight = tileHeight;
+    const playerLeft = gameState.playerX - 0.5 * playerWidth;
+    const playerTop = gameState.playerY - playerHeight;
+
+    DrawRectangle(buffer, playerLeft, playerTop, playerLeft + playerHeight, playerTop + playerWidth, playerR, playerG, playerB);
 }
 
 // NOTEAt the moment, this has to be a very fast function, it cannot be
@@ -126,8 +206,7 @@ pub export fn GetSoundSamples(_: *common.thread_context, gameMemory: *common.mem
         }
     }
 
-    // const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
-    const gameState = @ptrCast(*common.state, gameMemory.permanentStorage);
+    const gameState = @ptrCast(*common.state, @alignCast(@alignOf(common.state), gameMemory.permanentStorage));
     OutputSound(gameState, soundBuffer, 400);
 }
 

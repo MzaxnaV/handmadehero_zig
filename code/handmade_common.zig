@@ -65,7 +65,7 @@ pub const input = struct {
     mouseX: i32 = 0,
     mouseY: i32 = 0,
     mouseZ: i32 = 0,
-    secondsToAdvanceOverUpdate: f32 = 0,
+    dtForFrame: f32 = 0,
     controllers: [5]controller_input = [1]controller_input{controller_input{}} ** 5,
 };
 
@@ -81,7 +81,10 @@ pub const memory = struct {
     DEBUGPlatformWriteEntireFile: fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool = undefined,
 };
 
-pub const state = struct {};
+pub const state = struct {
+    playerX: f32,
+    playerY: f32,
+};
 
 // IMPORTANT: These are NOT for doing anything in the shipping game - they are blocking and the write doesn't protect against lost data
 pub const debug_read_file_result = struct {

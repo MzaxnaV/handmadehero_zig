@@ -1033,7 +1033,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                     var newInput = &inputs[0];
                     var oldInput = &inputs[1];
-                    newInput.secondsToAdvanceOverUpdate = targetSecondsPerFrame;
 
                     var lastCounter = Win32GetWallClock();
                     var flipWallClock = Win32GetWallClock();
@@ -1051,6 +1050,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     var lastCycleCount = rdtsc();
 
                     while (globalRunning) {
+                        newInput.dtForFrame = targetSecondsPerFrame;
                         const newDLLWriteTime = Win32GetLastWriteTime(&sourceGameCodeDLLFullPath);
                         if (win32.CompareFileTime(&newDLLWriteTime, &gameCode.dllLastWriteTime) != 0) {
                             Win32UnloadGameCode(&gameCode);
