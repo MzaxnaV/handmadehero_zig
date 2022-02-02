@@ -2,7 +2,7 @@
 
 pub const PI32 = 3.14159265359;
 
-// data types -----------------------------------------------------------------------------------------------------------------------------
+// platform data types -----------------------------------------------------------------------------------------------------------------------------
 
 pub const thread_context = struct {
     placeHolder: u32 = 0,
@@ -79,6 +79,28 @@ pub const memory = struct {
     DEBUGPlatformFreeFileMemory: fn (*thread_context, *anyopaque) void = undefined,
     DEBUGPlatformReadEntireFile: fn (*thread_context, [*:0]const u8) debug_read_file_result = undefined,
     DEBUGPlatformWriteEntireFile: fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool = undefined,
+};
+
+// game data types ------------------------------------------------------------------------------------------------------------------------
+
+pub const tile_map = struct {
+    countX: i32 = 0,
+    countY: i32 = 0,
+
+    upperLeftX: f32 = 0,
+    upperLeftY: f32 = 0,
+    
+    tileWidth: f32 = 0,
+    tileHeight: f32 = 0,
+
+    tiles: [*]const u32 = undefined,
+};
+
+pub const world = struct {
+    tileMapCountX: u32,
+    tileMapCountY: u32,
+
+    tileMaps: [*]tile_map,
 };
 
 pub const state = struct {

@@ -9,9 +9,9 @@ pub fn build(b: *std.build.Builder) void {
             .path = .{ .path = "./code/zigwin32/win32.zig" },
         };
 
-        const common = std.build.Pkg{
-            .name = "handmade_common",
-            .path = .{ .path = "./code/handmade_common.zig" },
+        const platform = std.build.Pkg{
+            .name = "handmade_platform",
+            .path = .{ .path = "./code/handmade_platform.zig" },
         };
     };
 
@@ -23,7 +23,7 @@ pub fn build(b: *std.build.Builder) void {
     const lib = b.addSharedLibrary(lib_name, "code/handmade.zig", b.version(1, 0, 0));
     lib.setTarget(target);
     lib.setBuildMode(mode);
-    lib.addPackage(pkgs.common);
+    lib.addPackage(pkgs.platform);
 
     lib.setOutputDir("build");
     lib.addOptions("build_consts", options);
@@ -34,7 +34,7 @@ pub fn build(b: *std.build.Builder) void {
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.addPackage(pkgs.win32);
-    exe.addPackage(pkgs.common);
+    exe.addPackage(pkgs.platform);
 
     exe.setOutputDir("build");
     exe.addOptions("build_consts", options);

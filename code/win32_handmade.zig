@@ -31,7 +31,7 @@ const win32 = struct {
     };
 };
 
-const game = @import("handmade_common");
+const game = @import("handmade_platform");
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -517,8 +517,13 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u3
 }
 
 fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: win32.HDC, windowWidth: i32, windowHeight: i32) void {
-    _ = windowHeight;
-    _ = windowWidth;
+    const offsetX = 10;
+    const offsetY = 10;
+
+    _ = win32.PatBlt(deviceContext, 0, 0, windowWidth, offsetY, win32.ROP_CODE.BLACKNESS);
+    _ = win32.PatBlt(deviceContext, 0, offsetY + @intCast(i32, buffer.width), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+    _ = win32.PatBlt(deviceContext, 0, 0, offsetX, windowHeight, win32.ROP_CODE.BLACKNESS);
+    _ = win32.PatBlt(deviceContext, offsetX + @intCast(i32, buffer.width), 0, windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
 
     // For prototyping purposes, we're going to always blit
     // 1-to-1 pixels to make sure we don't introduce artifacts with
@@ -526,8 +531,8 @@ fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: wi
 
     _ = win32.StretchDIBits(
         deviceContext,
-        0,
-        0,
+        offsetX,
+        offsetY,
         @intCast(i32, buffer.width),
         @intCast(i32, buffer.height),
         0,
