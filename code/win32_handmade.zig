@@ -521,7 +521,7 @@ fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: wi
     const offsetY = 10;
 
     _ = win32.PatBlt(deviceContext, 0, 0, windowWidth, offsetY, win32.ROP_CODE.BLACKNESS);
-    _ = win32.PatBlt(deviceContext, 0, offsetY + @intCast(i32, buffer.width), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+    _ = win32.PatBlt(deviceContext, 0, offsetY + @intCast(i32, buffer.height), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
     _ = win32.PatBlt(deviceContext, 0, 0, offsetX, windowHeight, win32.ROP_CODE.BLACKNESS);
     _ = win32.PatBlt(deviceContext, offsetX + @intCast(i32, buffer.width), 0, windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
 
