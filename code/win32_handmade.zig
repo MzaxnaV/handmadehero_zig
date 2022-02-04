@@ -31,7 +31,7 @@ const win32 = struct {
     };
 };
 
-const game = @import("handmade_platform");
+const handmade = @import("handmade_platform");
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -103,8 +103,8 @@ const win32_debug_time_marker = struct {
 const win32_game_code = struct {
     gameCodeDLL: ?win32.HINSTANCE = undefined,
     dllLastWriteTime: win32.FILETIME = undefined,
-    UpdateAndRender: ?game.UpdateAndRenderType = null,
-    GetSoundSamples: ?game.GetSoundSamplesType = null,
+    UpdateAndRender: ?handmade.UpdateAndRenderType = null,
+    GetSoundSamples: ?handmade.GetSoundSamplesType = null,
 
     isValid: bool = false,
 };
@@ -250,12 +250,12 @@ fn Win32BuildEXEPathFileName(gameState: *win32_state, filename: []const u16, des
 //     Win32DebugDrawVertical(backBuffer, x, top, bottom, colour);
 // }
 
-fn DEBUGWin32FreeFileMemory(_: *game.thread_context, memory: *anyopaque) void {
+fn DEBUGWin32FreeFileMemory(_: *handmade.thread_context, memory: *anyopaque) void {
     _ = win32.VirtualFree(memory, 0, win32.MEM_RELEASE);
 }
 
-fn DEBUGWin32ReadEntireFile(thread: *game.thread_context, filename: [*:0]const u8) game.debug_read_file_result {
-    var result = game.debug_read_file_result{};
+fn DEBUGWin32ReadEntireFile(thread: *handmade.thread_context, filename: [*:0]const u8) handmade.debug_read_file_result {
+    var result = handmade.debug_read_file_result{};
     var fileHandle = win32.CreateFileA(filename, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
 
     if (fileHandle != null and fileHandle != win32.INVALID_HANDLE_VALUE) {
@@ -284,7 +284,7 @@ fn DEBUGWin32ReadEntireFile(thread: *game.thread_context, filename: [*:0]const u
     return result;
 }
 
-fn DEBUGWin32WriteEntireFile(_: *game.thread_context, fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool {
+fn DEBUGWin32WriteEntireFile(_: *handmade.thread_context, fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool {
     var result = false;
     var fileHandle = win32.CreateFileA(fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_MODE.NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null);
 
@@ -612,7 +612,7 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
     }
 }
 
-fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, bytesToWrite: DWORD, sourceBuffer: *game.sound_output_buffer) void {
+fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, bytesToWrite: DWORD, sourceBuffer: *handmade.sound_output_buffer) void {
     // TODO: more strenous test :)
     var region1: ?*anyopaque = undefined;
     var region1Size: DWORD = undefined;
@@ -654,14 +654,14 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
     }
 }
 
-fn Win32ProcessKeyboardMessage(newState: *game.button_state, isDown: u32) void {
+fn Win32ProcessKeyboardMessage(newState: *handmade.button_state, isDown: u32) void {
     if (newState.endedDown != isDown) {
         newState.endedDown = isDown;
         newState.haltTransitionCount += 1;
     }
 }
 
-fn Win32ProcessXinputDigitalButton(xInputButtonState: DWORD, oldState: *game.button_state, buttonBit: DWORD, newState: *game.button_state) void {
+fn Win32ProcessXinputDigitalButton(xInputButtonState: DWORD, oldState: *handmade.button_state, buttonBit: DWORD, newState: *handmade.button_state) void {
     newState.endedDown = @as(u32, @boolToInt((xInputButtonState & buttonBit) == buttonBit));
     newState.haltTransitionCount = if (oldState.endedDown != newState.endedDown) 1 else 0;
 }
@@ -740,12 +740,12 @@ fn Win32EndInputPlayBack(state: *win32_state) void {
     state.inputPlayingIndex = 0;
 }
 
-fn Win32RecordInput(state: *win32_state, newInput: *game.input) void {
+fn Win32RecordInput(state: *win32_state, newInput: *handmade.input) void {
     var bytesWritten: DWORD = 0;
     _ = win32.WriteFile(state.recordingHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesWritten, null);
 }
 
-fn Win32PlayBackInput(state: *win32_state, newInput: *game.input) void {
+fn Win32PlayBackInput(state: *win32_state, newInput: *handmade.input) void {
     var bytesRead: DWORD = 0;
     if (win32.ReadFile(state.playBackHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesRead, null) != win32.FALSE) {
         if (bytesRead == 0) {
@@ -758,7 +758,7 @@ fn Win32PlayBackInput(state: *win32_state, newInput: *game.input) void {
     }
 }
 
-fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *game.controller_input) void {
+fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *handmade.controller_input) void {
     var message: win32.MSG = undefined;
     while (win32.PeekMessage(&message, null, 0, 0, win32.PM_REMOVE) != 0) {
         switch (message.message) {
@@ -840,6 +840,7 @@ inline fn Win32GetSecondsElapsed(start: win32.LARGE_INTEGER, end: win32.LARGE_IN
 inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) void {
     @memcpy(@ptrCast([*]u8, dest), @ptrCast([*]const u8, source), size);
 
+    // loop below is notoriously slow.
     // for (@ptrCast([*]const u8, source)[0..size]) |byte, index| {
     //     @ptrCast([*]u8, dest)[index] = byte;
     // }
@@ -967,9 +968,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             )))) |samples| {
                 // defer _ = win32.VirtualFree();
 
-                var gameMemory = game.memory{
-                    .permanentStorageSize = game.MegaBytes(64),
-                    .transientStorageSize = game.GigaBytes(1),
+                var gameMemory = handmade.memory{
+                    .permanentStorageSize = handmade.MegaBytes(64),
+                    .transientStorageSize = handmade.GigaBytes(1),
                     .permanentStorage = undefined,
                     .transientStorage = undefined,
                     .DEBUGPlatformFreeFileMemory = DEBUGWin32FreeFileMemory,
@@ -977,7 +978,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     .DEBUGPlatformWriteEntireFile = DEBUGWin32WriteEntireFile,
                 };
 
-                const baseAddress = if (HANDMADE_INTERNAL) (@intToPtr([*]u8, game.TeraBytes(2))) else null;
+                const baseAddress = if (HANDMADE_INTERNAL) (@intToPtr([*]u8, handmade.TeraBytes(2))) else null;
                 win32State.totalSize = gameMemory.permanentStorageSize + gameMemory.transientStorageSize;
 
                 if (win32.VirtualAlloc(baseAddress, win32State.totalSize, allocationType, win32.PAGE_READWRITE)) |memory| {
@@ -1034,7 +1035,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    var inputs = [1]game.input{game.input{}} ** 2;
+                    var inputs = [1]handmade.input{handmade.input{}} ** 2;
 
                     var newInput = &inputs[0];
                     var oldInput = &inputs[1];
@@ -1063,10 +1064,10 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             loadCounter = 0;
                         }
 
-                        const oldKeyboardController: *game.controller_input = &oldInput.controllers[0];
-                        const newKeyboardController: *game.controller_input = &newInput.controllers[0];
+                        const oldKeyboardController: *handmade.controller_input = &oldInput.controllers[0];
+                        const newKeyboardController: *handmade.controller_input = &newInput.controllers[0];
                         // TODO: can't zero everything because the up/down state will be wrong
-                        newKeyboardController.* = game.controller_input{
+                        newKeyboardController.* = handmade.controller_input{
                             .isConnected = true,
                         };
 
@@ -1203,9 +1204,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 }
                             }
 
-                            var thread = game.thread_context{};
+                            var thread = handmade.thread_context{};
 
-                            var buffer = game.offscreen_buffer{
+                            var buffer = handmade.offscreen_buffer{
                                 .memory = globalBackBuffer.memory,
                                 .width = globalBackBuffer.width,
                                 .height = globalBackBuffer.height,
@@ -1285,7 +1286,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                     bytesToWrite = targetCursor - byteToLock;
                                 }
 
-                                var soundBuffer = game.sound_output_buffer{
+                                var soundBuffer = handmade.sound_output_buffer{
                                     .samplesPerSecond = soundOutput.samplesPerSecond,
                                     .sampleCount = @divTrunc(bytesToWrite, soundOutput.bytesPerSample),
                                     .samples = samples,
