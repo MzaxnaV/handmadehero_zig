@@ -684,8 +684,15 @@ fn Win32GetInputFileLocation(state: *win32_state, inputStream: bool, slotIndex: 
     Win32BuildEXEPathFileName(state, exeName[0..64], dest);
 }
 
+fn Win32GetReplayBuffer(state: *win32_state, index: u32) *win32_replay_buffer {
+    std.debug.assert(index > 0);
+    const result = &(state.replayBuffers[index]);
+
+    return result;
+}
+
 fn Win32BeginRecordingInput(state: *win32_state, inputRecordingIndex: u32) void {
-    const replayBuffer = state.replayBuffers[inputRecordingIndex];
+    const replayBuffer = Win32GetReplayBuffer(state, inputRecordingIndex);
 
     if (replayBuffer.memoryBlock) |replayMemBlock| {
         state.inputRecordingIndex = inputRecordingIndex;
@@ -713,7 +720,7 @@ fn Win32EndRecordingInput(state: *win32_state) void {
 }
 
 fn Win32BeginInputPlayBack(state: *win32_state, inputPlayingIndex: u32) void {
-    const replayBuffer = state.replayBuffers[inputPlayingIndex];
+    const replayBuffer = Win32GetReplayBuffer(state, inputPlayingIndex);
 
     if (replayBuffer.memoryBlock) |replayMemBlock| {
         state.inputPlayingIndex = inputPlayingIndex;
@@ -989,7 +996,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     gameMemory.permanentStorage = @ptrCast([*]u8, win32State.gameMemoryBlock);
                     gameMemory.transientStorage = gameMemory.permanentStorage + gameMemory.permanentStorageSize;
 
-                    var replayIndex: u32 = 0;
+                    var replayIndex: u32 = 1;
                     while (replayIndex < win32State.replayBuffers.len) : (replayIndex += 1) {
                         var replayBuffer = &win32State.replayBuffers[replayIndex];
                         // TODO: Recording system still seems to take too long

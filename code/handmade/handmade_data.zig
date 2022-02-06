@@ -1,6 +1,8 @@
+const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
+
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
-pub const canonical_position = struct {
+pub const canonical_position = if (NOT_IGNORE) struct {
     tileMapX: i32 = 0,
     tileMapY: i32 = 0,
 
@@ -9,14 +11,12 @@ pub const canonical_position = struct {
 
     tileRelX: f32 = 0,
     tileRelY: f32 = 0,
-};
+} else struct {
+    _tileX: i32 = 0,
+    _tileY: i32 = 0,
 
-pub const raw_position = struct {
-    tileMapX: i32,
-    tileMapY: i32,
-
-    x: f32,
-    y: f32,
+    tileRelX: f32 = 0,
+    tileRelY: f32 = 0,
 };
 
 pub const tile_map = struct {
@@ -26,6 +26,7 @@ pub const tile_map = struct {
 pub const world = struct {
     tileSideInMeters: f32,
     tileSideInPixels: i32,
+    metersToPixels: f32 = undefined,
 
     countX: i32 = 0,
     countY: i32 = 0,
@@ -40,9 +41,5 @@ pub const world = struct {
 };
 
 pub const state = struct {
-    playerTileMapX: i32,
-    playerTileMapY: i32,
-
-    playerX: f32,
-    playerY: f32,
+    playerP: canonical_position = canonical_position{}
 };

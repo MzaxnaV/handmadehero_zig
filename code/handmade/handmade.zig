@@ -28,7 +28,7 @@ inline fn GetTileValueUnchecked(world: *const game.world, tileMap: *game.tile_ma
     return tileMapValue;
 }
 
-inline fn IsTileMapPointEmpty(world: *const game.world, tileMap: ?*game.tile_map, testTileX: i32, testTileY: i32) bool {
+fn IsTileMapPointEmpty(world: *const game.world, tileMap: ?*game.tile_map, testTileX: i32, testTileY: i32) bool {
     var empty = false;
 
     if (tileMap) |map| {
@@ -41,50 +41,42 @@ inline fn IsTileMapPointEmpty(world: *const game.world, tileMap: ?*game.tile_map
     return empty;
 }
 
-inline fn GetCanonicalPosition(world: *const game.world, pos: game.raw_position) game.canonical_position {
-    var result = game.canonical_position{};
+fn RecanonicalizeCoord(world: *const game.world, tileCount: i32, tileMap: *i32, tile: *i32, tileRel: *f32) void {
+    const offSet = game.FloorF32ToI32(tileRel.* / world.tileSideInMeters);
+    tile.* += offSet;
+    tileRel.* -= @intToFloat(f32, offSet) * world.tileSideInMeters;
 
-    result.tileMapX = pos.tileMapX;
-    result.tileMapY = pos.tileMapY;
+    std.debug.assert(tileRel.* >= 0);
+    std.debug.assert(tileRel.* <= world.tileSideInMeters);
 
-    const x = pos.x - world.upperLeftX;
-    const y = pos.y - world.upperLeftY;
-
-    result.tileX = game.FloorF32ToI32(x / @intToFloat(f32, world.tileSideInPixels));
-    result.tileY = game.FloorF32ToI32(y / @intToFloat(f32, world.tileSideInPixels));
-
-    result.tileRelX = x - @intToFloat(f32, result.tileX * world.tileSideInPixels);
-    result.tileRelY = y - @intToFloat(f32, result.tileY * world.tileSideInPixels);
-
-    std.debug.assert(result.tileRelX >= 0);
-    std.debug.assert(result.tileRelY >= 0);
-    std.debug.assert(result.tileRelX < @intToFloat(f32, world.tileSideInPixels));
-    std.debug.assert(result.tileRelY < @intToFloat(f32, world.tileSideInPixels));
-
-    if (result.tileX < 0) {
-        result.tileX += world.countX;
-        result.tileMapX -= 1;
+    if (tile.* < 0) {
+        tile.* += tileCount;
+        tileMap.* -= 1;
     }
 
-    if (result.tileY < 0) {
-        result.tileY += world.countY;
-        result.tileMapY -= 1;
+    if (tile.* >= tileCount) {
+        tile.* -= tileCount;
+        tileMap.* += 1;
     }
+}
 
-    if (result.tileX >= world.countX) {
-        result.tileX -= world.countX;
-        result.tileMapX += 1;
-    }
+fn RecanonicalizePosition(world: *const game.world, pos: game.canonical_position) game.canonical_position {
+    var result = pos;
 
-    if (result.tileY >= world.countY) {
-        result.tileY -= world.countY;
-        result.tileMapY += 1;
-    }
+    RecanonicalizeCoord(world, world.countX, &result.tileMapX, &result.tileX, &result.tileRelX);
+    RecanonicalizeCoord(world, world.countY, &result.tileMapY, &result.tileY, &result.tileRelY);
 
     return result;
 }
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
+
+fn IsWorldPointEmpty(world: *const game.world, canPos: game.canonical_position) bool {
+    const tileMap = GetTileMap(world, canPos.tileMapX, canPos.tileMapY);
+    const empty = IsTileMapPointEmpty(world, tileMap, canPos.tileX, canPos.tileY);
+
+    return empty;
+}
 
 fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneHz: u32) void {
     const toneVolume = 3000;
@@ -149,14 +141,6 @@ fn DrawRectangle(buffer: *platform.offscreen_buffer, fMinX: f32, fMinY: f32, fMa
         }
         row += buffer.pitch;
     }
-}
-
-fn IsWorldPointEmpty(world: *const game.world, testPos: game.raw_position) bool {
-    const canPos = GetCanonicalPosition(world, testPos);
-    const tileMap = GetTileMap(world, canPos.tileMapX, canPos.tileMapY);
-    const empty = IsTileMapPointEmpty(world, tileMap, canPos.tileX, canPos.tileY);
-
-    return empty;
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
@@ -250,22 +234,29 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         .tileMaps = @ptrCast([*]game.tile_map, &tileMaps),
     };
 
+    world.metersToPixels = @intToFloat(f32, world.tileSideInPixels) / world.tileSideInMeters;
     world.upperLeftX = -@intToFloat(f32, world.tileSideInPixels) / 2;
     world.upperLeftY = 0;
 
-    const playerWidth = 0.75 * @intToFloat(f32, world.tileSideInPixels);
-    const playerHeight = @intToFloat(f32, world.tileSideInPixels);
+    const playerHeight: f32 = 1.4;
+    const playerWidth = 0.75 * playerHeight;
 
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
-        gameState.playerX = 175;
-        gameState.playerY = 150;
+        gameState.playerP.tileMapX = 0;
+        gameState.playerP.tileMapY = 0;
+
+        gameState.playerP.tileX = 3;
+        gameState.playerP.tileY = 3;
+
+        gameState.playerP.tileRelX = 5.0;
+        gameState.playerP.tileRelY = 5.0;
 
         gameMemory.isInitialized = true;
     }
 
-    if (GetTileMap(&world, gameState.playerTileMapX, gameState.playerTileMapY)) |tileMap| {
+    if (GetTileMap(&world, gameState.playerP.tileMapX, gameState.playerP.tileMapY)) |tileMap| {
         for (gameInput.controllers) |controller| {
             if (controller.isAnalog) {
                 // Use analog movement tuning
@@ -288,33 +279,27 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                     dPlayerX = 1.0;
                 }
 
-                dPlayerX *= 64;
-                dPlayerY *= 64;
+                dPlayerX *= 2;
+                dPlayerY *= 2;
 
-                const newPlayerX = gameState.playerX + gameInput.dtForFrame * dPlayerX;
-                const newPlayerY = gameState.playerY + gameInput.dtForFrame * dPlayerY;
+                var newPlayerP = gameState.playerP;
+                newPlayerP.tileRelX += gameInput.dtForFrame * dPlayerX;
+                newPlayerP.tileRelY += gameInput.dtForFrame * dPlayerY;
+                newPlayerP = RecanonicalizePosition(&world, newPlayerP);
 
-                const playerPos = game.raw_position{
-                    .tileMapX = gameState.playerTileMapX,
-                    .tileMapY = gameState.playerTileMapY,
-                    .x = newPlayerX,
-                    .y = newPlayerY,
-                };
-                var playerLeft = playerPos;
-                playerLeft.x -= 0.5 * playerWidth;
-                var playerRight = playerPos;
-                playerRight.x += 0.5 * playerWidth;
+                var playerLeft = newPlayerP;
+                playerLeft.tileRelX -= 0.5 * playerWidth;
+                playerLeft = RecanonicalizePosition(&world, playerLeft);
 
-                if (IsWorldPointEmpty(&world, playerPos) and
+                var playerRight = newPlayerP;
+                playerRight.tileRelX += 0.5 * playerWidth;
+                playerRight = RecanonicalizePosition(&world, playerRight);
+
+                if (IsWorldPointEmpty(&world, newPlayerP) and
                     IsWorldPointEmpty(&world, playerLeft) and
                     IsWorldPointEmpty(&world, playerRight))
                 {
-                    const canPos = GetCanonicalPosition(&world, playerPos);
-
-                    gameState.playerTileMapX = canPos.tileMapX;
-                    gameState.playerTileMapY = canPos.tileMapY;
-                    gameState.playerX = world.upperLeftX + @intToFloat(f32, world.tileSideInPixels) * @intToFloat(f32, canPos.tileX) + canPos.tileRelX;
-                    gameState.playerY = world.upperLeftY + @intToFloat(f32, world.tileSideInPixels) * @intToFloat(f32, canPos.tileY) + canPos.tileRelY;
+                    gameState.playerP = newPlayerP;
                 }
             }
         }
@@ -332,6 +317,10 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                     else => {},
                 }
 
+                if ((col == gameState.playerP.tileX) and (row == gameState.playerP.tileY)) {
+                    grey = 0.0;
+                }
+
                 const minX = world.upperLeftX + @intToFloat(f32, col * world.tileSideInPixels);
                 const minY = world.upperLeftY + @intToFloat(f32, row * world.tileSideInPixels);
                 const maxX = minX + @intToFloat(f32, world.tileSideInPixels);
@@ -345,10 +334,21 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         const playerG = 1.0;
         const playerB = 0.0;
 
-        const playerLeft = gameState.playerX - 0.5 * playerWidth;
-        const playerTop = gameState.playerY - playerHeight;
+        const playerLeft = world.upperLeftX + @intToFloat(f32, world.tileSideInPixels * gameState.playerP.tileX) +
+            world.metersToPixels * gameState.playerP.tileRelX - 0.5 * world.metersToPixels * playerWidth;
+        const playerTop = world.upperLeftY + @intToFloat(f32, world.tileSideInPixels * gameState.playerP.tileY) +
+            world.metersToPixels * gameState.playerP.tileRelY - world.metersToPixels * playerHeight;
 
-        DrawRectangle(buffer, playerLeft, playerTop, playerLeft + playerWidth, playerTop + playerHeight, playerR, playerG, playerB);
+        DrawRectangle(
+            buffer,
+            playerLeft,
+            playerTop,
+            playerLeft + world.metersToPixels * playerWidth,
+            playerTop + world.metersToPixels * playerHeight,
+            playerR,
+            playerG,
+            playerB,
+        );
     }
 }
 
