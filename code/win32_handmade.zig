@@ -36,7 +36,7 @@ const handmade = @import("handmade_platform");
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
 const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
-const HANDMADE_INTERNAL = (@import("builtin").mode == std.builtin.Mode.Debug);
+const HANDMADE_INTERNAL = @import("build_consts").HANDMADE_INTERNAL;
 const WIN32_STATE_FILE_NAME_COUNT = win32.MAX_PATH;
 
 const allocationType = @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT));
@@ -171,6 +171,7 @@ fn Win32BuildEXEPathFileName(gameState: *win32_state, filename: []const u16, des
     CatStrings(gameState.exeFileName[0..gameState.onePastLastEXEFileNameSlashIndex], filename, dest);
 }
 
+// !NOT_IGNORE:
 // fn Win32DebugDrawVertical(backBuffer: *win32_offscreen_buffer, x: u32, top: u32, bottom: u32, colour: u32) void {
 //     var safeTop = top;
 //     var safeBottom = bottom;
