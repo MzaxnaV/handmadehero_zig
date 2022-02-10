@@ -4,6 +4,8 @@ pub const PI32 = 3.14159265359;
 
 // platform data types -----------------------------------------------------------------------------------------------------------------------------
 
+pub const memory_index = usize;
+
 pub const thread_context = struct {
     placeHolder: u32 = 0,
 };

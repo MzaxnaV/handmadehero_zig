@@ -3,7 +3,7 @@ const math = @import("std").math;
 // intrinsics -----------------------------------------------------------------------------------------------------------------------------
 
 pub inline fn RoundF32ToInt(comptime T: type, float32: f32) T {
-    const result = @floatToInt(T, float32 + 0.5);
+    const result = @floatToInt(T, math.round(float32)); // use @round()?
     return result;
 }
 
