@@ -2,8 +2,9 @@ const std = @import("std");
 const platform = @import("handmade_platform");
 const game = struct {
     usingnamespace @import("handmade_intrinsics.zig");
-    usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_internals.zig");
     usingnamespace @import("handmade_tile.zig");
+    usingnamespace @import("handmade_random.zig");
 };
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
@@ -13,12 +14,21 @@ const HANDMADE_INTERNAL = @import("build_consts").HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
 
-fn SetTileValue(_: *game.memory_arena, tileMap: *game.tile_map, absTileX: u32, absTileY: u32, tileValue: u32) void
-{
-    const chunkPos = game.GetChunkPositionFor(tileMap, absTileX, absTileY);
-    const tileChunk = game.GetTileChunk(tileMap, @intCast(i32, chunkPos.tileChunkX), @intCast(i32, chunkPos.tileChunkY));
+fn SetTileValue(arena: *game.memory_arena, tileMap: *game.tile_map, absTileX: u32, absTileY: u32, absTileZ: u32, tileValue: u32) void {
+    const chunkPos = game.GetChunkPositionFor(tileMap, absTileX, absTileY, absTileZ);
+    const tileChunk = game.GetTileChunk(tileMap, chunkPos.tileChunkX, chunkPos.tileChunkY, chunkPos.tileChunkZ);
 
     std.debug.assert(tileChunk != null);
+
+    if (tileChunk.?.tiles) |_| {} else {
+        const tileCount = tileMap.chunkDim * tileMap.chunkDim;
+        tileChunk.?.tiles = game.PushArrayPtr(u32, tileCount, arena);
+
+        var tileIndex: u32 = 0;
+        while (tileIndex < tileCount) : (tileIndex += 1) {
+            tileChunk.?.tiles.?[tileIndex] = 1;
+        }
+    }
 
     game.SetTileValue(tileMap, tileChunk, chunkPos.relTileX, chunkPos.relTileY, tileValue);
 }
@@ -88,28 +98,6 @@ fn DrawRectangle(buffer: *platform.offscreen_buffer, fMinX: f32, fMinY: f32, fMa
     }
 }
 
-fn InitializeArena(arena: *game.memory_arena, size: platform.memory_index, base: [*]u8) void {
-    arena.size = size;
-    arena.base = base;
-    arena.used = 0;
-}
-
-fn PushSize(arena: *game.memory_arena, size: platform.memory_index) [*]u8 {
-    std.debug.assert((arena.used + size) <= arena.size);
-    const result = arena.base + arena.used;
-    arena.used += size;
-
-    return result;
-}
-
-inline fn PushStruct(comptime T: type, arena: *game.memory_arena) *T {
-    return @ptrCast(*T, @alignCast(@alignOf(T), PushSize(arena, @sizeOf(T))));
-}
-
-inline fn PushArray(comptime T: type, comptime count: platform.memory_index, arena: *game.memory_arena, ) *[count]T {
-    return @ptrCast(*[count]T, @alignCast(@alignOf(T), PushSize(arena, count * @sizeOf(T))));
-}
-
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform.memory, gameInput: *platform.input, buffer: *platform.offscreen_buffer) void {
@@ -134,23 +122,24 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
-        gameState.playerP.absTileX = 1  ;
+        gameState.playerP.absTileX = 1;
         gameState.playerP.absTileY = 3;
         gameState.playerP.tileRelX = 5.0;
         gameState.playerP.tileRelY = 5.0;
 
-        InitializeArena(&gameState.worldArena, gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
+        game.InitializeArena(&gameState.worldArena, gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
 
-        gameState.world = PushStruct(game.world, &gameState.worldArena);
+        gameState.world = game.PushStruct(game.world, &gameState.worldArena);
 
         const world = gameState.world;
-        world.tileMap = PushStruct(game.tile_map, &gameState.worldArena);
+        world.tileMap = game.PushStruct(game.tile_map, &gameState.worldArena);
 
         const tileChunkCountX = 128;
         const tileChunkCountY = 128;
+        const tileChunkCountZ = 2;
 
         const chunkShift = 4;
-        const chunkDim = @as(u32, 1) <<  @intCast(u5, chunkShift);
+        const chunkDim = @as(u32, 1) << @intCast(u5, chunkShift);
 
         var tileMap = world.tileMap;
         tileMap.chunkShift = chunkShift;
@@ -159,40 +148,110 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
 
         tileMap.tileChunkCountX = tileChunkCountX;
         tileMap.tileChunkCountY = tileChunkCountY;
-        tileMap.tileChunks = PushArray(game.tile_chunk, tileChunkCountX * tileChunkCountY, &gameState.worldArena);
-
-        var y: u32 = 0;
-        while(y < tileMap.tileChunkCountY) : (y += 1) {
-            var x: u32 = 0;
-            while(x < tileMap.tileChunkCountX) : (x += 1) {
-                tileMap.tileChunks[y * @intCast(u32, tileMap.tileChunkCountX) + x].tiles = PushArray(u32, chunkDim * chunkDim, &gameState.worldArena);
-            }
-        }
+        tileMap.tileChunkCountZ = tileChunkCountZ;
+        tileMap.tileChunks = game.PushArraySlice(game.tile_chunk, tileChunkCountX * tileChunkCountY * tileChunkCountZ, &gameState.worldArena);
 
         tileMap.tileSideInMeters = 1.4;
-        tileMap.tileSideInPixels = 60;
-        tileMap.metersToPixels = @intToFloat(f32, tileMap.tileSideInPixels) / tileMap.tileSideInMeters;
-
-        // const lowerLeftX = - @intToFloat(f32, tileMap.tileSideInPixels) / 2;
-        // const lowerLeftY = @intToFloat(f32, buffer.height);
 
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
+        var screenX: u32 = 0;
+        var screenY: u32 = 0;
+        var absTileZ: u32 = 0;
 
-        var screenY:u32 = 0;
-        while(screenY < 32) : (screenY += 1) {
-            var screenX:u32 = 0;
-            while(screenX < 32) : (screenX += 1) {
-                var tileY:u32 = 0;
-                while(tileY < tilesPerHeight) : (tileY += 1) {
-                    var tileX:u32 = 0;
-                    while(tileX < tilesPerWidth) : (tileX += 1) {
-                        const absTileX = screenX * tilesPerWidth + tileX;
-                        const absTileY = screenY * tilesPerHeight + tileY;
+        var doorLeft = false;
+        var doorRight = false;
+        var doorTop = false;
+        var doorBottom = false;
+        var doorUp = false;
+        var doorDown = false;
 
-                        SetTileValue(&gameState.worldArena, world.tileMap, absTileX, absTileY, if ((tileX == tileY) and (tileY % 2 == 0)) 1 else 0);
-                    }
+        var screenIndex: u32 = 0;
+        while (screenIndex < 100) : (screenIndex += 1) {
+            var randomChoice: u32 = 0;
+            if (doorUp or doorDown) {
+                randomChoice = game.RandInt(u32) % 2;
+            } else {
+                randomChoice = game.RandInt(u32) % 3;
+            }
+
+            if (randomChoice == 2) {
+                if (absTileZ == 0) {
+                    doorUp = true;
+                } else {
+                    doorDown = true;
                 }
+            } else if (randomChoice == 1) {
+                doorRight = true;
+            } else {
+                doorTop = true;
+            }
+
+            var tileY: u32 = 0;
+            while (tileY < tilesPerHeight) : (tileY += 1) {
+                var tileX: u32 = 0;
+                while (tileX < tilesPerWidth) : (tileX += 1) {
+                    const absTileX = screenX * tilesPerWidth + tileX;
+                    const absTileY = screenY * tilesPerHeight + tileY;
+
+                    var tileValue: u32 = 1;
+                    if ((tileX == 0) and (!doorLeft or (tileY != (tilesPerHeight / 2)))) {
+                        tileValue = 2;
+                    }
+
+                    if ((tileX == (tilesPerWidth - 1)) and (!doorRight or (tileX != (tilesPerWidth / 2)))) {
+                        tileValue = 2;
+                    }
+
+                    if ((tileY == 0) and (!doorBottom or (tileX != (tilesPerWidth / 2)))) {
+                        tileValue = 2;
+                    }
+
+                    if ((tileY == (tilesPerHeight - 1)) and (!doorTop or (tileX != (tilesPerWidth / 2)))) {
+                        tileValue = 2;
+                    }
+
+                    if ((tileX == 10) and (tileY == 6)) {
+                        if (doorUp) {
+                            tileValue = 3;
+                        }
+
+                        if (doorDown) {
+                            tileValue = 4;
+                        }
+                    }
+
+                    SetTileValue(&gameState.worldArena, world.tileMap, absTileX, absTileY, absTileZ, tileValue);
+                }
+            }
+
+            doorLeft = doorRight;
+            doorBottom = doorTop;
+
+            if (doorUp) {
+                doorDown = true;
+                doorUp = false;
+            } else if (doorDown) {
+                doorDown = false;
+                doorUp = true;
+            } else {
+                doorDown = false;
+                doorUp = false;
+            }
+
+            doorRight = false;
+            doorLeft = false;
+
+            if (randomChoice == 2) {
+                if (absTileZ == 0) {
+                    absTileZ = 1;
+                } else {
+                    absTileZ = 0;
+                }
+            } else if (randomChoice == 1) {
+                screenX += 1;
+            } else {
+                screenY += 1;
             }
         }
 
@@ -201,6 +260,12 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
 
     const world = gameState.world;
     const tileMap = world.tileMap;
+
+    const tileSideInPixels = 60;
+    const metersToPixels = @intToFloat(f32, tileSideInPixels) / tileMap.tileSideInMeters;
+
+    // const lowerLeftX = -@intToFloat(f32, tileSideInPixels) / 2;
+    // const lowerLeftY = @intToFloat(f32, buffer.height);
 
     for (gameInput.controllers) |controller| {
         if (controller.isAnalog) {
@@ -224,7 +289,7 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
                 dPlayerX = 1.0;
             }
 
-            var playerSpeed:f32 = 2.0; 
+            var playerSpeed: f32 = 2.0;
             if (controller.buttons.mapped.actionUp.endedDown != 0) {
                 playerSpeed = 10.0;
             }
@@ -265,25 +330,32 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
         while (relCol < 20) : (relCol += 1) {
             const col = @bitCast(u32, @intCast(i32, gameState.playerP.absTileX) + relCol);
             const row = @bitCast(u32, @intCast(i32, gameState.playerP.absTileY) + relRow);
-            const tileID = game.GetTileValueFromAbs(tileMap, col, row);
-            var grey: f32 = 0.5;
-            switch (tileID) {
-                1 => grey = 1,
-                else => {},
+            const tileID = game.GetTileValueFromAbs(tileMap, col, row, gameState.playerP.absTileZ);
+
+            if (tileID > 0) {
+                var grey: f32 = 0.5;
+
+                if (tileID == 2) {
+                    grey = 1;
+                }
+
+                if (tileID > 2) {
+                    grey = 0.25;
+                }
+
+                if ((col == gameState.playerP.absTileX) and (row == gameState.playerP.absTileY)) {
+                    grey = 0.0;
+                }
+
+                const cenX = screenCenterX - metersToPixels * gameState.playerP.tileRelX + @intToFloat(f32, relCol * tileSideInPixels);
+                const cenY = screenCenterY + metersToPixels * gameState.playerP.tileRelY - @intToFloat(f32, relRow * tileSideInPixels);
+                const minX = cenX - 0.5 * @intToFloat(f32, tileSideInPixels);
+                const minY = cenY - 0.5 * @intToFloat(f32, tileSideInPixels);
+                const maxX = cenX + 0.5 * @intToFloat(f32, tileSideInPixels);
+                const maxY = cenY + 0.5 * @intToFloat(f32, tileSideInPixels);
+
+                DrawRectangle(buffer, minX, minY, maxX, maxY, grey, grey, grey);
             }
-
-            if ((col == gameState.playerP.absTileX) and (row == gameState.playerP.absTileY)) {
-                grey = 0.0;
-            }
-
-            const cenX = screenCenterX - tileMap.metersToPixels * gameState.playerP.tileRelX + @intToFloat(f32, relCol * tileMap.tileSideInPixels);
-            const cenY = screenCenterY + tileMap.metersToPixels * gameState.playerP.tileRelY - @intToFloat(f32, relRow * tileMap.tileSideInPixels);
-            const minX = cenX - 0.5 * @intToFloat(f32, tileMap.tileSideInPixels);
-            const minY = cenY - 0.5 * @intToFloat(f32, tileMap.tileSideInPixels);
-            const maxX = cenX + 0.5 * @intToFloat(f32, tileMap.tileSideInPixels);
-            const maxY = cenY + 0.5 * @intToFloat(f32, tileMap.tileSideInPixels);
-
-            DrawRectangle(buffer, minX, minY, maxX, maxY, grey, grey, grey);
         }
     }
 
@@ -291,15 +363,15 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
     const playerG = 1.0;
     const playerB = 0.0;
 
-    const playerLeft = screenCenterX - 0.5 * tileMap.metersToPixels * playerWidth;
-    const playerTop = screenCenterY - tileMap.metersToPixels * playerHeight;
+    const playerLeft = screenCenterX - 0.5 * metersToPixels * playerWidth;
+    const playerTop = screenCenterY - metersToPixels * playerHeight;
 
     DrawRectangle(
         buffer,
         playerLeft,
         playerTop,
-        playerLeft + tileMap.metersToPixels * playerWidth,
-        playerTop + tileMap.metersToPixels * playerHeight,
+        playerLeft + metersToPixels * playerWidth,
+        playerTop + metersToPixels * playerHeight,
         playerR,
         playerG,
         playerB,
