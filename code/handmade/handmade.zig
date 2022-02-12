@@ -98,9 +98,35 @@ fn DrawRectangle(buffer: *platform.offscreen_buffer, fMinX: f32, fMinY: f32, fMa
     }
 }
 
+const bitmap_header = packed struct {
+    fileType: u16,
+    fileSize: u32,
+    reserved1: u16,
+    reserved2: u16,
+    bitmapOffset: u32,
+    size: u32,
+    width: i32,
+    height: i32,
+    planes: u16,
+    bitsPerPixel: u16,
+};
+
+fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug_platform_read_entire_file, fileName: [*:0]const u8) [*]u32 {
+    var result: [*]u32 = undefined;
+
+    const readResult = ReadEntireFile(thread, fileName);
+    if (readResult.contentSize != 0) {
+        const header = @ptrCast(*bitmap_header, readResult.contents);
+        const pixels = @ptrCast([*]u32, @alignCast(@alignOf(u32), readResult.contents)) + header.bitmapOffset;
+        result = pixels;
+    }
+
+    return result;
+}
+
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
-pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform.memory, gameInput: *platform.input, buffer: *platform.offscreen_buffer) void {
+pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *platform.memory, gameInput: *platform.input, buffer: *platform.offscreen_buffer) void {
     comptime {
         // This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args.len != @typeInfo(platform.UpdateAndRenderType).Fn.args.len or
@@ -122,10 +148,12 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
+        gameState.pixelPointer = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
+
         gameState.playerP.absTileX = 1;
         gameState.playerP.absTileY = 3;
-        gameState.playerP.tileRelX = 5.0;
-        gameState.playerP.tileRelY = 5.0;
+        gameState.playerP.offsetX = 5.0;
+        gameState.playerP.offsetY = 5.0;
 
         game.InitializeArena(&gameState.worldArena, gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
 
@@ -175,7 +203,9 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
                 randomChoice = game.RandInt(u32) % 3;
             }
 
+            var createdZDoor = false;
             if (randomChoice == 2) {
+                createdZDoor = true;
                 if (absTileZ == 0) {
                     doorUp = true;
                 } else {
@@ -228,12 +258,9 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
             doorLeft = doorRight;
             doorBottom = doorTop;
 
-            if (doorUp) {
-                doorDown = true;
-                doorUp = false;
-            } else if (doorDown) {
-                doorDown = false;
-                doorUp = true;
+            if (createdZDoor) {
+                doorDown = !doorDown;
+                doorUp = !doorUp;
             } else {
                 doorDown = false;
                 doorUp = false;
@@ -298,22 +325,31 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
             dPlayerY *= playerSpeed;
 
             var newPlayerP = gameState.playerP;
-            newPlayerP.tileRelX += gameInput.dtForFrame * dPlayerX;
-            newPlayerP.tileRelY += gameInput.dtForFrame * dPlayerY;
+            newPlayerP.offsetX += gameInput.dtForFrame * dPlayerX;
+            newPlayerP.offsetY += gameInput.dtForFrame * dPlayerY;
             newPlayerP = game.RecanonicalizePosition(tileMap, newPlayerP);
 
             var playerLeft = newPlayerP;
-            playerLeft.tileRelX -= 0.5 * playerWidth;
+            playerLeft.offsetX -= 0.5 * playerWidth;
             playerLeft = game.RecanonicalizePosition(tileMap, playerLeft);
 
             var playerRight = newPlayerP;
-            playerRight.tileRelX += 0.5 * playerWidth;
+            playerRight.offsetX += 0.5 * playerWidth;
             playerRight = game.RecanonicalizePosition(tileMap, playerRight);
 
             if (game.IsTileMapPointEmpty(tileMap, newPlayerP) and
                 game.IsTileMapPointEmpty(tileMap, playerLeft) and
                 game.IsTileMapPointEmpty(tileMap, playerRight))
             {
+                if (game.AreOnSameTile(&gameState.playerP, &newPlayerP)) {
+                    const newTileValue = game.GetTileValueFromPos(tileMap, newPlayerP);
+
+                    if (newTileValue == 3) {
+                        newPlayerP.absTileZ +%= 1;
+                    } else if (newTileValue == 4) {
+                        newPlayerP.absTileZ -%= 1;
+                    }
+                }
                 gameState.playerP = newPlayerP;
             }
         }
@@ -347,8 +383,8 @@ pub export fn UpdateAndRender(_: *platform.thread_context, gameMemory: *platform
                     grey = 0.0;
                 }
 
-                const cenX = screenCenterX - metersToPixels * gameState.playerP.tileRelX + @intToFloat(f32, relCol * tileSideInPixels);
-                const cenY = screenCenterY + metersToPixels * gameState.playerP.tileRelY - @intToFloat(f32, relRow * tileSideInPixels);
+                const cenX = screenCenterX - metersToPixels * gameState.playerP.offsetX + @intToFloat(f32, relCol * tileSideInPixels);
+                const cenY = screenCenterY + metersToPixels * gameState.playerP.offsetY - @intToFloat(f32, relRow * tileSideInPixels);
                 const minX = cenX - 0.5 * @intToFloat(f32, tileSideInPixels);
                 const minY = cenY - 0.5 * @intToFloat(f32, tileSideInPixels);
                 const maxX = cenX + 0.5 * @intToFloat(f32, tileSideInPixels);

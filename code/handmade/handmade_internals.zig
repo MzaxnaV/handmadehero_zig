@@ -19,7 +19,9 @@ pub const world = struct {
 pub const state = struct {
     worldArena: memory_arena,
     world: *world,
-    playerP: tile_map_position = tile_map_position{}
+
+    playerP: tile_map_position = tile_map_position{},
+    pixelPointer: [*]u32,
 };
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
@@ -44,10 +46,10 @@ pub inline fn PushStruct(comptime T: type, arena: *memory_arena) *T {
     return @ptrCast(*T, @alignCast(@alignOf(T), PushSize(arena, @sizeOf(T))));
 }
 
-pub inline fn PushArraySlice(comptime T: type, comptime count: memory_index, arena: *memory_arena, ) *[count]T {
+pub inline fn PushArraySlice(comptime T: type, comptime count: memory_index, arena: *memory_arena) *[count]T {
     return @ptrCast(*[count]T, @alignCast(@alignOf(T), PushSize(arena, count * @sizeOf(T))));
 }
 
-pub inline fn PushArrayPtr(comptime T: type, count: memory_index, arena: *memory_arena, ) [*]T {
+pub inline fn PushArrayPtr(comptime T: type, count: memory_index, arena: *memory_arena) [*]T {
     return @ptrCast([*]T, @alignCast(@alignOf(T), PushSize(arena, count * @sizeOf(T))));
 }

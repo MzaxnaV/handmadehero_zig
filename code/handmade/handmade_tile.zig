@@ -8,8 +8,8 @@ pub const tile_map_position = struct {
     absTileY: u32 = 0,
     absTileZ: u32 = 0,
 
-    tileRelX: f32 = 0,
-    tileRelY: f32 = 0,
+    offsetX: f32 = 0,
+    offsetY: f32 = 0,
 };
 
 pub const tile_chunk_position = struct {
@@ -53,8 +53,14 @@ pub inline fn RecanonicalizeCoord(tileMap: *const tile_map, tile: *u32, tileRel:
 pub inline fn RecanonicalizePosition(tileMap: *const tile_map, pos: tile_map_position) tile_map_position {
     var result = pos;
 
-    RecanonicalizeCoord(tileMap, &result.absTileX, &result.tileRelX);
-    RecanonicalizeCoord(tileMap, &result.absTileY, &result.tileRelY);
+    RecanonicalizeCoord(tileMap, &result.absTileX, &result.offsetX);
+    RecanonicalizeCoord(tileMap, &result.absTileY, &result.offsetY);
+
+    return result;
+}
+
+pub inline fn AreOnSameTile(a: *const tile_map_position, b: *const tile_map_position) bool {
+    const result = ((a.absTileX == b.absTileX) and (a.absTileY == b.absTileY) and (a.absTileZ == b.absTileZ));
 
     return result;
 }
@@ -85,7 +91,7 @@ pub inline fn SetTileValueUnchecked(tileMap: *const tile_map, tileChunk: *const 
 }
 
 pub inline fn GetTileValue(tileMap: *const tile_map, tileChunk: ?*const tile_chunk, testTileX: u32, testTileY: u32) u32 {
-    var tileChunkValue:u32 = 0;
+    var tileChunkValue: u32 = 0;
     if (tileChunk) |tc| {
         if (tc.tiles) |_| {
             tileChunkValue = GetTileValueUnchecked(tileMap, tc, testTileX, testTileY);
@@ -125,9 +131,15 @@ pub fn GetTileValueFromAbs(tileMap: *const tile_map, absTileX: u32, absTileY: u3
     return tileChunkValue;
 }
 
-pub fn IsTileMapPointEmpty(tileMap: *const tile_map, canPos: tile_map_position) bool {
-    const tileChunkValue = GetTileValueFromAbs(tileMap, canPos.absTileX, canPos.absTileY, canPos.absTileZ);
-    const empty = (tileChunkValue == 1);
+pub fn GetTileValueFromPos(tileMap: *const tile_map, pos: tile_map_position) u32 {
+    const tileChunkValue = GetTileValueFromAbs(tileMap, pos.absTileX, pos.absTileY, pos.absTileZ);
+
+    return tileChunkValue;
+}
+
+pub fn IsTileMapPointEmpty(tileMap: *const tile_map, pos: tile_map_position) bool {
+    const tileChunkValue = GetTileValueFromPos(tileMap, pos);
+    const empty = (tileChunkValue == 1) or (tileChunkValue == 3) or (tileChunkValue == 4);
 
     return empty;
 }

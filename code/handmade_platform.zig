@@ -71,6 +71,8 @@ pub const input = struct {
     controllers: [5]controller_input = [1]controller_input{controller_input{}} ** 5,
 };
 
+pub const debug_platform_read_entire_file = fn (*thread_context, [*:0]const u8) debug_read_file_result;
+
 pub const memory = struct {
     isInitialized: bool = false,
     permanentStorageSize: u64,
@@ -79,7 +81,7 @@ pub const memory = struct {
     transientStorage: [*]u8,
 
     DEBUGPlatformFreeFileMemory: fn (*thread_context, *anyopaque) void = undefined,
-    DEBUGPlatformReadEntireFile: fn (*thread_context, [*:0]const u8) debug_read_file_result = undefined,
+    DEBUGPlatformReadEntireFile: debug_platform_read_entire_file = undefined,
     DEBUGPlatformWriteEntireFile: fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool = undefined,
 };
 
