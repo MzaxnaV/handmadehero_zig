@@ -16,12 +16,27 @@ pub const world = struct {
     tileMap: *tile_map,
 };
 
+pub const loaded_bitmap = struct {
+    width: i32 = 0,
+    height: i32 = 0,
+    pixels: extern union {
+        // access individual colours
+        colour: [*]u8,
+        // access the whole pixel
+        access: [*]u32,
+    } = undefined,
+};
+
 pub const state = struct {
     worldArena: memory_arena,
     world: *world,
 
     playerP: tile_map_position = tile_map_position{},
-    pixelPointer: [*]u32,
+
+    backdrop: loaded_bitmap,
+    herohead: loaded_bitmap,
+    heroCape: loaded_bitmap,
+    heroTorso: loaded_bitmap,
 };
 
 // functions ------------------------------------------------------------------------------------------------------------------------------

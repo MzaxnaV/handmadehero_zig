@@ -86,15 +86,54 @@ fn DrawRectangle(buffer: *platform.offscreen_buffer, fMinX: f32, fMinY: f32, fMa
 
     var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * buffer.bytesPerPixel + @intCast(u32, minY) * buffer.pitch;
 
-    var y = @bitCast(u32, minY);
+    var y = minY;
     while (y < maxY) : (y += 1) {
         var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
-        var x = @bitCast(u32, minX);
+        var x = minX;
         while (x < maxX) : (x += 1) {
             pixel.* = colour;
             pixel += 1;
         }
         row += buffer.pitch;
+    }
+}
+
+fn DrawBitmap(buffer: *platform.offscreen_buffer, bitmap: *game.loaded_bitmap, realX: f32, realY: f32) void {
+    var minX = game.RoundF32ToInt(i32, realX);
+    var minY = game.RoundF32ToInt(i32, realY);
+    var maxX = game.RoundF32ToInt(i32, realX + @intToFloat(f32, bitmap.width));
+    var maxY = game.RoundF32ToInt(i32, realY + @intToFloat(f32, bitmap.height));
+
+    if (minX < 0) {
+        minX = 0;
+    }
+
+    if (minY < 0) {
+        minY = 0;
+    }
+
+    if (maxX > @intCast(i32, buffer.width)) {
+        maxX = @intCast(i32, buffer.width);
+    }
+
+    if (maxY > @intCast(i32, buffer.height)) {
+        maxY = @intCast(i32, buffer.height);
+    }
+
+    var sourceRow = bitmap.pixels.access + @intCast(u32, bitmap.width * (bitmap.height - 1));
+    var destRow = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * buffer.bytesPerPixel + @intCast(u32, minY) * buffer.pitch;
+
+    var y = minY;
+    while(y < maxY) : (y += 1) {
+        const dest = @ptrCast([*]u32, @alignCast(@alignOf(u32), destRow));
+        const source = sourceRow;
+        var x = minX;
+        while (x < maxX) : (x += 1) {
+            dest[@intCast(u32, x - minX)] = source[@intCast(u32, x - minX)];
+        }
+
+        destRow += buffer.pitch;
+        sourceRow -= @intCast(u32, bitmap.width);
     }
 }
 
@@ -109,16 +148,35 @@ const bitmap_header = packed struct {
     height: i32,
     planes: u16,
     bitsPerPixel: u16,
+    compression: u32,
+    sizeOfBitmap: u32,
+    horzResolution: u32,
+    vertResolution: u32,
+    colorsUsed: u32,
+    colorsImportant: u32,
+
+    redMask: u32,
+    greenMask: u32,
+    blueMask: u32,
 };
 
-fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug_platform_read_entire_file, fileName: [*:0]const u8) [*]u32 {
-    var result: [*]u32 = undefined;
+fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug_platform_read_entire_file, fileName: [*:0]const u8) game.loaded_bitmap {
+    var result = game.loaded_bitmap{};
 
     const readResult = ReadEntireFile(thread, fileName);
     if (readResult.contentSize != 0) {
         const header = @ptrCast(*bitmap_header, readResult.contents);
-        const pixels = @ptrCast([*]u32, @alignCast(@alignOf(u32), readResult.contents)) + header.bitmapOffset;
-        result = pixels;
+        var pixels = @ptrCast([*]u8, readResult.contents) + header.bitmapOffset;
+        result.width = header.width;
+        result.height = header.height;
+        result.pixels.colour = pixels;
+
+        const sourceDest = result.pixels.access;
+
+        var index = @as(u32, 0);
+        while(index < @intCast(u32, header.height * header.width)) : (index += 1) {
+            sourceDest[index] = (sourceDest[index] >> 8) | (sourceDest[index] << 24);
+        }
     }
 
     return result;
@@ -148,7 +206,10 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
-        gameState.pixelPointer = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
+        gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
+        gameState.herohead = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp");
+        gameState.heroCape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
+        gameState.heroTorso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
 
         gameState.playerP.absTileX = 1;
         gameState.playerP.absTileY = 3;
@@ -355,7 +416,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         }
     }
 
-    DrawRectangle(buffer, 0, 0, @intToFloat(f32, buffer.width), @intToFloat(f32, buffer.height), 1, 0, 0);
+    DrawBitmap(buffer, &gameState.backdrop, 0, 0);
 
     const screenCenterX = 0.5 * @intToFloat(f32, buffer.width);
     const screenCenterY = 0.5 * @intToFloat(f32, buffer.height);
@@ -368,7 +429,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             const row = @bitCast(u32, @intCast(i32, gameState.playerP.absTileY) + relRow);
             const tileID = game.GetTileValueFromAbs(tileMap, col, row, gameState.playerP.absTileZ);
 
-            if (tileID > 0) {
+            if (tileID > 1) {
                 var grey: f32 = 0.5;
 
                 if (tileID == 2) {
@@ -412,6 +473,8 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         playerG,
         playerB,
     );
+
+    DrawBitmap(buffer, &gameState.herohead, 0, 0);
 }
 
 // NOTEAt the moment, this has to be a very fast function, it cannot be
