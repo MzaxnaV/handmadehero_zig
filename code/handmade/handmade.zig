@@ -124,12 +124,26 @@ fn DrawBitmap(buffer: *platform.offscreen_buffer, bitmap: *game.loaded_bitmap, r
     var destRow = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * buffer.bytesPerPixel + @intCast(u32, minY) * buffer.pitch;
 
     var y = minY;
-    while(y < maxY) : (y += 1) {
+    while (y < maxY) : (y += 1) {
         const dest = @ptrCast([*]u32, @alignCast(@alignOf(u32), destRow));
-        const source = sourceRow;
         var x = minX;
         while (x < maxX) : (x += 1) {
-            dest[@intCast(u32, x - minX)] = source[@intCast(u32, x - minX)];
+            const index = @intCast(u32, x - minX);
+
+            const a = @intToFloat(f32, ((sourceRow[index] >> 24) & 0xff)) / 255.0;
+            const sR = @intToFloat(f32, ((sourceRow[index] >> 16) & 0xff));
+            const sG = @intToFloat(f32, ((sourceRow[index] >> 8) & 0xff));
+            const sB = @intToFloat(f32, ((sourceRow[index] >> 0) & 0xff));
+
+            const dR = @intToFloat(f32, ((dest[index] >> 16) & 0xff));
+            const dG = @intToFloat(f32, ((dest[index] >> 8) & 0xff));
+            const dB = @intToFloat(f32, ((dest[index] >> 0) & 0xff));
+
+            const r = (1 - a) * dR + a * sR;
+            const g = (1 - a) * dG + a * sG;
+            const b = (1 - a) * dB + a * sB;
+
+            dest[index] = (@floatToInt(u32, r + 0.5) << 16) | (@floatToInt(u32, g + 0.5) << 8) | (@floatToInt(u32, b + 0.5) << 0);
         }
 
         destRow += buffer.pitch;
@@ -171,11 +185,24 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
         result.height = header.height;
         result.pixels.colour = pixels;
 
+        std.debug.assert(header.compression == 3);
+
+        const redMask = header.redMask;
+        const greenMask = header.greenMask;
+        const blueMask = header.blueMask;
+        const alphaMask = ~(redMask | greenMask | blueMask);
+
+        const redShift = @truncate(u5, game.FindLeastSignificantSetBit(redMask));
+        const greenShift = @truncate(u5, game.FindLeastSignificantSetBit(greenMask));
+        const blueShift = @truncate(u5, game.FindLeastSignificantSetBit(blueMask));
+        const alphaShift = @truncate(u5, game.FindLeastSignificantSetBit(alphaMask));
+
         const sourceDest = result.pixels.access;
 
         var index = @as(u32, 0);
-        while(index < @intCast(u32, header.height * header.width)) : (index += 1) {
-            sourceDest[index] = (sourceDest[index] >> 8) | (sourceDest[index] << 24);
+        while (index < @intCast(u32, header.height * header.width)) : (index += 1) {
+            const c = sourceDest[index];
+            sourceDest[index] = ((c >> alphaShift) & 0xff) << 24 | ((c >> redShift) & 0xff) << 16 | ((c >> greenShift) & 0xff) << 8 | ((c >> blueShift) & 0xff) << 0;
         }
     }
 
@@ -474,7 +501,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         playerB,
     );
 
-    DrawBitmap(buffer, &gameState.herohead, 0, 0);
+    DrawBitmap(buffer, &gameState.herohead, playerLeft, playerTop);
 }
 
 // NOTEAt the moment, this has to be a very fast function, it cannot be
