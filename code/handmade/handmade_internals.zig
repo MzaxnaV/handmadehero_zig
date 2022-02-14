@@ -27,16 +27,25 @@ pub const loaded_bitmap = struct {
     } = undefined,
 };
 
+pub const hero_bitmaps = struct {
+    alignX: i32,
+    alignY: i32,
+    head: loaded_bitmap,
+    cape: loaded_bitmap,
+    torso: loaded_bitmap,
+};
+
 pub const state = struct {
     worldArena: memory_arena,
     world: *world,
 
+    cameraP: tile_map_position = tile_map_position{},
     playerP: tile_map_position = tile_map_position{},
 
     backdrop: loaded_bitmap,
-    herohead: loaded_bitmap,
-    heroCape: loaded_bitmap,
-    heroTorso: loaded_bitmap,
+
+    heroFacingDirection: u32,
+    heroBitmaps: [4]hero_bitmaps,
 };
 
 // functions ------------------------------------------------------------------------------------------------------------------------------

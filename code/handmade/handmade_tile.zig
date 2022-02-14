@@ -3,6 +3,12 @@ const RoundF32ToInt = @import("handmade_intrinsics.zig").RoundF32ToInt;
 
 // tile data types ------------------------------------------------------------------------------------------------------------------------
 
+pub const tile_map_difference = struct {
+    dX: f32 = 0,
+    dY: f32 = 0,
+    dZ: f32 = 0,
+};
+
 pub const tile_map_position = struct {
     absTileX: u32 = 0,
     absTileY: u32 = 0,
@@ -61,6 +67,20 @@ pub inline fn RecanonicalizePosition(tileMap: *const tile_map, pos: tile_map_pos
 
 pub inline fn AreOnSameTile(a: *const tile_map_position, b: *const tile_map_position) bool {
     const result = ((a.absTileX == b.absTileX) and (a.absTileY == b.absTileY) and (a.absTileZ == b.absTileZ));
+
+    return result;
+}
+
+pub inline fn Substract(tileMap: *const tile_map, a: *const tile_map_position, b: *const tile_map_position) tile_map_difference {
+    const dTileX = @intToFloat(f32, a.absTileX) - @intToFloat(f32, b.absTileX);
+    const dTileY = @intToFloat(f32, a.absTileY) - @intToFloat(f32, b.absTileY);
+    const dTileZ = @intToFloat(f32, a.absTileZ) - @intToFloat(f32, b.absTileZ);
+
+    const result = tile_map_difference{
+        .dX = tileMap.tileSideInMeters * dTileX + (a.offsetX - b.offsetX),
+        .dY = tileMap.tileSideInMeters * dTileY + (a.offsetY - b.offsetY),
+        .dZ = tileMap.tileSideInMeters * dTileZ,
+    };
 
     return result;
 }

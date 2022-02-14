@@ -27,23 +27,20 @@ pub fn build(b: *std.build.Builder) void {
     lib.setTarget(target);
     lib.setBuildMode(mode);
     lib.addPackage(pkgs.platform);
-
     lib.setOutputDir("build");
     lib.addOptions("build_consts", options);
-
-    lib.install();
 
     const exe = b.addExecutable("win32_handmade", "code/win32_handmade.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.addPackage(pkgs.win32);
     exe.addPackage(pkgs.platform);
-
     exe.setOutputDir("build");
     exe.addOptions("build_consts", options);
 
-    b.installArtifact(exe);
-
     const build_lib = b.step("lib", "Build the handmade lib");
     build_lib.dependOn(&lib.step);
+
+    b.installArtifact(lib);
+    b.installArtifact(exe);
 }

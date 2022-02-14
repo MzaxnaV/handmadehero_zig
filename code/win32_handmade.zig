@@ -322,26 +322,48 @@ fn Win32GetLastWriteTime(fileName: [*:0]const u16) win32.FILETIME {
     return lastWriteTime;
 }
 
-fn Win32LoadGameCode(sourceDLLName: [:0]const u16, tempDLLName: [:0]const u16) win32_game_code {
+fn Win32LoadGameCode(sourceDLLName: [:0]const u16, tempDLLName: [:0]const u16, lockFileName: [:0]const u16) win32_game_code {
     var result = win32_game_code{};
-    result.dllLastWriteTime = Win32GetLastWriteTime(sourceDLLName);
 
-    _ = win32.CopyFileW(sourceDLLName, tempDLLName, win32.FALSE);
+    // NOTE: (Manav) no lock file, so this is useless for now :(
+    var ignored = win32.WIN32_FILE_ATTRIBUTE_DATA{
+        .dwFileAttributes = 0,
+        .ftCreationTime = win32.FILETIME{
+            .dwLowDateTime = 0,
+            .dwHighDateTime = 0,
+        },
+        .ftLastAccessTime = win32.FILETIME{
+            .dwLowDateTime = 0,
+            .dwHighDateTime = 0,
+        },
+        .ftLastWriteTime = win32.FILETIME{
+            .dwLowDateTime = 0,
+            .dwHighDateTime = 0,
+        },
+        .nFileSizeHigh = 0,
+        .nFileSizeLow = 0,
+    };
 
-    result.gameCodeDLL = win32.LoadLibraryW(tempDLLName);
-    if (result.gameCodeDLL) |HANDMADE_DLL| {
-        result.isValid = true;
+    if (win32.GetFileAttributesExW(lockFileName, win32.GetFileExInfoStandard, &ignored) == win32.FALSE) {
+        result.dllLastWriteTime = Win32GetLastWriteTime(sourceDLLName);
 
-        if (win32.GetProcAddress(HANDMADE_DLL, "UpdateAndRender")) |funcptr| {
-            result.UpdateAndRender = @ptrCast(@TypeOf(result.UpdateAndRender), funcptr);
-        } else {
-            result.isValid = false;
-        }
+        _ = win32.CopyFileW(sourceDLLName, tempDLLName, win32.FALSE);
 
-        if (win32.GetProcAddress(HANDMADE_DLL, "GetSoundSamples")) |funcptr| {
-            result.GetSoundSamples = @ptrCast(@TypeOf(result.GetSoundSamples), funcptr);
-        } else {
-            result.isValid = false;
+        result.gameCodeDLL = win32.LoadLibraryW(tempDLLName);
+        if (result.gameCodeDLL) |HANDMADE_DLL| {
+            result.isValid = true;
+
+            if (win32.GetProcAddress(HANDMADE_DLL, "UpdateAndRender")) |funcptr| {
+                result.UpdateAndRender = @ptrCast(@TypeOf(result.UpdateAndRender), funcptr);
+            } else {
+                result.isValid = false;
+            }
+
+            if (win32.GetProcAddress(HANDMADE_DLL, "GetSoundSamples")) |funcptr| {
+                result.GetSoundSamples = @ptrCast(@TypeOf(result.GetSoundSamples), funcptr);
+            } else {
+                result.isValid = false;
+            }
         }
     }
 
@@ -887,6 +909,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     var tempGameCodeDLLFullPath = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
     Win32BuildEXEPathFileName(&win32State, win32.L("handmade_temp.dll"), tempGameCodeDLLFullPath[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
+    var gameCodeLockFullPath = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
+    Win32BuildEXEPathFileName(&win32State, win32.L("lock.tmp"), gameCodeLockFullPath[0..WIN32_STATE_FILE_NAME_COUNT :0]);
+
     // NOTE: Set the Windows scheduler granularity to 1ms
     // so that our Sleep() can be more granular.
     const desiredSchedulerMS = 1;
@@ -1058,7 +1083,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     var audioLatencySeconds: f32 = 0;
                     var soundIsValid = false;
 
-                    var gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath);
+                    var gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
                     var loadCounter: u32 = 0;
 
                     var lastCycleCount = rdtsc();
@@ -1068,7 +1093,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         const newDLLWriteTime = Win32GetLastWriteTime(&sourceGameCodeDLLFullPath);
                         if (win32.CompareFileTime(&newDLLWriteTime, &gameCode.dllLastWriteTime) != 0) {
                             Win32UnloadGameCode(&gameCode);
-                            gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath);
+                            gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
                             loadCounter = 0;
                         }
 

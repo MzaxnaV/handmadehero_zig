@@ -98,17 +98,24 @@ fn DrawRectangle(buffer: *platform.offscreen_buffer, fMinX: f32, fMinY: f32, fMa
     }
 }
 
-fn DrawBitmap(buffer: *platform.offscreen_buffer, bitmap: *game.loaded_bitmap, realX: f32, realY: f32) void {
-    var minX = game.RoundF32ToInt(i32, realX);
-    var minY = game.RoundF32ToInt(i32, realY);
-    var maxX = game.RoundF32ToInt(i32, realX + @intToFloat(f32, bitmap.width));
-    var maxY = game.RoundF32ToInt(i32, realY + @intToFloat(f32, bitmap.height));
+fn DrawBitmap(buffer: *platform.offscreen_buffer, bitmap: *const game.loaded_bitmap, realX: f32, realY: f32, alignX: i32, alignY: i32) void {
+    const alignedRealX = realX - @intToFloat(f32, alignX);
+    const alignedRealY = realY - @intToFloat(f32, alignY);
 
+    var minX = game.RoundF32ToInt(i32, alignedRealX);
+    var minY = game.RoundF32ToInt(i32, alignedRealY);
+    var maxX = game.RoundF32ToInt(i32, alignedRealX + @intToFloat(f32, bitmap.width));
+    var maxY = game.RoundF32ToInt(i32, alignedRealY + @intToFloat(f32, bitmap.height));
+
+    var sourceOffesetX = @as(i32, 0);
     if (minX < 0) {
+        sourceOffesetX = -minX;
         minX = 0;
     }
 
+    var sourceOffesetY = @as(i32, 0);
     if (minY < 0) {
+        sourceOffesetY = -minY;
         minY = 0;
     }
 
@@ -120,7 +127,7 @@ fn DrawBitmap(buffer: *platform.offscreen_buffer, bitmap: *game.loaded_bitmap, r
         maxY = @intCast(i32, buffer.height);
     }
 
-    var sourceRow = bitmap.pixels.access + @intCast(u32, bitmap.width * (bitmap.height - 1));
+    var sourceRow = bitmap.pixels.access + @intCast(u32, bitmap.width * (bitmap.height - 1) - sourceOffesetY * bitmap.width + sourceOffesetX);
     var destRow = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * buffer.bytesPerPixel + @intCast(u32, minY) * buffer.pitch;
 
     var y = minY;
@@ -227,16 +234,40 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
 
     std.debug.assert(@sizeOf(game.state) <= gameMemory.permanentStorageSize);
 
-    const playerHeight: f32 = 1.4;
+    const playerHeight = 1.4;
     const playerWidth = 0.75 * playerHeight;
 
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
         gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
-        gameState.herohead = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp");
-        gameState.heroCape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
-        gameState.heroTorso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
+
+        gameState.heroBitmaps[0].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
+        gameState.heroBitmaps[0].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");
+        gameState.heroBitmaps[0].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_torso.bmp");
+        gameState.heroBitmaps[0].alignX = 72;
+        gameState.heroBitmaps[0].alignY = 182;
+
+        gameState.heroBitmaps[1].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_head.bmp");
+        gameState.heroBitmaps[1].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_cape.bmp");
+        gameState.heroBitmaps[1].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_torso.bmp");
+        gameState.heroBitmaps[1].alignX = 72;
+        gameState.heroBitmaps[1].alignY = 182;
+
+        gameState.heroBitmaps[2].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_head.bmp");
+        gameState.heroBitmaps[2].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_cape.bmp");
+        gameState.heroBitmaps[2].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_torso.bmp");
+        gameState.heroBitmaps[2].alignX = 72;
+        gameState.heroBitmaps[2].alignY = 182;
+
+        gameState.heroBitmaps[3].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp");
+        gameState.heroBitmaps[3].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
+        gameState.heroBitmaps[3].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
+        gameState.heroBitmaps[3].alignX = 72;
+        gameState.heroBitmaps[3].alignY = 182;
+
+        gameState.cameraP.absTileX = @divTrunc(17, 2);
+        gameState.cameraP.absTileY = @divTrunc(9, 2);
 
         gameState.playerP.absTileX = 1;
         gameState.playerP.absTileY = 3;
@@ -317,7 +348,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                         tileValue = 2;
                     }
 
-                    if ((tileX == (tilesPerWidth - 1)) and (!doorRight or (tileX != (tilesPerWidth / 2)))) {
+                    if ((tileX == (tilesPerWidth - 1)) and (!doorRight or (tileY != (tilesPerHeight / 2)))) {
                         tileValue = 2;
                     }
 
@@ -355,7 +386,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             }
 
             doorRight = false;
-            doorLeft = false;
+            doorTop = false;
 
             if (randomChoice == 2) {
                 if (absTileZ == 0) {
@@ -392,15 +423,19 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             var dPlayerY: f32 = 0; // pixels/second
 
             if (controller.buttons.mapped.moveUp.endedDown != 0) {
+                gameState.heroFacingDirection = 1;
                 dPlayerY = 1.0;
             }
             if (controller.buttons.mapped.moveDown.endedDown != 0) {
+                gameState.heroFacingDirection = 3;
                 dPlayerY = -1.0;
             }
             if (controller.buttons.mapped.moveLeft.endedDown != 0) {
+                gameState.heroFacingDirection = 2;
                 dPlayerX = -1.0;
             }
             if (controller.buttons.mapped.moveRight.endedDown != 0) {
+                gameState.heroFacingDirection = 0;
                 dPlayerX = 1.0;
             }
 
@@ -440,10 +475,26 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                 }
                 gameState.playerP = newPlayerP;
             }
+
+            gameState.cameraP.absTileZ = gameState.playerP.absTileZ;
+
+            const diff = game.Substract(tileMap, &gameState.playerP, &gameState.cameraP);
+            if (diff.dX > (9 * tileMap.tileSideInMeters)) {
+                gameState.cameraP.absTileX += 17;
+            }
+            if (diff.dX < -(9 * tileMap.tileSideInMeters)) {
+                gameState.cameraP.absTileX -= 17;
+            }
+            if (diff.dY > (5 * tileMap.tileSideInMeters)) {
+                gameState.cameraP.absTileY += 9;
+            }
+            if (diff.dY < -(5 * tileMap.tileSideInMeters)) {
+                gameState.cameraP.absTileY -= 9;
+            }
         }
     }
 
-    DrawBitmap(buffer, &gameState.backdrop, 0, 0);
+    DrawBitmap(buffer, &gameState.backdrop, 0, 0, 0, 0);
 
     const screenCenterX = 0.5 * @intToFloat(f32, buffer.width);
     const screenCenterY = 0.5 * @intToFloat(f32, buffer.height);
@@ -452,9 +503,9 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     while (relRow < 10) : (relRow += 1) {
         var relCol: i32 = -20;
         while (relCol < 20) : (relCol += 1) {
-            const col = @bitCast(u32, @intCast(i32, gameState.playerP.absTileX) + relCol);
-            const row = @bitCast(u32, @intCast(i32, gameState.playerP.absTileY) + relRow);
-            const tileID = game.GetTileValueFromAbs(tileMap, col, row, gameState.playerP.absTileZ);
+            const col = @bitCast(u32, @intCast(i32, gameState.cameraP.absTileX) + relCol);
+            const row = @bitCast(u32, @intCast(i32, gameState.cameraP.absTileY) + relRow);
+            const tileID = game.GetTileValueFromAbs(tileMap, col, row, gameState.cameraP.absTileZ);
 
             if (tileID > 1) {
                 var grey: f32 = 0.5;
@@ -467,12 +518,12 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                     grey = 0.25;
                 }
 
-                if ((col == gameState.playerP.absTileX) and (row == gameState.playerP.absTileY)) {
+                if ((col == gameState.cameraP.absTileX) and (row == gameState.cameraP.absTileY)) {
                     grey = 0.0;
                 }
 
-                const cenX = screenCenterX - metersToPixels * gameState.playerP.offsetX + @intToFloat(f32, relCol * tileSideInPixels);
-                const cenY = screenCenterY + metersToPixels * gameState.playerP.offsetY - @intToFloat(f32, relRow * tileSideInPixels);
+                const cenX = screenCenterX - metersToPixels * gameState.cameraP.offsetX + @intToFloat(f32, relCol * tileSideInPixels);
+                const cenY = screenCenterY + metersToPixels * gameState.cameraP.offsetY - @intToFloat(f32, relRow * tileSideInPixels);
                 const minX = cenX - 0.5 * @intToFloat(f32, tileSideInPixels);
                 const minY = cenY - 0.5 * @intToFloat(f32, tileSideInPixels);
                 const maxX = cenX + 0.5 * @intToFloat(f32, tileSideInPixels);
@@ -483,12 +534,16 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         }
     }
 
+    const diff = game.Substract(tileMap, &gameState.playerP, &gameState.cameraP);
+
     const playerR = 1.0;
     const playerG = 1.0;
     const playerB = 0.0;
 
-    const playerLeft = screenCenterX - 0.5 * metersToPixels * playerWidth;
-    const playerTop = screenCenterY - metersToPixels * playerHeight;
+    const playerGroundPointX = screenCenterX + metersToPixels * diff.dX;
+    const playerGroundPointY = screenCenterY - metersToPixels * diff.dY;
+    const playerLeft = playerGroundPointX - 0.5 * metersToPixels * playerWidth;
+    const playerTop = playerGroundPointY - metersToPixels * playerHeight;
 
     DrawRectangle(
         buffer,
@@ -501,7 +556,11 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         playerB,
     );
 
-    DrawBitmap(buffer, &gameState.herohead, playerLeft, playerTop);
+    const heroBitmaps = gameState.heroBitmaps[gameState.heroFacingDirection];
+
+    DrawBitmap(buffer, &heroBitmaps.torso, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY);
+    DrawBitmap(buffer, &heroBitmaps.cape, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY);
+    DrawBitmap(buffer, &heroBitmaps.head, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY);
 }
 
 // NOTEAt the moment, this has to be a very fast function, it cannot be
