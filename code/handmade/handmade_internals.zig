@@ -20,9 +20,9 @@ pub const loaded_bitmap = struct {
     width: i32 = 0,
     height: i32 = 0,
     pixels: extern union {
-        // access individual colours
+        // NOTE: (Manav), access colours
         colour: [*]u8,
-        // access the whole pixel
+        // NOTE: (Manav), access pixel array
         access: [*]u32,
     } = undefined,
 };

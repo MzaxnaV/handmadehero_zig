@@ -220,7 +220,7 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
 
 pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *platform.memory, gameInput: *platform.input, buffer: *platform.offscreen_buffer) void {
     comptime {
-        // This is hacky atm. Need to check as we're using win32.LoadLibrary()
+        // NOTE: (Manav) This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args.len != @typeInfo(platform.UpdateAndRenderType).Fn.args.len or
             (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[0].arg_type.? != @typeInfo(platform.UpdateAndRenderType).Fn.args[0].arg_type.?) or
             (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[1].arg_type.? != @typeInfo(platform.UpdateAndRenderType).Fn.args[1].arg_type.?) or
@@ -414,13 +414,9 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     // const lowerLeftY = @intToFloat(f32, buffer.height);
 
     for (gameInput.controllers) |controller| {
-        if (controller.isAnalog) {
-            // Use analog movement tuning
-        } else {
-            // Use digital movement tuning
-
-            var dPlayerX: f32 = 0; // pixels/second
-            var dPlayerY: f32 = 0; // pixels/second
+        if (controller.isAnalog) {} else {
+            var dPlayerX = @as(f32, 0);
+            var dPlayerY = @as(f32, 0);
 
             if (controller.buttons.mapped.moveUp.endedDown != 0) {
                 gameState.heroFacingDirection = 1;
@@ -439,7 +435,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                 dPlayerX = 1.0;
             }
 
-            var playerSpeed: f32 = 2.0;
+            var playerSpeed = @as(f32, 2.0);
             if (controller.buttons.mapped.actionUp.endedDown != 0) {
                 playerSpeed = 10.0;
             }
@@ -563,13 +559,9 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     DrawBitmap(buffer, &heroBitmaps.head, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY);
 }
 
-// NOTEAt the moment, this has to be a very fast function, it cannot be
-// more than a millisecond or so.
-// TODO Reduce the pressure on this function's performance by measuring it
-// or asking about it, etc.
 pub export fn GetSoundSamples(_: *platform.thread_context, gameMemory: *platform.memory, soundBuffer: *platform.sound_output_buffer) void {
     comptime {
-        // This is hacky atm. Need to check as we're using win32.LoadLibrary()
+        // NOTE: (Manav) This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args.len != @typeInfo(platform.GetSoundSamplesType).Fn.args.len or
             (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args[0].arg_type.? != @typeInfo(platform.GetSoundSamplesType).Fn.args[0].arg_type.?) or
             (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args[1].arg_type.? != @typeInfo(platform.GetSoundSamplesType).Fn.args[1].arg_type.?) or

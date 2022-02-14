@@ -44,7 +44,6 @@ const allocationType = @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win3
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
 const win32_offscreen_buffer = struct {
-    // NOTE: Pixels are alwasy 32-bits wide, Memory Order BB GG RR XX
     info: win32.BITMAPINFO = win32.BITMAPINFO{
         .bmiHeader = win32.BITMAPINFOHEADER{
             .biSize = @sizeOf(win32.BITMAPINFOHEADER),
@@ -297,7 +296,6 @@ fn DEBUGWin32WriteEntireFile(_: *handmade.thread_context, fileName: [*:0]const u
     if (fileHandle != null and fileHandle != win32.INVALID_HANDLE_VALUE) {
         var bytesWritten: DWORD = 0;
         if (win32.WriteFile(fileHandle, memory, memorySize, &bytesWritten, null) != 0) {
-            // File written successfully
             result = (bytesWritten == memorySize);
         } else {
             // TODO: logging
@@ -393,7 +391,7 @@ fn Win32UnloadGameCode(gameCode: *win32_game_code) void {
 
 fn Win32LoadXinput() void {
     if (win32.LoadLibraryW(win32.L("xinput1_4.dll"))) |XInputLibrary| {
-        // NO TYPESAFETY TO WARN YOU, BEWARE :D
+        // NOTE: (Manav) NO TYPESAFETY TO WARN YOU, BEWARE :D
         if (win32.GetProcAddress(XInputLibrary, "XInputGetState")) |funcptr| {
             XInputGetState = @ptrCast(@TypeOf(XInputGetState), funcptr);
         } else {
@@ -445,7 +443,6 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
 
                     const GUID_NULL = win32.Guid.initString("00000000-0000-0000-0000-000000000000");
                     if (win32.SUCCEEDED(directSound.vtable.SetCooperativeLevel(directSound, window, win32.DSSCL_PRIORITY))) {
-                        // https://docs.microsoft.com/en-us/previous-versions/windows/desktop/ee416820(v=vs.85)#remarks
                         var bufferDescription = win32.DSBUFFERDESC{
                             .dwSize = @sizeOf(win32.DSBUFFERDESC),
                             .dwFlags = win32.DSBCAPS_PRIMARYBUFFER,
@@ -459,7 +456,6 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                         if (win32.SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &pB, null))) {
                             if (pB) |primaryBuffer| {
                                 if (win32.SUCCEEDED(primaryBuffer.vtable.SetFormat(primaryBuffer, &waveFormat))) {
-                                    // we have finally set the format
                                     win32.OutputDebugStringW(win32.L("Primary buffer format was set\n"));
                                 } else {
                                     // TODO: diagnostic
@@ -481,7 +477,6 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                         .guid3DAlgorithm = GUID_NULL,
                     };
 
-                    // Create a secondary buffer
                     var secondaryBuffer: ?*win32.IDirectSoundBuffer = undefined;
                     if (win32.SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &secondaryBuffer, null))) {
                         if (secondaryBuffer) |value| {
@@ -921,12 +916,13 @@ inline fn Win32GetSecondsElapsed(start: win32.LARGE_INTEGER, end: win32.LARGE_IN
 inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) void {
     @memcpy(@ptrCast([*]u8, dest), @ptrCast([*]const u8, source), size);
 
-    // NOTE: (manav) loop below is notoriously slow.
+    // NOTE: (Manav) loop below is notoriously slow.
     // for (@ptrCast([*]const u8, source)[0..size]) |byte, index| {
     //     @ptrCast([*]u8, dest)[index] = byte;
     // }
 }
 
+// NOTE: (Manav) Read this: https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=rdtsc&expand=375&ig_expand=465,463,5629,5629
 inline fn rdtsc() u64 {
     var low: u64 = undefined;
     var high: u64 = undefined;
@@ -1033,8 +1029,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             globalRunning = true;
 
             if (!NOT_IGNORE) {
-                // NOTE: This tests the PlayCursor/WriteCursor update frequency
-                // for this machine it was 1920
                 while (globalRunning) {
                     var playCursor: DWORD = 0;
                     var writeCursor: DWORD = 0;
@@ -1270,7 +1264,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                     Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.start, win32.XINPUT_GAMEPAD_START, &newController.buttons.mapped.start);
                                     Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.back, win32.XINPUT_GAMEPAD_BACK, &newController.buttons.mapped.back);
                                 } else {
-                                    // This controller is not available
                                     newController.isConnected = false;
                                 }
                             }
@@ -1304,20 +1297,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             var writeCursor: DWORD = 0;
 
                             if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor))) {
-                                // NOTE:
-                                // Here is how sound output computation works.
-
-                                // We define a safety value that is the number of samples we think our game update loop may vary by (let's say upto 2ms).
-
-                                // When we wake up to write audio, we will look and see what the play cursor position is and we will forecast ahead where we think the
-                                // play cursor will be on the next frame boundary.
-
-                                // We will then look to see if the write cursor is before that by at least our safety value. If it is, the target fill position is that frame boundary plus one frame.
-                                // This gives us perfect audio sync in the case of a card that has low enough latency.
-
-                                // If the write cursor is _after_ that safety margin, then we assume we can never sync the audio perfectly. So we will write one frame's
-                                // worth of audio plus the satefy margin's worth of guard samples.
-
                                 if (!soundIsValid) {
                                     soundOutput.runningSampleIndex = @divTrunc(writeCursor, soundOutput.bytesPerSample);
                                     soundIsValid = true;
@@ -1421,9 +1400,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                             const dimension = Win32GetWindowDimenstion(windowHandle);
 
-                            // if (HANDMADE_INTERNAL) {
-                            //     Win32DebugSyncDisplay(&globalBackBuffer, debugTimeMarkers.len, &debugTimeMarkers, debugTimeMarkerIndex -% 1, &soundOutput, targetSecondsPerFrame);
-                            // }
+                            // HANDMADE_INTERNAL:
+                            // Win32DebugSyncDisplay(&globalBackBuffer, debugTimeMarkers.len, &debugTimeMarkers, debugTimeMarkerIndex -% 1, &soundOutput, targetSecondsPerFrame);
 
                             if (win32.GetDC(windowHandle)) |deviceContext| {
                                 defer _ = win32.ReleaseDC(windowHandle, deviceContext);
