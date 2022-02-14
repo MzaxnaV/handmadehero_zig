@@ -84,9 +84,6 @@ const win32_sound_output = struct {
     bytesPerSample: u32 = 0,
     secondaryBufferSize: DWORD = 0,
     safetyBytes: DWORD = 0,
-    tSine: f32 = 0,
-    // TODO: Should running sample index be in bytes as well
-    // TODO: Math gets simpler if we add a "bytes per second" field?
 };
 
 const win32_debug_time_marker = struct {
@@ -133,11 +130,20 @@ const win32_state = struct {
 
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
-pub var globalRunning: bool = undefined;
-pub var globalPause: bool = undefined;
-pub var globalBackBuffer = win32_offscreen_buffer{};
-pub var globalSecondaryBuffer: *win32.IDirectSoundBuffer = undefined;
-pub var globalPerfCounterFrequency: i64 = undefined;
+var globalRunning: bool = undefined;
+var globalPause: bool = undefined;
+var globalBackBuffer = win32_offscreen_buffer{};
+var globalSecondaryBuffer: *win32.IDirectSoundBuffer = undefined;
+var globalPerfCounterFrequency: i64 = undefined;
+var debugGlobalShowCursor: bool = undefined;
+var globalWindowPosition = win32.WINDOWPLACEMENT{
+    .length = undefined,
+    .flags = undefined,
+    .showCmd = undefined,
+    .ptMinPosition = undefined,
+    .ptMaxPosition = undefined,
+    .rcNormalPosition = undefined,
+};
 
 // library defs ---------------------------------------------------------------------------------------------------------------------------
 
@@ -190,7 +196,6 @@ fn Win32BuildEXEPathFileName(gameState: *win32_state, filename: []const u16, des
 // }
 
 // fn Win32DebugSyncDisplay(backBuffer: *win32_offscreen_buffer, markerCount: u32, markers: [*]win32_debug_time_marker, currentMarkerIndex: u32, soundOutput: *win32_sound_output, targetSecondsPerFrame: f32) void {
-//     // TODO: draw where we're writing our sound
 //     _ = targetSecondsPerFrame;
 
 //     const padX = 16;
@@ -509,9 +514,6 @@ fn Win32GetWindowDimenstion(windowHandle: win32.HWND) win32_window_dimension {
 }
 
 fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u32) void {
-    // TODO: Bullet proof this.
-    // Maybe don't free	first, free after, then free first if that failes.
-
     if (buffer.memory) |_| {
         _ = win32.VirtualFree(buffer.memory, 0, win32.MEM_RELEASE);
     }
@@ -522,9 +524,6 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u3
     const bytesPerPixel = 4;
     buffer.bytesPerPixel = bytesPerPixel;
 
-    // NOTE: When the biHeight field is neative, this is clue to windows to treat bitmap
-    // as top-down, not bottom-up, meaning that the first three byte of the image are the
-    // colour for the top left pixel in the bitmap, not the bottom left
     buffer.info.bmiHeader.biSize = @sizeOf(win32.BITMAPINFOHEADER);
     buffer.info.bmiHeader.biWidth = @intCast(i32, buffer.width);
     buffer.info.bmiHeader.biHeight = -@intCast(i32, buffer.height);
@@ -535,45 +534,65 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u3
     const bitmapMemorySize = @intCast(usize, bytesPerPixel * (buffer.width * buffer.height));
     buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT)), win32.PAGE_READWRITE);
     buffer.pitch = @intCast(usize, width) * bytesPerPixel;
-
-    // TODO: probably clear this to black
 }
 
 fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: win32.HDC, windowWidth: i32, windowHeight: i32) void {
-    const offsetX = 10;
-    const offsetY = 10;
+    if ((windowWidth >= buffer.width * 2) and (windowHeight >= buffer.height * 2)) {
+        _ = win32.StretchDIBits(
+            deviceContext,
+            0,
+            0,
+            @intCast(i32, 2 * buffer.width),
+            @intCast(i32, 2 * buffer.height),
+            0,
+            0,
+            @intCast(i32, buffer.width),
+            @intCast(i32, buffer.height),
+            buffer.memory,
+            &buffer.info,
+            win32.DIB_RGB_COLORS,
+            win32.SRCCOPY,
+        );
+    } else {
+        const offsetX = 10;
+        const offsetY = 10;
 
-    _ = win32.PatBlt(deviceContext, 0, 0, windowWidth, offsetY, win32.ROP_CODE.BLACKNESS);
-    _ = win32.PatBlt(deviceContext, 0, offsetY + @intCast(i32, buffer.height), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
-    _ = win32.PatBlt(deviceContext, 0, 0, offsetX, windowHeight, win32.ROP_CODE.BLACKNESS);
-    _ = win32.PatBlt(deviceContext, offsetX + @intCast(i32, buffer.width), 0, windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+        _ = win32.PatBlt(deviceContext, 0, 0, windowWidth, offsetY, win32.ROP_CODE.BLACKNESS);
+        _ = win32.PatBlt(deviceContext, 0, offsetY + @intCast(i32, buffer.height), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+        _ = win32.PatBlt(deviceContext, 0, 0, offsetX, windowHeight, win32.ROP_CODE.BLACKNESS);
+        _ = win32.PatBlt(deviceContext, offsetX + @intCast(i32, buffer.width), 0, windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
 
-    // For prototyping purposes, we're going to always blit
-    // 1-to-1 pixels to make sure we don't introduce artifacts with
-    // stretching while we are learning to code the renderer!
-
-    _ = win32.StretchDIBits(
-        deviceContext,
-        offsetX,
-        offsetY,
-        @intCast(i32, buffer.width),
-        @intCast(i32, buffer.height),
-        0,
-        0,
-        @intCast(i32, buffer.width),
-        @intCast(i32, buffer.height),
-        buffer.memory,
-        &buffer.info,
-        win32.DIB_RGB_COLORS,
-        win32.SRCCOPY,
-    );
+        _ = win32.StretchDIBits(
+            deviceContext,
+            offsetX,
+            offsetY,
+            @intCast(i32, buffer.width),
+            @intCast(i32, buffer.height),
+            0,
+            0,
+            @intCast(i32, buffer.width),
+            @intCast(i32, buffer.height),
+            buffer.memory,
+            &buffer.info,
+            win32.DIB_RGB_COLORS,
+            win32.SRCCOPY,
+        );
+    }
 }
 
 fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(WINAPI) win32.LRESULT {
     var result: win32.LRESULT = 0;
 
     switch (message) {
-        win32.WM_CLOSE => globalRunning = false, // TODO: handle this with a message to a user?
+        win32.WM_CLOSE => globalRunning = false,
+
+        win32.WM_SETCURSOR => {
+            if (debugGlobalShowCursor) {
+                result = win32.DefWindowProcW(windowHandle, message, wParam, lParam);
+            } else {
+                _ = win32.SetCursor(null);
+            }
+        },
 
         win32.WM_ACTIVATEAPP => {
             if (!NOT_IGNORE) {
@@ -585,7 +604,7 @@ fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32
             }
         },
 
-        win32.WM_DESTROY => globalRunning = false, // TODO: handle this as an error = recreate window?
+        win32.WM_DESTROY => globalRunning = false,
 
         win32.WM_KEYDOWN, win32.WM_KEYUP, win32.WM_SYSKEYDOWN, win32.WM_SYSKEYUP => {
             std.debug.print("{s}", .{"Keyboard input came in through a non-dispatch message!"});
@@ -636,15 +655,12 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
 }
 
 fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, bytesToWrite: DWORD, sourceBuffer: *handmade.sound_output_buffer) void {
-    // TODO: more strenous test :)
     var region1: ?*anyopaque = undefined;
     var region1Size: DWORD = undefined;
     var region2: ?*anyopaque = undefined;
     var region2Size: DWORD = undefined;
 
     if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
-        // TODO: asset that region1Size/region2Size is valid
-        // TODO: collapse the two loops
         if (region1) |ptr| {
             const region1SampleCount = region1Size / soundOutput.bytesPerSample;
             var destSample = @ptrCast([*]i16, @alignCast(@alignOf(i16), ptr));
@@ -779,12 +795,41 @@ fn Win32PlayBackInput(state: *win32_state, newInput: *handmade.input) void {
     var bytesRead: DWORD = 0;
     if (win32.ReadFile(state.playBackHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesRead, null) != win32.FALSE) {
         if (bytesRead == 0) {
-            // We've hit the end of the stream, go back to the beginning
             const playingIndex = state.inputPlayingIndex;
             Win32EndInputPlayBack(state);
             Win32BeginInputPlayBack(state, playingIndex);
             _ = win32.ReadFile(state.playBackHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesRead, null);
         }
+    }
+}
+
+fn ToggleFullscreen(window: win32.HWND) void {
+    const style: u32 = @intCast(u32, win32.GetWindowLongW(window, win32.GWL_STYLE));
+    if ((style & @enumToInt(win32.WS_OVERLAPPEDWINDOW)) != 0) {
+        var monitorInfo: win32.MONITORINFO = undefined;
+        monitorInfo.cbSize = @sizeOf(win32.MONITORINFO);
+        const windowPlacementSucceded = win32.GetWindowPlacement(window, &globalWindowPosition);
+        const monitorFromWindow = win32.MonitorFromWindow(window, win32.MONITOR_DEFAULTTOPRIMARY);
+        const monitorInfoSucceded = win32.GetMonitorInfoW(monitorFromWindow, &monitorInfo);
+
+        if ((windowPlacementSucceded != win32.FALSE) and (monitorInfoSucceded) != win32.FALSE) {
+            _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @bitCast(i32, style & ~@enumToInt(win32.WS_OVERLAPPEDWINDOW)));
+            _ = win32.SetWindowPos(
+                window,
+                null,
+                monitorInfo.rcMonitor.left,
+                monitorInfo.rcMonitor.top,
+                monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+                monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+                @intToEnum(win32.SET_WINDOW_POS_FLAGS, @enumToInt(win32.SWP_NOOWNERZORDER) | @enumToInt(win32.SWP_FRAMECHANGED)),
+            );
+        }
+    } else {
+        _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @bitCast(i32, style | @enumToInt(win32.WS_OVERLAPPEDWINDOW)));
+        _ = win32.SetWindowPos(window, null, 0, 0, 0, 0, @intToEnum(
+            win32.SET_WINDOW_POS_FLAGS,
+            @enumToInt(win32.SWP_NOMOVE) | @enumToInt(win32.SWP_NOSIZE) | @enumToInt(win32.SWP_NOZORDER) | @enumToInt(win32.SWP_NOOWNERZORDER) | @enumToInt(win32.SWP_FRAMECHANGED),
+        ));
     }
 }
 
@@ -795,7 +840,6 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *handmad
             win32.WM_QUIT => globalRunning = false,
             win32.WM_KEYDOWN, win32.WM_KEYUP, win32.WM_SYSKEYDOWN, win32.WM_SYSKEYUP => {
                 const vkCode = @intToEnum(win32.VIRTUAL_KEY, message.wParam);
-                // DOCUMENTATION: https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-keydown
                 const wasDown = ((message.lParam & (1 << 30)) != 0);
                 const isDown = ((message.lParam & (1 << 31)) == 0);
 
@@ -840,9 +884,16 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *handmad
                     }
                 }
 
-                const altKeyWasDown = ((message.lParam & (1 << 29)) != 0);
-                if ((vkCode == win32.VK_F4) and altKeyWasDown) {
-                    globalRunning = false;
+                if (isDown) {
+                    const altKeyWasDown = ((message.lParam & (1 << 29)) != 0);
+                    if ((vkCode == win32.VK_F4) and altKeyWasDown) {
+                        globalRunning = false;
+                    }
+                    if ((vkCode == win32.VK_RETURN) and altKeyWasDown) {
+                        if (message.hwnd) |window| {
+                            ToggleFullscreen(window);
+                        }
+                    }
                 }
             },
             else => {
@@ -870,7 +921,7 @@ inline fn Win32GetSecondsElapsed(start: win32.LARGE_INTEGER, end: win32.LARGE_IN
 inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) void {
     @memcpy(@ptrCast([*]u8, dest), @ptrCast([*]const u8, source), size);
 
-    // loop below is notoriously slow.
+    // NOTE: (manav) loop below is notoriously slow.
     // for (@ptrCast([*]const u8, source)[0..size]) |byte, index| {
     //     @ptrCast([*]u8, dest)[index] = byte;
     // }
@@ -912,14 +963,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     var gameCodeLockFullPath = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
     Win32BuildEXEPathFileName(&win32State, win32.L("lock.tmp"), gameCodeLockFullPath[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
-    // NOTE: Set the Windows scheduler granularity to 1ms
-    // so that our Sleep() can be more granular.
     const desiredSchedulerMS = 1;
     const sleepIsGranular = (win32.timeBeginPeriod(desiredSchedulerMS) == win32.TIMERR_NOERROR);
 
     Win32LoadXinput();
 
     Win32ResizeDIBSection(&globalBackBuffer, 960, 540);
+
+    debugGlobalShowCursor = HANDMADE_INTERNAL;
 
     const windowclass = win32.WNDCLASSW{
         .style = @intToEnum(win32.WNDCLASS_STYLES, 0), // WS_EX_TOPMOST|WS_EX_LAYERED
@@ -928,7 +979,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         .cbWndExtra = 0,
         .hInstance = hInstance,
         .hIcon = null,
-        .hCursor = null,
+        .hCursor = win32.LoadCursorW(null, win32.IDC_ARROW),
         .hbrBackground = null,
         .lpszMenuName = null,
         .lpszClassName = win32.L("HandmadeHeroWindowClass"),
@@ -949,8 +1000,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             hInstance,
             null,
         )) |windowHandle| {
-
-            // TODO: how do we reliably query this on windows?
             var monitorRefreshHz: u32 = 60;
             var win32RefreshRate: i32 = undefined;
 
@@ -1017,7 +1066,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 if (win32.VirtualAlloc(baseAddress, win32State.totalSize, allocationType, win32.PAGE_READWRITE)) |memory| {
                     // defer _ = win32.VirtualFree();
 
-                    // TODO: handle various memory footprints (USING SYSTEM METRICS)
                     win32State.gameMemoryBlock = memory;
                     gameMemory.permanentStorage = @ptrCast([*]u8, win32State.gameMemoryBlock);
                     gameMemory.transientStorage = gameMemory.permanentStorage + gameMemory.permanentStorageSize;
@@ -1025,9 +1073,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     var replayIndex: u32 = 1;
                     while (replayIndex < win32State.replayBuffers.len) : (replayIndex += 1) {
                         var replayBuffer = &win32State.replayBuffers[replayIndex];
-                        // TODO: Recording system still seems to take too long
-                        // on record start - find out what Windows is doing and if
-                        // we can speed up / defer some of that processing.
 
                         Win32GetInputFileLocation(&win32State, false, replayIndex, replayBuffer.fileName[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
@@ -1099,7 +1144,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                         const oldKeyboardController: *handmade.controller_input = &oldInput.controllers[0];
                         const newKeyboardController: *handmade.controller_input = &newInput.controllers[0];
-                        // TODO: can't zero everything because the up/down state will be wrong
+
                         newKeyboardController.* = handmade.controller_input{
                             .isConnected = true,
                         };
@@ -1118,7 +1163,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                             newInput.mouseX = mouseP.x;
                             newInput.mouseY = mouseP.y;
-                            newInput.mouseZ = 0; // TODO: Support mousewheel?
+                            newInput.mouseZ = 0;
 
                             Win32ProcessKeyboardMessage(
                                 &newInput.mouseButtons[0],
@@ -1141,8 +1186,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 @as(u32, (@bitCast(u16, win32.GetKeyState(@enumToInt(win32.VK_XBUTTON2))) & (1 << 15))),
                             );
 
-                            // TODO: Need to not poll disconnected controllers to avoid xinput frame rate hit on older libraries...
-                            // TODO: Should we poll this more frequently
                             var maxControllerCount = win32.XUSER_MAX_COUNT;
                             if (maxControllerCount > newInput.controllers.len - 1) {
                                 maxControllerCount = newInput.controllers.len - 1;
@@ -1159,13 +1202,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                     newController.isConnected = true;
                                     newController.isAnalog = oldController.isAnalog;
 
-                                    // This controller is plugged in
-                                    // TODO: see if ControllerState.dwPacketNumber increments too rapidly
                                     const pad = &controllerState.Gamepad;
 
-                                    // TODO: This is a square deadzone, check XInput to
-                                    // verify that the deadzone is "round" and show how to do
-                                    // round deadzone processing.
                                     newController.stickAverageX = Win32ProcessXInputStickValue(pad.sThumbLX, win32.XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
                                     newController.stickAverageY = Win32ProcessXInputStickValue(pad.sThumbLY, win32.XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
 
@@ -1356,7 +1394,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             const workCounter = Win32GetWallClock();
                             const workSecondsElapsed = Win32GetSecondsElapsed(lastCounter, workCounter);
 
-                            // TODO: not tested yet, probably buggy
                             var secondsElapsedForFrame = workSecondsElapsed;
                             if (secondsElapsedForFrame < targetSecondsPerFrame) {
                                 if (sleepIsGranular) {
@@ -1412,7 +1449,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             const temp = newInput;
                             newInput = oldInput;
                             oldInput = temp;
-                            // TODO: should I clear these here?
 
                             if (NOT_IGNORE) {
                                 var endCycleCount = rdtsc();
