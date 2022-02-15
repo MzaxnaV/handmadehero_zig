@@ -57,6 +57,13 @@ pub inline fn sub(a: v2, b: v2) v2 {
 
 pub inline fn neg(a: v2) v2 {
     const result = scale(a, -1);
+
+    return result;
+}
+
+pub inline fn inner(a: v2, b: v2) f32 {
+    const result = a.x * b.x + a.y * b.y;
+
     return result;
 }
 

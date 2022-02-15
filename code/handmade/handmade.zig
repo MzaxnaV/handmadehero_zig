@@ -463,10 +463,45 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             playerRight.offset.x += 0.5 * playerWidth;
             playerRight = game.RecanonicalizePosition(tileMap, playerRight);
 
-            if (game.IsTileMapPointEmpty(tileMap, newPlayerP) and
-                game.IsTileMapPointEmpty(tileMap, playerLeft) and
-                game.IsTileMapPointEmpty(tileMap, playerRight))
-            {
+            var collided = false;
+            var colP = game.tile_map_position{};
+            if (!game.IsTileMapPointEmpty(tileMap, newPlayerP)) {
+                colP = newPlayerP;
+                collided = true;
+            }
+
+            if (!game.IsTileMapPointEmpty(tileMap, playerLeft)) {
+                colP = playerLeft;
+                collided = true;
+            }
+
+            if (!game.IsTileMapPointEmpty(tileMap, playerRight)) {
+                colP = playerRight;
+                collided = true;
+            }
+
+            if (collided) {
+                var r = game.v2{};
+
+                if (colP.absTileX < gameState.playerP.absTileX) {
+                    r = .{ .x = 1, .y = 0 };
+                }
+
+                if (colP.absTileX > gameState.playerP.absTileX) {
+                    r = .{ .x = -1, .y = 0 };
+                }
+
+                if (colP.absTileY < gameState.playerP.absTileY) {
+                    r = .{ .x = 0, .y = 1 };
+                }
+
+                if (colP.absTileY > gameState.playerP.absTileY) {
+                    r = .{ .x = 0, .y = -1 };
+                }
+
+                // NOTE: (Manav) gameState.dPlayerP += - 1*inner(gameState.dPlayerP, r) * r;
+                _ = gameState.dPlayerP.sub(game.scale(r, 1 * game.inner(gameState.dPlayerP, r)));
+            } else {
                 if (game.AreOnSameTile(&gameState.playerP, &newPlayerP)) {
                     const newTileValue = game.GetTileValueFromPos(tileMap, newPlayerP);
 
