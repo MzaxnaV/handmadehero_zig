@@ -3,6 +3,7 @@ const std = @import("std");
 const memory_index = @import("handmade_platform").memory_index;
 const tile_map = @import("handmade_tile.zig").tile_map;
 const tile_map_position = @import("handmade_tile.zig").tile_map_position;
+const v2 = @import("handmade_math.zig").v2;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
@@ -41,9 +42,9 @@ pub const state = struct {
 
     cameraP: tile_map_position = tile_map_position{},
     playerP: tile_map_position = tile_map_position{},
+    dPlayerP: v2,
 
     backdrop: loaded_bitmap,
-
     heroFacingDirection: u32,
     heroBitmaps: [4]hero_bitmaps,
 };

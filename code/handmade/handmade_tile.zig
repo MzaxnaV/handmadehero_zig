@@ -1,11 +1,11 @@
-const std = @import("std");
-const hm = @import("handmade_math.zig");
+const assert = @import("std").debug.assert;
+const math = @import("handmade_math.zig");
 const RoundF32ToInt = @import("handmade_intrinsics.zig").RoundF32ToInt;
 
 // tile data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const tile_map_difference = struct {
-    dXY: hm.v2 = hm.v2{},
+    dXY: math.v2 = .{},
     dZ: f32 = 0,
 };
 
@@ -14,7 +14,7 @@ pub const tile_map_position = struct {
     absTileY: u32 = 0,
     absTileZ: u32 = 0,
 
-    offset: hm.v2 = .{},
+    offset: math.v2 = .{},
 };
 
 pub const tile_chunk_position = struct {
@@ -51,8 +51,8 @@ pub inline fn RecanonicalizeCoord(tileMap: *const tile_map, tile: *u32, tileRel:
     tile.* +%= @bitCast(u32, offSet);
     tileRel.* -= @intToFloat(f32, offSet) * tileMap.tileSideInMeters;
 
-    std.debug.assert(tileRel.* >= -0.5 * tileMap.tileSideInMeters);
-    std.debug.assert(tileRel.* <= 0.5 * tileMap.tileSideInMeters);
+    assert(tileRel.* >= -0.5 * tileMap.tileSideInMeters);
+    assert(tileRel.* <= 0.5 * tileMap.tileSideInMeters);
 }
 
 pub inline fn RecanonicalizePosition(tileMap: *const tile_map, pos: tile_map_position) tile_map_position {
@@ -79,7 +79,7 @@ pub inline fn Substract(tileMap: *const tile_map, a: *const tile_map_position, b
 
     const result = tile_map_difference{
         // NOTE: (Manav) .dxy = dTileXY * tileMap.tileSideInMeters + (a.offset - b.offset)
-        .dXY = hm.add(hm.scale(dTileXY, tileMap.tileSideInMeters), hm.sub(a.offset, b.offset)),
+        .dXY = math.add(math.scale(dTileXY, tileMap.tileSideInMeters), math.sub(a.offset, b.offset)),
         .dZ = tileMap.tileSideInMeters * dTileZ,
     };
 
@@ -97,16 +97,16 @@ pub inline fn GetTileChunk(tileMap: *const tile_map, tileChunkX: u32, tileChunkY
 }
 
 pub inline fn GetTileValueUnchecked(tileMap: *const tile_map, tileChunk: *const tile_chunk, tileX: u32, tileY: u32) u32 {
-    std.debug.assert(tileX < tileMap.chunkDim);
-    std.debug.assert(tileY < tileMap.chunkDim);
+    assert(tileX < tileMap.chunkDim);
+    assert(tileY < tileMap.chunkDim);
 
     const tileChunkValue = tileChunk.tiles.?[tileY * tileMap.chunkDim + tileX];
     return tileChunkValue;
 }
 
 pub inline fn SetTileValueUnchecked(tileMap: *const tile_map, tileChunk: *const tile_chunk, tileX: u32, tileY: u32, tileValue: u32) void {
-    std.debug.assert(tileX < tileMap.chunkDim);
-    std.debug.assert(tileY < tileMap.chunkDim);
+    assert(tileX < tileMap.chunkDim);
+    assert(tileY < tileMap.chunkDim);
 
     tileChunk.tiles.?[tileY * tileMap.chunkDim + tileX] = tileValue;
 }

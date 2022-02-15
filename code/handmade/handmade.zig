@@ -415,39 +415,44 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
 
     for (gameInput.controllers) |controller| {
         if (controller.isAnalog) {} else {
-            var dPlayer = game.v2{};
+            var ddPlayer = game.v2{};
 
             if (controller.buttons.mapped.moveUp.endedDown != 0) {
                 gameState.heroFacingDirection = 1;
-                dPlayer.y = 1.0;
+                ddPlayer.y = 1.0;
             }
             if (controller.buttons.mapped.moveDown.endedDown != 0) {
                 gameState.heroFacingDirection = 3;
-                dPlayer.y = -1.0;
+                ddPlayer.y = -1.0;
             }
             if (controller.buttons.mapped.moveLeft.endedDown != 0) {
                 gameState.heroFacingDirection = 2;
-                dPlayer.x = -1.0;
+                ddPlayer.x = -1.0;
             }
             if (controller.buttons.mapped.moveRight.endedDown != 0) {
                 gameState.heroFacingDirection = 0;
-                dPlayer.x = 1.0;
+                ddPlayer.x = 1.0;
             }
 
-            var playerSpeed = @as(f32, 2.0);
+            if ((ddPlayer.x != 0) and (ddPlayer.y != 0)) {
+                _ = ddPlayer.scale(0.707106781187);
+            }
+
+            var playerAcc = @as(f32, 10.0);
             if (controller.buttons.mapped.actionUp.endedDown != 0) {
-                playerSpeed = 10.0;
+                playerAcc = 50.0;
             }
 
-            _ = dPlayer.scale(playerSpeed);
-
-            if ((dPlayer.x != 0) and (dPlayer.y != 0)) {
-                _ = dPlayer.scale(0.707106781187);
-            }
+            _ = ddPlayer.scale(playerAcc);
+            _ = ddPlayer.add(game.scale(gameState.dPlayerP, -1.5));
 
             var newPlayerP = gameState.playerP;
-            // newPlayerP.offset += gameInput.dtForFrame * dPlayer;
-            _ = newPlayerP.offset.add(dPlayer.scale(gameInput.dtForFrame).*);
+
+            // NOTE: (Manav) newPlayerP.offset = (0.5 * ddPlayer * square(gameInput.dtForFrame) + gameState.dPlayerP * gameInput.dtForFrame + NewPlayerP.Offset);
+            newPlayerP.offset = game.add(game.add(game.scale(ddPlayer, 0.5 * game.square(gameInput.dtForFrame)), game.scale(gameState.dPlayerP, gameInput.dtForFrame)), newPlayerP.offset);
+            // NOTE: (Manav) gameState->dPlayerP = ddPlayer * gameInput->dtForFrame + gameState->dPlayerP
+            gameState.dPlayerP = game.add(game.scale(ddPlayer, gameInput.dtForFrame), gameState.dPlayerP);
+
             newPlayerP = game.RecanonicalizePosition(tileMap, newPlayerP);
 
             var playerLeft = newPlayerP;

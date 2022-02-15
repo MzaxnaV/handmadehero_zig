@@ -29,26 +29,39 @@ pub const v2 = struct {
 };
 
 pub inline fn scale(a: v2, scalar: f32) v2 {
-    return v2 {
+    const result = .{
         .x = a.x * scalar,
         .y = a.y * scalar,
     };
+
+    return result;
 }
 
 pub inline fn add(a: v2, b: v2) v2 {
-    return v2{
+    const result = .{
         .x = a.x + b.x,
         .y = a.y + b.y,
     };
+
+    return result;
 }
 
 pub inline fn sub(a: v2, b: v2) v2 {
-    return v2{
+    const result = .{
         .x = a.x - b.x,
         .y = a.y - b.y,
     };
+
+    return result;
 }
 
 pub inline fn neg(a: v2) v2 {
-    return scale(a, -1);
+    const result = scale(a, -1);
+    return result;
+}
+
+pub inline fn square(a: f32) f32 {
+    const result = a * a;
+
+    return result;
 }
