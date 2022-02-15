@@ -553,7 +553,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     DrawRectangle(
         buffer,
         playerLeftTop,
-        game.add(playerLeftTop, playerWidthHeight),
+        game.add(playerLeftTop, game.scale(playerWidthHeight, metersToPixels)),
         playerR,
         playerG,
         playerB,
