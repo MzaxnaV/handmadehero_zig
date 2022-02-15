@@ -3,6 +3,7 @@ const platform = @import("handmade_platform");
 const game = struct {
     usingnamespace @import("handmade_intrinsics.zig");
     usingnamespace @import("handmade_internals.zig");
+    usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_tile.zig");
     usingnamespace @import("handmade_random.zig");
 };
@@ -60,11 +61,11 @@ fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneH
     }
 }
 
-fn DrawRectangle(buffer: *platform.offscreen_buffer, fMinX: f32, fMinY: f32, fMaxX: f32, fMaxY: f32, r: f32, g: f32, b: f32) void {
-    var minX = game.RoundF32ToInt(i32, fMinX);
-    var minY = game.RoundF32ToInt(i32, fMinY);
-    var maxX = game.RoundF32ToInt(i32, fMaxX);
-    var maxY = game.RoundF32ToInt(i32, fMaxY);
+fn DrawRectangle(buffer: *platform.offscreen_buffer, vMin: game.v2, vMax: game.v2, r: f32, g: f32, b: f32) void {
+    var minX = game.RoundF32ToInt(i32, vMin.x);
+    var minY = game.RoundF32ToInt(i32, vMin.y);
+    var maxX = game.RoundF32ToInt(i32, vMax.x);
+    var maxY = game.RoundF32ToInt(i32, vMax.y);
 
     if (minX < 0) {
         minX = 0;
@@ -271,8 +272,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
 
         gameState.playerP.absTileX = 1;
         gameState.playerP.absTileY = 3;
-        gameState.playerP.offsetX = 5.0;
-        gameState.playerP.offsetY = 5.0;
+        gameState.playerP.offset = .{ .x = 5.0, .y = 5.0 };
 
         game.InitializeArena(&gameState.worldArena, gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
 
@@ -415,24 +415,23 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
 
     for (gameInput.controllers) |controller| {
         if (controller.isAnalog) {} else {
-            var dPlayerX = @as(f32, 0);
-            var dPlayerY = @as(f32, 0);
+            var dPlayer = game.v2{};
 
             if (controller.buttons.mapped.moveUp.endedDown != 0) {
                 gameState.heroFacingDirection = 1;
-                dPlayerY = 1.0;
+                dPlayer.y = 1.0;
             }
             if (controller.buttons.mapped.moveDown.endedDown != 0) {
                 gameState.heroFacingDirection = 3;
-                dPlayerY = -1.0;
+                dPlayer.y = -1.0;
             }
             if (controller.buttons.mapped.moveLeft.endedDown != 0) {
                 gameState.heroFacingDirection = 2;
-                dPlayerX = -1.0;
+                dPlayer.x = -1.0;
             }
             if (controller.buttons.mapped.moveRight.endedDown != 0) {
                 gameState.heroFacingDirection = 0;
-                dPlayerX = 1.0;
+                dPlayer.x = 1.0;
             }
 
             var playerSpeed = @as(f32, 2.0);
@@ -440,20 +439,23 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                 playerSpeed = 10.0;
             }
 
-            dPlayerX *= playerSpeed;
-            dPlayerY *= playerSpeed;
+            _ = dPlayer.scale(playerSpeed);
+
+            if ((dPlayer.x != 0) and (dPlayer.y != 0)) {
+                _ = dPlayer.scale(0.707106781187);
+            }
 
             var newPlayerP = gameState.playerP;
-            newPlayerP.offsetX += gameInput.dtForFrame * dPlayerX;
-            newPlayerP.offsetY += gameInput.dtForFrame * dPlayerY;
+            // newPlayerP.offset += gameInput.dtForFrame * dPlayer;
+            _ = newPlayerP.offset.add(dPlayer.scale(gameInput.dtForFrame).*);
             newPlayerP = game.RecanonicalizePosition(tileMap, newPlayerP);
 
             var playerLeft = newPlayerP;
-            playerLeft.offsetX -= 0.5 * playerWidth;
+            playerLeft.offset.x -= 0.5 * playerWidth;
             playerLeft = game.RecanonicalizePosition(tileMap, playerLeft);
 
             var playerRight = newPlayerP;
-            playerRight.offsetX += 0.5 * playerWidth;
+            playerRight.offset.x += 0.5 * playerWidth;
             playerRight = game.RecanonicalizePosition(tileMap, playerRight);
 
             if (game.IsTileMapPointEmpty(tileMap, newPlayerP) and
@@ -475,16 +477,16 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             gameState.cameraP.absTileZ = gameState.playerP.absTileZ;
 
             const diff = game.Substract(tileMap, &gameState.playerP, &gameState.cameraP);
-            if (diff.dX > (9 * tileMap.tileSideInMeters)) {
+            if (diff.dXY.x > (9 * tileMap.tileSideInMeters)) {
                 gameState.cameraP.absTileX += 17;
             }
-            if (diff.dX < -(9 * tileMap.tileSideInMeters)) {
+            if (diff.dXY.x < -(9 * tileMap.tileSideInMeters)) {
                 gameState.cameraP.absTileX -= 17;
             }
-            if (diff.dY > (5 * tileMap.tileSideInMeters)) {
+            if (diff.dXY.y > (5 * tileMap.tileSideInMeters)) {
                 gameState.cameraP.absTileY += 9;
             }
-            if (diff.dY < -(5 * tileMap.tileSideInMeters)) {
+            if (diff.dXY.y < -(5 * tileMap.tileSideInMeters)) {
                 gameState.cameraP.absTileY -= 9;
             }
         }
@@ -518,14 +520,18 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                     grey = 0.0;
                 }
 
-                const cenX = screenCenterX - metersToPixels * gameState.cameraP.offsetX + @intToFloat(f32, relCol * tileSideInPixels);
-                const cenY = screenCenterY + metersToPixels * gameState.cameraP.offsetY - @intToFloat(f32, relRow * tileSideInPixels);
-                const minX = cenX - 0.5 * @intToFloat(f32, tileSideInPixels);
-                const minY = cenY - 0.5 * @intToFloat(f32, tileSideInPixels);
-                const maxX = cenX + 0.5 * @intToFloat(f32, tileSideInPixels);
-                const maxY = cenY + 0.5 * @intToFloat(f32, tileSideInPixels);
+                const tileSide = .{ .x = @as(f32, 0.5) * tileSideInPixels, .y = @as(f32, 0.5) * tileSideInPixels };
+                const cen = .{
+                    .x = screenCenterX - metersToPixels * gameState.cameraP.offset.x + @intToFloat(f32, relCol * tileSideInPixels),
+                    .y = screenCenterY + metersToPixels * gameState.cameraP.offset.y - @intToFloat(f32, relRow * tileSideInPixels),
+                };
 
-                DrawRectangle(buffer, minX, minY, maxX, maxY, grey, grey, grey);
+                // min = cen - tileSide
+                // max = cen + tileSide
+                const min = game.sub(cen, tileSide);
+                const max = game.add(cen, tileSide);
+
+                DrawRectangle(buffer, min, max, grey, grey, grey);
             }
         }
     }
@@ -536,17 +542,18 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     const playerG = 1.0;
     const playerB = 0.0;
 
-    const playerGroundPointX = screenCenterX + metersToPixels * diff.dX;
-    const playerGroundPointY = screenCenterY - metersToPixels * diff.dY;
-    const playerLeft = playerGroundPointX - 0.5 * metersToPixels * playerWidth;
-    const playerTop = playerGroundPointY - metersToPixels * playerHeight;
+    const playerGroundPointX = screenCenterX + metersToPixels * diff.dXY.x;
+    const playerGroundPointY = screenCenterY - metersToPixels * diff.dXY.y;
+    const playerLeftTop = game.v2{
+        .x = playerGroundPointX - 0.5 * metersToPixels * playerWidth,
+        .y = playerGroundPointY - metersToPixels * playerHeight,
+    };
+    const playerWidthHeight = game.v2{ .x = playerWidth, .y = playerHeight };
 
     DrawRectangle(
         buffer,
-        playerLeft,
-        playerTop,
-        playerLeft + metersToPixels * playerWidth,
-        playerTop + metersToPixels * playerHeight,
+        playerLeftTop,
+        game.add(playerLeftTop, playerWidthHeight),
         playerR,
         playerG,
         playerB,

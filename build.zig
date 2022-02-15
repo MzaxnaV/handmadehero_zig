@@ -38,8 +38,14 @@ pub fn build(b: *std.build.Builder) void {
     exe.setOutputDir("build");
     exe.addOptions("build_consts", options);
 
-    const build_lib = b.step("lib", "Build the handmade lib");
-    build_lib.dependOn(&lib.step);
+    var lib_tests = b.addTest("code/handmade/handmade_tests.zig");
+    lib_tests.setBuildMode(mode);
+
+    const test_step = b.step("test", "Run handmade tests");
+    test_step.dependOn(&lib_tests.step);
+
+    const build_step = b.step("lib", "Build the handmade lib");
+    build_step.dependOn(&lib.step);
 
     b.installArtifact(lib);
     b.installArtifact(exe);

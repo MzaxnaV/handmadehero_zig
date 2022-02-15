@@ -4,7 +4,16 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Zig Project",
+            "label": "Build and Test Project",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "zig build --verbose & zig build test"
+        },
+        {
+            "label": "Build Project",
             "type": "shell",
             "group": {
                 "kind": "build",

@@ -1,11 +1,11 @@
 const std = @import("std");
+const hm = @import("handmade_math.zig");
 const RoundF32ToInt = @import("handmade_intrinsics.zig").RoundF32ToInt;
 
 // tile data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const tile_map_difference = struct {
-    dX: f32 = 0,
-    dY: f32 = 0,
+    dXY: hm.v2 = hm.v2{},
     dZ: f32 = 0,
 };
 
@@ -14,8 +14,7 @@ pub const tile_map_position = struct {
     absTileY: u32 = 0,
     absTileZ: u32 = 0,
 
-    offsetX: f32 = 0,
-    offsetY: f32 = 0,
+    offset: hm.v2 = .{},
 };
 
 pub const tile_chunk_position = struct {
@@ -59,8 +58,8 @@ pub inline fn RecanonicalizeCoord(tileMap: *const tile_map, tile: *u32, tileRel:
 pub inline fn RecanonicalizePosition(tileMap: *const tile_map, pos: tile_map_position) tile_map_position {
     var result = pos;
 
-    RecanonicalizeCoord(tileMap, &result.absTileX, &result.offsetX);
-    RecanonicalizeCoord(tileMap, &result.absTileY, &result.offsetY);
+    RecanonicalizeCoord(tileMap, &result.absTileX, &result.offset.x);
+    RecanonicalizeCoord(tileMap, &result.absTileY, &result.offset.y);
 
     return result;
 }
@@ -72,13 +71,15 @@ pub inline fn AreOnSameTile(a: *const tile_map_position, b: *const tile_map_posi
 }
 
 pub inline fn Substract(tileMap: *const tile_map, a: *const tile_map_position, b: *const tile_map_position) tile_map_difference {
-    const dTileX = @intToFloat(f32, a.absTileX) - @intToFloat(f32, b.absTileX);
-    const dTileY = @intToFloat(f32, a.absTileY) - @intToFloat(f32, b.absTileY);
+    const dTileXY = .{
+        .x = @intToFloat(f32, a.absTileX) - @intToFloat(f32, b.absTileX),
+        .y = @intToFloat(f32, a.absTileY) - @intToFloat(f32, b.absTileY),
+    };
     const dTileZ = @intToFloat(f32, a.absTileZ) - @intToFloat(f32, b.absTileZ);
 
     const result = tile_map_difference{
-        .dX = tileMap.tileSideInMeters * dTileX + (a.offsetX - b.offsetX),
-        .dY = tileMap.tileSideInMeters * dTileY + (a.offsetY - b.offsetY),
+        // NOTE: (Manav) .dxy = dTileXY * tileMap.tileSideInMeters + (a.offset - b.offset)
+        .dXY = hm.add(hm.scale(dTileXY, tileMap.tileSideInMeters), hm.sub(a.offset, b.offset)),
         .dZ = tileMap.tileSideInMeters * dTileZ,
     };
 

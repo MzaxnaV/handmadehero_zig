@@ -44,8 +44,8 @@ const allocationType = @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win3
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
 const win32_offscreen_buffer = struct {
-    info: win32.BITMAPINFO = win32.BITMAPINFO{
-        .bmiHeader = win32.BITMAPINFOHEADER{
+    info: win32.BITMAPINFO = .{
+        .bmiHeader = .{
             .biSize = @sizeOf(win32.BITMAPINFOHEADER),
             .biWidth = 0,
             .biHeight = 0,
@@ -58,7 +58,7 @@ const win32_offscreen_buffer = struct {
             .biClrUsed = 0,
             .biClrImportant = 0,
         },
-        .bmiColors = [1]win32.RGBQUAD{win32.RGBQUAD{
+        .bmiColors = [1]win32.RGBQUAD{.{
             .rgbBlue = 0,
             .rgbGreen = 0,
             .rgbRed = 0,
@@ -115,7 +115,7 @@ const win32_replay_buffer = struct {
 const win32_state = struct {
     totalSize: u64 = 0,
     gameMemoryBlock: *anyopaque,
-    replayBuffers: [4]win32_replay_buffer = [1]win32_replay_buffer{win32_replay_buffer{}} ** 4,
+    replayBuffers: [4]win32_replay_buffer = [1]win32_replay_buffer{.{}} ** 4,
 
     recordingHandle: win32.HANDLE,
     inputRecordingIndex: u32 = 0,
@@ -135,7 +135,7 @@ var globalBackBuffer = win32_offscreen_buffer{};
 var globalSecondaryBuffer: *win32.IDirectSoundBuffer = undefined;
 var globalPerfCounterFrequency: i64 = undefined;
 var debugGlobalShowCursor: bool = undefined;
-var globalWindowPosition = win32.WINDOWPLACEMENT{
+var globalWindowPosition = .{
     .length = undefined,
     .flags = undefined,
     .showCmd = undefined,
@@ -312,7 +312,7 @@ fn DEBUGWin32WriteEntireFile(_: *handmade.thread_context, fileName: [*:0]const u
 // local Win32 functions ------------------------------------------------------------------------------------------------------------------
 
 fn Win32GetLastWriteTime(fileName: [*:0]const u16) win32.FILETIME {
-    var lastWriteTime: win32.FILETIME = .{
+    var lastWriteTime = win32.FILETIME{
         .dwLowDateTime = 0,
         .dwHighDateTime = 0,
     };
@@ -331,15 +331,15 @@ fn Win32LoadGameCode(sourceDLLName: [:0]const u16, tempDLLName: [:0]const u16, l
     // NOTE: (Manav) no lock file, so this is useless for now :(
     var ignored = win32.WIN32_FILE_ATTRIBUTE_DATA{
         .dwFileAttributes = 0,
-        .ftCreationTime = win32.FILETIME{
+        .ftCreationTime = .{
             .dwLowDateTime = 0,
             .dwHighDateTime = 0,
         },
-        .ftLastAccessTime = win32.FILETIME{
+        .ftLastAccessTime = .{
             .dwLowDateTime = 0,
             .dwHighDateTime = 0,
         },
-        .ftLastWriteTime = win32.FILETIME{
+        .ftLastWriteTime = .{
             .dwLowDateTime = 0,
             .dwHighDateTime = 0,
         },
@@ -782,12 +782,12 @@ fn Win32EndInputPlayBack(state: *win32_state) void {
 }
 
 fn Win32RecordInput(state: *win32_state, newInput: *handmade.input) void {
-    var bytesWritten: DWORD = 0;
+    var bytesWritten = @as(DWORD, 0);
     _ = win32.WriteFile(state.recordingHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesWritten, null);
 }
 
 fn Win32PlayBackInput(state: *win32_state, newInput: *handmade.input) void {
-    var bytesRead: DWORD = 0;
+    var bytesRead = @as(DWORD, 0);
     if (win32.ReadFile(state.playBackHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesRead, null) != win32.FALSE) {
         if (bytesRead == 0) {
             const playingIndex = state.inputPlayingIndex;
@@ -799,7 +799,7 @@ fn Win32PlayBackInput(state: *win32_state, newInput: *handmade.input) void {
 }
 
 fn ToggleFullscreen(window: win32.HWND) void {
-    const style: u32 = @intCast(u32, win32.GetWindowLongW(window, win32.GWL_STYLE));
+    const style = @intCast(u32, win32.GetWindowLongW(window, win32.GWL_STYLE));
     if ((style & @enumToInt(win32.WS_OVERLAPPEDWINDOW)) != 0) {
         var monitorInfo: win32.MONITORINFO = undefined;
         monitorInfo.cbSize = @sizeOf(win32.MONITORINFO);
@@ -968,7 +968,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
     debugGlobalShowCursor = HANDMADE_INTERNAL;
 
-    const windowclass = win32.WNDCLASSW{
+    const windowclass = .{
         .style = @intToEnum(win32.WNDCLASS_STYLES, 0), // WS_EX_TOPMOST|WS_EX_LAYERED
         .lpfnWndProc = Win32MainWindowCallback,
         .cbClsExtra = 0,

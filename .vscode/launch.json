@@ -5,11 +5,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Zig Debug (Build and Run)",
+            "name": "Zig Debug (Build, Test and Run)",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/win32_handmade.exe",
-            "preLaunchTask": "Build Zig Project",
+            "preLaunchTask": "Build and Test Project",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/data",
@@ -17,10 +17,11 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Zig Debug (Run)",
+            "name": "Zig Debug (Build and Run)",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/win32_handmade.exe",
+            "preLaunchTask": "Build Project",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/data",
