@@ -135,8 +135,8 @@ var globalBackBuffer = win32_offscreen_buffer{};
 var globalSecondaryBuffer: *win32.IDirectSoundBuffer = undefined;
 var globalPerfCounterFrequency: i64 = undefined;
 var debugGlobalShowCursor: bool = undefined;
-var globalWindowPosition = .{
-    .length = undefined,
+var globalWindowPosition = win32.WINDOWPLACEMENT{
+    .length = @sizeOf(win32.WINDOWPLACEMENT),
     .flags = undefined,
     .showCmd = undefined,
     .ptMinPosition = undefined,
@@ -175,85 +175,6 @@ fn Win32GetEXEFileName(gameState: *win32_state) void {
 fn Win32BuildEXEPathFileName(gameState: *win32_state, filename: []const u16, dest: [:0]u16) void {
     CatStrings(gameState.exeFileName[0..gameState.onePastLastEXEFileNameSlashIndex], filename, dest);
 }
-
-// !NOT_IGNORE:
-// fn Win32DebugDrawVertical(backBuffer: *win32_offscreen_buffer, x: u32, top: u32, bottom: u32, colour: u32) void {
-//     var safeTop = top;
-//     var safeBottom = bottom;
-
-//     if (safeBottom > backBuffer.height) {
-//         safeBottom = backBuffer.height;
-//     }
-//     if (x < backBuffer.width) {
-//         var pixel: [*]u8 = @ptrCast([*]u8, backBuffer.memory) + x * backBuffer.bytesPerPixel + safeTop * backBuffer.pitch;
-//         var y = safeTop;
-//         while (y < safeBottom) : (y += 1) {
-//             @ptrCast(*u32, @alignCast(@alignOf(u32), pixel)).* = colour;
-//             pixel += backBuffer.pitch;
-//         }
-//     }
-// }
-
-// fn Win32DebugSyncDisplay(backBuffer: *win32_offscreen_buffer, markerCount: u32, markers: [*]win32_debug_time_marker, currentMarkerIndex: u32, soundOutput: *win32_sound_output, targetSecondsPerFrame: f32) void {
-//     _ = targetSecondsPerFrame;
-
-//     const padX = 16;
-//     const padY = 16;
-
-//     const lineHeight = 64;
-
-//     const coeff = @intToFloat(f32, (backBuffer.width - 2 * padX)) / @intToFloat(f32, soundOutput.secondaryBufferSize);
-//     var markerIndex: u32 = 0;
-//     while (markerIndex < markerCount) : (markerIndex += 1) {
-//         const thisMarker = &markers[markerIndex];
-//         std.debug.assert(thisMarker.outputPlayCursor < soundOutput.secondaryBufferSize);
-//         std.debug.assert(thisMarker.outputWriteCursor < soundOutput.secondaryBufferSize);
-//         std.debug.assert(thisMarker.outputLocation < soundOutput.secondaryBufferSize);
-//         std.debug.assert(thisMarker.outputByteCount < soundOutput.secondaryBufferSize);
-//         std.debug.assert(thisMarker.flipPlayCursor < soundOutput.secondaryBufferSize);
-//         std.debug.assert(thisMarker.flipWriteCursor < soundOutput.secondaryBufferSize);
-
-//         const playColour = 0xffffffff;
-//         const writeColour = 0xffff0000;
-//         const expectedFlipColour = 0xffffff00;
-//         const playWindowColour = 0xffff00ff;
-
-//         var top: u32 = padY;
-//         var bottom: u32 = lineHeight + padY;
-//         if (markerIndex == currentMarkerIndex) {
-//             top += lineHeight + padY;
-//             bottom += lineHeight + padY;
-
-//             const firstTop = top;
-
-//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputPlayCursor, playColour);
-//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputWriteCursor, writeColour);
-
-//             top += lineHeight + padY;
-//             bottom += lineHeight + padY;
-
-//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputLocation, playColour);
-//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputLocation + thisMarker.outputByteCount, writeColour);
-
-//             top += lineHeight + padY;
-//             bottom += lineHeight + padY;
-
-//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, firstTop, bottom, thisMarker.expectedFlipPlayCursor, expectedFlipColour);
-//         }
-
-//         Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipPlayCursor, playColour);
-//         Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipPlayCursor + 480 * soundOutput.bytesPerSample, playWindowColour);
-//         Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipWriteCursor, writeColour);
-//     }
-// }
-
-// inline fn Win32DrawSoundBufferMarker(backBuffer: *win32_offscreen_buffer, soundOutput: *win32_sound_output, coeff: f32, padX: u32, top: u32, bottom: u32, value: DWORD, colour: u32) void {
-//     _ = soundOutput;
-//     const xReal32 = coeff * @intToFloat(f32, value);
-//     const x = padX + @floatToInt(u32, xReal32);
-
-//     Win32DebugDrawVertical(backBuffer, x, top, bottom, colour);
-// }
 
 fn DEBUGWin32FreeFileMemory(_: *handmade.thread_context, memory: *anyopaque) void {
     _ = win32.VirtualFree(memory, 0, win32.MEM_RELEASE);
@@ -328,7 +249,7 @@ fn Win32GetLastWriteTime(fileName: [*:0]const u16) win32.FILETIME {
 fn Win32LoadGameCode(sourceDLLName: [:0]const u16, tempDLLName: [:0]const u16, lockFileName: [:0]const u16) win32_game_code {
     var result = win32_game_code{};
 
-    // NOTE: (Manav) no lock file, so this is useless for now :(
+    // NOTE (Manav): no lock file, so this is useless for now :(
     var ignored = win32.WIN32_FILE_ATTRIBUTE_DATA{
         .dwFileAttributes = 0,
         .ftCreationTime = .{
@@ -391,7 +312,7 @@ fn Win32UnloadGameCode(gameCode: *win32_game_code) void {
 
 fn Win32LoadXinput() void {
     if (win32.LoadLibraryW(win32.L("xinput1_4.dll"))) |XInputLibrary| {
-        // NOTE: (Manav) NO TYPESAFETY TO WARN YOU, BEWARE :D
+        // NOTE (Manav): NO TYPESAFETY TO WARN YOU, BEWARE :D
         if (win32.GetProcAddress(XInputLibrary, "XInputGetState")) |funcptr| {
             XInputGetState = @ptrCast(@TypeOf(XInputGetState), funcptr);
         } else {
@@ -821,6 +742,7 @@ fn ToggleFullscreen(window: win32.HWND) void {
         }
     } else {
         _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @bitCast(i32, style | @enumToInt(win32.WS_OVERLAPPEDWINDOW)));
+        _ = win32.SetWindowPlacement(window, &globalWindowPosition);
         _ = win32.SetWindowPos(window, null, 0, 0, 0, 0, @intToEnum(
             win32.SET_WINDOW_POS_FLAGS,
             @enumToInt(win32.SWP_NOMOVE) | @enumToInt(win32.SWP_NOSIZE) | @enumToInt(win32.SWP_NOZORDER) | @enumToInt(win32.SWP_NOOWNERZORDER) | @enumToInt(win32.SWP_FRAMECHANGED),
@@ -916,13 +838,13 @@ inline fn Win32GetSecondsElapsed(start: win32.LARGE_INTEGER, end: win32.LARGE_IN
 inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) void {
     @memcpy(@ptrCast([*]u8, dest), @ptrCast([*]const u8, source), size);
 
-    // NOTE: (Manav) loop below is notoriously slow.
+    // NOTE (Manav): loop below is notoriously slow.
     // for (@ptrCast([*]const u8, source)[0..size]) |byte, index| {
     //     @ptrCast([*]u8, dest)[index] = byte;
     // }
 }
 
-// NOTE: (Manav) Read this: https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=rdtsc&expand=375&ig_expand=465,463,5629,5629
+// NOTE (Manav): Read this: https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=rdtsc&expand=375&ig_expand=465,463,5629,5629
 inline fn rdtsc() u64 {
     var low: u64 = undefined;
     var high: u64 = undefined;
@@ -934,6 +856,85 @@ inline fn rdtsc() u64 {
 
     return (high << 32) | low;
 }
+
+// !NOT_IGNORE:
+// fn Win32DebugDrawVertical(backBuffer: *win32_offscreen_buffer, x: u32, top: u32, bottom: u32, colour: u32) void {
+//     var safeTop = top;
+//     var safeBottom = bottom;
+
+//     if (safeBottom > backBuffer.height) {
+//         safeBottom = backBuffer.height;
+//     }
+//     if (x < backBuffer.width) {
+//         var pixel: [*]u8 = @ptrCast([*]u8, backBuffer.memory) + x * backBuffer.bytesPerPixel + safeTop * backBuffer.pitch;
+//         var y = safeTop;
+//         while (y < safeBottom) : (y += 1) {
+//             @ptrCast(*u32, @alignCast(@alignOf(u32), pixel)).* = colour;
+//             pixel += backBuffer.pitch;
+//         }
+//     }
+// }
+
+// fn Win32DebugSyncDisplay(backBuffer: *win32_offscreen_buffer, markerCount: u32, markers: [*]win32_debug_time_marker, currentMarkerIndex: u32, soundOutput: *win32_sound_output, targetSecondsPerFrame: f32) void {
+//     _ = targetSecondsPerFrame;
+
+//     const padX = 16;
+//     const padY = 16;
+
+//     const lineHeight = 64;
+
+//     const coeff = @intToFloat(f32, (backBuffer.width - 2 * padX)) / @intToFloat(f32, soundOutput.secondaryBufferSize);
+//     var markerIndex: u32 = 0;
+//     while (markerIndex < markerCount) : (markerIndex += 1) {
+//         const thisMarker = &markers[markerIndex];
+//         std.debug.assert(thisMarker.outputPlayCursor < soundOutput.secondaryBufferSize);
+//         std.debug.assert(thisMarker.outputWriteCursor < soundOutput.secondaryBufferSize);
+//         std.debug.assert(thisMarker.outputLocation < soundOutput.secondaryBufferSize);
+//         std.debug.assert(thisMarker.outputByteCount < soundOutput.secondaryBufferSize);
+//         std.debug.assert(thisMarker.flipPlayCursor < soundOutput.secondaryBufferSize);
+//         std.debug.assert(thisMarker.flipWriteCursor < soundOutput.secondaryBufferSize);
+
+//         const playColour = 0xffffffff;
+//         const writeColour = 0xffff0000;
+//         const expectedFlipColour = 0xffffff00;
+//         const playWindowColour = 0xffff00ff;
+
+//         var top: u32 = padY;
+//         var bottom: u32 = lineHeight + padY;
+//         if (markerIndex == currentMarkerIndex) {
+//             top += lineHeight + padY;
+//             bottom += lineHeight + padY;
+
+//             const firstTop = top;
+
+//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputPlayCursor, playColour);
+//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputWriteCursor, writeColour);
+
+//             top += lineHeight + padY;
+//             bottom += lineHeight + padY;
+
+//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputLocation, playColour);
+//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputLocation + thisMarker.outputByteCount, writeColour);
+
+//             top += lineHeight + padY;
+//             bottom += lineHeight + padY;
+
+//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, firstTop, bottom, thisMarker.expectedFlipPlayCursor, expectedFlipColour);
+//         }
+
+//         Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipPlayCursor, playColour);
+//         Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipPlayCursor + 480 * soundOutput.bytesPerSample, playWindowColour);
+//         Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipWriteCursor, writeColour);
+//     }
+// }
+
+// inline fn Win32DrawSoundBufferMarker(backBuffer: *win32_offscreen_buffer, soundOutput: *win32_sound_output, coeff: f32, padX: u32, top: u32, bottom: u32, value: DWORD, colour: u32) void {
+//     _ = soundOutput;
+//     const xReal32 = coeff * @intToFloat(f32, value);
+//     const x = padX + @floatToInt(u32, xReal32);
+
+//     Win32DebugDrawVertical(backBuffer, x, top, bottom, colour);
+// }
 
 // main -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -1015,8 +1016,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             var soundOutput = win32_sound_output{
                 .samplesPerSecond = 48000,
                 .bytesPerSample = @sizeOf(i16) * 2,
-                .secondaryBufferSize = undefined,
-                .safetyBytes = undefined,
             };
 
             soundOutput.secondaryBufferSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
@@ -1116,7 +1115,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     var flipWallClock = Win32GetWallClock();
 
                     var debugTimeMarkerIndex: u32 = 0;
-                    var debugTimeMarkers = [1]win32_debug_time_marker{win32_debug_time_marker{}} ** 30;
+                    var debugTimeMarkers = [1]win32_debug_time_marker{.{}} ** 30;
 
                     var audioLatencyBytes: DWORD = 0;
                     var audioLatencySeconds: f32 = 0;
@@ -1306,8 +1305,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                                 const expectedSoundBytesPerFrame = @divTrunc(soundOutput.samplesPerSecond * soundOutput.bytesPerSample, gameUpdateHz);
                                 const secondsLeftUntilFLip = (targetSecondsPerFrame - fromBeginToAudioSeconds);
-
                                 const expectedBytesUntilFlip = @floatToInt(i32, (secondsLeftUntilFLip / targetSecondsPerFrame) * @intToFloat(f32, expectedSoundBytesPerFrame));
+                                
                                 const expectedFrameBoundaryByte = playCursor +% @bitCast(u32, expectedBytesUntilFlip);
 
                                 var safeWriteCursor = writeCursor;
@@ -1361,9 +1360,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                     audioLatencyBytes = unwrappedWriteCursor - playCursor;
                                     audioLatencySeconds = (@intToFloat(f32, audioLatencyBytes) / @intToFloat(f32, soundOutput.bytesPerSample)) / @intToFloat(f32, soundOutput.samplesPerSecond);
 
-                                    var textbuffer = [1]u16{0} ** 256;
-                                    _ = win32.extra.wsprintfW(&textbuffer, win32.L("BTL:%u TC:%u BTW:%u - PC:%u WC:%u DELTA:%u (%fs)\n"), byteToLock, targetCursor, bytesToWrite, playCursor, writeCursor, audioLatencyBytes, audioLatencySeconds);
-                                    _ = win32.OutputDebugStringW(&textbuffer);
+                                    if (!NOT_IGNORE) {
+                                        var textbuffer = [1]u16{0} ** 256;
+                                        _ = win32.extra.wsprintfW(&textbuffer, win32.L("BTL:%u TC:%u BTW:%u - PC:%u WC:%u DELTA:%u (%fs)\n"), byteToLock, targetCursor, bytesToWrite, playCursor, writeCursor, audioLatencyBytes, audioLatencySeconds);
+                                        _ = win32.OutputDebugStringW(&textbuffer);
+                                    }
                                 }
                                 Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuffer);
                             } else {
@@ -1400,9 +1401,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                             const dimension = Win32GetWindowDimenstion(windowHandle);
 
-                            // HANDMADE_INTERNAL:
-                            // Win32DebugSyncDisplay(&globalBackBuffer, debugTimeMarkers.len, &debugTimeMarkers, debugTimeMarkerIndex -% 1, &soundOutput, targetSecondsPerFrame);
-
                             if (win32.GetDC(windowHandle)) |deviceContext| {
                                 defer _ = win32.ReleaseDC(windowHandle, deviceContext);
 
@@ -1428,7 +1426,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             newInput = oldInput;
                             oldInput = temp;
 
-                            if (NOT_IGNORE) {
+                            if (!NOT_IGNORE) {
                                 var endCycleCount = rdtsc();
                                 const cyclesElapsed = endCycleCount - lastCycleCount;
                                 lastCycleCount = endCycleCount;

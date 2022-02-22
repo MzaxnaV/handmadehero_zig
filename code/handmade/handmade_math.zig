@@ -72,3 +72,9 @@ pub inline fn square(a: f32) f32 {
 
     return result;
 }
+
+pub inline fn LengthSq(a: v2) f32 {
+    const result = inner(a, a);
+
+    return result;
+}

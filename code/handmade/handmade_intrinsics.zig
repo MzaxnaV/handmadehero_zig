@@ -32,7 +32,7 @@ pub inline fn atan2(y: f32, x: f32) f32 {
     return result;
 }
 
-// NOTE: (Manav) Read this. https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_BitScanForward&expand=375&ig_expand=465,5629,463
+// NOTE (Manav): Read this. https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_BitScanForward&expand=375&ig_expand=465,5629,463
 pub inline fn FindLeastSignificantSetBit(value: u32) u32 {
     return asm ("bsf %[value], %[ret]"
         : [ret] "=r" (-> u32),

@@ -31,7 +31,7 @@ pub const tile_chunk = struct {
 };
 
 pub const tile_map = struct {
-    chunkShift: u32,
+    chunkShift: u32, // NOTE (Manav): should this be u5?
     chunkMask: u32 = undefined,
     chunkDim: u32,
 
@@ -78,7 +78,7 @@ pub inline fn Substract(tileMap: *const tile_map, a: *const tile_map_position, b
     const dTileZ = @intToFloat(f32, a.absTileZ) - @intToFloat(f32, b.absTileZ);
 
     const result = tile_map_difference{
-        // NOTE: (Manav) .dxy = dTileXY * tileMap.tileSideInMeters + (a.offset - b.offset)
+        // NOTE (Manav): .dxy = dTileXY * tileMap.tileSideInMeters + (a.offset - b.offset)
         .dXY = math.add(math.scale(dTileXY, tileMap.tileSideInMeters), math.sub(a.offset, b.offset)),
         .dZ = tileMap.tileSideInMeters * dTileZ,
     };
@@ -90,7 +90,7 @@ pub inline fn GetTileChunk(tileMap: *const tile_map, tileChunkX: u32, tileChunkY
     var tileChunk: ?*tile_chunk = null;
 
     if ((tileChunkX < tileMap.tileChunkCountX) and (tileChunkY < tileMap.tileChunkCountY) and (tileChunkZ < tileMap.tileChunkCountZ)) {
-        tileChunk = &tileMap.tileChunks[tileChunkY * tileMap.tileChunkCountX + tileChunkX];
+        tileChunk = &tileMap.tileChunks[tileChunkZ * tileMap.tileChunkCountY * tileMap.tileChunkCountX + tileChunkY * tileMap.tileChunkCountX + tileChunkX];
     }
 
     return tileChunk;
@@ -122,6 +122,20 @@ pub inline fn GetTileValue(tileMap: *const tile_map, tileChunk: ?*const tile_chu
     return tileChunkValue;
 }
 
+pub inline fn GetTileValueFromAbs(tileMap: *const tile_map, absTileX: u32, absTileY: u32, absTileZ: u32) u32 {
+    const chunkPos = GetChunkPositionFor(tileMap, absTileX, absTileY, absTileZ);
+    const tileChunk = GetTileChunk(tileMap, chunkPos.tileChunkX, chunkPos.tileChunkY, chunkPos.tileChunkZ);
+    const tileChunkValue = GetTileValue(tileMap, tileChunk, chunkPos.relTileX, chunkPos.relTileY);
+
+    return tileChunkValue;
+}
+
+pub inline fn GetTileValueFromPos(tileMap: *const tile_map, pos: tile_map_position) u32 {
+    const tileChunkValue = GetTileValueFromAbs(tileMap, pos.absTileX, pos.absTileY, pos.absTileZ);
+
+    return tileChunkValue;
+}
+
 pub inline fn SetTileValue(tileMap: *const tile_map, tileChunk: ?*const tile_chunk, testTileX: u32, testTileY: u32, tileValue: u32) void {
     if (tileChunk) |tc| {
         if (tc.tiles) |_| {
@@ -142,25 +156,27 @@ pub inline fn GetChunkPositionFor(tileMap: *const tile_map, absTileX: u32, absTi
     return result;
 }
 
-// public functions -----------------------------------------------------------------------------------------------------------------------
+pub inline fn CenteredTilePoint(absTileX: u32, absTileY: u32, absTileZ: u32) tile_map_position {
+    const result = tile_map_position{
+        .absTileX = absTileX,
+        .absTileY = absTileY,
+        .absTileZ = absTileZ,
+    };
 
-pub fn GetTileValueFromAbs(tileMap: *const tile_map, absTileX: u32, absTileY: u32, absTileZ: u32) u32 {
-    const chunkPos = GetChunkPositionFor(tileMap, absTileX, absTileY, absTileZ);
-    const tileChunk = GetTileChunk(tileMap, chunkPos.tileChunkX, chunkPos.tileChunkY, chunkPos.tileChunkZ);
-    const tileChunkValue = GetTileValue(tileMap, tileChunk, chunkPos.relTileX, chunkPos.relTileY);
-
-    return tileChunkValue;
+    return result;
 }
 
-pub fn GetTileValueFromPos(tileMap: *const tile_map, pos: tile_map_position) u32 {
-    const tileChunkValue = GetTileValueFromAbs(tileMap, pos.absTileX, pos.absTileY, pos.absTileZ);
+// public functions -----------------------------------------------------------------------------------------------------------------------
 
-    return tileChunkValue;
+pub fn IsTileValueEmpty(tileValue: u32) bool {
+    const empty = (tileValue == 1) or (tileValue == 3) or (tileValue == 4);
+
+    return empty;
 }
 
 pub fn IsTileMapPointEmpty(tileMap: *const tile_map, pos: tile_map_position) bool {
     const tileChunkValue = GetTileValueFromPos(tileMap, pos);
-    const empty = (tileChunkValue == 1) or (tileChunkValue == 3) or (tileChunkValue == 4);
+    const empty = IsTileValueEmpty(tileChunkValue);
 
     return empty;
 }

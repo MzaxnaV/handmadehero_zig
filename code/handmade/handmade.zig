@@ -221,7 +221,7 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
 
 pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *platform.memory, gameInput: *platform.input, buffer: *platform.offscreen_buffer) void {
     comptime {
-        // NOTE: (Manav) This is hacky atm. Need to check as we're using win32.LoadLibrary()
+        // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args.len != @typeInfo(platform.UpdateAndRenderType).Fn.args.len or
             (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[0].arg_type.? != @typeInfo(platform.UpdateAndRenderType).Fn.args[0].arg_type.?) or
             (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[1].arg_type.? != @typeInfo(platform.UpdateAndRenderType).Fn.args[1].arg_type.?) or
@@ -413,6 +413,8 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     // const lowerLeftX = -@intToFloat(f32, tileSideInPixels) / 2;
     // const lowerLeftY = @intToFloat(f32, buffer.height);
 
+    var oldPlayerP = gameState.playerP;
+
     for (gameInput.controllers) |controller| {
         if (controller.isAnalog) {} else {
             var ddPlayer = game.v2{};
@@ -448,89 +450,132 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
 
             var newPlayerP = gameState.playerP;
 
-            // NOTE: (Manav) newPlayerP.offset = (0.5 * ddPlayer * square(gameInput.dtForFrame) + gameState.dPlayerP * gameInput.dtForFrame + NewPlayerP.Offset);
-            newPlayerP.offset = game.add(game.add(game.scale(ddPlayer, 0.5 * game.square(gameInput.dtForFrame)), game.scale(gameState.dPlayerP, gameInput.dtForFrame)), newPlayerP.offset);
-            // NOTE: (Manav) gameState->dPlayerP = ddPlayer * gameInput->dtForFrame + gameState->dPlayerP
-            gameState.dPlayerP = game.add(game.scale(ddPlayer, gameInput.dtForFrame), gameState.dPlayerP);
+            // NOTE (Manav): playerDelta = (0.5 * ddPlayer * square(gameInput.dtForFrame) + gameState.dPlayerP * gameInput.dtForFrame + NewPlayerP.Offset);
+            const playerDelta = game.add(game.scale(ddPlayer, 0.5 * game.square(gameInput.dtForFrame)), game.scale(gameState.dPlayerP, gameInput.dtForFrame));
 
+            // NOTE (Manav): newPlayerP.offset += playerDelta
+            _ = newPlayerP.offset.add(playerDelta);
+
+            // NOTE (Manav): gameState->dPlayerP = ddPlayer * gameInput->dtForFrame + gameState->dPlayerP
+            gameState.dPlayerP = game.add(game.scale(ddPlayer, gameInput.dtForFrame), gameState.dPlayerP);
             newPlayerP = game.RecanonicalizePosition(tileMap, newPlayerP);
 
-            var playerLeft = newPlayerP;
-            playerLeft.offset.x -= 0.5 * playerWidth;
-            playerLeft = game.RecanonicalizePosition(tileMap, playerLeft);
+            if (NOT_IGNORE) {
+                var playerLeft = newPlayerP;
+                playerLeft.offset.x -= 0.5 * playerWidth;
+                playerLeft = game.RecanonicalizePosition(tileMap, playerLeft);
 
-            var playerRight = newPlayerP;
-            playerRight.offset.x += 0.5 * playerWidth;
-            playerRight = game.RecanonicalizePosition(tileMap, playerRight);
+                var playerRight = newPlayerP;
+                playerRight.offset.x += 0.5 * playerWidth;
+                playerRight = game.RecanonicalizePosition(tileMap, playerRight);
 
-            var collided = false;
-            var colP = game.tile_map_position{};
-            if (!game.IsTileMapPointEmpty(tileMap, newPlayerP)) {
-                colP = newPlayerP;
-                collided = true;
-            }
-
-            if (!game.IsTileMapPointEmpty(tileMap, playerLeft)) {
-                colP = playerLeft;
-                collided = true;
-            }
-
-            if (!game.IsTileMapPointEmpty(tileMap, playerRight)) {
-                colP = playerRight;
-                collided = true;
-            }
-
-            if (collided) {
-                var r = game.v2{};
-
-                if (colP.absTileX < gameState.playerP.absTileX) {
-                    r = .{ .x = 1, .y = 0 };
+                var collided = false;
+                var colP = game.tile_map_position{};
+                if (!game.IsTileMapPointEmpty(tileMap, newPlayerP)) {
+                    colP = newPlayerP;
+                    collided = true;
                 }
 
-                if (colP.absTileX > gameState.playerP.absTileX) {
-                    r = .{ .x = -1, .y = 0 };
+                if (!game.IsTileMapPointEmpty(tileMap, playerLeft)) {
+                    colP = playerLeft;
+                    collided = true;
                 }
 
-                if (colP.absTileY < gameState.playerP.absTileY) {
-                    r = .{ .x = 0, .y = 1 };
+                if (!game.IsTileMapPointEmpty(tileMap, playerRight)) {
+                    colP = playerRight;
+                    collided = true;
                 }
 
-                if (colP.absTileY > gameState.playerP.absTileY) {
-                    r = .{ .x = 0, .y = -1 };
-                }
+                if (collided) {
+                    var r = game.v2{};
 
-                // NOTE: (Manav) gameState.dPlayerP += - 1*inner(gameState.dPlayerP, r) * r;
-                _ = gameState.dPlayerP.sub(game.scale(r, 1 * game.inner(gameState.dPlayerP, r)));
-            } else {
-                if (game.AreOnSameTile(&gameState.playerP, &newPlayerP)) {
-                    const newTileValue = game.GetTileValueFromPos(tileMap, newPlayerP);
-
-                    if (newTileValue == 3) {
-                        newPlayerP.absTileZ +%= 1;
-                    } else if (newTileValue == 4) {
-                        newPlayerP.absTileZ -%= 1;
+                    if (colP.absTileX < gameState.playerP.absTileX) {
+                        r = .{ .x = 1, .y = 0 };
                     }
+
+                    if (colP.absTileX > gameState.playerP.absTileX) {
+                        r = .{ .x = -1, .y = 0 };
+                    }
+
+                    if (colP.absTileY < gameState.playerP.absTileY) {
+                        r = .{ .x = 0, .y = 1 };
+                    }
+
+                    if (colP.absTileY > gameState.playerP.absTileY) {
+                        r = .{ .x = 0, .y = -1 };
+                    }
+
+                    // NOTE (Manav): gameState.dPlayerP += - 1*inner(gameState.dPlayerP, r) * r;
+                    _ = gameState.dPlayerP.sub(game.scale(r, 1 * game.inner(gameState.dPlayerP, r)));
+                } else {
+                    gameState.playerP = newPlayerP;
                 }
-                gameState.playerP = newPlayerP;
-            }
+            } else {
+                // const minTileX = @as(u32, 0);
+                // const minTileY = @as(u32, 0);
+                // const onePastMaxTileX = @as(u32, 0);
+                // const onePastMaxTileY = @as(u32, 0);
+                // const absTileZ = gameState.playerP.absTileZ;
+                // var bestPlayerP = gameState.playerP;
+                // var bestDistanceSq = game.LengthSq(playerDelta);
+                // var absTIleY = minTileY;
+                // while(absTileY != onePastMaxTileY) : (absTileY += 1) {
+                //     var absTIleX = minTileX;
+                //     while(absTileX != onePastMaxTileX) : (absTileX += 1) {
+                //         const testTileP = game.CenteredTilePoint(absTIleX, absTIleY, absTileZ);
+                //         const tileValue = game.GetTileValueFromPos(&tileMap, testTileP);
+                //         if (game.IsTileValueEmpty(tileValue)) {
+                //             const minCorner = game.v2 {
+                //                 .x = -0.5 * tileMap.tileSideInMeters,
+                //                 .y = -0.5 * tileMap.tileSideInMeters
+                //             };
+                //             const maxCorner = game.v2 {
+                //                 .x = 0.5 * tileMap.tileSideInMeters,
+                //                 .y = 0.5 * tileMap.tileSideInMeters
+                //             };
 
-            gameState.cameraP.absTileZ = gameState.playerP.absTileZ;
+                //             const relNewPlayerP = game.Substract(&tileMap, &testTileP, &newPlayerP);
+                //             const testP = game.ClosestPointInRectangle(minCorner, maxCorner, relNewPlayerP);
 
-            const diff = game.Substract(tileMap, &gameState.playerP, &gameState.cameraP);
-            if (diff.dXY.x > (9 * tileMap.tileSideInMeters)) {
-                gameState.cameraP.absTileX += 17;
-            }
-            if (diff.dXY.x < -(9 * tileMap.tileSideInMeters)) {
-                gameState.cameraP.absTileX -= 17;
-            }
-            if (diff.dXY.y > (5 * tileMap.tileSideInMeters)) {
-                gameState.cameraP.absTileY += 9;
-            }
-            if (diff.dXY.y < -(5 * tileMap.tileSideInMeters)) {
-                gameState.cameraP.absTileY -= 9;
+                //             testDistanceSq = ;
+                //             if (bestDistanceSq > testDistanceSq) {
+                //                 bestPlayerP = ;
+                //                 bestDistanceSq = ;
+                //             }
+
+                //         }
+                //     }
+                // }
             }
         }
     }
+
+    if (!game.AreOnSameTile(&oldPlayerP, &gameState.playerP)) {
+        const newTileValue = game.GetTileValueFromPos(tileMap, gameState.playerP);
+
+        if (newTileValue == 3) {
+            gameState.playerP.absTileZ +%= 1;
+        } else if (newTileValue == 4) {
+            gameState.playerP.absTileZ -%= 1;
+        }
+    }
+
+    gameState.cameraP.absTileZ = gameState.playerP.absTileZ;
+
+    var diff = game.Substract(tileMap, &gameState.playerP, &gameState.cameraP);
+    if (diff.dXY.x > (9 * tileMap.tileSideInMeters)) {
+        gameState.cameraP.absTileX += 17;
+    }
+    if (diff.dXY.x < -(9 * tileMap.tileSideInMeters)) {
+        gameState.cameraP.absTileX -= 17;
+    }
+    if (diff.dXY.y > (5 * tileMap.tileSideInMeters)) {
+        gameState.cameraP.absTileY += 9;
+    }
+    if (diff.dXY.y < -(5 * tileMap.tileSideInMeters)) {
+        gameState.cameraP.absTileY -= 9;
+    }
+    diff = game.Substract(tileMap, &gameState.playerP, &gameState.cameraP);
 
     DrawBitmap(buffer, &gameState.backdrop, 0, 0, 0, 0);
 
@@ -566,17 +611,15 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                     .y = screenCenterY + metersToPixels * gameState.cameraP.offset.y - @intToFloat(f32, relRow * tileSideInPixels),
                 };
 
-                // min = cen - tileSide
-                // max = cen + tileSide
+                // NOTE (Manav): min = cen - tileSide
                 const min = game.sub(cen, tileSide);
+                // NOTE (Manav): max = cen + tileSide
                 const max = game.add(cen, tileSide);
 
                 DrawRectangle(buffer, min, max, grey, grey, grey);
             }
         }
     }
-
-    const diff = game.Substract(tileMap, &gameState.playerP, &gameState.cameraP);
 
     const playerR = 1.0;
     const playerG = 1.0;
@@ -608,7 +651,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
 
 pub export fn GetSoundSamples(_: *platform.thread_context, gameMemory: *platform.memory, soundBuffer: *platform.sound_output_buffer) void {
     comptime {
-        // NOTE: (Manav) This is hacky atm. Need to check as we're using win32.LoadLibrary()
+        // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args.len != @typeInfo(platform.GetSoundSamplesType).Fn.args.len or
             (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args[0].arg_type.? != @typeInfo(platform.GetSoundSamplesType).Fn.args[0].arg_type.?) or
             (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args[1].arg_type.? != @typeInfo(platform.GetSoundSamplesType).Fn.args[1].arg_type.?) or
