@@ -2,6 +2,29 @@ const math = @import("std").math;
 
 // intrinsics -----------------------------------------------------------------------------------------------------------------------------
 
+pub inline fn AbsoluteValue(float32: f32) f32 {
+    const result = @fabs(float32);
+    return result;
+}
+
+pub inline fn RotateLeft(value: u32, amount: i8) u32 {
+    const result = math.rotl(u32, value, amount);
+
+    // NOTE (Manav): Inline asm below is buggy, doesn't work with inlining calls
+    // const result = asm ("rol %[amt], %[val]"
+    //     : [ret] "=r" (-> u32),
+    //     : [val] "r" (value),
+    //       [amt] "{cl}" (amount),
+    // );
+
+    return result;
+}
+
+pub inline fn RotateRight(value: u32, amount: i8) u32 {
+    const result = math.rotr(u32, value, amount);
+    return result;
+}
+
 pub inline fn RoundF32ToInt(comptime T: type, float32: f32) T {
     const result = @floatToInt(T, math.round(float32)); // use @round()?
     return result;
@@ -34,8 +57,10 @@ pub inline fn atan2(y: f32, x: f32) f32 {
 
 // NOTE (Manav): Read this. https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_BitScanForward&expand=375&ig_expand=465,5629,463
 pub inline fn FindLeastSignificantSetBit(value: u32) u32 {
-    return asm ("bsf %[value], %[ret]"
+    const result = asm ("bsf %[val], %[ret]"
         : [ret] "=r" (-> u32),
-        : [value] "rm" (value),
+        : [val] "rm" (value),
     );
+
+    return result;
 }

@@ -200,21 +200,210 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
         const blueMask = header.blueMask;
         const alphaMask = ~(redMask | greenMask | blueMask);
 
-        const redShift = @truncate(u5, game.FindLeastSignificantSetBit(redMask));
-        const greenShift = @truncate(u5, game.FindLeastSignificantSetBit(greenMask));
-        const blueShift = @truncate(u5, game.FindLeastSignificantSetBit(blueMask));
-        const alphaShift = @truncate(u5, game.FindLeastSignificantSetBit(alphaMask));
+        const redScan = game.FindLeastSignificantSetBit(redMask);
+        const greenScan = game.FindLeastSignificantSetBit(greenMask);
+        const blueScan = game.FindLeastSignificantSetBit(blueMask);
+        const alphaScan = game.FindLeastSignificantSetBit(alphaMask);
+
+        const redShift = 16 - @intCast(i8, redScan);
+        const greenShift = 8 - @intCast(i8, greenScan);
+        const blueShift = 0 - @intCast(i8, blueScan);
+        const alphaShift = 24 - @intCast(i8, alphaScan);
 
         const sourceDest = result.pixels.access;
 
         var index = @as(u32, 0);
         while (index < @intCast(u32, header.height * header.width)) : (index += 1) {
             const c = sourceDest[index];
-            sourceDest[index] = ((c >> alphaShift) & 0xff) << 24 | ((c >> redShift) & 0xff) << 16 | ((c >> greenShift) & 0xff) << 8 | ((c >> blueShift) & 0xff) << 0;
+            sourceDest[index] = (game.RotateLeft(c & redMask, redShift) |
+                game.RotateLeft(c & greenMask, greenShift) |
+                game.RotateLeft(c & blueMask, blueShift) |
+                game.RotateLeft(c & alphaMask, alphaShift));
         }
     }
 
     return result;
+}
+
+fn GetEntity(gameState: *game.state, index: u32) ?*game.entity {
+    var entity:?*game.entity = null;
+    
+    if (index > 0) {
+        entity = if (gameState.entities[index]) |*e| e else null;
+    }
+
+    return entity;
+}
+
+fn InitializaPlayer(gameState: *game.state, entityIndex: u32) void {
+
+    const entity = GetEntity(gameState, entityIndex);
+
+    std.debug.assert(entity != null);
+
+    entity.?.exists = true;
+    entity.?.p.absTileX = 1;
+    entity.?.p.absTileY = 3;
+    entity.?.p.offset = .{ .x = 5, .y = 5 };
+    entity.?.height = 1.4;
+    entity.?.width = 0.75 * entity.?.height;
+
+
+    if (GetEntity(gameState, gameState.cameraFollowingEntityIndex) == null) {
+        gameState.cameraFollowingEntityIndex = entityIndex;
+    }
+}
+
+fn AddEntity(gameState: *game.state) u32 {
+    const entityIndex = gameState.entityCount;
+    gameState.entityCount += 1;
+
+    std.debug.assert(gameState.entityCount < gameState.entities.len);
+    var entity = &gameState.entities[entityIndex];
+    entity.* = .{};
+
+    return entityIndex;
+}
+
+fn MovePlayer(gameState: *game.state, entity: *game.entity, dt: f32, accelaration: game.v2) void {
+    const tileMap = gameState.world.tileMap;
+
+    var ddP = accelaration;
+
+    if ((ddP.x != 0) and (ddP.y != 0)) {
+        _ = ddP.scale(0.707106781187);
+    }
+
+    const playerSpeed = @as(f32, 50.0);
+    // NOTE (Manav): ddP *= playerSpeed;
+    _ = ddP.scale(playerSpeed);
+
+    // NOTE (Manav): ddP += -8.0 * entity.dP;
+    _ = ddP.add(game.scale(entity.dP, -8.0));
+
+    const oldPlayerP = entity.p;
+    var newPlayerP = oldPlayerP;
+    // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
+    const playerDelta = game.add(game.scale(ddP, 0.5 * game.square(dt)), game.scale(entity.dP, dt));
+    // NOTE (Manav): newPlayerP.offset += playerDelta;
+    _ = newPlayerP.offset.add(playerDelta);
+    // NOTE (Manav): entity.dP += ddP * dt;
+    _ = entity.dP.add(game.scale(ddP, dt));
+    newPlayerP = game.RecanonicalizePosition(tileMap, newPlayerP);
+
+    if (NOT_IGNORE) {
+        var playerLeft = newPlayerP;
+        playerLeft.offset.x -= 0.5 * entity.width;
+        playerLeft = game.RecanonicalizePosition(tileMap, playerLeft);
+
+        var playerRight = newPlayerP;
+        playerRight.offset.x += 0.5 * entity.width;
+        playerRight = game.RecanonicalizePosition(tileMap, playerRight);
+
+        var collided = false;
+        var colP = game.tile_map_position{};
+        if (!game.IsTileMapPointEmpty(tileMap, newPlayerP)) {
+            colP = newPlayerP;
+            collided = true;
+        }
+
+        if (!game.IsTileMapPointEmpty(tileMap, playerLeft)) {
+            colP = playerLeft;
+            collided = true;
+        }
+
+        if (!game.IsTileMapPointEmpty(tileMap, playerRight)) {
+            colP = playerRight;
+            collided = true;
+        }
+
+        if (collided) {
+            var r = game.v2{};
+
+            if (colP.absTileX < entity.p.absTileX) {
+                r = .{ .x = 1, .y = 0 };
+            }
+
+            if (colP.absTileX > entity.p.absTileX) {
+                r = .{ .x = -1, .y = 0 };
+            }
+
+            if (colP.absTileY < entity.p.absTileY) {
+                r = .{ .x = 0, .y = 1 };
+            }
+
+            if (colP.absTileY > entity.p.absTileY) {
+                r = .{ .x = 0, .y = -1 };
+            }
+
+            // NOTE (Manav): entity.dP += - 1*inner(entity.dp, r) * r;
+            _ = entity.dP.sub(game.scale(r, 1 * game.inner(entity.dP, r)));
+        } else {
+            entity.p = newPlayerP;
+        }
+    } else {
+        // const minTileX = @as(u32, 0);
+        // const minTileY = @as(u32, 0);
+        // const onePastMaxTileX = @as(u32, 0);
+        // const onePastMaxTileY = @as(u32, 0);
+        // const absTileZ = gameState.playerP.absTileZ;
+        // var bestPlayerP = gameState.playerP;
+        // var bestDistanceSq = game.LengthSq(playerDelta);
+        // var absTIleY = minTileY;
+        // while(absTileY != onePastMaxTileY) : (absTileY += 1) {
+        //     var absTIleX = minTileX;
+        //     while(absTileX != onePastMaxTileX) : (absTileX += 1) {
+        //         const testTileP = game.CenteredTilePoint(absTIleX, absTIleY, absTileZ);
+        //         const tileValue = game.GetTileValueFromPos(&tileMap, testTileP);
+        //         if (game.IsTileValueEmpty(tileValue)) {
+        //             const minCorner = game.v2 {
+        //                 .x = -0.5 * tileMap.tileSideInMeters,
+        //                 .y = -0.5 * tileMap.tileSideInMeters
+        //             };
+        //             const maxCorner = game.v2 {
+        //                 .x = 0.5 * tileMap.tileSideInMeters,
+        //                 .y = 0.5 * tileMap.tileSideInMeters
+        //             };
+
+        //             const relNewPlayerP = game.Substract(&tileMap, &testTileP, &newPlayerP);
+        //             const testP = game.ClosestPointInRectangle(minCorner, maxCorner, relNewPlayerP);
+
+        //             testDistanceSq = ;
+        //             if (bestDistanceSq > testDistanceSq) {
+        //                 bestPlayerP = ;
+        //                 bestDistanceSq = ;
+        //             }
+
+        //         }
+        //     }
+        // }
+    }
+
+    if (!game.AreOnSameTile(&oldPlayerP, &entity.p)) {
+        const newTileValue = game.GetTileValueFromPos(tileMap, entity.p);
+
+        if (newTileValue == 3) {
+            entity.p.absTileZ +%= 1;
+        } else if (newTileValue == 4) {
+            entity.p.absTileZ -%= 1;
+        }
+    }
+
+    if ((entity.dP.x == 0) and (entity.dP.y == 0)) {
+        // NOTE(casey): Leave FacingDirection whatever it was
+    } else if (game.AbsoluteValue(entity.dP.x) > game.AbsoluteValue(entity.dP.y)) {
+        if (entity.dP.x > 0) {
+            entity.facingDirection = 0;
+        } else {
+            entity.facingDirection = 2;
+        }
+    } else {
+        if (entity.dP.y > 0) {
+            entity.facingDirection = 1;
+        } else {
+            entity.facingDirection = 3;
+        }
+    }
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
@@ -235,12 +424,11 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
 
     std.debug.assert(@sizeOf(game.state) <= gameMemory.permanentStorageSize);
 
-    const playerHeight = 1.4;
-    const playerWidth = 0.75 * playerHeight;
-
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
+        _ = AddEntity(gameState);
+
         gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
 
         gameState.heroBitmaps[0].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
@@ -267,12 +455,8 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         gameState.heroBitmaps[3].alignX = 72;
         gameState.heroBitmaps[3].alignY = 182;
 
-        gameState.cameraP.absTileX = @divTrunc(17, 2);
-        gameState.cameraP.absTileY = @divTrunc(9, 2);
-
-        gameState.playerP.absTileX = 1;
-        gameState.playerP.absTileY = 3;
-        gameState.playerP.offset = .{ .x = 5.0, .y = 5.0 };
+        gameState.cameraP.absTileX = 17 / 2;
+        gameState.cameraP.absTileY = 9 / 2;
 
         game.InitializeArena(&gameState.worldArena, gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
 
@@ -413,169 +597,53 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     // const lowerLeftX = -@intToFloat(f32, tileSideInPixels) / 2;
     // const lowerLeftY = @intToFloat(f32, buffer.height);
 
-    var oldPlayerP = gameState.playerP;
-
-    for (gameInput.controllers) |controller| {
-        if (controller.isAnalog) {} else {
-            var ddPlayer = game.v2{};
-
-            if (controller.buttons.mapped.moveUp.endedDown != 0) {
-                gameState.heroFacingDirection = 1;
-                ddPlayer.y = 1.0;
-            }
-            if (controller.buttons.mapped.moveDown.endedDown != 0) {
-                gameState.heroFacingDirection = 3;
-                ddPlayer.y = -1.0;
-            }
-            if (controller.buttons.mapped.moveLeft.endedDown != 0) {
-                gameState.heroFacingDirection = 2;
-                ddPlayer.x = -1.0;
-            }
-            if (controller.buttons.mapped.moveRight.endedDown != 0) {
-                gameState.heroFacingDirection = 0;
-                ddPlayer.x = 1.0;
-            }
-
-            if ((ddPlayer.x != 0) and (ddPlayer.y != 0)) {
-                _ = ddPlayer.scale(0.707106781187);
-            }
-
-            var playerAcc = @as(f32, 10.0);
-            if (controller.buttons.mapped.actionUp.endedDown != 0) {
-                playerAcc = 50.0;
-            }
-
-            _ = ddPlayer.scale(playerAcc);
-            _ = ddPlayer.add(game.scale(gameState.dPlayerP, -1.5));
-
-            var newPlayerP = gameState.playerP;
-
-            // NOTE (Manav): playerDelta = (0.5 * ddPlayer * square(gameInput.dtForFrame) + gameState.dPlayerP * gameInput.dtForFrame + NewPlayerP.Offset);
-            const playerDelta = game.add(game.scale(ddPlayer, 0.5 * game.square(gameInput.dtForFrame)), game.scale(gameState.dPlayerP, gameInput.dtForFrame));
-
-            // NOTE (Manav): newPlayerP.offset += playerDelta
-            _ = newPlayerP.offset.add(playerDelta);
-
-            // NOTE (Manav): gameState->dPlayerP = ddPlayer * gameInput->dtForFrame + gameState->dPlayerP
-            gameState.dPlayerP = game.add(game.scale(ddPlayer, gameInput.dtForFrame), gameState.dPlayerP);
-            newPlayerP = game.RecanonicalizePosition(tileMap, newPlayerP);
-
-            if (NOT_IGNORE) {
-                var playerLeft = newPlayerP;
-                playerLeft.offset.x -= 0.5 * playerWidth;
-                playerLeft = game.RecanonicalizePosition(tileMap, playerLeft);
-
-                var playerRight = newPlayerP;
-                playerRight.offset.x += 0.5 * playerWidth;
-                playerRight = game.RecanonicalizePosition(tileMap, playerRight);
-
-                var collided = false;
-                var colP = game.tile_map_position{};
-                if (!game.IsTileMapPointEmpty(tileMap, newPlayerP)) {
-                    colP = newPlayerP;
-                    collided = true;
-                }
-
-                if (!game.IsTileMapPointEmpty(tileMap, playerLeft)) {
-                    colP = playerLeft;
-                    collided = true;
-                }
-
-                if (!game.IsTileMapPointEmpty(tileMap, playerRight)) {
-                    colP = playerRight;
-                    collided = true;
-                }
-
-                if (collided) {
-                    var r = game.v2{};
-
-                    if (colP.absTileX < gameState.playerP.absTileX) {
-                        r = .{ .x = 1, .y = 0 };
-                    }
-
-                    if (colP.absTileX > gameState.playerP.absTileX) {
-                        r = .{ .x = -1, .y = 0 };
-                    }
-
-                    if (colP.absTileY < gameState.playerP.absTileY) {
-                        r = .{ .x = 0, .y = 1 };
-                    }
-
-                    if (colP.absTileY > gameState.playerP.absTileY) {
-                        r = .{ .x = 0, .y = -1 };
-                    }
-
-                    // NOTE (Manav): gameState.dPlayerP += - 1*inner(gameState.dPlayerP, r) * r;
-                    _ = gameState.dPlayerP.sub(game.scale(r, 1 * game.inner(gameState.dPlayerP, r)));
-                } else {
-                    gameState.playerP = newPlayerP;
-                }
+    for (gameInput.controllers) |controller, controllerIndex| {
+        if (GetEntity(gameState, gameState.playerIndexForController[controllerIndex])) |*controllingEntity| {
+            var ddP = game.v2{};
+            if (controller.isAnalog) {
+                ddP = .{ .x = controller.stickAverageX, .y = controller.stickAverageX };
             } else {
-                // const minTileX = @as(u32, 0);
-                // const minTileY = @as(u32, 0);
-                // const onePastMaxTileX = @as(u32, 0);
-                // const onePastMaxTileY = @as(u32, 0);
-                // const absTileZ = gameState.playerP.absTileZ;
-                // var bestPlayerP = gameState.playerP;
-                // var bestDistanceSq = game.LengthSq(playerDelta);
-                // var absTIleY = minTileY;
-                // while(absTileY != onePastMaxTileY) : (absTileY += 1) {
-                //     var absTIleX = minTileX;
-                //     while(absTileX != onePastMaxTileX) : (absTileX += 1) {
-                //         const testTileP = game.CenteredTilePoint(absTIleX, absTIleY, absTileZ);
-                //         const tileValue = game.GetTileValueFromPos(&tileMap, testTileP);
-                //         if (game.IsTileValueEmpty(tileValue)) {
-                //             const minCorner = game.v2 {
-                //                 .x = -0.5 * tileMap.tileSideInMeters,
-                //                 .y = -0.5 * tileMap.tileSideInMeters
-                //             };
-                //             const maxCorner = game.v2 {
-                //                 .x = 0.5 * tileMap.tileSideInMeters,
-                //                 .y = 0.5 * tileMap.tileSideInMeters
-                //             };
+                if (controller.buttons.mapped.moveUp.endedDown != 0) {
+                    ddP.y = 1.0;
+                }
+                if (controller.buttons.mapped.moveDown.endedDown != 0) {
+                    ddP.y = -1.0;
+                }
+                if (controller.buttons.mapped.moveLeft.endedDown != 0) {
+                    ddP.x = -1.0;
+                }
+                if (controller.buttons.mapped.moveRight.endedDown != 0) {
+                    ddP.x = 1.0;
+                }
+            }
 
-                //             const relNewPlayerP = game.Substract(&tileMap, &testTileP, &newPlayerP);
-                //             const testP = game.ClosestPointInRectangle(minCorner, maxCorner, relNewPlayerP);
-
-                //             testDistanceSq = ;
-                //             if (bestDistanceSq > testDistanceSq) {
-                //                 bestPlayerP = ;
-                //                 bestDistanceSq = ;
-                //             }
-
-                //         }
-                //     }
-                // }
+            MovePlayer(gameState, controllingEntity.*, gameInput.dtForFrame, ddP);
+        } else {
+            if (controller.buttons.mapped.start.endedDown != 0) {
+                const entityIndex = AddEntity(gameState);
+                InitializaPlayer(gameState, entityIndex);
+                gameState.playerIndexForController[controllerIndex] = entityIndex;
             }
         }
     }
 
-    if (!game.AreOnSameTile(&oldPlayerP, &gameState.playerP)) {
-        const newTileValue = game.GetTileValueFromPos(tileMap, gameState.playerP);
+    if (GetEntity(gameState, gameState.cameraFollowingEntityIndex)) |cameraFollowingEntity| {
+        gameState.cameraP.absTileZ = cameraFollowingEntity.p.absTileZ;
 
-        if (newTileValue == 3) {
-            gameState.playerP.absTileZ +%= 1;
-        } else if (newTileValue == 4) {
-            gameState.playerP.absTileZ -%= 1;
+        const diff = game.Substract(tileMap, &cameraFollowingEntity.p, &gameState.cameraP);
+        if (diff.dXY.x > (9 * tileMap.tileSideInMeters)) {
+            gameState.cameraP.absTileX += 17;
+        }
+        if (diff.dXY.x < -(9 * tileMap.tileSideInMeters)) {
+            gameState.cameraP.absTileX -= 17;
+        }
+        if (diff.dXY.y > (5 * tileMap.tileSideInMeters)) {
+            gameState.cameraP.absTileY += 9;
+        }
+        if (diff.dXY.y < -(5 * tileMap.tileSideInMeters)) {
+            gameState.cameraP.absTileY -= 9;
         }
     }
-
-    gameState.cameraP.absTileZ = gameState.playerP.absTileZ;
-
-    var diff = game.Substract(tileMap, &gameState.playerP, &gameState.cameraP);
-    if (diff.dXY.x > (9 * tileMap.tileSideInMeters)) {
-        gameState.cameraP.absTileX += 17;
-    }
-    if (diff.dXY.x < -(9 * tileMap.tileSideInMeters)) {
-        gameState.cameraP.absTileX -= 17;
-    }
-    if (diff.dXY.y > (5 * tileMap.tileSideInMeters)) {
-        gameState.cameraP.absTileY += 9;
-    }
-    if (diff.dXY.y < -(5 * tileMap.tileSideInMeters)) {
-        gameState.cameraP.absTileY -= 9;
-    }
-    diff = game.Substract(tileMap, &gameState.playerP, &gameState.cameraP);
 
     DrawBitmap(buffer, &gameState.backdrop, 0, 0, 0, 0);
 
@@ -621,32 +689,41 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         }
     }
 
-    const playerR = 1.0;
-    const playerG = 1.0;
-    const playerB = 0.0;
+    var entityIndex = @as(u32, 0);
+    while (entityIndex < gameState.entityCount) : (entityIndex += 1) {
+        if (gameState.entities[entityIndex]) |entity| {
+            if (entity.exists) {
+                const diff = game.Substract(tileMap, &entity.p, &gameState.cameraP);
 
-    const playerGroundPointX = screenCenterX + metersToPixels * diff.dXY.x;
-    const playerGroundPointY = screenCenterY - metersToPixels * diff.dXY.y;
-    const playerLeftTop = game.v2{
-        .x = playerGroundPointX - 0.5 * metersToPixels * playerWidth,
-        .y = playerGroundPointY - metersToPixels * playerHeight,
-    };
-    const playerWidthHeight = game.v2{ .x = playerWidth, .y = playerHeight };
+                const playerR = 1.0;
+                const playerG = 1.0;
+                const playerB = 0.0;
 
-    DrawRectangle(
-        buffer,
-        playerLeftTop,
-        game.add(playerLeftTop, game.scale(playerWidthHeight, metersToPixels)),
-        playerR,
-        playerG,
-        playerB,
-    );
+                const playerGroundPointX = screenCenterX + metersToPixels * diff.dXY.x;
+                const playerGroundPointY = screenCenterY - metersToPixels * diff.dXY.y;
+                const playerLeftTop = .{
+                    .x = playerGroundPointX - 0.5 * metersToPixels * entity.width,
+                    .y = playerGroundPointY - metersToPixels * entity.height,
+                };
+                const entityWidthHeight = .{ .x = entity.width, .y = entity.height };
 
-    const heroBitmaps = gameState.heroBitmaps[gameState.heroFacingDirection];
+                DrawRectangle(
+                    buffer,
+                    playerLeftTop,
+                    game.add(playerLeftTop, game.scale(entityWidthHeight, metersToPixels)),
+                    playerR,
+                    playerG,
+                    playerB,
+                );
 
-    DrawBitmap(buffer, &heroBitmaps.torso, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY);
-    DrawBitmap(buffer, &heroBitmaps.cape, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY);
-    DrawBitmap(buffer, &heroBitmaps.head, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY);
+                const heroBitmaps = gameState.heroBitmaps[entity.facingDirection];
+
+                DrawBitmap(buffer, &heroBitmaps.torso, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY);
+                DrawBitmap(buffer, &heroBitmaps.cape, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY);
+                DrawBitmap(buffer, &heroBitmaps.head, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY);
+            }
+        }
+    }
 }
 
 pub export fn GetSoundSamples(_: *platform.thread_context, gameMemory: *platform.memory, soundBuffer: *platform.sound_output_buffer) void {

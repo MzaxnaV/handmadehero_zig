@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const CONTROLLERS = @import("handmade_platform").CONTROLLERS;
 const memory_index = @import("handmade_platform").memory_index;
 const tile_map = @import("handmade_tile.zig").tile_map;
 const tile_map_position = @import("handmade_tile.zig").tile_map_position;
@@ -36,16 +37,27 @@ pub const hero_bitmaps = struct {
     torso: loaded_bitmap,
 };
 
+pub const entity = struct {
+    exists: bool = false,
+    p: tile_map_position = .{},
+    dP: v2 = .{},
+    facingDirection: u32 = 0,
+    width: f32 = 0,
+    height: f32 = 0,
+};
+
 pub const state = struct {
     worldArena: memory_arena,
     world: *world,
 
+    cameraFollowingEntityIndex: u32,
     cameraP: tile_map_position = tile_map_position{},
-    playerP: tile_map_position = tile_map_position{},
-    dPlayerP: v2,
+
+    playerIndexForController: [CONTROLLERS]u32,
+    entityCount: u32,
+    entities: [256]?entity,
 
     backdrop: loaded_bitmap,
-    heroFacingDirection: u32,
     heroBitmaps: [4]hero_bitmaps,
 };
 

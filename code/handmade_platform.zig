@@ -1,6 +1,7 @@
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
 pub const PI32 = 3.14159265359;
+pub const CONTROLLERS = 5;
 
 // platform data types -----------------------------------------------------------------------------------------------------------------------------
 
@@ -63,12 +64,12 @@ pub const controller_input = struct {
 };
 
 pub const input = struct {
-    mouseButtons: [5]button_state = [1]button_state{button_state{}} ** 5,
+    mouseButtons: [CONTROLLERS]button_state = [1]button_state{button_state{}} ** CONTROLLERS,
     mouseX: i32 = 0,
     mouseY: i32 = 0,
     mouseZ: i32 = 0,
     dtForFrame: f32 = 0,
-    controllers: [5]controller_input = [1]controller_input{controller_input{}} ** 5,
+    controllers: [CONTROLLERS]controller_input = [1]controller_input{controller_input{}} ** CONTROLLERS,
 };
 
 pub const debug_platform_read_entire_file = fn (*thread_context, [*:0]const u8) debug_read_file_result;

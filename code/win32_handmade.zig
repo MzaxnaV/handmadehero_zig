@@ -772,8 +772,8 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *handmad
                         win32.VK_LEFT => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionLeft, @as(u32, @boolToInt(isDown))),
                         win32.VK_DOWN => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionDown, @as(u32, @boolToInt(isDown))),
                         win32.VK_RIGHT => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionRight, @as(u32, @boolToInt(isDown))),
-                        win32.VK_ESCAPE => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.start, @as(u32, @boolToInt(isDown))),
-                        win32.VK_SPACE => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.back, @as(u32, @boolToInt(isDown))),
+                        win32.VK_ESCAPE => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.back, @as(u32, @boolToInt(isDown))),
+                        win32.VK_SPACE => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.start, @as(u32, @boolToInt(isDown))),
                         win32.VK_P => {
                             if (HANDMADE_INTERNAL) {
                                 if (isDown) {
