@@ -2,6 +2,11 @@ const math = @import("std").math;
 
 // intrinsics -----------------------------------------------------------------------------------------------------------------------------
 
+pub inline fn SquareRoot(float32: f32) f32 {
+    const result = @sqrt(float32);
+    return result;
+}
+
 pub inline fn AbsoluteValue(float32: f32) f32 {
     const result = @fabs(float32);
     return result;

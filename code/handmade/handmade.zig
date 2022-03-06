@@ -270,8 +270,9 @@ fn MovePlayer(gameState: *game.state, entity: *game.entity, dt: f32, accelaratio
 
     var ddP = accelaration;
 
-    if ((ddP.x != 0) and (ddP.y != 0)) {
-        _ = ddP.scale(0.707106781187);
+    const ddPLength = game.LengthSq(ddP);
+    if (ddPLength > 1.0) {
+        _ = ddP.scale(1.0 / game.SquareRoot(ddPLength));
     }
 
     const playerSpeed = @as(f32, 50.0);
@@ -342,20 +343,21 @@ fn MovePlayer(gameState: *game.state, entity: *game.entity, dt: f32, accelaratio
             entity.p = newPlayerP;
         }
     } else {
-        // const minTileX = @as(u32, 0);
-        // const minTileY = @as(u32, 0);
-        // const onePastMaxTileX = @as(u32, 0);
-        // const onePastMaxTileY = @as(u32, 0);
+        // const minTileX = @minimum(oldPlayerP.absTileX, newPlayerP.absTileX);
+        // const minTileY = @minimum(oldPlayerP.absTileY, newPlayerP.absTileY);
+        // const onePastMaxTileX = @minimum(oldPlayerP.absTileX, newPlayerP.absTileX) + 1;
+        // const onePastMaxTileY = @minimum(oldPlayerP.absTileY, newPlayerP.absTileY) + 1;
+
         // const absTileZ = gameState.playerP.absTileZ;
-        // var bestPlayerP = gameState.playerP;
-        // var bestDistanceSq = game.LengthSq(playerDelta);
-        // var absTIleY = minTileY;
+        
+        // const tMin = @as(f32, 1.0);
+        // var absTileY = minTileY;
         // while(absTileY != onePastMaxTileY) : (absTileY += 1) {
-        //     var absTIleX = minTileX;
+        //     var absTileX = minTileX;
         //     while(absTileX != onePastMaxTileX) : (absTileX += 1) {
-        //         const testTileP = game.CenteredTilePoint(absTIleX, absTIleY, absTileZ);
+        //         const testTileP = game.CenteredTilePoint(absTileX, absTileY, absTileZ);
         //         const tileValue = game.GetTileValueFromPos(&tileMap, testTileP);
-        //         if (game.IsTileValueEmpty(tileValue)) {
+        //         if (!game.IsTileValueEmpty(tileValue)) {
         //             const minCorner = game.v2 {
         //                 .x = -0.5 * tileMap.tileSideInMeters,
         //                 .y = -0.5 * tileMap.tileSideInMeters
@@ -366,13 +368,10 @@ fn MovePlayer(gameState: *game.state, entity: *game.entity, dt: f32, accelaratio
         //             };
 
         //             const relNewPlayerP = game.Substract(&tileMap, &testTileP, &newPlayerP);
-        //             const testP = game.ClosestPointInRectangle(minCorner, maxCorner, relNewPlayerP);
+        //             const rel = relNewPlayerP.dXY;
 
-        //             testDistanceSq = ;
-        //             if (bestDistanceSq > testDistanceSq) {
-        //                 bestPlayerP = ;
-        //                 bestDistanceSq = ;
-        //             }
+        //             tResult = (wallX - relNewPlayerP.x) / playerDelta.x;
+        //             TestWall(minCorner.x, minCorner.y, maxCorner.y, relNewPlayerP.x);
 
         //         }
         //     }
