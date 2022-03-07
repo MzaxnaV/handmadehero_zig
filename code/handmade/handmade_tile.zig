@@ -51,8 +51,8 @@ pub inline fn RecanonicalizeCoord(tileMap: *const tile_map, tile: *u32, tileRel:
     tile.* +%= @bitCast(u32, offSet);
     tileRel.* -= @intToFloat(f32, offSet) * tileMap.tileSideInMeters;
 
-    assert(tileRel.* >= -0.5 * tileMap.tileSideInMeters);
-    assert(tileRel.* <= 0.5 * tileMap.tileSideInMeters);
+    assert(tileRel.* > -0.5001 * tileMap.tileSideInMeters);
+    assert(tileRel.* < 0.5001 * tileMap.tileSideInMeters);
 }
 
 pub inline fn RecanonicalizePosition(tileMap: *const tile_map, pos: tile_map_position) tile_map_position {
