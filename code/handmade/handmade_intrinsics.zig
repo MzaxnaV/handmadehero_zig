@@ -2,6 +2,11 @@ const math = @import("std").math;
 
 // intrinsics -----------------------------------------------------------------------------------------------------------------------------
 
+pub inline fn SignOf(value: i32) i32 {
+    const result = if (value >= 0) @as(i32, 1) else @as(i32, -1);
+    return result;
+}
+
 pub inline fn SquareRoot(float32: f32) f32 {
     const result = @sqrt(float32);
     return result;

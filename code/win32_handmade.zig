@@ -1306,7 +1306,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 const expectedSoundBytesPerFrame = @divTrunc(soundOutput.samplesPerSecond * soundOutput.bytesPerSample, gameUpdateHz);
                                 const secondsLeftUntilFLip = (targetSecondsPerFrame - fromBeginToAudioSeconds);
                                 const expectedBytesUntilFlip = @floatToInt(i32, (secondsLeftUntilFLip / targetSecondsPerFrame) * @intToFloat(f32, expectedSoundBytesPerFrame));
-                                
+
                                 const expectedFrameBoundaryByte = playCursor +% @bitCast(u32, expectedBytesUntilFlip);
 
                                 var safeWriteCursor = writeCursor;

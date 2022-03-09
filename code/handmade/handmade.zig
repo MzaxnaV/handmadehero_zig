@@ -243,7 +243,7 @@ fn InitializaPlayer(gameState: *game.state, entityIndex: u32) void {
     entity.?.exists = true;
     entity.?.p.absTileX = 1;
     entity.?.p.absTileY = 3;
-    entity.?.p.offset = .{ .x = 5, .y = 5 };
+    entity.?.p.offset_ = .{ .x = 0, .y = 0 };
     entity.?.height = 1.4;
     entity.?.width = 0.75 * entity.?.height;
 
@@ -297,17 +297,15 @@ fn MovePlayer(gameState: *game.state, entity: *game.entity, dt: f32, accelaratio
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
     const playerDelta = game.add(game.scale(ddP, 0.5 * game.square(dt)), game.scale(entity.dP, dt));
     _ = entity.dP.add(game.scale(ddP, dt)); // NOTE (Manav): entity.dP += ddP * dt;
-    var newPlayerP = oldPlayerP;
-    _ = newPlayerP.offset.add(playerDelta); // NOTE (Manav): newPlayerP.offset += playerDelta;
-    newPlayerP = game.RecanonicalizePosition(tileMap, newPlayerP);
+    var newPlayerP = game.Offset(tileMap, oldPlayerP, playerDelta);
 
     if (!NOT_IGNORE) {
         var playerLeft = newPlayerP;
-        playerLeft.offset.x -= 0.5 * entity.width;
+        playerLeft.offset_.x -= 0.5 * entity.width;
         playerLeft = game.RecanonicalizePosition(tileMap, playerLeft);
 
         var playerRight = newPlayerP;
-        playerRight.offset.x += 0.5 * entity.width;
+        playerRight.offset_.x += 0.5 * entity.width;
         playerRight = game.RecanonicalizePosition(tileMap, playerRight);
 
         var collided = false;
@@ -352,18 +350,33 @@ fn MovePlayer(gameState: *game.state, entity: *game.entity, dt: f32, accelaratio
             entity.p = newPlayerP;
         }
     } else {
-        const minTileX = @minimum(oldPlayerP.absTileX, newPlayerP.absTileX);
-        const minTileY = @minimum(oldPlayerP.absTileY, newPlayerP.absTileY);
-        const onePastMaxTileX = @maximum(oldPlayerP.absTileX, newPlayerP.absTileX) + 1;
-        const onePastMaxTileY = @maximum(oldPlayerP.absTileY, newPlayerP.absTileY) + 1;
+
+        // !NOT_IGNORE:
+        // const minTileX = @minimum(oldPlayerP.absTileX, newPlayerP.absTileX);
+        // const minTileY = @minimum(oldPlayerP.absTileY, newPlayerP.absTileY);
+        // const onePastMaxTileX = @maximum(oldPlayerP.absTileX, newPlayerP.absTileX) + 1;
+        // const onePastMaxTileY = @maximum(oldPlayerP.absTileY, newPlayerP.absTileY) + 1;
+
+        const startTileX = oldPlayerP.absTileX;
+        const startTileY = oldPlayerP.absTileY;
+        const endTileX = newPlayerP.absTileX;
+        const endTileY = newPlayerP.absTileY;
+
+        if (endTileX > startTileX) {
+            // @breakpoint();
+        }
+
+        const deltaX = game.SignOf(@intCast(i32, endTileX) - @intCast(i32, startTileX));
+        const deltaY = game.SignOf(@intCast(i32, endTileY) - @intCast(i32, startTileY));
 
         const absTileZ = entity.p.absTileZ;
-
         var tMin = @as(f32, 1.0);
-        var absTileY = minTileY;
-        while (absTileY != onePastMaxTileY) : (absTileY += 1) {
-            var absTileX = minTileX;
-            while (absTileX != onePastMaxTileX) : (absTileX += 1) {
+
+        var absTileY = startTileY;
+        while (true) {
+
+            var absTileX = startTileX;
+            while (true) {
                 const testTileP = game.CenteredTilePoint(absTileX, absTileY, absTileZ);
                 const tileValue = game.GetTileValueFromPos(tileMap, testTileP);
                 if (!game.IsTileValueEmpty(tileValue)) {
@@ -378,14 +391,24 @@ fn MovePlayer(gameState: *game.state, entity: *game.entity, dt: f32, accelaratio
                     TestWall(minCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x);
                     TestWall(maxCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x);
                 }
+
+                if (absTileX == endTileX) {
+                    break;
+                } else {
+                    // TODO (Manav): improve this
+                    absTileX = if (deltaX > 0) absTileX + @intCast(u32, deltaX) else absTileX - @intCast(u32, -deltaX);
+                }
+            }
+
+            if (absTileY == endTileY) {
+                break;
+            } else {
+                // TODO (Manav): improve this
+                absTileY = if (deltaY > 0) absTileY + @intCast(u32, deltaY) else absTileY - @intCast(u32, -deltaY);
             }
         }
 
-        newPlayerP = oldPlayerP;
-        // NOTE (Manav): newPlayerP.offset += tMin*playerDelta;
-        _ = newPlayerP.offset.add(game.scale(playerDelta, tMin));
-        entity.p = newPlayerP;
-        newPlayerP = game.RecanonicalizePosition(tileMap, newPlayerP);
+        entity.p = game.Offset(tileMap, oldPlayerP, game.scale(playerDelta, tMin));
     }
 
     if (!game.AreOnSameTile(&oldPlayerP, &entity.p)) {
@@ -495,8 +518,13 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
 
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
+
+        // !NOT_IGNORE
+        // var screenX: u32 = std.math.maxInt(i32) / 2;
+        // var screenY: u32 = std.math.maxInt(i32) / 2;
         var screenX: u32 = 0;
         var screenY: u32 = 0;
+
         var absTileZ: u32 = 0;
 
         var doorLeft = false;
@@ -684,8 +712,8 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
 
                 const tileSide = .{ .x = @as(f32, 0.5) * tileSideInPixels, .y = @as(f32, 0.5) * tileSideInPixels };
                 const cen = .{
-                    .x = screenCenterX - metersToPixels * gameState.cameraP.offset.x + @intToFloat(f32, relCol * tileSideInPixels),
-                    .y = screenCenterY + metersToPixels * gameState.cameraP.offset.y - @intToFloat(f32, relRow * tileSideInPixels),
+                    .x = screenCenterX - metersToPixels * gameState.cameraP.offset_.x + @intToFloat(f32, relCol * tileSideInPixels),
+                    .y = screenCenterY + metersToPixels * gameState.cameraP.offset_.y - @intToFloat(f32, relRow * tileSideInPixels),
                 };
 
                 // NOTE (Manav): min = cen - 0.9 * tileSide
@@ -751,24 +779,3 @@ pub export fn GetSoundSamples(_: *platform.thread_context, gameMemory: *platform
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
     OutputSound(gameState, soundBuffer, 400);
 }
-
-// fn RenderWeirdGradient(buffer: *platform.offscreen_buffer, xOffset: i32, yOffset: i32) void {
-//     var row = @ptrCast([*]u8, buffer.memory);
-
-//     var y: u32 = 0;
-//     while (y < buffer.height) : (y += 1) {
-//         var x: u32 = 0;
-//         var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
-//         while (x < buffer.width) : (x += 1) {
-//             // Pixel in memory: BB GG RR xx
-//             // Little endian arch: 0x xxRRGGBB
-
-//             var blue: u8 = @truncate(u8, x +% @bitCast(u32, xOffset));
-//             var green: u8 = @truncate(u8, y +% @bitCast(u32, yOffset));
-
-//             pixel.* = (@as(u32, green) << 16) | @as(u32, blue);
-//             pixel += 1;
-//         }
-//         row += buffer.pitch;
-//     }
-// }

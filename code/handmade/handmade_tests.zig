@@ -35,8 +35,8 @@ test "math" {
     try testing.expectEqual(math.add(vec1, vec2), .{ .x = 6, .y = 2 });
     try testing.expectEqual(math.sub(vec1, vec2), .{ .x = -4, .y = 2 });
     try testing.expectEqual(math.neg(vec1), .{ .x = -1, .y = -2 });
-    try testing.expectEqual(math.scale(vec1, 2), .{ .x = 2, .y = 4} );
-    
+    try testing.expectEqual(math.scale(vec1, 2), .{ .x = 2, .y = 4 });
+
     try testing.expectEqual(math.inner(vec1, vec2), 5);
 
     try testing.expectEqual(math.add(vec1, vec2), vec1.add(vec2).*);

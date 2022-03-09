@@ -14,7 +14,7 @@ pub const tile_map_position = struct {
     absTileY: u32 = 0,
     absTileZ: u32 = 0,
 
-    offset: math.v2 = .{},
+    offset_: math.v2 = .{},
 };
 
 pub const tile_chunk_position = struct {
@@ -58,8 +58,8 @@ pub inline fn RecanonicalizeCoord(tileMap: *const tile_map, tile: *u32, tileRel:
 pub inline fn RecanonicalizePosition(tileMap: *const tile_map, pos: tile_map_position) tile_map_position {
     var result = pos;
 
-    RecanonicalizeCoord(tileMap, &result.absTileX, &result.offset.x);
-    RecanonicalizeCoord(tileMap, &result.absTileY, &result.offset.y);
+    RecanonicalizeCoord(tileMap, &result.absTileX, &result.offset_.x);
+    RecanonicalizeCoord(tileMap, &result.absTileY, &result.offset_.y);
 
     return result;
 }
@@ -78,8 +78,8 @@ pub inline fn Substract(tileMap: *const tile_map, a: *const tile_map_position, b
     const dTileZ = @intToFloat(f32, a.absTileZ) - @intToFloat(f32, b.absTileZ);
 
     const result = tile_map_difference{
-        // NOTE (Manav): .dxy = dTileXY * tileMap.tileSideInMeters + (a.offset - b.offset)
-        .dXY = math.add(math.scale(dTileXY, tileMap.tileSideInMeters), math.sub(a.offset, b.offset)),
+        // NOTE (Manav): .dxy = dTileXY * tileMap.tileSideInMeters + (a.offset_ - b.offset_)
+        .dXY = math.add(math.scale(dTileXY, tileMap.tileSideInMeters), math.sub(a.offset_, b.offset_)),
         .dZ = tileMap.tileSideInMeters * dTileZ,
     };
 
@@ -164,6 +164,14 @@ pub inline fn CenteredTilePoint(absTileX: u32, absTileY: u32, absTileZ: u32) til
     };
 
     return result;
+}
+
+pub inline fn Offset(tileMap: *const tile_map, p: tile_map_position, offset: math.v2) tile_map_position {
+    var pos = p;
+    _ = pos.offset_.add(offset); // NOTE (Manav): pos.offset_ += offset;
+    pos = RecanonicalizePosition(tileMap, pos);
+
+    return pos;
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
