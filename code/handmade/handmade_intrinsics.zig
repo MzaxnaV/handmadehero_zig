@@ -40,6 +40,11 @@ pub inline fn RoundF32ToInt(comptime T: type, float32: f32) T {
     return result;
 }
 
+pub inline fn CeilF32ToI32(float32: f32) i32 {
+    const result = @floatToInt(i32, @ceil(float32));
+    return result;
+}
+
 pub inline fn TruncateF32ToI32(float32: f32) i32 {
     const result = @floatToInt(i32, float32);
     return result;

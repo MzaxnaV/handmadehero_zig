@@ -244,8 +244,8 @@ fn InitializaPlayer(gameState: *game.state, entityIndex: u32) void {
     entity.?.p.absTileX = 1;
     entity.?.p.absTileY = 3;
     entity.?.p.offset_ = .{ .x = 0, .y = 0 };
-    entity.?.height = 1.4;
-    entity.?.width = 0.75 * entity.?.height;
+    entity.?.height = 0.5;
+    entity.?.width = 1.0;
 
     if (GetEntity(gameState, gameState.cameraFollowingEntityIndex) == null) {
         gameState.cameraFollowingEntityIndex = entityIndex;
@@ -263,7 +263,8 @@ fn AddEntity(gameState: *game.state) u32 {
     return entityIndex;
 }
 
-fn TestWall(wallX: f32, relX: f32, relY: f32, playerDeltaX: f32, playerDeltaY: f32, tMin: *f32, minY: f32, maxY: f32) void {
+fn TestWall(wallX: f32, relX: f32, relY: f32, playerDeltaX: f32, playerDeltaY: f32, tMin: *f32, minY: f32, maxY: f32) bool {
+    var hit = false;
     const tEpsilon = 0.0001;
     if (playerDeltaX != 0) {
         const tResult = (wallX - relX) / playerDeltaX;
@@ -272,9 +273,12 @@ fn TestWall(wallX: f32, relX: f32, relY: f32, playerDeltaX: f32, playerDeltaY: f
         if ((tResult >= 0) and (tMin.* > tResult)) {
             if ((y >= minY) and (y <= maxY)) {
                 tMin.* = @maximum(0, tResult - tEpsilon);
+                hit = true;
             }
         }
     }
+
+    return hit;
 }
 
 fn MovePlayer(gameState: *game.state, entity: *game.entity, dt: f32, accelaration: game.v2) void {
@@ -288,14 +292,13 @@ fn MovePlayer(gameState: *game.state, entity: *game.entity, dt: f32, accelaratio
     }
 
     const playerSpeed = @as(f32, 50.0);
-    _ = ddP.scale(playerSpeed); // NOTE (Manav): ddP *= playerSpeed;
+    _ = ddP.scale(playerSpeed);
 
     _ = ddP.add(game.scale(entity.dP, -8.0)); // NOTE (Manav): ddP += -8.0 * entity.dP;
 
     const oldPlayerP = entity.p;
-
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
-    const playerDelta = game.add(game.scale(ddP, 0.5 * game.square(dt)), game.scale(entity.dP, dt));
+    var playerDelta = game.add(game.scale(ddP, 0.5 * game.square(dt)), game.scale(entity.dP, dt));
     _ = entity.dP.add(game.scale(ddP, dt)); // NOTE (Manav): entity.dP += ddP * dt;
     var newPlayerP = game.Offset(tileMap, oldPlayerP, playerDelta);
 
@@ -350,65 +353,69 @@ fn MovePlayer(gameState: *game.state, entity: *game.entity, dt: f32, accelaratio
             entity.p = newPlayerP;
         }
     } else {
+        var minTileX = @minimum(oldPlayerP.absTileX, newPlayerP.absTileX);
+        var minTileY = @minimum(oldPlayerP.absTileY, newPlayerP.absTileY);
+        var maxTileX = @maximum(oldPlayerP.absTileX, newPlayerP.absTileX);
+        var maxTileY = @maximum(oldPlayerP.absTileY, newPlayerP.absTileY);
 
-        // !NOT_IGNORE:
-        // const minTileX = @minimum(oldPlayerP.absTileX, newPlayerP.absTileX);
-        // const minTileY = @minimum(oldPlayerP.absTileY, newPlayerP.absTileY);
-        // const onePastMaxTileX = @maximum(oldPlayerP.absTileX, newPlayerP.absTileX) + 1;
-        // const onePastMaxTileY = @maximum(oldPlayerP.absTileY, newPlayerP.absTileY) + 1;
+        const entityTileWidth = game.CeilF32ToI32(entity.width / tileMap.tileSideInMeters);
+        const entityTileHeight = game.CeilF32ToI32(entity.height / tileMap.tileSideInMeters);
 
-        const startTileX = oldPlayerP.absTileX;
-        const startTileY = oldPlayerP.absTileY;
-        const endTileX = newPlayerP.absTileX;
-        const endTileY = newPlayerP.absTileY;
-
-        if (endTileX > startTileX) {
-            // @breakpoint();
-        }
-
-        const deltaX = game.SignOf(@intCast(i32, endTileX) - @intCast(i32, startTileX));
-        const deltaY = game.SignOf(@intCast(i32, endTileY) - @intCast(i32, startTileY));
+        minTileX -= @intCast(u32, entityTileWidth);
+        minTileY -= @intCast(u32, entityTileHeight);
+        maxTileX += @intCast(u32, entityTileWidth);
+        maxTileY += @intCast(u32, entityTileHeight);
 
         const absTileZ = entity.p.absTileZ;
-        var tMin = @as(f32, 1.0);
 
-        var absTileY = startTileY;
-        while (true) {
+        var tRemaining = @as(f32, 1.0);
+        var iteration = @as(u32, 0);
+        while ((iteration < 4) and (tRemaining > 0)) : (iteration += 1) {
+            var tMin = @as(f32, 1.0);
+            var wallNormal = game.v2{};
 
-            var absTileX = startTileX;
-            while (true) {
-                const testTileP = game.CenteredTilePoint(absTileX, absTileY, absTileZ);
-                const tileValue = game.GetTileValueFromPos(tileMap, testTileP);
-                if (!game.IsTileValueEmpty(tileValue)) {
-                    const minCorner = game.v2{ .x = -0.5 * tileMap.tileSideInMeters, .y = -0.5 * tileMap.tileSideInMeters };
-                    const maxCorner = game.v2{ .x = 0.5 * tileMap.tileSideInMeters, .y = 0.5 * tileMap.tileSideInMeters };
+            std.debug.assert((maxTileX - minTileX) < 32);
+            std.debug.assert((maxTileY - minTileY) < 32);
 
-                    const relOldPlayerP = game.Substract(tileMap, &oldPlayerP, &testTileP);
-                    const rel = relOldPlayerP.dXY;
+            var absTileY = minTileY;
+            while (absTileY <= maxTileY) : (absTileY += 1) {
+                var absTileX = minTileX;
+                while (absTileX <= maxTileX) : (absTileX += 1) {
+                    const testTileP = game.CenteredTilePoint(absTileX, absTileY, absTileZ);
+                    const tileValue = game.GetTileValueFromPos(tileMap, testTileP);
 
-                    TestWall(minCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y);
-                    TestWall(maxCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y);
-                    TestWall(minCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x);
-                    TestWall(maxCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x);
-                }
+                    if (!game.IsTileValueEmpty(tileValue)) {
+                        const diameterW = tileMap.tileSideInMeters + entity.width;
+                        const diameterH = tileMap.tileSideInMeters + entity.height;
+                        const minCorner = game.v2{ .x = -0.5 * diameterW, .y = -0.5 * diameterH };
+                        const maxCorner = game.v2{ .x = 0.5 * diameterW, .y = 0.5 * diameterH };
 
-                if (absTileX == endTileX) {
-                    break;
-                } else {
-                    // TODO (Manav): improve this
-                    absTileX = if (deltaX > 0) absTileX + @intCast(u32, deltaX) else absTileX - @intCast(u32, -deltaX);
+                        const relOldPlayerP = game.Substract(tileMap, &entity.p, &testTileP);
+                        const rel = relOldPlayerP.dXY;
+
+                        if (TestWall(minCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
+                            wallNormal = .{ .x = -1, .y = 0 };
+                        }
+                        if (TestWall(maxCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
+                            wallNormal = .{ .x = 1, .y = 0 };
+                        }
+                        if (TestWall(minCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
+                            wallNormal = .{ .x = 0, .y = -1 };
+                        }
+                        if (TestWall(maxCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
+                            wallNormal = .{ .x = 0, .y = 1 };
+                        }
+                    }
                 }
             }
 
-            if (absTileY == endTileY) {
-                break;
-            } else {
-                // TODO (Manav): improve this
-                absTileY = if (deltaY > 0) absTileY + @intCast(u32, deltaY) else absTileY - @intCast(u32, -deltaY);
-            }
+            entity.p = game.Offset(tileMap, entity.p, game.scale(playerDelta, tMin));
+            // NOTE (Manav): entity.dP -= (1 * inner(entity.dP, wallNormal))*wallNormal;
+            _ = entity.dP.sub(game.scale(wallNormal, 1 * game.inner(entity.dP, wallNormal)));
+            // NOTE (Manav): playerDelta -= (1 * inner(playerDelta, wallNormal))*wallNormal;
+            _ = playerDelta.sub(game.scale(wallNormal, 1 * game.inner(playerDelta, wallNormal)));
+            tRemaining -= tMin * tRemaining;
         }
-
-        entity.p = game.Offset(tileMap, oldPlayerP, game.scale(playerDelta, tMin));
     }
 
     if (!game.AreOnSameTile(&oldPlayerP, &entity.p)) {
@@ -740,7 +747,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                 const playerGroundPointY = screenCenterY - metersToPixels * diff.dXY.y;
                 const playerLeftTop = .{
                     .x = playerGroundPointX - 0.5 * metersToPixels * entity.width,
-                    .y = playerGroundPointY - metersToPixels * entity.height,
+                    .y = playerGroundPointY - 0.5 * metersToPixels * entity.height,
                 };
                 const entityWidthHeight = .{ .x = entity.width, .y = entity.height };
 

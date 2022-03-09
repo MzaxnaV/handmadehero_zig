@@ -11,6 +11,9 @@ test "intrinsics" {
     try testing.expectEqual(intrinsics.RoundF32ToInt(u32, -0.2), 0);
     try testing.expectEqual(intrinsics.RoundF32ToInt(u32, 0.2), 0);
 
+    try testing.expectEqual(intrinsics.CeilF32ToI32(2.34), 3);
+    try testing.expectEqual(intrinsics.CeilF32ToI32(-2.34), -2);
+
     try testing.expectEqual(intrinsics.TruncateF32ToI32(1.2), 1);
     try testing.expectEqual(intrinsics.TruncateF32ToI32(-0.2), 0);
     try testing.expectEqual(intrinsics.TruncateF32ToI32(-1.2), -1);
