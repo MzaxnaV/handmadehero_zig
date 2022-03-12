@@ -45,9 +45,9 @@ pub const high_entity = struct {
 
     z: f32 = 0,
     dZ: f32 = 0,
-};
 
-pub const low_entity = struct {};
+    lowEntityIndex: u32 = 0,
+};
 
 pub const entity_type = enum {
     Null,
@@ -56,7 +56,7 @@ pub const entity_type = enum {
     Wall,
 };
 
-pub const dormant_entity = struct {
+pub const low_entity = struct {
     entityType: entity_type = .Null,
     p: tile_map_position = .{},
     width: f32 = 0,
@@ -64,20 +64,14 @@ pub const dormant_entity = struct {
 
     collides: bool = false,
     dAbsTileZ: i32 = 0,
-};
 
-pub const entity_residence = enum(u2) {
-    Nonexistent,
-    Dormant,
-    Low,
-    High,
+    highEntityIndex: u32 = 0,
 };
 
 pub const entity = struct {
-    residence: entity_residence = .Nonexistent,
+    lowIndex: u32 = 0,
     low: *low_entity,
-    dormant: *dormant_entity,
-    high: *high_entity,
+    high: ?*high_entity = null,
 };
 
 pub const state = struct {
@@ -85,15 +79,15 @@ pub const state = struct {
     world: *world,
 
     cameraFollowingEntityIndex: u32,
-    cameraP: tile_map_position = tile_map_position{},
+    cameraP: tile_map_position = .{},
 
     playerIndexForController: [CONTROLLERS]u32,
-    entityCount: u32,
 
-    entityResidence: [256]entity_residence,
+    lowEntityCount: u32,
+    lowEntities: [4096]low_entity,
+
+    highEntityCount: u32,
     highEntities: [256]high_entity,
-    lowEntities: [256]low_entity,
-    dormantEntities: [256]dormant_entity,
 
     backdrop: loaded_bitmap,
     shadow: loaded_bitmap,

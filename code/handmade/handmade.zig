@@ -226,95 +226,133 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
     return result;
 }
 
-fn ChangeEntityResidence(gameState: *game.state, entityIndex: u32, residence: game.entity_residence) void {
-    if (residence == .High) {
-        if (gameState.entityResidence[entityIndex] != .High) {
-            var entityHigh = &gameState.highEntities[entityIndex];
-            var entityDormant = &gameState.dormantEntities[entityIndex];
+inline fn GetLowEntity(gameState: *game.state, index: u32) *game.low_entity {
+    var result: *game.low_entity = undefined;
 
-            const diff = game.Substract(gameState.world.tileMap, &entityDormant.p, &gameState.cameraP);
+    if ((index > 0) and (index < gameState.lowEntityCount)) {
+        result = &gameState.lowEntities[index];
+    }
 
-            entityHigh.p = diff.dXY;
-            entityHigh.dP = .{};
-            entityHigh.absTileZ = entityDormant.p.absTileZ;
-            entityHigh.facingDirection = 0;
+    return result;
+}
+
+inline fn MakeEntityHighFrequency(gameState: *game.state, lowIndex: u32) ?*game.high_entity {
+    var entityHigh : ?*game.high_entity = null;
+
+    const entityLow = &gameState.lowEntities[lowIndex];
+    if (entityLow.highEntityIndex != 0) {
+        entityHigh = &gameState.highEntities[entityLow.highEntityIndex];
+    } else {
+        if (gameState.highEntityCount < gameState.highEntities.len) {
+            const highIndex = gameState.highEntityCount;
+            gameState.highEntityCount += 1;
+            entityHigh = &gameState.highEntities[highIndex];
+
+            const diff = game.Substract(gameState.world.tileMap, &entityLow.p, &gameState.cameraP);
+
+            entityHigh.?.p = diff.dXY;
+            entityHigh.?.dP = .{};
+            entityHigh.?.absTileZ = entityLow.p.absTileZ;
+            entityHigh.?.facingDirection = 0;
+            entityHigh.?.lowEntityIndex = lowIndex;
+
+            entityLow.highEntityIndex = highIndex;
+        } else {
+            unreachable;
         }
     }
 
-    gameState.entityResidence[entityIndex] = residence;
+    return entityHigh;
 }
 
-inline fn GetEntity(gameState: *game.state, residence: game.entity_residence, index: u32) game.entity {
-    var entity = game.entity{
+inline fn GetHighEntity(gameState: *game.state, lowIndex: u32) game.entity {
+    var result = game.entity{
         .low = undefined,
-        .dormant = undefined,
-        .high = undefined,
     };
 
-    if ((index > 0) and (index < gameState.entityCount)) {
-        if (@enumToInt(gameState.entityResidence[index]) < @enumToInt(residence)) {
-            ChangeEntityResidence(gameState, index, residence);
-            std.debug.assert(@enumToInt(gameState.entityResidence[index]) >= @enumToInt(residence));
-        }
-        entity.residence = residence;
-        entity.dormant = &gameState.dormantEntities[index];
-        entity.low = &gameState.lowEntities[index];
-        entity.high = &gameState.highEntities[index];
+    if ((lowIndex > 0) and (lowIndex < gameState.lowEntityCount)) {
+        result.lowIndex = lowIndex;
+        result.low = &gameState.lowEntities[lowIndex];
+        result.high = MakeEntityHighFrequency(gameState, lowIndex);
     }
 
-    return entity;
+    return result;
 }
 
-fn AddEntity(gameState: *game.state, entityType: game.entity_type) u32 {
-    const entityIndex = gameState.entityCount;
-    gameState.entityCount += 1;
+inline fn MakeEntityLowFrequency(gameState: *game.state, lowIndex: u32) void {
+    const entityLow = &gameState.lowEntities[lowIndex];
+    const highIndex = entityLow.highEntityIndex;
 
-    std.debug.assert(gameState.entityCount < gameState.dormantEntities.len);
-    std.debug.assert(gameState.entityCount < gameState.lowEntities.len);
-    std.debug.assert(gameState.entityCount < gameState.highEntities.len);
+    if (highIndex != 0) {
+        const lastHighIndex = gameState.highEntityCount - 1;
+        if (highIndex != lastHighIndex) {
+            const lastEntity = &gameState.highEntities[lastHighIndex];
+            const delEntity = &gameState.highEntities[highIndex];
 
-    gameState.entityResidence[entityIndex] = .Dormant;
-    gameState.dormantEntities[entityIndex] = .{
+            delEntity.* = lastEntity.*;
+            gameState.lowEntities[lastEntity.lowEntityIndex].highEntityIndex = highIndex;
+        }
+        gameState.highEntityCount -= 1;
+        entityLow.highEntityIndex = 0;
+    }
+}
+
+inline fn OffsetAndCheckFrequencyByArea(gameState: *game.state, offset: game.v2, cameraBounds: game.rect2) void {
+    var entityIndex = @as(u32, 1);
+    while (entityIndex < gameState.highEntityCount) {
+        var high = &gameState.highEntities[entityIndex];
+
+        _ = high.p.add(offset);
+        if (game.IsInRectangle(cameraBounds, high.p)) {
+            entityIndex += 1;
+        } else {
+            MakeEntityLowFrequency(gameState, high.lowEntityIndex);
+        }
+    }
+}
+
+fn AddLowEntity(gameState: *game.state, entityType: game.entity_type) u32 {
+    std.debug.assert(gameState.lowEntityCount < gameState.lowEntities.len);
+    const entityIndex = gameState.lowEntityCount;
+    gameState.lowEntityCount += 1;
+
+    gameState.lowEntities[entityIndex] = .{
         .entityType = entityType,
     };
-    gameState.lowEntities[entityIndex] = .{};
-    gameState.highEntities[entityIndex] = .{};
 
     return entityIndex;
 }
 
 fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) u32 {
-    const entityIndex = AddEntity(gameState, .Wall);
-    const entity = GetEntity(gameState, .Dormant, entityIndex);
+    const entityIndex = AddLowEntity(gameState, .Wall);
+    const entityLow = GetLowEntity(gameState, entityIndex);
 
-    entity.dormant.p = .{
+    entityLow.p = .{
         .absTileX = absTileX,
         .absTileY = absTileY,
         .absTileZ = absTileZ,
     };
-    entity.dormant.height = gameState.world.tileMap.tileSideInMeters;
-    entity.dormant.width = entity.dormant.height;
-    entity.dormant.collides = true;
+    entityLow.height = gameState.world.tileMap.tileSideInMeters;
+    entityLow.width = entityLow.height;
+    entityLow.collides = true;
 
     return entityIndex;
 }
 
 fn AddPlayer(gameState: *game.state) u32 {
-    const entityIndex = AddEntity(gameState, .Hero);
-    const entity = GetEntity(gameState, .Dormant, entityIndex);
+    const entityIndex = AddLowEntity(gameState, .Hero);
+    const entityLow = GetLowEntity(gameState, entityIndex);
 
-    entity.dormant.p = .{
+    entityLow.p = .{
         .absTileX = 1,
         .absTileY = 3,
         .offset_ = .{ .x = 0, .y = 0 },
     };
-    entity.dormant.height = 0.5;
-    entity.dormant.width = 1.0;
-    entity.dormant.collides = true;
+    entityLow.height = 0.5;
+    entityLow.width = 1.0;
+    entityLow.collides = true;
 
-    ChangeEntityResidence(gameState, entityIndex, .High);
-
-    if (GetEntity(gameState, .Dormant, gameState.cameraFollowingEntityIndex).residence == .Nonexistent) {
+    if (gameState.cameraFollowingEntityIndex == 0) {
         gameState.cameraFollowingEntityIndex = entityIndex;
     }
 
@@ -351,12 +389,12 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
     const playerSpeed = @as(f32, 50.0);
     _ = ddP.scale(playerSpeed);
 
-    _ = ddP.add(game.scale(entity.high.dP, -8.0)); // NOTE (Manav): ddP += -8.0 * entity.high.dP;
+    _ = ddP.add(game.scale(entity.high.?.dP, -8.0)); // NOTE (Manav): ddP += -8.0 * entity.high.dP;
 
     // const oldPlayerP = entity.high.p;
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
-    var playerDelta = game.add(game.scale(ddP, 0.5 * game.Square(dt)), game.scale(entity.high.dP, dt));
-    _ = entity.high.dP.add(game.scale(ddP, dt)); // NOTE (Manav): entity.dP += ddP * dt;
+    var playerDelta = game.add(game.scale(ddP, 0.5 * game.Square(dt)), game.scale(entity.high.?.dP, dt));
+    _ = entity.high.?.dP.add(game.scale(ddP, dt)); // NOTE (Manav): entity.dP += ddP * dt;
     // const newPlayerP = game.add(oldPlayerP, playerDelta);
 
     // !NOT_IGNORE
@@ -379,78 +417,85 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
     while (iteration < 4) : (iteration += 1) {
         var tMin = @as(f32, 1.0);
         var wallNormal = game.v2{};
-        var hitEntityIndex = @as(u32, 0);
+        var hitHighEntityIndex = @as(u32, 0);
 
         // NOTE (Manav): desiredPosition = entity.high.p + playerDelta;
-        const desiredPosition = game.add(entity.high.p, playerDelta);
+        const desiredPosition = game.add(entity.high.?.p, playerDelta);
 
-        var entityIndex = @as(u32, 1);
-        while (entityIndex < gameState.entityCount) : (entityIndex += 1) {
-            const testEntity = GetEntity(gameState, .High, entityIndex);
-            if (testEntity.high != entity.high) {
-                if (testEntity.dormant.collides) {
-                    const diameterW = testEntity.dormant.width + entity.dormant.width;
-                    const diameterH = testEntity.dormant.height + entity.dormant.height;
+        var testHighEntityIndex = @as(u32, 1);
+        while (testHighEntityIndex < gameState.highEntityCount) : (testHighEntityIndex += 1) {
+            if (testHighEntityIndex != entity.low.highEntityIndex) {
+                var testEntity = game.entity{
+                    .low = undefined,
+                    .high = undefined,
+                };
+                testEntity.high = &gameState.highEntities[testHighEntityIndex];
+                testEntity.lowIndex = testEntity.high.?.lowEntityIndex;
+                testEntity.low = &gameState.lowEntities[testEntity.lowIndex];
+                if (testEntity.low.collides) {
+                    const diameterW = testEntity.low.width + entity.low.width;
+                    const diameterH = testEntity.low.height + entity.low.height;
 
                     const minCorner = game.v2{ .x = -0.5 * diameterW, .y = -0.5 * diameterH };
                     const maxCorner = game.v2{ .x = 0.5 * diameterW, .y = 0.5 * diameterH };
 
-                    const rel = game.sub(entity.high.p, testEntity.high.p); // NOTE: (Manav): entity.high.p - testEntity.high.p
+                    const rel = game.sub(entity.high.?.p, testEntity.high.?.p); // NOTE: (Manav): entity.high.p - testEntity.high.p
 
                     if (TestWall(minCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
                         wallNormal = .{ .x = -1, .y = 0 };
-                        hitEntityIndex = entityIndex;
+                        hitHighEntityIndex = testHighEntityIndex;
                     }
                     if (TestWall(maxCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
                         wallNormal = .{ .x = 1, .y = 0 };
-                        hitEntityIndex = entityIndex;
+                        hitHighEntityIndex = testHighEntityIndex;
                     }
                     if (TestWall(minCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
                         wallNormal = .{ .x = 0, .y = -1 };
-                        hitEntityIndex = entityIndex;
+                        hitHighEntityIndex = testHighEntityIndex;
                     }
                     if (TestWall(maxCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
                         wallNormal = .{ .x = 0, .y = 1 };
-                        hitEntityIndex = entityIndex;
+                        hitHighEntityIndex = testHighEntityIndex;
                     }
                 }
             }
         }
 
         // NOTE: (Manav): entity.high.p += tMin * playerDelta
-        _ = entity.high.p.add(game.scale(playerDelta, tMin));
-        if (hitEntityIndex != 0) {
+        _ = entity.high.?.p.add(game.scale(playerDelta, tMin));
+        if (hitHighEntityIndex != 0) {
             // NOTE (Manav): entity.high.dP -= (1 * inner(entity.high.dP, wallNormal))*wallNormal;
-            _ = entity.high.dP.sub(game.scale(wallNormal, 1 * game.inner(entity.high.dP, wallNormal)));
+            _ = entity.high.?.dP.sub(game.scale(wallNormal, 1 * game.inner(entity.high.?.dP, wallNormal)));
             // NOTE (Manav): playerDelta = desiredPositon - entity.high.p;
-            playerDelta = game.sub(desiredPosition, entity.high.p);
+            playerDelta = game.sub(desiredPosition, entity.high.?.p);
             // NOTE (Manav): playerDelta -= (1 * inner(playerDelta, wallNormal))*wallNormal;
             _ = playerDelta.sub(game.scale(wallNormal, 1 * game.inner(playerDelta, wallNormal)));
 
-            const hitEntity = GetEntity(gameState, .Dormant, hitEntityIndex);
-            entity.high.absTileZ = game.AddI32ToU32(entity.high.absTileZ, hitEntity.dormant.dAbsTileZ);
+            const hitHigh = &gameState.highEntities[hitHighEntityIndex];
+            const hitLow = &gameState.lowEntities[hitHigh.lowEntityIndex];
+            entity.high.?.absTileZ = game.AddI32ToU32(entity.high.?.absTileZ, hitLow.dAbsTileZ);
         } else {
             break;
         }
     }
 
-    if ((entity.high.dP.x == 0) and (entity.high.dP.y == 0)) {
+    if ((entity.high.?.dP.x == 0) and (entity.high.?.dP.y == 0)) {
         // NOTE(casey): Leave FacingDirection whatever it was
-    } else if (game.AbsoluteValue(entity.high.dP.x) > game.AbsoluteValue(entity.high.dP.y)) {
-        if (entity.high.dP.x > 0) {
-            entity.high.facingDirection = 0;
+    } else if (game.AbsoluteValue(entity.high.?.dP.x) > game.AbsoluteValue(entity.high.?.dP.y)) {
+        if (entity.high.?.dP.x > 0) {
+            entity.high.?.facingDirection = 0;
         } else {
-            entity.high.facingDirection = 2;
+            entity.high.?.facingDirection = 2;
         }
     } else {
-        if (entity.high.dP.y > 0) {
-            entity.high.facingDirection = 1;
+        if (entity.high.?.dP.y > 0) {
+            entity.high.?.facingDirection = 1;
         } else {
-            entity.high.facingDirection = 3;
+            entity.high.?.facingDirection = 3;
         }
     }
 
-    entity.dormant.p = game.MapIntoTileSpace(gameState.world.tileMap, gameState.cameraP, entity.high.p);
+    entity.low.p = game.MapIntoTileSpace(gameState.world.tileMap, gameState.cameraP, entity.high.?.p);
 }
 
 fn SetCamera(gameState: *game.state, newCameraP: game.tile_map_position) void {
@@ -472,36 +517,25 @@ fn SetCamera(gameState: *game.state, newCameraP: game.tile_map_position) void {
 
     const entityOffsetForFrame = game.scale(dCameraP.dXY, -1);
 
-    var entityIndex = @as(u32, 1);
-    while (entityIndex < gameState.highEntities.len) : (entityIndex += 1) {
-        if (gameState.entityResidence[entityIndex] == .High) {
-            var high = &gameState.highEntities[entityIndex];
-            // NOTE (Manav): high.p += entityOffsetForFrame;
-            _ = high.p.add(entityOffsetForFrame);
-
-            if (!game.IsInRectangle(cameraBounds, high.p)) {
-                ChangeEntityResidence(gameState, entityIndex, .Dormant);
-            }
-        }
-    }
+    OffsetAndCheckFrequencyByArea(gameState, entityOffsetForFrame, cameraBounds);
 
     const minTileX = newCameraP.absTileX -% tileSpanX / 2;
     const maxTileX = newCameraP.absTileX +% tileSpanX / 2;
     const minTileY = newCameraP.absTileY -% tileSpanY / 2;
     const maxTileY = newCameraP.absTileY +% tileSpanY / 2;
 
-    entityIndex = 1;
-    while (entityIndex < gameState.dormantEntities.len) : (entityIndex += 1) {
-        if (gameState.entityResidence[entityIndex] == .Dormant) {
-            var dormant = &gameState.dormantEntities[entityIndex];
+    var entityIndex = @as(u32, 1);
+    while (entityIndex < gameState.lowEntityCount) : (entityIndex += 1) {
+        const low = &gameState.lowEntities[entityIndex];
+        if (low.highEntityIndex == 0) {
 
-            if ((dormant.p.absTileZ == newCameraP.absTileZ) and
-                (dormant.p.absTileX >= minTileX) and
-                (dormant.p.absTileX <= maxTileX) and
-                (dormant.p.absTileY <= minTileY) and
-                (dormant.p.absTileY >= maxTileY))
+            if ((low.p.absTileZ == newCameraP.absTileZ) and
+                (low.p.absTileX >= minTileX) and
+                (low.p.absTileX <= maxTileX) and
+                (low.p.absTileY <= minTileY) and
+                (low.p.absTileY >= maxTileY))
             {
-                ChangeEntityResidence(gameState, entityIndex, .High);
+                _ = MakeEntityHighFrequency(gameState, entityIndex);
             }
         }
     }
@@ -528,7 +562,8 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
-        _ = AddEntity(gameState, .Null);
+        _ = AddLowEntity(gameState, .Null);
+        gameState.highEntityCount = 1;
 
         gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
         gameState.shadow = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp");
@@ -716,9 +751,14 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     // const lowerLeftY = @intToFloat(f32, buffer.height);
 
     for (gameInput.controllers) |controller, controllerIndex| {
-        var controllingEntity = GetEntity(gameState, .High, gameState.playerIndexForController[controllerIndex]);
-
-        if (controllingEntity.residence != .Nonexistent) {
+        const lowIndex = gameState.playerIndexForController[controllerIndex];
+        if (lowIndex == 0) {
+            if (controller.buttons.mapped.start.endedDown != 0) {
+                const entityIndex = AddPlayer(gameState);
+                gameState.playerIndexForController[controllerIndex] = entityIndex;
+            }
+        } else {
+            const controllingEntity = GetHighEntity(gameState, lowIndex);
             var ddP = game.v2{};
             if (controller.isAnalog) {
                 ddP = .{ .x = controller.stickAverageX, .y = controller.stickAverageX };
@@ -738,48 +778,43 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             }
 
             if (controller.buttons.mapped.actionDown.endedDown != 0) {
-                controllingEntity.high.dZ = 3.0;
+                controllingEntity.high.?.dZ = 3.0;
             }
 
             MovePlayer(gameState, controllingEntity, gameInput.dtForFrame, ddP);
-        } else {
-            if (controller.buttons.mapped.start.endedDown != 0) {
-                const entityIndex = AddPlayer(gameState);
-                gameState.playerIndexForController[controllerIndex] = entityIndex;
-            }
         }
     }
 
     var entityOffsetForFrame = game.v2{};
-    const cameraFollowingEntity = GetEntity(gameState, .High, gameState.cameraFollowingEntityIndex);
-    if (cameraFollowingEntity.residence != .Nonexistent) {
+    const cameraFollowingEntity = GetHighEntity(gameState, gameState.cameraFollowingEntityIndex);
+    if (cameraFollowingEntity.high) |_| {
         var newCameraP = gameState.cameraP;
-        newCameraP.absTileZ = cameraFollowingEntity.dormant.p.absTileZ;
+        newCameraP.absTileZ = cameraFollowingEntity.low.p.absTileZ;
 
         if (NOT_IGNORE) {
-            if (cameraFollowingEntity.high.p.x > (9 * tileMap.tileSideInMeters)) {
+            if (cameraFollowingEntity.high.?.p.x > (9 * tileMap.tileSideInMeters)) {
                 newCameraP.absTileX += 17;
             }
-            if (cameraFollowingEntity.high.p.x < -(9 * tileMap.tileSideInMeters)) {
-                newCameraP.absTileX -= 17;
+            if (cameraFollowingEntity.high.?.p.x < -(9 * tileMap.tileSideInMeters)) {
+                newCameraP.absTileX -%= 17;
             }
-            if (cameraFollowingEntity.high.p.y > (5 * tileMap.tileSideInMeters)) {
+            if (cameraFollowingEntity.high.?.p.y > (5 * tileMap.tileSideInMeters)) {
                 newCameraP.absTileY += 9;
             }
-            if (cameraFollowingEntity.high.p.y < -(5 * tileMap.tileSideInMeters)) {
-                newCameraP.absTileY -= 9;
+            if (cameraFollowingEntity.high.?.p.y < -(5 * tileMap.tileSideInMeters)) {
+                newCameraP.absTileY -%= 9;
             }
         } else {
-            if (cameraFollowingEntity.high.p.x > (1 * tileMap.tileSideInMeters)) {
+            if (cameraFollowingEntity.high.?.p.x > (1 * tileMap.tileSideInMeters)) {
                 newCameraP.absTileX += 1;
             }
-            if (cameraFollowingEntity.high.p.x < -(1 * tileMap.tileSideInMeters)) {
+            if (cameraFollowingEntity.high.?.p.x < -(1 * tileMap.tileSideInMeters)) {
                 newCameraP.absTileX -= 1;
             }
-            if (cameraFollowingEntity.high.p.y > (1 * tileMap.tileSideInMeters)) {
+            if (cameraFollowingEntity.high.?.p.y > (1 * tileMap.tileSideInMeters)) {
                 newCameraP.absTileY += 1;
             }
-            if (cameraFollowingEntity.high.p.y < -(1 * tileMap.tileSideInMeters)) {
+            if (cameraFollowingEntity.high.?.p.y < -(1 * tileMap.tileSideInMeters)) {
                 newCameraP.absTileY -= 1;
             }
         }
@@ -833,57 +868,54 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         }
     }
 
-    var entityIndex = @as(u32, 1);
-    while (entityIndex < gameState.entityCount) : (entityIndex += 1) {
-        if (gameState.entityResidence[entityIndex] == .High) {
-            var highEntity = &gameState.highEntities[entityIndex];
-            // var lowEntity = &gameState.lowEntities[entityIndex];
-            var dormantEntity = &gameState.dormantEntities[entityIndex];
+    var highEntityIndex = @as(u32, 1);
+    while (highEntityIndex < gameState.highEntityCount) : (highEntityIndex += 1) {
+        const highEntity = &gameState.highEntities[highEntityIndex];
+        const lowEntity = &gameState.lowEntities[highEntity.lowEntityIndex];
 
-            _ = highEntity.p.add(entityOffsetForFrame);
+        _ = highEntity.p.add(entityOffsetForFrame);
 
-            const dt = gameInput.dtForFrame;
-            const ddZ = -9.8;
-            highEntity.z += 0.5 * ddZ * game.Square(dt) + highEntity.dZ * dt;
-            highEntity.dZ += ddZ * dt;
+        const dt = gameInput.dtForFrame;
+        const ddZ = -9.8;
+        highEntity.z += 0.5 * ddZ * game.Square(dt) + highEntity.dZ * dt;
+        highEntity.dZ += ddZ * dt;
 
-            if (highEntity.z < 0) {
-                highEntity.z = 0;
-            }
+        if (highEntity.z < 0) {
+            highEntity.z = 0;
+        }
 
-            const cAlphaCal = 1 - 0.5 * highEntity.z;
-            const cAlpha = if (cAlphaCal > 0) cAlphaCal else 0;
+        const cAlphaCal = 1 - 0.5 * highEntity.z;
+        const cAlpha = if (cAlphaCal > 0) cAlphaCal else 0;
 
-            const playerR = 1.0;
-            const playerG = 1.0;
-            const playerB = 0.0;
+        const playerR = 1.0;
+        const playerG = 1.0;
+        const playerB = 0.0;
 
-            const playerGroundPointX = screenCenterX + metersToPixels * highEntity.p.x;
-            const playerGroundPointY = screenCenterY - metersToPixels * highEntity.p.y;
-            const z = -metersToPixels * highEntity.z;
-            const playerLeftTop = .{
-                .x = playerGroundPointX - 0.5 * metersToPixels * dormantEntity.width,
-                .y = playerGroundPointY - 0.5 * metersToPixels * dormantEntity.height,
-            };
-            const entityWidthHeight = .{ .x = dormantEntity.width, .y = dormantEntity.height };
+        const playerGroundPointX = screenCenterX + metersToPixels * highEntity.p.x;
+        const playerGroundPointY = screenCenterY - metersToPixels * highEntity.p.y;
+        const z = -metersToPixels * highEntity.z;
+        const playerLeftTop = .{
+            .x = playerGroundPointX - 0.5 * metersToPixels * lowEntity.width,
+            .y = playerGroundPointY - 0.5 * metersToPixels * lowEntity.height,
+        };
+        const entityWidthHeight = .{ .x = lowEntity.width, .y = lowEntity.height };
 
-            if (dormantEntity.entityType == .Hero) {
-                const heroBitmaps = gameState.heroBitmaps[highEntity.facingDirection];
+        if (lowEntity.entityType == .Hero) {
+            const heroBitmaps = gameState.heroBitmaps[highEntity.facingDirection];
 
-                DrawBitmap(buffer, &gameState.shadow, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY, cAlpha);
-                DrawBitmap(buffer, &heroBitmaps.torso, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
-                DrawBitmap(buffer, &heroBitmaps.cape, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
-                DrawBitmap(buffer, &heroBitmaps.head, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
-            } else {
-                DrawRectangle(
-                    buffer,
-                    playerLeftTop,
-                    game.add(playerLeftTop, game.scale(entityWidthHeight, metersToPixels)),
-                    playerR,
-                    playerG,
-                    playerB,
-                );
-            }
+            DrawBitmap(buffer, &gameState.shadow, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY, cAlpha);
+            DrawBitmap(buffer, &heroBitmaps.torso, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
+            DrawBitmap(buffer, &heroBitmaps.cape, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
+            DrawBitmap(buffer, &heroBitmaps.head, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
+        } else {
+            DrawRectangle(
+                buffer,
+                playerLeftTop,
+                game.add(playerLeftTop, game.scale(entityWidthHeight, metersToPixels)),
+                playerR,
+                playerG,
+                playerB,
+            );
         }
     }
 }
