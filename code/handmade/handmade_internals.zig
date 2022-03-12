@@ -49,7 +49,15 @@ pub const high_entity = struct {
 
 pub const low_entity = struct {};
 
+pub const entity_type = enum {
+    Null,
+
+    Hero,
+    Wall,
+};
+
 pub const dormant_entity = struct {
+    entityType: entity_type = .Null,
     p: tile_map_position = .{},
     width: f32 = 0,
     height: f32 = 0,
@@ -82,7 +90,7 @@ pub const state = struct {
     playerIndexForController: [CONTROLLERS]u32,
     entityCount: u32,
 
-    entityResidence: [246]entity_residence,
+    entityResidence: [256]entity_residence,
     highEntities: [256]high_entity,
     lowEntities: [256]low_entity,
     dormantEntities: [256]dormant_entity,

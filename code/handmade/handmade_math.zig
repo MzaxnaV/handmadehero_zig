@@ -67,7 +67,45 @@ pub inline fn inner(a: v2, b: v2) f32 {
     return result;
 }
 
-pub inline fn square(a: f32) f32 {
+pub const rect2 = struct {
+    min: v2 = .{},
+    max: v2 = .{},
+
+    pub inline fn initMinDim(min: v2, dim: v2) rect2 {
+        const result = rect2{
+            .min = min,
+            .max = add(min, dim),
+        };
+
+        return result;
+    }
+
+    pub inline fn initCenterHalfDim(center: v2, halfDim: v2) rect2 {
+        const result = rect2{
+            .min = sub(center, halfDim),
+            .max = add(center, halfDim),
+        };
+
+        return result;
+    }
+
+    pub inline fn initCenterDim(center: v2, dim: v2) rect2 {
+        const result = initCenterHalfDim(center, scale(dim, 0.5));
+
+        return result;
+    }
+};
+
+pub inline fn IsInRectangle(rectangle: rect2, testP: v2) bool {
+    const result = ((testP.x >= rectangle.min.x) and
+        (testP.y >= rectangle.min.y) and
+        (testP.x < rectangle.max.x) and
+        (testP.y < rectangle.max.y));
+
+    return result;
+}
+
+pub inline fn Square(a: f32) f32 {
     const result = a * a;
 
     return result;

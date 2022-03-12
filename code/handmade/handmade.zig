@@ -105,8 +105,8 @@ fn DrawBitmap(buffer: *platform.offscreen_buffer, bitmap: *const game.loaded_bit
 
     var minX = game.RoundF32ToInt(i32, alignedRealX);
     var minY = game.RoundF32ToInt(i32, alignedRealY);
-    var maxX = game.RoundF32ToInt(i32, alignedRealX + @intToFloat(f32, bitmap.width));
-    var maxY = game.RoundF32ToInt(i32, alignedRealY + @intToFloat(f32, bitmap.height));
+    var maxX = minX + bitmap.width;
+    var maxY = minY + bitmap.height;
 
     var sourceOffesetX = @as(i32, 0);
     if (minX < 0) {
@@ -265,7 +265,42 @@ inline fn GetEntity(gameState: *game.state, residence: game.entity_residence, in
     return entity;
 }
 
-fn InitializaPlayer(gameState: *game.state, entityIndex: u32) void {
+fn AddEntity(gameState: *game.state, entityType: game.entity_type) u32 {
+    const entityIndex = gameState.entityCount;
+    gameState.entityCount += 1;
+
+    std.debug.assert(gameState.entityCount < gameState.dormantEntities.len);
+    std.debug.assert(gameState.entityCount < gameState.lowEntities.len);
+    std.debug.assert(gameState.entityCount < gameState.highEntities.len);
+
+    gameState.entityResidence[entityIndex] = .Dormant;
+    gameState.dormantEntities[entityIndex] = .{
+        .entityType = entityType,
+    };
+    gameState.lowEntities[entityIndex] = .{};
+    gameState.highEntities[entityIndex] = .{};
+
+    return entityIndex;
+}
+
+fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) u32 {
+    const entityIndex = AddEntity(gameState, .Wall);
+    const entity = GetEntity(gameState, .Dormant, entityIndex);
+
+    entity.dormant.p = .{
+        .absTileX = absTileX,
+        .absTileY = absTileY,
+        .absTileZ = absTileZ,
+    };
+    entity.dormant.height = gameState.world.tileMap.tileSideInMeters;
+    entity.dormant.width = entity.dormant.height;
+    entity.dormant.collides = true;
+
+    return entityIndex;
+}
+
+fn AddPlayer(gameState: *game.state) u32 {
+    const entityIndex = AddEntity(gameState, .Hero);
     const entity = GetEntity(gameState, .Dormant, entityIndex);
 
     entity.dormant.p = .{
@@ -282,20 +317,6 @@ fn InitializaPlayer(gameState: *game.state, entityIndex: u32) void {
     if (GetEntity(gameState, .Dormant, gameState.cameraFollowingEntityIndex).residence == .Nonexistent) {
         gameState.cameraFollowingEntityIndex = entityIndex;
     }
-}
-
-fn AddEntity(gameState: *game.state) u32 {
-    const entityIndex = gameState.entityCount;
-    gameState.entityCount += 1;
-
-    std.debug.assert(gameState.entityCount < gameState.dormantEntities.len);
-    std.debug.assert(gameState.entityCount < gameState.lowEntities.len);
-    std.debug.assert(gameState.entityCount < gameState.highEntities.len);
-
-    gameState.entityResidence[entityIndex] = .Dormant;
-    gameState.dormantEntities[entityIndex] = .{};
-    gameState.lowEntities[entityIndex] = .{};
-    gameState.highEntities[entityIndex] = .{};
 
     return entityIndex;
 }
@@ -319,9 +340,8 @@ fn TestWall(wallX: f32, relX: f32, relY: f32, playerDeltaX: f32, playerDeltaY: f
 }
 
 fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration: game.v2) void {
-    // const tileMap = gameState.world.tileMap;
-
     var ddP = accelaration;
+    // const tileMap = gameState.world.tileMap;
 
     const ddPLength = game.LengthSq(ddP);
     if (ddPLength > 1.0) {
@@ -335,7 +355,7 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
 
     // const oldPlayerP = entity.high.p;
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
-    var playerDelta = game.add(game.scale(ddP, 0.5 * game.square(dt)), game.scale(entity.high.dP, dt));
+    var playerDelta = game.add(game.scale(ddP, 0.5 * game.Square(dt)), game.scale(entity.high.dP, dt));
     _ = entity.high.dP.add(game.scale(ddP, dt)); // NOTE (Manav): entity.dP += ddP * dt;
     // const newPlayerP = game.add(oldPlayerP, playerDelta);
 
@@ -355,13 +375,15 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
 
     // const absTileZ = entity.high.p.absTileZ;
 
-    var tRemaining = @as(f32, 1.0);
     var iteration = @as(u32, 0);
-    while ((iteration < 4) and (tRemaining > 0)) : (iteration += 1) {
+    while (iteration < 4) : (iteration += 1) {
         var tMin = @as(f32, 1.0);
         var wallNormal = game.v2{};
-
         var hitEntityIndex = @as(u32, 0);
+
+        // NOTE (Manav): desiredPosition = entity.high.p + playerDelta;
+        const desiredPosition = game.add(entity.high.p, playerDelta);
+
         var entityIndex = @as(u32, 1);
         while (entityIndex < gameState.entityCount) : (entityIndex += 1) {
             const testEntity = GetEntity(gameState, .High, entityIndex);
@@ -400,9 +422,10 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
         if (hitEntityIndex != 0) {
             // NOTE (Manav): entity.high.dP -= (1 * inner(entity.high.dP, wallNormal))*wallNormal;
             _ = entity.high.dP.sub(game.scale(wallNormal, 1 * game.inner(entity.high.dP, wallNormal)));
+            // NOTE (Manav): playerDelta = desiredPositon - entity.high.p;
+            playerDelta = game.sub(desiredPosition, entity.high.p);
             // NOTE (Manav): playerDelta -= (1 * inner(playerDelta, wallNormal))*wallNormal;
             _ = playerDelta.sub(game.scale(wallNormal, 1 * game.inner(playerDelta, wallNormal)));
-            tRemaining -= tMin * tRemaining;
 
             const hitEntity = GetEntity(gameState, .Dormant, hitEntityIndex);
             entity.high.absTileZ = game.AddI32ToU32(entity.high.absTileZ, hitEntity.dormant.dAbsTileZ);
@@ -430,6 +453,60 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
     entity.dormant.p = game.MapIntoTileSpace(gameState.world.tileMap, gameState.cameraP, entity.high.p);
 }
 
+fn SetCamera(gameState: *game.state, newCameraP: game.tile_map_position) void {
+    const tileMap = gameState.world.tileMap;
+
+    const dCameraP = game.Substract(tileMap, &newCameraP, &gameState.cameraP);
+    gameState.cameraP = newCameraP;
+
+    const tileSpanX = 17 * 3;
+    const tileSpanY = 9 * 3;
+
+    const cameraBounds = game.rect2.initCenterDim(.{}, game.scale(
+        .{
+            .x = @intToFloat(f32, tileSpanX),
+            .y = @intToFloat(f32, tileSpanY),
+        },
+        tileMap.tileSideInMeters,
+    ));
+
+    const entityOffsetForFrame = game.scale(dCameraP.dXY, -1);
+
+    var entityIndex = @as(u32, 1);
+    while (entityIndex < gameState.highEntities.len) : (entityIndex += 1) {
+        if (gameState.entityResidence[entityIndex] == .High) {
+            var high = &gameState.highEntities[entityIndex];
+            // NOTE (Manav): high.p += entityOffsetForFrame;
+            _ = high.p.add(entityOffsetForFrame);
+
+            if (!game.IsInRectangle(cameraBounds, high.p)) {
+                ChangeEntityResidence(gameState, entityIndex, .Dormant);
+            }
+        }
+    }
+
+    const minTileX = newCameraP.absTileX -% tileSpanX / 2;
+    const maxTileX = newCameraP.absTileX +% tileSpanX / 2;
+    const minTileY = newCameraP.absTileY -% tileSpanY / 2;
+    const maxTileY = newCameraP.absTileY +% tileSpanY / 2;
+
+    entityIndex = 1;
+    while (entityIndex < gameState.dormantEntities.len) : (entityIndex += 1) {
+        if (gameState.entityResidence[entityIndex] == .Dormant) {
+            var dormant = &gameState.dormantEntities[entityIndex];
+
+            if ((dormant.p.absTileZ == newCameraP.absTileZ) and
+                (dormant.p.absTileX >= minTileX) and
+                (dormant.p.absTileX <= maxTileX) and
+                (dormant.p.absTileY <= minTileY) and
+                (dormant.p.absTileY >= maxTileY))
+            {
+                ChangeEntityResidence(gameState, entityIndex, .High);
+            }
+        }
+    }
+}
+
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *platform.memory, gameInput: *platform.input, buffer: *platform.offscreen_buffer) void {
@@ -451,7 +528,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
-        _ = AddEntity(gameState);
+        _ = AddEntity(gameState, .Null);
 
         gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
         gameState.shadow = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp");
@@ -479,9 +556,6 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         gameState.heroBitmaps[3].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
         gameState.heroBitmaps[3].alignX = 72;
         gameState.heroBitmaps[3].alignY = 182;
-
-        gameState.cameraP.absTileX = 17 / 2;
-        gameState.cameraP.absTileY = 9 / 2;
 
         game.InitializeArena(&gameState.worldArena, gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
 
@@ -528,13 +602,17 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         var doorDown = false;
 
         var screenIndex: u32 = 0;
-        while (screenIndex < 100) : (screenIndex += 1) {
+        while (screenIndex < 2) : (screenIndex += 1) {
             var randomChoice: u32 = 0;
-            if (doorUp or doorDown) {
-                randomChoice = game.RandInt(u32) % 2;
-            } else {
-                randomChoice = game.RandInt(u32) % 3;
+
+            if (!NOT_IGNORE) {
+                // if (doorUp or doorDown) {
+                //     randomChoice = game.RandInt(u32) % 2;
+                // } else {
+                //     randomChoice = game.RandInt(u32) % 3;
+                // }
             }
+            randomChoice = game.RandInt(u32) % 2;
 
             var createdZDoor = false;
             if (randomChoice == 2) {
@@ -550,14 +628,14 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                 doorTop = true;
             }
 
-            var tileY: u32 = 0;
+            var tileY = @as(u32, 0);
             while (tileY < tilesPerHeight) : (tileY += 1) {
-                var tileX: u32 = 0;
+                var tileX = @as(u32, 0);
                 while (tileX < tilesPerWidth) : (tileX += 1) {
                     const absTileX = screenX * tilesPerWidth + tileX;
                     const absTileY = screenY * tilesPerHeight + tileY;
 
-                    var tileValue: u32 = 1;
+                    var tileValue = @as(u32, 1);
                     if ((tileX == 0) and (!doorLeft or (tileY != (tilesPerHeight / 2)))) {
                         tileValue = 2;
                     }
@@ -585,6 +663,10 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                     }
 
                     SetTileValue(&gameState.worldArena, world.tileMap, absTileX, absTileY, absTileZ, tileValue);
+
+                    if (tileValue == 2) {
+                        _ = AddWall(gameState, absTileX, absTileY, absTileZ);
+                    }
                 }
             }
 
@@ -614,6 +696,12 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                 screenY += 1;
             }
         }
+
+        const newCameraP = game.tile_map_position{
+            .absTileX = 17 / 2,
+            .absTileY = 9 / 2,
+        };
+        SetCamera(gameState, newCameraP);
 
         gameMemory.isInitialized = true;
     }
@@ -656,8 +744,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             MovePlayer(gameState, controllingEntity, gameInput.dtForFrame, ddP);
         } else {
             if (controller.buttons.mapped.start.endedDown != 0) {
-                const entityIndex = AddEntity(gameState);
-                InitializaPlayer(gameState, entityIndex);
+                const entityIndex = AddPlayer(gameState);
                 gameState.playerIndexForController[controllerIndex] = entityIndex;
             }
         }
@@ -666,25 +753,38 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     var entityOffsetForFrame = game.v2{};
     const cameraFollowingEntity = GetEntity(gameState, .High, gameState.cameraFollowingEntityIndex);
     if (cameraFollowingEntity.residence != .Nonexistent) {
-        const oldCameraP = gameState.cameraP;
+        var newCameraP = gameState.cameraP;
+        newCameraP.absTileZ = cameraFollowingEntity.dormant.p.absTileZ;
 
-        gameState.cameraP.absTileZ = cameraFollowingEntity.dormant.p.absTileZ;
+        if (NOT_IGNORE) {
+            if (cameraFollowingEntity.high.p.x > (9 * tileMap.tileSideInMeters)) {
+                newCameraP.absTileX += 17;
+            }
+            if (cameraFollowingEntity.high.p.x < -(9 * tileMap.tileSideInMeters)) {
+                newCameraP.absTileX -= 17;
+            }
+            if (cameraFollowingEntity.high.p.y > (5 * tileMap.tileSideInMeters)) {
+                newCameraP.absTileY += 9;
+            }
+            if (cameraFollowingEntity.high.p.y < -(5 * tileMap.tileSideInMeters)) {
+                newCameraP.absTileY -= 9;
+            }
+        } else {
+            if (cameraFollowingEntity.high.p.x > (1 * tileMap.tileSideInMeters)) {
+                newCameraP.absTileX += 1;
+            }
+            if (cameraFollowingEntity.high.p.x < -(1 * tileMap.tileSideInMeters)) {
+                newCameraP.absTileX -= 1;
+            }
+            if (cameraFollowingEntity.high.p.y > (1 * tileMap.tileSideInMeters)) {
+                newCameraP.absTileY += 1;
+            }
+            if (cameraFollowingEntity.high.p.y < -(1 * tileMap.tileSideInMeters)) {
+                newCameraP.absTileY -= 1;
+            }
+        }
 
-        if (cameraFollowingEntity.high.p.x > (9 * tileMap.tileSideInMeters)) {
-            gameState.cameraP.absTileX += 17;
-        }
-        if (cameraFollowingEntity.high.p.x < -(9 * tileMap.tileSideInMeters)) {
-            gameState.cameraP.absTileX -= 17;
-        }
-        if (cameraFollowingEntity.high.p.y > (5 * tileMap.tileSideInMeters)) {
-            gameState.cameraP.absTileY += 9;
-        }
-        if (cameraFollowingEntity.high.p.y < -(5 * tileMap.tileSideInMeters)) {
-            gameState.cameraP.absTileY -= 9;
-        }
-
-        const dCameraP = game.Substract(tileMap, &gameState.cameraP, &oldCameraP);
-        entityOffsetForFrame = game.scale(dCameraP.dXY, -1);
+        SetCamera(gameState, newCameraP);
     }
 
     DrawBitmap(buffer, &gameState.backdrop, 0, 0, 0, 0, 1);
@@ -692,46 +792,48 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     const screenCenterX = 0.5 * @intToFloat(f32, buffer.width);
     const screenCenterY = 0.5 * @intToFloat(f32, buffer.height);
 
-    var relRow: i32 = -10;
-    while (relRow < 10) : (relRow += 1) {
-        var relCol: i32 = -20;
-        while (relCol < 20) : (relCol += 1) {
-            const col = @bitCast(u32, @intCast(i32, gameState.cameraP.absTileX) + relCol);
-            const row = @bitCast(u32, @intCast(i32, gameState.cameraP.absTileY) + relRow);
-            const tileID = game.GetTileValueFromAbs(tileMap, col, row, gameState.cameraP.absTileZ);
+    if (!NOT_IGNORE) {
+        var relRow: i32 = -10;
+        while (relRow < 10) : (relRow += 1) {
+            var relCol: i32 = -20;
+            while (relCol < 20) : (relCol += 1) {
+                const col = @bitCast(u32, @intCast(i32, gameState.cameraP.absTileX) + relCol);
+                const row = @bitCast(u32, @intCast(i32, gameState.cameraP.absTileY) + relRow);
+                const tileID = game.GetTileValueFromAbs(tileMap, col, row, gameState.cameraP.absTileZ);
 
-            if (tileID > 1) {
-                var grey: f32 = 0.5;
+                if (tileID > 1) {
+                    var grey: f32 = 0.5;
 
-                if (tileID == 2) {
-                    grey = 1;
+                    if (tileID == 2) {
+                        grey = 1;
+                    }
+
+                    if (tileID > 2) {
+                        grey = 0.25;
+                    }
+
+                    if ((col == gameState.cameraP.absTileX) and (row == gameState.cameraP.absTileY)) {
+                        grey = 0.0;
+                    }
+
+                    const tileSide = .{ .x = @as(f32, 0.5) * tileSideInPixels, .y = @as(f32, 0.5) * tileSideInPixels };
+                    const cen = .{
+                        .x = screenCenterX - metersToPixels * gameState.cameraP.offset_.x + @intToFloat(f32, relCol * tileSideInPixels),
+                        .y = screenCenterY + metersToPixels * gameState.cameraP.offset_.y - @intToFloat(f32, relRow * tileSideInPixels),
+                    };
+
+                    // NOTE (Manav): min = cen - 0.9 * tileSide
+                    const min = game.sub(cen, game.scale(tileSide, 0.9));
+                    // NOTE (Manav): max = cen + 0.9 * tileSide
+                    const max = game.add(cen, game.scale(tileSide, 0.9));
+
+                    DrawRectangle(buffer, min, max, grey, grey, grey);
                 }
-
-                if (tileID > 2) {
-                    grey = 0.25;
-                }
-
-                if ((col == gameState.cameraP.absTileX) and (row == gameState.cameraP.absTileY)) {
-                    grey = 0.0;
-                }
-
-                const tileSide = .{ .x = @as(f32, 0.5) * tileSideInPixels, .y = @as(f32, 0.5) * tileSideInPixels };
-                const cen = .{
-                    .x = screenCenterX - metersToPixels * gameState.cameraP.offset_.x + @intToFloat(f32, relCol * tileSideInPixels),
-                    .y = screenCenterY + metersToPixels * gameState.cameraP.offset_.y - @intToFloat(f32, relRow * tileSideInPixels),
-                };
-
-                // NOTE (Manav): min = cen - 0.9 * tileSide
-                const min = game.sub(cen, game.scale(tileSide, 0.9));
-                // NOTE (Manav): max = cen + 0.9 * tileSide
-                const max = game.add(cen, game.scale(tileSide, 0.9));
-
-                DrawRectangle(buffer, min, max, grey, grey, grey);
             }
         }
     }
 
-    var entityIndex = @as(u32, 0);
+    var entityIndex = @as(u32, 1);
     while (entityIndex < gameState.entityCount) : (entityIndex += 1) {
         if (gameState.entityResidence[entityIndex] == .High) {
             var highEntity = &gameState.highEntities[entityIndex];
@@ -742,7 +844,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
 
             const dt = gameInput.dtForFrame;
             const ddZ = -9.8;
-            highEntity.z += 0.5 * ddZ * game.square(dt) + highEntity.dZ * dt;
+            highEntity.z += 0.5 * ddZ * game.Square(dt) + highEntity.dZ * dt;
             highEntity.dZ += ddZ * dt;
 
             if (highEntity.z < 0) {
@@ -765,7 +867,14 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             };
             const entityWidthHeight = .{ .x = dormantEntity.width, .y = dormantEntity.height };
 
-            if (!NOT_IGNORE) {
+            if (dormantEntity.entityType == .Hero) {
+                const heroBitmaps = gameState.heroBitmaps[highEntity.facingDirection];
+
+                DrawBitmap(buffer, &gameState.shadow, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY, cAlpha);
+                DrawBitmap(buffer, &heroBitmaps.torso, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
+                DrawBitmap(buffer, &heroBitmaps.cape, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
+                DrawBitmap(buffer, &heroBitmaps.head, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
+            } else {
                 DrawRectangle(
                     buffer,
                     playerLeftTop,
@@ -775,13 +884,6 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                     playerB,
                 );
             }
-
-            const heroBitmaps = gameState.heroBitmaps[highEntity.facingDirection];
-
-            DrawBitmap(buffer, &gameState.shadow, playerGroundPointX, playerGroundPointY, heroBitmaps.alignX, heroBitmaps.alignY, cAlpha);
-            DrawBitmap(buffer, &heroBitmaps.torso, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
-            DrawBitmap(buffer, &heroBitmaps.cape, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
-            DrawBitmap(buffer, &heroBitmaps.head, playerGroundPointX, playerGroundPointY + z, heroBitmaps.alignX, heroBitmaps.alignY, 1.0);
         }
     }
 }
