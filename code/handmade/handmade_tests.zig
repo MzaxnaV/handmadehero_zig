@@ -46,4 +46,8 @@ test "math" {
     try testing.expectEqual(math.sub(vec1, vec2), vec1.sub(vec2).*);
     try testing.expectEqual(math.neg(vec1), vec1.neg().*);
     try testing.expectEqual(math.scale(vec1, 2), vec1.scale(2).*);
+
+    try testing.expectEqual(math.AddI32ToU32(32, -2), 30);
+    try testing.expectEqual(math.AddI32ToU32(32, -30), 2);
+    try testing.expectEqual(math.AddI32ToU32(std.math.maxInt(u32), -2147483647), 2147483648);
 }

@@ -78,3 +78,9 @@ pub inline fn LengthSq(a: v2) f32 {
 
     return result;
 }
+
+pub inline fn AddI32ToU32(a: u32, b: i32) u32 {
+    const result = if (b > 0) a + @intCast(u32, b) else a - @intCast(u32, -b);
+
+    return result;
+}

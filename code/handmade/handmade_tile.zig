@@ -51,12 +51,14 @@ pub inline fn RecanonicalizeCoord(tileMap: *const tile_map, tile: *u32, tileRel:
     tile.* +%= @bitCast(u32, offSet);
     tileRel.* -= @intToFloat(f32, offSet) * tileMap.tileSideInMeters;
 
-    assert(tileRel.* > -0.5001 * tileMap.tileSideInMeters);
-    assert(tileRel.* < 0.5001 * tileMap.tileSideInMeters);
+    assert(tileRel.* > -0.5 * tileMap.tileSideInMeters);
+    assert(tileRel.* < 0.5 * tileMap.tileSideInMeters);
 }
 
-pub inline fn RecanonicalizePosition(tileMap: *const tile_map, pos: tile_map_position) tile_map_position {
-    var result = pos;
+pub inline fn MapIntoTileSpace(tileMap: *const tile_map, basePos: tile_map_position, offset: math.v2) tile_map_position {
+    var result = basePos;
+
+    _ = result.offset_.add(offset); // NOTE (Manav): result.offset_ += offset
 
     RecanonicalizeCoord(tileMap, &result.absTileX, &result.offset_.x);
     RecanonicalizeCoord(tileMap, &result.absTileY, &result.offset_.y);
@@ -164,14 +166,6 @@ pub inline fn CenteredTilePoint(absTileX: u32, absTileY: u32, absTileZ: u32) til
     };
 
     return result;
-}
-
-pub inline fn Offset(tileMap: *const tile_map, p: tile_map_position, offset: math.v2) tile_map_position {
-    var pos = p;
-    _ = pos.offset_.add(offset); // NOTE (Manav): pos.offset_ += offset;
-    pos = RecanonicalizePosition(tileMap, pos);
-
-    return pos;
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------

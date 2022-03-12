@@ -18,6 +18,11 @@ pub inline fn AbsoluteValue(float32: f32) f32 {
 }
 
 pub inline fn RotateLeft(value: u32, amount: i8) u32 {
+
+    // NOTE (Manav): this is hacky atm
+    // const amt: u5 = 31 & @truncate(u5, @bitCast(u8, amount));
+    // const result = (value << amt) | (value >> @truncate(u5, 32 - @as(u6, amt)));
+
     const result = math.rotl(u32, value, amount);
 
     // NOTE (Manav): Inline asm below is buggy, doesn't work with inlining calls
@@ -31,6 +36,11 @@ pub inline fn RotateLeft(value: u32, amount: i8) u32 {
 }
 
 pub inline fn RotateRight(value: u32, amount: i8) u32 {
+
+    // NOTE (Manav): this is hacky atm
+    // const amt: u5 = 31 & @truncate(u5, @bitCast(u8, amount));
+    // const result = (value >> amt) | (value << @truncate(u5, 32 - @as(u6, amt)));
+
     const result = math.rotr(u32, value, amount);
     return result;
 }

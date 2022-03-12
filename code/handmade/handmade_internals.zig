@@ -37,13 +37,39 @@ pub const hero_bitmaps = struct {
     torso: loaded_bitmap,
 };
 
-pub const entity = struct {
-    exists: bool = false,
-    p: tile_map_position = .{},
+pub const high_entity = struct {
+    p: v2 = .{},
     dP: v2 = .{},
+    absTileZ: u32 = 0,
     facingDirection: u32 = 0,
+
+    z: f32 = 0,
+    dZ: f32 = 0,
+};
+
+pub const low_entity = struct {};
+
+pub const dormant_entity = struct {
+    p: tile_map_position = .{},
     width: f32 = 0,
     height: f32 = 0,
+
+    collides: bool = false,
+    dAbsTileZ: i32 = 0,
+};
+
+pub const entity_residence = enum(u2) {
+    Nonexistent,
+    Dormant,
+    Low,
+    High,
+};
+
+pub const entity = struct {
+    residence: entity_residence = .Nonexistent,
+    low: *low_entity,
+    dormant: *dormant_entity,
+    high: *high_entity,
 };
 
 pub const state = struct {
@@ -55,9 +81,14 @@ pub const state = struct {
 
     playerIndexForController: [CONTROLLERS]u32,
     entityCount: u32,
-    entities: [256]?entity,
+
+    entityResidence: [246]entity_residence,
+    highEntities: [256]high_entity,
+    lowEntities: [256]low_entity,
+    dormantEntities: [256]dormant_entity,
 
     backdrop: loaded_bitmap,
+    shadow: loaded_bitmap,
     heroBitmaps: [4]hero_bitmaps,
 };
 
