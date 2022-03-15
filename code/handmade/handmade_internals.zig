@@ -2,8 +2,8 @@ const std = @import("std");
 
 const CONTROLLERS = @import("handmade_platform").CONTROLLERS;
 const memory_index = @import("handmade_platform").memory_index;
-const tile_map = @import("handmade_tile.zig").tile_map;
-const tile_map_position = @import("handmade_tile.zig").tile_map_position;
+const world_position = @import("handmade_world.zig").world_position;
+const world = @import("handmade_world.zig").world;
 const v2 = @import("handmade_math.zig").v2;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
@@ -12,10 +12,6 @@ pub const memory_arena = struct {
     size: memory_index,
     base: [*]u8,
     used: memory_index,
-};
-
-pub const world = struct {
-    tileMap: *tile_map,
 };
 
 pub const loaded_bitmap = struct {
@@ -58,7 +54,7 @@ pub const entity_type = enum {
 
 pub const low_entity = struct {
     entityType: entity_type = .Null,
-    p: tile_map_position = .{},
+    p: world_position = .{},
     width: f32 = 0,
     height: f32 = 0,
 
@@ -79,12 +75,12 @@ pub const state = struct {
     world: *world,
 
     cameraFollowingEntityIndex: u32,
-    cameraP: tile_map_position = .{},
+    cameraP: world_position = .{},
 
     playerIndexForController: [CONTROLLERS]u32,
 
     lowEntityCount: u32,
-    lowEntities: [4096]low_entity,
+    lowEntities: [100000]low_entity,
 
     highEntityCount: u32,
     highEntities: [256]high_entity,

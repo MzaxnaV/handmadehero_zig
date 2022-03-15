@@ -1044,7 +1044,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 // defer _ = win32.VirtualFree();
 
                 var gameMemory = handmade.memory{
-                    .permanentStorageSize = handmade.MegaBytes(64),
+                    .permanentStorageSize = handmade.MegaBytes(256),
                     .transientStorageSize = handmade.GigaBytes(1),
                     .permanentStorage = undefined,
                     .transientStorage = undefined,
