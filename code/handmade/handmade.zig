@@ -15,25 +15,6 @@ const HANDMADE_INTERNAL = @import("build_consts").HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
 
-fn SetTileValue(arena: *game.memory_arena, tileMap: *game.tile_map, absTileX: u32, absTileY: u32, absTileZ: u32, tileValue: u32) void {
-    const chunkPos = game.GetChunkPositionFor(tileMap, absTileX, absTileY, absTileZ);
-    const tileChunk = game.GetTileChunk(tileMap, chunkPos.tileChunkX, chunkPos.tileChunkY, chunkPos.tileChunkZ);
-
-    std.debug.assert(tileChunk != null);
-
-    if (tileChunk.?.tiles) |_| {} else {
-        const tileCount = tileMap.chunkDim * tileMap.chunkDim;
-        tileChunk.?.tiles = game.PushArrayPtr(u32, tileCount, arena);
-
-        var tileIndex: u32 = 0;
-        while (tileIndex < tileCount) : (tileIndex += 1) {
-            tileChunk.?.tiles.?[tileIndex] = 1;
-        }
-    }
-
-    game.SetTileValue(tileMap, tileChunk, chunkPos.relTileX, chunkPos.relTileY, tileValue);
-}
-
 fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneHz: u32) void {
     const toneVolume = 3000;
     _ = toneVolume;
@@ -237,7 +218,7 @@ inline fn GetLowEntity(gameState: *game.state, index: u32) *game.low_entity {
 }
 
 inline fn MakeEntityHighFrequency(gameState: *game.state, lowIndex: u32) ?*game.high_entity {
-    var entityHigh : ?*game.high_entity = null;
+    var entityHigh: ?*game.high_entity = null;
 
     const entityLow = &gameState.lowEntities[lowIndex];
     if (entityLow.highEntityIndex != 0) {
@@ -252,7 +233,7 @@ inline fn MakeEntityHighFrequency(gameState: *game.state, lowIndex: u32) ?*game.
 
             entityHigh.?.p = diff.dXY;
             entityHigh.?.dP = .{};
-            entityHigh.?.absTileZ = entityLow.p.absTileZ;
+            entityHigh.?.absTileZ = @intCast(u32, entityLow.p.absTileZ);
             entityHigh.?.facingDirection = 0;
             entityHigh.?.lowEntityIndex = lowIndex;
 
@@ -328,9 +309,9 @@ fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) 
     const entityLow = GetLowEntity(gameState, entityIndex);
 
     entityLow.p = .{
-        .absTileX = absTileX,
-        .absTileY = absTileY,
-        .absTileZ = absTileZ,
+        .absTileX = @intCast(i32, absTileX),
+        .absTileY = @intCast(i32, absTileY),
+        .absTileZ = @intCast(i32, absTileZ),
     };
     entityLow.height = gameState.world.tileMap.tileSideInMeters;
     entityLow.width = entityLow.height;
@@ -344,8 +325,8 @@ fn AddPlayer(gameState: *game.state) u32 {
     const entityLow = GetLowEntity(gameState, entityIndex);
 
     entityLow.p = .{
-        .absTileX = 1,
-        .absTileY = 3,
+        .absTileX = gameState.cameraP.absTileX,
+        .absTileY = gameState.cameraP.absTileY,
         .offset_ = .{ .x = 0, .y = 0 },
     };
     entityLow.height = 0.5;
@@ -528,12 +509,11 @@ fn SetCamera(gameState: *game.state, newCameraP: game.tile_map_position) void {
     while (entityIndex < gameState.lowEntityCount) : (entityIndex += 1) {
         const low = &gameState.lowEntities[entityIndex];
         if (low.highEntityIndex == 0) {
-
             if ((low.p.absTileZ == newCameraP.absTileZ) and
                 (low.p.absTileX >= minTileX) and
                 (low.p.absTileX <= maxTileX) and
-                (low.p.absTileY <= minTileY) and
-                (low.p.absTileY >= maxTileY))
+                (low.p.absTileY >= minTileY) and
+                (low.p.absTileY <= maxTileY))
             {
                 _ = MakeEntityHighFrequency(gameState, entityIndex);
             }
@@ -599,35 +579,18 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         const world = gameState.world;
         world.tileMap = game.PushStruct(game.tile_map, &gameState.worldArena);
 
-        const tileChunkCountX = 128;
-        const tileChunkCountY = 128;
-        const tileChunkCountZ = 2;
-
-        const chunkShift = 4;
-        const chunkDim = @as(u32, 1) << @intCast(u5, chunkShift);
-
         var tileMap = world.tileMap;
-        tileMap.chunkShift = chunkShift;
-        tileMap.chunkMask = (@as(u32, 1) << @intCast(u5, chunkShift)) - 1;
-        tileMap.chunkDim = chunkDim;
-
-        tileMap.tileChunkCountX = tileChunkCountX;
-        tileMap.tileChunkCountY = tileChunkCountY;
-        tileMap.tileChunkCountZ = tileChunkCountZ;
-        tileMap.tileChunks = game.PushArraySlice(game.tile_chunk, tileChunkCountX * tileChunkCountY * tileChunkCountZ, &gameState.worldArena);
-
-        tileMap.tileSideInMeters = 1.4;
+        game.InitializeTileMap(tileMap, 1.4);
 
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
 
-        // !NOT_IGNORE
-        // var screenX: u32 = std.math.maxInt(i32) / 2;
-        // var screenY: u32 = std.math.maxInt(i32) / 2;
-        var screenX: u32 = 0;
-        var screenY: u32 = 0;
-
-        var absTileZ: u32 = 0;
+        const screenBaseX = @as(u32, 0);
+        const screenBaseY = @as(u32, 0);
+        const screenBaseZ = @as(u32, 0);
+        var screenX = screenBaseX;
+        var screenY = screenBaseY;
+        var absTileZ = screenBaseZ;
 
         var doorLeft = false;
         var doorRight = false;
@@ -652,7 +615,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             var createdZDoor = false;
             if (randomChoice == 2) {
                 createdZDoor = true;
-                if (absTileZ == 0) {
+                if (absTileZ == screenBaseZ) {
                     doorUp = true;
                 } else {
                     doorDown = true;
@@ -697,7 +660,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                         }
                     }
 
-                    SetTileValue(&gameState.worldArena, world.tileMap, absTileX, absTileY, absTileZ, tileValue);
+                    game.SetTileValueFromAbs(&gameState.worldArena, world.tileMap, absTileX, absTileY, absTileZ, tileValue);
 
                     if (tileValue == 2) {
                         _ = AddWall(gameState, absTileX, absTileY, absTileZ);
@@ -720,10 +683,10 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             doorTop = false;
 
             if (randomChoice == 2) {
-                if (absTileZ == 0) {
-                    absTileZ = 1;
+                if (absTileZ == screenBaseZ) {
+                    absTileZ = screenBaseZ + 1;
                 } else {
-                    absTileZ = 0;
+                    absTileZ = screenBaseZ;
                 }
             } else if (randomChoice == 1) {
                 screenX += 1;
@@ -733,8 +696,8 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         }
 
         const newCameraP = game.tile_map_position{
-            .absTileX = 17 / 2,
-            .absTileY = 9 / 2,
+            .absTileX = screenBaseX * tilesPerWidth + 17 / 2,
+            .absTileY = screenBaseY * tilesPerHeight + 9 / 2,
         };
         SetCamera(gameState, newCameraP);
 
