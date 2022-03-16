@@ -36,7 +36,7 @@ pub const hero_bitmaps = struct {
 pub const high_entity = struct {
     p: v2 = .{},
     dP: v2 = .{},
-    absTileZ: u32 = 0,
+    chunkZ: u32 = 0,
     facingDirection: u32 = 0,
 
     z: f32 = 0,

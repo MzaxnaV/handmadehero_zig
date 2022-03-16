@@ -233,7 +233,7 @@ inline fn MakeEntityHighFrequency(gameState: *game.state, lowIndex: u32) ?*game.
 
             entityHigh.?.p = diff.dXY;
             entityHigh.?.dP = .{};
-            entityHigh.?.absTileZ = @intCast(u32, entityLow.p.absTileZ);
+            entityHigh.?.chunkZ = @intCast(u32, entityLow.p.chunkZ);
             entityHigh.?.facingDirection = 0;
             entityHigh.?.lowEntityIndex = lowIndex;
 
@@ -308,11 +308,7 @@ fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) 
     const entityIndex = AddLowEntity(gameState, .Wall);
     const entityLow = GetLowEntity(gameState, entityIndex);
 
-    entityLow.p = .{
-        .absTileX = @intCast(i32, absTileX),
-        .absTileY = @intCast(i32, absTileY),
-        .absTileZ = @intCast(i32, absTileZ),
-    };
+    entityLow.p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ));
     entityLow.height = gameState.world.tileSideInMeters;
     entityLow.width = entityLow.height;
     entityLow.collides = true;
@@ -325,8 +321,8 @@ fn AddPlayer(gameState: *game.state) u32 {
     const entityLow = GetLowEntity(gameState, entityIndex);
 
     entityLow.p = .{
-        .absTileX = gameState.cameraP.absTileX,
-        .absTileY = gameState.cameraP.absTileY,
+        .chunkX = gameState.cameraP.chunkX,
+        .chunkY = gameState.cameraP.chunkY,
         .offset_ = .{ .x = 0, .y = 0 },
     };
     entityLow.height = 0.5;
@@ -452,9 +448,9 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
             // NOTE (Manav): playerDelta -= (1 * inner(playerDelta, wallNormal))*wallNormal;
             _ = playerDelta.sub(game.scale(wallNormal, 1 * game.inner(playerDelta, wallNormal)));
 
-            const hitHigh = &gameState.highEntities[hitHighEntityIndex];
-            const hitLow = &gameState.lowEntities[hitHigh.lowEntityIndex];
-            entity.high.?.absTileZ = game.AddI32ToU32(entity.high.?.absTileZ, hitLow.dAbsTileZ);
+            // const hitHigh = &gameState.highEntities[hitHighEntityIndex];
+            // const hitLow = &gameState.lowEntities[hitHigh.lowEntityIndex];
+            // entity.high.?.absTileZ = game.AddI32ToU32(entity.high.?.absTileZ, hitLow.dAbsTileZ);
         } else {
             break;
         }
@@ -500,25 +496,26 @@ fn SetCamera(gameState: *game.state, newCameraP: game.world_position) void {
 
     OffsetAndCheckFrequencyByArea(gameState, entityOffsetForFrame, cameraBounds);
 
-    const minTileX = newCameraP.absTileX -% tileSpanX / 2;
-    const maxTileX = newCameraP.absTileX +% tileSpanX / 2;
-    const minTileY = newCameraP.absTileY -% tileSpanY / 2;
-    const maxTileY = newCameraP.absTileY +% tileSpanY / 2;
+    // !NOT_IGNORE
+    // const minTileX = newCameraP.absTileX -% tileSpanX / 2;
+    // const maxTileX = newCameraP.absTileX +% tileSpanX / 2;
+    // const minTileY = newCameraP.absTileY -% tileSpanY / 2;
+    // const maxTileY = newCameraP.absTileY +% tileSpanY / 2;
 
-    var entityIndex = @as(u32, 1);
-    while (entityIndex < gameState.lowEntityCount) : (entityIndex += 1) {
-        const low = &gameState.lowEntities[entityIndex];
-        if (low.highEntityIndex == 0) {
-            if ((low.p.absTileZ == newCameraP.absTileZ) and
-                (low.p.absTileX >= minTileX) and
-                (low.p.absTileX <= maxTileX) and
-                (low.p.absTileY >= minTileY) and
-                (low.p.absTileY <= maxTileY))
-            {
-                _ = MakeEntityHighFrequency(gameState, entityIndex);
-            }
-        }
-    }
+    // var entityIndex = @as(u32, 1);
+    // while (entityIndex < gameState.lowEntityCount) : (entityIndex += 1) {
+    //     const low = &gameState.lowEntities[entityIndex];
+    //     if (low.highEntityIndex == 0) {
+    //         if ((low.p.absTileZ == newCameraP.absTileZ) and
+    //             (low.p.absTileX >= minTileX) and
+    //             (low.p.absTileX <= maxTileX) and
+    //             (low.p.absTileY >= minTileY) and
+    //             (low.p.absTileY <= maxTileY))
+    //         {
+    //             _ = MakeEntityHighFrequency(gameState, entityIndex);
+    //         }
+    //     }
+    // }
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
@@ -597,7 +594,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         var doorDown = false;
 
         var screenIndex: u32 = 0;
-        while (screenIndex < 2) : (screenIndex += 1) {
+        while (screenIndex < 2000) : (screenIndex += 1) {
             var randomChoice: u32 = 0;
 
             if (!NOT_IGNORE) {
@@ -697,10 +694,12 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             }
         }
 
-        const newCameraP = game.world_position{
-            .absTileX = screenBaseX * tilesPerWidth + 17 / 2,
-            .absTileY = screenBaseY * tilesPerHeight + 9 / 2,
-        };
+        const newCameraP = game.ChunkPosFromTilePos(
+            gameState.world,
+            screenBaseX * tilesPerWidth + 17 / 2,
+            screenBaseY * tilesPerHeight + 9 / 2,
+            screenBaseZ,
+        );
         SetCamera(gameState, newCameraP);
 
         gameMemory.isInitialized = true;
@@ -753,7 +752,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
     const cameraFollowingEntity = GetHighEntity(gameState, gameState.cameraFollowingEntityIndex);
     if (cameraFollowingEntity.high) |_| {
         var newCameraP = gameState.cameraP;
-        newCameraP.absTileZ = cameraFollowingEntity.low.p.absTileZ;
+        newCameraP.chunkZ = cameraFollowingEntity.low.p.chunkZ;
 
         if (!NOT_IGNORE) {
             if (cameraFollowingEntity.high.?.p.x > (9 * world.tileSideInMeters)) {

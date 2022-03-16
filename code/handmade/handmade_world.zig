@@ -11,6 +11,8 @@ const RoundF32ToInt = @import("handmade_intrinsics.zig").RoundF32ToInt;
 const TILE_CHUNK_SAFE_MARGIN = std.math.maxInt(i32) / 64;
 const TILE_CHUNK_UNINITIALIZED = std.math.maxInt(i32);
 
+const TILES_PER_CHUNK = 16;
+
 // tile data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const world_difference = struct {
@@ -19,9 +21,9 @@ pub const world_difference = struct {
 };
 
 pub const world_position = struct {
-    absTileX: i32 = 0,
-    absTileY: i32 = 0,
-    absTileZ: i32 = 0,
+    chunkX: i32 = 0,
+    chunkY: i32 = 0,
+    chunkZ: i32 = 0,
 
     offset_: math.v2 = .{},
 };
@@ -44,15 +46,31 @@ pub const world_chunk = struct {
 
 pub const world = struct {
     tileSideInMeters: f32,
+    chunkSideInMeters: f32,
 
-    chunkShift: i32, // NOTE (Manav): should this be u5?
-    chunkMask: i32,
-    chunkDim: i32,
-
+    firstFree: ?*world_entity_block,
     chunkHash: [4096]world_chunk,
 };
 
 // public inline functions ----------------------------------------------------------------------------------------------------------------
+
+inline fn IsCanonicalCoord(w: *const world, tileRel: f32) bool {
+    const result = (tileRel >= -0.5 * w.chunkSideInMeters) and (tileRel <= 0.5 * w.chunkSideInMeters);
+    return result;
+}
+
+inline fn IsCanonical(w: *const world, offset: math.v2) bool {
+    const result = IsCanonicalCoord(w, offset.x) and IsCanonicalCoord(w, offset.y);
+    return result;
+}
+
+inline fn AreInSameChunk(w: *world, a: *world_position, b: *world_position) bool {
+    assert(IsCanonical(w, a.offset_));
+    assert(IsCanonical(w, b.offset_));
+
+    const result = (a.chunkX == b.chunkX) and (a.chunkY == b.chunkY) and (a.chunkZ == b.chunkZ);
+    return result;
+}
 
 fn GetWorldChunk(memoryArena: ?*memory_arena, w: *world, chunkX: i32, chunkY: i32, chunkZ: i32) ?*world_chunk {
     assert(chunkX > -TILE_CHUNK_SAFE_MARGIN);
@@ -81,8 +99,6 @@ fn GetWorldChunk(memoryArena: ?*memory_arena, w: *world, chunkX: i32, chunkY: i3
             }
 
             if (chunk.*.chunkX == TILE_CHUNK_UNINITIALIZED) {
-                // const tileCount = @intCast(u32, world.chunkDim * world.chunkDim);
-
                 chunk.*.chunkX = chunkX;
                 chunk.*.chunkY = chunkY;
                 chunk.*.chunkZ = chunkZ;
@@ -98,26 +114,12 @@ fn GetWorldChunk(memoryArena: ?*memory_arena, w: *world, chunkX: i32, chunkY: i3
     return worldChunk;
 }
 
-// !NOT_IGNORE
-// inline fn GetChunkPositionFor(tileMap: *const tile_map, absTileX: u32, absTileY: u32, absTileZ: u32) tile_chunk_position {
-//     const result = tile_chunk_position{
-//         .tileChunkX = @intCast(i32, absTileX) >> @intCast(u5, tileMap.chunkShift),
-//         .tileChunkY = @intCast(i32, absTileY) >> @intCast(u5, tileMap.chunkShift),
-//         .tileChunkZ = @intCast(i32, absTileZ),
-//         .relTileX = @intCast(i32, absTileX) & tileMap.chunkMask,
-//         .relTileY = @intCast(i32, absTileY) & tileMap.chunkMask,
-//     };
-
-//     return result;
-// }
-
 inline fn RecanonicalizeCoord(w: *const world, tile: *i32, tileRel: *f32) void {
-    const offSet = RoundF32ToInt(i32, tileRel.* / w.tileSideInMeters);
+    var offSet = RoundF32ToInt(i32, tileRel.* / w.chunkSideInMeters);
     tile.* +%= offSet;
-    tileRel.* -= @intToFloat(f32, offSet) * w.tileSideInMeters;
+    tileRel.* -= @intToFloat(f32, offSet) * w.chunkSideInMeters;
 
-    assert(tileRel.* > -0.5 * w.tileSideInMeters);
-    assert(tileRel.* < 0.5 * w.tileSideInMeters);
+    assert(IsCanonicalCoord(w, tileRel.*));
 }
 
 pub inline fn MapIntoTileSpace(w: *const world, basePos: world_position, offset: math.v2) world_position {
@@ -125,56 +127,118 @@ pub inline fn MapIntoTileSpace(w: *const world, basePos: world_position, offset:
 
     _ = result.offset_.add(offset); // NOTE (Manav): result.offset_ += offset
 
-    RecanonicalizeCoord(w, &result.absTileX, &result.offset_.x);
-    RecanonicalizeCoord(w, &result.absTileY, &result.offset_.y);
+    RecanonicalizeCoord(w, &result.chunkX, &result.offset_.x);
+    RecanonicalizeCoord(w, &result.chunkY, &result.offset_.y);
 
     return result;
 }
 
-inline fn AreOnSameTile(a: *const world_position, b: *const world_position) bool {
-    const result = ((a.absTileX == b.absTileX) and (a.absTileY == b.absTileY) and (a.absTileZ == b.absTileZ));
+pub inline fn ChunkPosFromTilePos(w: *world, absTileX: i32, absTileY: i32, absTileZ: i32) world_position {
+    const result = world_position{
+        .chunkX = @divTrunc(absTileX, TILES_PER_CHUNK),
+        .chunkY = @divTrunc(absTileY, TILES_PER_CHUNK),
+        .chunkZ = @divTrunc(absTileZ, TILES_PER_CHUNK),
+
+        .offset_ = .{
+            // check against mod use
+            .x = @intToFloat(f32, @rem(absTileX, TILES_PER_CHUNK)) * w.tileSideInMeters,
+            .y = @intToFloat(f32, @rem(absTileX, TILES_PER_CHUNK)) * w.tileSideInMeters,
+        },
+    };
     return result;
 }
 
 pub inline fn Substract(w: *const world, a: *const world_position, b: *const world_position) world_difference {
     const dTileXY = .{
-        .x = @intToFloat(f32, a.absTileX) - @intToFloat(f32, b.absTileX),
-        .y = @intToFloat(f32, a.absTileY) - @intToFloat(f32, b.absTileY),
+        .x = @intToFloat(f32, a.chunkX) - @intToFloat(f32, b.chunkX),
+        .y = @intToFloat(f32, a.chunkY) - @intToFloat(f32, b.chunkY),
     };
-    const dTileZ = @intToFloat(f32, a.absTileZ) - @intToFloat(f32, b.absTileZ);
+    const dTileZ = @intToFloat(f32, a.chunkZ) - @intToFloat(f32, b.chunkZ);
 
     const result = world_difference{
-        // NOTE (Manav): .dxy = tileMap.tileSideInMeters * dTileXY  + (a.offset_ - b.offset_)
-        .dXY = math.add(math.scale(dTileXY, w.tileSideInMeters), math.sub(a.offset_, b.offset_)),
-        .dZ = w.tileSideInMeters * dTileZ,
+        // NOTE (Manav): .dxy = w.chunkSideInMeters * dTileXY  + (a.offset_ - b.offset_)
+        .dXY = math.add(math.scale(dTileXY, w.chunkSideInMeters), math.sub(a.offset_, b.offset_)),
+        .dZ = w.chunkSideInMeters * dTileZ,
     };
 
     return result;
 }
 
-inline fn CenteredTilePoint(absTileX: u32, absTileY: u32, absTileZ: u32) world_position {
+inline fn CenteredChunkPoint(chunkX: u32, chunkY: u32, chunkZ: u32) world_position {
     const result = world_position{
-        .absTileX = @intCast(i32, absTileX),
-        .absTileY = @intCast(i32, absTileY),
-        .absTileZ = @intCast(i32, absTileZ),
+        .chunkX = @intCast(i32, chunkX),
+        .chunkY = @intCast(i32, chunkY),
+        .chunkZ = @intCast(i32, chunkZ),
     };
 
     return result;
+}
+
+fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*world_position, newP: *world_position) void {
+    if ((oldP != null) and AreInSameChunk(w, &(oldP.?.*), newP)) {} else {
+        if (oldP) |p| {
+            if (GetWorldChunk(w, p.chunkX, p.chunkY, p.chunkZ)) |chunk| {
+                var firstBlock = &chunk.firstBlock;
+                var entityBlock: ?*world_entity_block = firstBlock;
+                while (entityBlock) |block| : (entityBlock = block.next) {
+                    for (block.lowEntityIndex) |_, i| {
+                        if (block.lowEntityIndex[i] == lowEntityIndex) {
+                            assert(firstBlock.entityCount > 0);
+                            firstBlock.entityCount -= 1;
+                            block.lowEntityIndex[i] = firstBlock.lowEntityIndex[firstBlock.entityCount];
+                            if (firstBlock.entityCount == 0) {
+                                if (firstBlock.next) |_| {
+                                    const nextBlock = firstBlock.next;
+                                    firstBlock.* = nextBlock.?.*;
+
+                                    nextBlock.?.next = w.firstFree;
+                                    w.firstFree = nextBlock;
+                                }
+                            }
+
+                            entityBlock = null;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                unreachable;
+            }
+        }
+
+        if (GetWorldChunk(arena, w, newP.chunkX, newP.chunkY, newP.chunkZ)) |chunk| {
+            const block = &chunk.firstBlock;
+            if (block.entityCount == block.lowEntityIndex.len) {
+                var oldBlock = w.firstFree;
+                if (oldBlock) |_| {
+                    w.firstFree = oldBlock.?.next;
+                } else {
+                    oldBlock = PushStruct(world_entity_block, arena);
+                }
+
+                oldBlock.?.* = block.*;
+                block.next = oldBlock;
+                block.entityCount = 0;
+            }
+
+            assert(block.entityCount < block.lowEntityIndex.len);
+            block.lowEntityIndex[block.entityCount] = lowEntityIndex;
+            block.entityCount += 1;
+        } else {
+            unreachable;
+        }
+    }
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub fn InitializeWorld(w: *world, tileSideInMeters: f32) void {
-    const chunkShift = 4;
-    const chunkMask = @as(u32, 1) << @intCast(u5, chunkShift) - 1;
-    const chunkDim = @as(u32, 1) << @intCast(u5, chunkShift);
-
-    w.chunkShift = chunkShift;
-    w.chunkMask = chunkMask;
-    w.chunkDim = chunkDim;
     w.tileSideInMeters = tileSideInMeters;
+    w.chunkSideInMeters = TILES_PER_CHUNK * tileSideInMeters;
+    w.firstFree = null;
 
     for (w.chunkHash) |*chunk| {
         chunk.chunkX = TILE_CHUNK_UNINITIALIZED;
+        chunk.firstBlock.entityCount = 0;
     }
 }
