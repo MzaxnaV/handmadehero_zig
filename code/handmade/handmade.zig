@@ -283,7 +283,7 @@ inline fn OffsetAndCheckFrequencyByArea(gameState: *game.state, offset: game.v2,
     while (entityIndex < gameState.highEntityCount) {
         var high = &gameState.highEntities[entityIndex];
 
-        _ = high.p.add(offset);
+        _ = high.p.Add(offset);
         if (game.IsInRectangle(highFrequencyBounds, high.p)) {
             entityIndex += 1;
         } else {
@@ -360,19 +360,19 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
 
     const ddPLength = game.LengthSq(ddP);
     if (ddPLength > 1.0) {
-        _ = ddP.scale(1.0 / game.SquareRoot(ddPLength));
+        _ = ddP.Scale(1.0 / game.SquareRoot(ddPLength));
     }
 
     const playerSpeed = @as(f32, 50.0);
-    _ = ddP.scale(playerSpeed);
+    _ = ddP.Scale(playerSpeed);
 
-    _ = ddP.add(game.scale(entity.high.?.dP, -8.0)); // NOTE (Manav): ddP += -8.0 * entity.high.dP;
+    _ = ddP.Add(game.Scale(entity.high.?.dP, -8.0)); // NOTE (Manav): ddP += -8.0 * entity.high.dP;
 
     // const oldPlayerP = entity.high.p;
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
-    var playerDelta = game.add(game.scale(ddP, 0.5 * game.Square(dt)), game.scale(entity.high.?.dP, dt));
-    _ = entity.high.?.dP.add(game.scale(ddP, dt)); // NOTE (Manav): entity.dP += ddP * dt;
-    // const newPlayerP = game.add(oldPlayerP, playerDelta);
+    var playerDelta = game.Add(game.Scale(ddP, 0.5 * game.Square(dt)), game.Scale(entity.high.?.dP, dt));
+    _ = entity.high.?.dP.Add(game.Scale(ddP, dt)); // NOTE (Manav): entity.dP += ddP * dt;
+    // const newPlayerP = game.Add(oldPlayerP, playerDelta);
 
     // !NOT_IGNORE
     // var minTileX = @minimum(oldPlayerP.absTileX, newPlayerP.absTileX);
@@ -397,7 +397,7 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
         var hitHighEntityIndex = @as(u32, 0);
 
         // NOTE (Manav): desiredPosition = entity.high.p + playerDelta;
-        const desiredPosition = game.add(entity.high.?.p, playerDelta);
+        const desiredPosition = game.Add(entity.high.?.p, playerDelta);
 
         var testHighEntityIndex = @as(u32, 1);
         while (testHighEntityIndex < gameState.highEntityCount) : (testHighEntityIndex += 1) {
@@ -416,7 +416,7 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
                     const minCorner = game.v2{ .x = -0.5 * diameterW, .y = -0.5 * diameterH };
                     const maxCorner = game.v2{ .x = 0.5 * diameterW, .y = 0.5 * diameterH };
 
-                    const rel = game.sub(entity.high.?.p, testEntity.high.?.p); // NOTE: (Manav): entity.high.p - testEntity.high.p
+                    const rel = game.Sub(entity.high.?.p, testEntity.high.?.p); // NOTE: (Manav): entity.high.p - testEntity.high.p
 
                     if (TestWall(minCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
                         wallNormal = .{ .x = -1, .y = 0 };
@@ -439,14 +439,14 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
         }
 
         // NOTE: (Manav): entity.high.p += tMin * playerDelta
-        _ = entity.high.?.p.add(game.scale(playerDelta, tMin));
+        _ = entity.high.?.p.Add(game.Scale(playerDelta, tMin));
         if (hitHighEntityIndex != 0) {
-            // NOTE (Manav): entity.high.dP -= (1 * inner(entity.high.dP, wallNormal))*wallNormal;
-            _ = entity.high.?.dP.sub(game.scale(wallNormal, 1 * game.inner(entity.high.?.dP, wallNormal)));
+            // NOTE (Manav): entity.high.dP -= (1 * Inner(entity.high.dP, wallNormal))*wallNormal;
+            _ = entity.high.?.dP.Sub(game.Scale(wallNormal, 1 * game.Inner(entity.high.?.dP, wallNormal)));
             // NOTE (Manav): playerDelta = desiredPositon - entity.high.p;
-            playerDelta = game.sub(desiredPosition, entity.high.?.p);
-            // NOTE (Manav): playerDelta -= (1 * inner(playerDelta, wallNormal))*wallNormal;
-            _ = playerDelta.sub(game.scale(wallNormal, 1 * game.inner(playerDelta, wallNormal)));
+            playerDelta = game.Sub(desiredPosition, entity.high.?.p);
+            // NOTE (Manav): playerDelta -= (1 * Inner(playerDelta, wallNormal))*wallNormal;
+            _ = playerDelta.Sub(game.Scale(wallNormal, 1 * game.Inner(playerDelta, wallNormal)));
 
             // const hitHigh = &gameState.highEntities[hitHighEntityIndex];
             // const hitLow = &gameState.lowEntities[hitHigh.lowEntityIndex];
@@ -472,7 +472,7 @@ fn MovePlayer(gameState: *game.state, entity: game.entity, dt: f32, accelaration
         }
     }
 
-    entity.low.p = game.MapIntoTileSpace(gameState.world, gameState.cameraP, entity.high.?.p);
+    entity.low.p = game.MapIntoChunkSpace(gameState.world, gameState.cameraP, entity.high.?.p);
 }
 
 fn SetCamera(gameState: *game.state, newCameraP: game.world_position) void {
@@ -484,7 +484,7 @@ fn SetCamera(gameState: *game.state, newCameraP: game.world_position) void {
     const tileSpanX = 17 * 3;
     const tileSpanY = 9 * 3;
 
-    const cameraBounds = game.rect2.initCenterDim(.{}, game.scale(
+    const cameraBounds = game.rect2.InitCenterDim(.{}, game.Scale(
         .{
             .x = @intToFloat(f32, tileSpanX),
             .y = @intToFloat(f32, tileSpanY),
@@ -492,7 +492,7 @@ fn SetCamera(gameState: *game.state, newCameraP: game.world_position) void {
         world.tileSideInMeters,
     ));
 
-    const entityOffsetForFrame = game.scale(dCameraP.dXY, -1);
+    const entityOffsetForFrame = game.Scale(dCameraP.dXY, -1);
 
     OffsetAndCheckFrequencyByArea(gameState, entityOffsetForFrame, cameraBounds);
 
@@ -569,9 +569,8 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         gameState.heroBitmaps[3].alignX = 72;
         gameState.heroBitmaps[3].alignY = 182;
 
-        game.InitializeArena(&gameState.worldArena, gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
-
-        gameState.world = game.PushStruct(game.world, &gameState.worldArena);
+        gameState.worldArena.Initialize(gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
+        gameState.world = gameState.worldArena.PushStruct(game.world);
 
         const world = gameState.world;
         game.InitializeWorld(world, 1.4);
@@ -810,9 +809,9 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
                     };
 
                     // NOTE (Manav): min = cen - 0.9 * tileSide
-                    const min = game.sub(cen, game.scale(tileSide, 0.9));
+                    const min = game.Sub(cen, game.Scale(tileSide, 0.9));
                     // NOTE (Manav): max = cen + 0.9 * tileSide
-                    const max = game.add(cen, game.scale(tileSide, 0.9));
+                    const max = game.Add(cen, game.Scale(tileSide, 0.9));
 
                     DrawRectangle(buffer, min, max, grey, grey, grey);
                 }
@@ -825,7 +824,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
         const highEntity = &gameState.highEntities[highEntityIndex];
         const lowEntity = &gameState.lowEntities[highEntity.lowEntityIndex];
 
-        _ = highEntity.p.add(entityOffsetForFrame);
+        _ = highEntity.p.Add(entityOffsetForFrame);
 
         const dt = gameInput.dtForFrame;
         const ddZ = -9.8;
@@ -863,7 +862,7 @@ pub export fn UpdateAndRender(thread: *platform.thread_context, gameMemory: *pla
             DrawRectangle(
                 buffer,
                 playerLeftTop,
-                game.add(playerLeftTop, game.scale(entityWidthHeight, metersToPixels)),
+                game.Add(playerLeftTop, game.Scale(entityWidthHeight, metersToPixels)),
                 playerR,
                 playerG,
                 playerB,

@@ -12,6 +12,32 @@ pub const memory_arena = struct {
     size: memory_index,
     base: [*]u8,
     used: memory_index,
+
+    pub fn Initialize(self: *memory_arena, size: memory_index, base: [*]u8) void {
+        self.size = size;
+        self.base = base;
+        self.used = 0;
+    }
+
+    fn PushSize(self: *memory_arena, size: memory_index) [*]u8 {
+        std.debug.assert((self.used + size) <= self.size);
+        const result = self.base + self.used;
+        self.used += size;
+
+        return result;
+    }
+
+    pub inline fn PushStruct(self: *memory_arena, comptime T: type) *T {
+        return @ptrCast(*T, @alignCast(@alignOf(T), self.PushSize(@sizeOf(T))));
+    }
+
+    pub inline fn PushArraySlice(self: *memory_arena, comptime T: type, comptime count: memory_index) *[count]T {
+        return @ptrCast(*[count]T, @alignCast(@alignOf(T), self.PushSize(count * @sizeOf(T))));
+    }
+
+    pub inline fn PushArrayPtr(self: *memory_arena, comptime T: type, count: memory_index) [*]T {
+        return @ptrCast([*]T, @alignCast(@alignOf(T), self.PushSize(count * @sizeOf(T))));
+    }
 };
 
 pub const loaded_bitmap = struct {
@@ -89,33 +115,3 @@ pub const state = struct {
     shadow: loaded_bitmap,
     heroBitmaps: [4]hero_bitmaps,
 };
-
-// functions ------------------------------------------------------------------------------------------------------------------------------
-
-fn PushSize(arena: *memory_arena, size: memory_index) [*]u8 {
-    std.debug.assert((arena.used + size) <= arena.size);
-    const result = arena.base + arena.used;
-    arena.used += size;
-
-    return result;
-}
-
-// public functions -----------------------------------------------------------------------------------------------------------------------
-
-pub fn InitializeArena(arena: *memory_arena, size: memory_index, base: [*]u8) void {
-    arena.size = size;
-    arena.base = base;
-    arena.used = 0;
-}
-
-pub inline fn PushStruct(comptime T: type, arena: *memory_arena) *T {
-    return @ptrCast(*T, @alignCast(@alignOf(T), PushSize(arena, @sizeOf(T))));
-}
-
-pub inline fn PushArraySlice(comptime T: type, comptime count: memory_index, arena: *memory_arena) *[count]T {
-    return @ptrCast(*[count]T, @alignCast(@alignOf(T), PushSize(arena, count * @sizeOf(T))));
-}
-
-pub inline fn PushArrayPtr(comptime T: type, count: memory_index, arena: *memory_arena) [*]T {
-    return @ptrCast([*]T, @alignCast(@alignOf(T), PushSize(arena, count * @sizeOf(T))));
-}

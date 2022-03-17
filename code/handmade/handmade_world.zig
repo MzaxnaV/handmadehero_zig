@@ -122,10 +122,10 @@ inline fn RecanonicalizeCoord(w: *const world, tile: *i32, tileRel: *f32) void {
     assert(IsCanonicalCoord(w, tileRel.*));
 }
 
-pub inline fn MapIntoTileSpace(w: *const world, basePos: world_position, offset: math.v2) world_position {
+pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset: math.v2) world_position {
     var result = basePos;
 
-    _ = result.offset_.add(offset); // NOTE (Manav): result.offset_ += offset
+    _ = result.offset_.Add(offset); // NOTE (Manav): result.offset_ += offset
 
     RecanonicalizeCoord(w, &result.chunkX, &result.offset_.x);
     RecanonicalizeCoord(w, &result.chunkY, &result.offset_.y);
@@ -157,7 +157,7 @@ pub inline fn Substract(w: *const world, a: *const world_position, b: *const wor
 
     const result = world_difference{
         // NOTE (Manav): .dxy = w.chunkSideInMeters * dTileXY  + (a.offset_ - b.offset_)
-        .dXY = math.add(math.scale(dTileXY, w.chunkSideInMeters), math.sub(a.offset_, b.offset_)),
+        .dXY = math.Add(math.Scale(dTileXY, w.chunkSideInMeters), math.Sub(a.offset_, b.offset_)),
         .dZ = w.chunkSideInMeters * dTileZ,
     };
 
@@ -178,14 +178,19 @@ fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, ol
     if ((oldP != null) and AreInSameChunk(w, &(oldP.?.*), newP)) {} else {
         if (oldP) |p| {
             if (GetWorldChunk(w, p.chunkX, p.chunkY, p.chunkZ)) |chunk| {
+                var notFound = true;
                 var firstBlock = &chunk.firstBlock;
                 var entityBlock: ?*world_entity_block = firstBlock;
                 while (entityBlock) |block| : (entityBlock = block.next) {
-                    for (block.lowEntityIndex) |_, i| {
-                        if (block.lowEntityIndex[i] == lowEntityIndex) {
+                    if (!notFound) {
+                        break;
+                    }
+                    var index = @as(u32, 0);
+                    while ((index < block.entityCount) and notFound) {
+                        if ((block.lowEntityIndex[index] == lowEntityIndex)) {
                             assert(firstBlock.entityCount > 0);
                             firstBlock.entityCount -= 1;
-                            block.lowEntityIndex[i] = firstBlock.lowEntityIndex[firstBlock.entityCount];
+                            block.lowEntityIndex[index] = firstBlock.lowEntityIndex[firstBlock.entityCount];
                             if (firstBlock.entityCount == 0) {
                                 if (firstBlock.next) |_| {
                                     const nextBlock = firstBlock.next;
@@ -196,8 +201,7 @@ fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, ol
                                 }
                             }
 
-                            entityBlock = null;
-                            break;
+                            notFound = false;
                         }
                     }
                 }
