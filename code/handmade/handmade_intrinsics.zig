@@ -65,17 +65,17 @@ pub inline fn FloorF32ToI32(float32: f32) i32 {
     return result;
 }
 
-pub inline fn sin(angle: f32) f32 {
+pub inline fn Sin(angle: f32) f32 {
     const result = @sin(angle);
     return result;
 }
 
-pub inline fn cos(angle: f32) f32 {
+pub inline fn Cos(angle: f32) f32 {
     const result = @cos(angle);
     return result;
 }
 
-pub inline fn atan2(y: f32, x: f32) f32 {
+pub inline fn Atan2(y: f32, x: f32) f32 {
     const result = math.atan2(y, x);
     return result;
 }

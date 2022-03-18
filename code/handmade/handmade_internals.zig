@@ -52,8 +52,7 @@ pub const loaded_bitmap = struct {
 };
 
 pub const hero_bitmaps = struct {
-    alignX: i32,
-    alignY: i32,
+    alignment: v2,
     head: loaded_bitmap,
     cape: loaded_bitmap,
     torso: loaded_bitmap,
@@ -64,6 +63,8 @@ pub const high_entity = struct {
     dP: v2 = .{},
     chunkZ: u32 = 0,
     facingDirection: u32 = 0,
+
+    tBob: f32,
 
     z: f32 = 0,
     dZ: f32 = 0,
@@ -76,6 +77,8 @@ pub const entity_type = enum {
 
     Hero,
     Wall,
+    Familiar,
+    Monstar,
 };
 
 pub const low_entity = struct {
@@ -94,6 +97,18 @@ pub const entity = struct {
     lowIndex: u32 = 0,
     low: *low_entity,
     high: ?*high_entity = null,
+};
+
+pub const entity_visible_piece = struct {
+    bitmap: *loaded_bitmap,
+    offset: v2 = .{},
+    offsetZ: f32 = 0,
+    alpha: f32 = 0,
+};
+
+pub const entity_visible_piece_group = struct {
+    pieceCount: u32,
+    pieces: [8]entity_visible_piece,
 };
 
 pub const state = struct {

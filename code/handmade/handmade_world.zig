@@ -133,17 +133,30 @@ pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset
 }
 
 pub inline fn ChunkPosFromTilePos(w: *world, absTileX: i32, absTileY: i32, absTileZ: i32) world_position {
-    const result = world_position{
+    var result: world_position = .{
         .chunkX = @divTrunc(absTileX, TILES_PER_CHUNK),
         .chunkY = @divTrunc(absTileY, TILES_PER_CHUNK),
         .chunkZ = @divTrunc(absTileZ, TILES_PER_CHUNK),
-
-        .offset_ = .{
-            // check against mod use
-            .x = @intToFloat(f32, @rem(absTileX, TILES_PER_CHUNK)) * w.tileSideInMeters,
-            .y = @intToFloat(f32, @rem(absTileY, TILES_PER_CHUNK)) * w.tileSideInMeters,
-        },
     };
+
+    if (absTileX < 0) {
+        result.chunkX -= 1;
+    }
+    if (absTileY < 0) {
+        result.chunkY -= 1;
+    }
+    if (absTileZ < 0) {
+        result.chunkZ -= 1;
+    }
+
+    result.offset_ = .{
+        // check against mod use
+        .x = @intToFloat(f32, (absTileX - TILES_PER_CHUNK / 2) - (result.chunkX * TILES_PER_CHUNK)) * w.tileSideInMeters,
+        .y = @intToFloat(f32, (absTileY - TILES_PER_CHUNK / 2) - (result.chunkY * TILES_PER_CHUNK)) * w.tileSideInMeters,
+    };
+
+    std.debug.assert(IsCanonical(w, result.offset_));
+
     return result;
 }
 
