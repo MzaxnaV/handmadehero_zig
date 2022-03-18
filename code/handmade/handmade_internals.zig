@@ -114,4 +114,6 @@ pub const state = struct {
     backdrop: loaded_bitmap,
     shadow: loaded_bitmap,
     heroBitmaps: [4]hero_bitmaps,
+
+    tree: loaded_bitmap,
 };

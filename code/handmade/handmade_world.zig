@@ -3,7 +3,6 @@ const assert = std.debug.assert;
 
 const math = @import("handmade_math.zig");
 const memory_arena = @import("handmade_internals.zig").memory_arena;
-const PushStruct = @import("handmade_internals.zig").PushStruct;
 const RoundF32ToInt = @import("handmade_intrinsics.zig").RoundF32ToInt;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
@@ -64,7 +63,7 @@ inline fn IsCanonical(w: *const world, offset: math.v2) bool {
     return result;
 }
 
-inline fn AreInSameChunk(w: *world, a: *world_position, b: *world_position) bool {
+inline fn AreInSameChunk(w: *const world, a: *const world_position, b: *const world_position) bool {
     assert(IsCanonical(w, a.offset_));
     assert(IsCanonical(w, b.offset_));
 
@@ -72,7 +71,7 @@ inline fn AreInSameChunk(w: *world, a: *world_position, b: *world_position) bool
     return result;
 }
 
-fn GetWorldChunk(memoryArena: ?*memory_arena, w: *world, chunkX: i32, chunkY: i32, chunkZ: i32) ?*world_chunk {
+pub fn GetWorldChunk(memoryArena: ?*memory_arena, w: *world, chunkX: i32, chunkY: i32, chunkZ: i32) ?*world_chunk {
     assert(chunkX > -TILE_CHUNK_SAFE_MARGIN);
     assert(chunkY > -TILE_CHUNK_SAFE_MARGIN);
     assert(chunkZ > -TILE_CHUNK_SAFE_MARGIN);
@@ -92,8 +91,8 @@ fn GetWorldChunk(memoryArena: ?*memory_arena, w: *world, chunkX: i32, chunkY: i3
         }
 
         if (memoryArena) |arena| {
-            if ((chunk.*.chunkX != TILE_CHUNK_UNINITIALIZED) and (chunk.*.nextInHash != null)) {
-                chunk.*.nextInHash = PushStruct(world_chunk, arena);
+            if ((chunk.*.chunkX != TILE_CHUNK_UNINITIALIZED) and (chunk.*.nextInHash == null)) {
+                chunk.*.nextInHash = arena.PushStruct(world_chunk);
                 worldChunk = chunk.*.nextInHash;
                 chunk.*.chunkX = TILE_CHUNK_UNINITIALIZED;
             }
@@ -142,7 +141,7 @@ pub inline fn ChunkPosFromTilePos(w: *world, absTileX: i32, absTileY: i32, absTi
         .offset_ = .{
             // check against mod use
             .x = @intToFloat(f32, @rem(absTileX, TILES_PER_CHUNK)) * w.tileSideInMeters,
-            .y = @intToFloat(f32, @rem(absTileX, TILES_PER_CHUNK)) * w.tileSideInMeters,
+            .y = @intToFloat(f32, @rem(absTileY, TILES_PER_CHUNK)) * w.tileSideInMeters,
         },
     };
     return result;
@@ -174,10 +173,10 @@ inline fn CenteredChunkPoint(chunkX: u32, chunkY: u32, chunkZ: u32) world_positi
     return result;
 }
 
-fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*world_position, newP: *world_position) void {
+pub fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*const world_position, newP: *const world_position) void {
     if ((oldP != null) and AreInSameChunk(w, &(oldP.?.*), newP)) {} else {
         if (oldP) |p| {
-            if (GetWorldChunk(w, p.chunkX, p.chunkY, p.chunkZ)) |chunk| {
+            if (GetWorldChunk(null, w, p.chunkX, p.chunkY, p.chunkZ)) |chunk| {
                 var notFound = true;
                 var firstBlock = &chunk.firstBlock;
                 var entityBlock: ?*world_entity_block = firstBlock;
@@ -186,7 +185,7 @@ fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, ol
                         break;
                     }
                     var index = @as(u32, 0);
-                    while ((index < block.entityCount) and notFound) {
+                    while ((index < block.entityCount) and notFound) : (index += 1) {
                         if ((block.lowEntityIndex[index] == lowEntityIndex)) {
                             assert(firstBlock.entityCount > 0);
                             firstBlock.entityCount -= 1;
@@ -211,13 +210,13 @@ fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, ol
         }
 
         if (GetWorldChunk(arena, w, newP.chunkX, newP.chunkY, newP.chunkZ)) |chunk| {
-            const block = &chunk.firstBlock;
+            var block = &chunk.firstBlock;
             if (block.entityCount == block.lowEntityIndex.len) {
                 var oldBlock = w.firstFree;
                 if (oldBlock) |_| {
                     w.firstFree = oldBlock.?.next;
                 } else {
-                    oldBlock = PushStruct(world_entity_block, arena);
+                    oldBlock = arena.PushStruct(world_entity_block);
                 }
 
                 oldBlock.?.* = block.*;
@@ -225,7 +224,6 @@ fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, ol
                 block.entityCount = 0;
             }
 
-            assert(block.entityCount < block.lowEntityIndex.len);
             block.lowEntityIndex[block.entityCount] = lowEntityIndex;
             block.entityCount += 1;
         } else {

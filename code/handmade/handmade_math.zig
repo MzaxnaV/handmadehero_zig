@@ -95,19 +95,19 @@ pub const rect2 = struct {
         return result;
     }
 
-    pub inline fn GetMinCorner(self: *rect2) v2 {
+    pub inline fn GetMinCorner(self: *const rect2) v2 {
         const result = self.min;
 
         return result;
     }
 
-    pub inline fn GetMaxCorner(self: *rect2) v2 {
+    pub inline fn GetMaxCorner(self: *const rect2) v2 {
         const result = self.max;
 
         return result;
     }
 
-    pub inline fn GetCenter(self: *rect2) v2 {
+    pub inline fn GetCenter(self: *const rect2) v2 {
         const result = Scale(Add(self.max, self.min), 0.5);
 
         return result;
