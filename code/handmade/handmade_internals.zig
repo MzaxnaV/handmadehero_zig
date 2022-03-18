@@ -6,6 +6,10 @@ const world_position = @import("handmade_world.zig").world_position;
 const world = @import("handmade_world.zig").world;
 const v2 = @import("handmade_math.zig").v2;
 
+// constants ------------------------------------------------------------------------------------------------------------------------------
+
+pub const HIT_POINT_SUB_COUNT = 4;
+
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const memory_arena = struct {
@@ -81,6 +85,11 @@ pub const entity_type = enum {
     Monstar,
 };
 
+pub const hit_point = struct {
+    flags: u8 = 0,
+    filledAmount: u8 = 0,
+};
+
 pub const low_entity = struct {
     entityType: entity_type = .Null,
     p: world_position = .{},
@@ -91,6 +100,9 @@ pub const low_entity = struct {
     dAbsTileZ: i32 = 0,
 
     highEntityIndex: u32 = 0,
+
+    hitPointMax: u32 = 0,
+    hitPoint: [16]hit_point = [1]hit_point{.{}} ** 16,
 };
 
 pub const entity = struct {
@@ -100,13 +112,21 @@ pub const entity = struct {
 };
 
 pub const entity_visible_piece = struct {
-    bitmap: *loaded_bitmap,
+    bitmap: ?*loaded_bitmap,
     offset: v2 = .{},
     offsetZ: f32 = 0,
-    alpha: f32 = 0,
+    entityZC: f32 = 0,
+
+    r: f32 = 0,
+    g: f32 = 0,
+    b: f32 = 0,
+    a: f32 = 0,
+
+    dim: v2 = .{},
 };
 
 pub const entity_visible_piece_group = struct {
+    gameState: *state,
     pieceCount: u32,
     pieces: [8]entity_visible_piece,
 };
@@ -131,4 +151,5 @@ pub const state = struct {
     heroBitmaps: [4]hero_bitmaps,
 
     tree: loaded_bitmap,
+    metersToPixels: f32,
 };

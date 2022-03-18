@@ -57,4 +57,12 @@ test "math" {
     try testing.expectEqual(math.IsInRectangle(r, .{ .x = 1, .y = 3 }), false);
     try testing.expectEqual(math.IsInRectangle(r, math.v2{}), true);
     try testing.expectEqual(math.IsInRectangle(r, .{ .x = 2, .y = 2 }), true);
+
+    const c3 = math.v3{ .e = [_]f32{ 3, 2, 1 } };
+    try testing.expectEqual(c3.c.g, c3.e[1]);
+    try testing.expectEqual(c3.c.g, c3.p.y);
+
+    const c4 = math.v4{ .e = [_]f32{ 1, 2, 3, 4 } };
+    try testing.expectEqual(c4.c.g, c4.e[1]);
+    try testing.expectEqual(c4.c.g, c4.p.y);
 }

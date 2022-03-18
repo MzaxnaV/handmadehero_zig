@@ -28,6 +28,20 @@ pub const v2 = struct {
     }
 };
 
+pub const v3 = extern union {
+    p: packed struct { x: f32, y: f32, z: f32 },
+    c: packed struct { r: f32, g: f32, b: f32 },
+
+    e: [3]f32,
+};
+
+pub const v4 = extern union {
+    p: packed struct { x: f32, y: f32, z: f32, w: f32 },
+    c: packed struct { r: f32, g: f32, b: f32, a: f32 },
+
+    e: [4]f32,
+};
+
 pub inline fn Scale(a: v2, scalar: f32) v2 {
     const result = .{
         .x = a.x * scalar,
