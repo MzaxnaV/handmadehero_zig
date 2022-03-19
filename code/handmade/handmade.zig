@@ -207,8 +207,8 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
     return result;
 }
 
-inline fn GetLowEntity(gameState: *game.state, index: u32) *game.low_entity {
-    var result: *game.low_entity = undefined;
+fn GetLowEntity(gameState: *game.state, index: u32) ?*game.low_entity {
+    var result: ?*game.low_entity = null;
 
     if ((index > 0) and (index < gameState.lowEntityCount)) {
         result = &gameState.lowEntities[index];
@@ -338,10 +338,7 @@ fn AddLowEntity(gameState: *game.state, entityType: game.entity_type, pos: ?*con
         .entityType = entityType,
     };
 
-    if (pos) |p| {
-        entityLow.p = p.*;
-        game.ChangeEntityLocation(&gameState.worldArena, gameState.world, entityIndex, null, p);
-    }
+    game.ChangeEntityLocation(&gameState.worldArena, gameState.world, entityIndex, entityLow, null, pos);
 
     const result = .{
         .low = entityLow,
@@ -362,18 +359,40 @@ fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) 
     return entity;
 }
 
+fn InitHitPoints(entityLow: *game.low_entity, hitPointCount: u32) void {
+    std.debug.assert(hitPointCount <= entityLow.hitPoint.len);
+    entityLow.hitPointMax = hitPointCount;
+
+    var hitPointIndex = @as(u32, 0);
+    while (hitPointIndex < entityLow.hitPointMax) : (hitPointIndex += 1) {
+        const hitPoint = &entityLow.hitPoint[hitPointIndex];
+        hitPoint.flags = 0;
+        hitPoint.filledAmount = game.HIT_POINT_SUB_COUNT;
+    }
+}
+
+fn AddSword(gameState: *game.state) add_low_entity_result {
+    var entity = AddLowEntity(gameState, .Sword, null);
+
+    entity.low.height = 0.5;
+    entity.low.width = 1;
+    entity.low.collides = false;
+
+    return entity;
+}
+
 fn AddPlayer(gameState: *game.state) add_low_entity_result {
     const p = gameState.cameraP;
     var entity = AddLowEntity(gameState, .Hero, &p);
 
-    entity.low.hitPointMax = 3;
-    entity.low.hitPoint[2].filledAmount = game.HIT_POINT_SUB_COUNT;
-    entity.low.hitPoint[0] = entity.low.hitPoint[2];
-    entity.low.hitPoint[1] = entity.low.hitPoint[2];
-
     entity.low.height = 0.5;
     entity.low.width = 1;
     entity.low.collides = true;
+
+    InitHitPoints(entity.low, 3);
+
+    const sword = AddSword(gameState);
+    entity.low.swordLowIndex = sword.lowIndex;
 
     if (gameState.cameraFollowingEntityIndex == 0) {
         gameState.cameraFollowingEntityIndex = entity.lowIndex;
@@ -389,6 +408,8 @@ fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u3
     entity.low.height = 0.5;
     entity.low.width = 1;
     entity.low.collides = true;
+
+    InitHitPoints(entity.low, 3);
 
     return entity;
 }
@@ -541,8 +562,7 @@ fn MoveEntity(gameState: *game.state, entity: game.entity, dt: f32, accelaration
 
     const newP = game.MapIntoChunkSpace(gameState.world, gameState.cameraP, entity.high.?.p);
 
-    game.ChangeEntityLocation(&gameState.worldArena, gameState.world, entity.lowIndex, &entity.low.p, &newP);
-    entity.low.p = newP;
+    game.ChangeEntityLocation(&gameState.worldArena, gameState.world, entity.lowIndex, entity.low, &entity.low.p, &newP);
 }
 
 inline fn PushPiece(
@@ -636,6 +656,10 @@ inline fn UpdateFamiliar(gameState: *game.state, entity: game.entity, dt: f32) v
 inline fn UpdateMonstar(_: *game.state, _: game.entity, _: f32) void {}
 
 fn SetCamera(gameState: *game.state, newCameraP: game.world_position) void {
+    const local_persist = struct {
+        var testEntityIndex: u32 = 0;
+    };
+
     const world = gameState.world;
 
     std.debug.assert(ValidateEnitiyPairs(gameState));
@@ -672,6 +696,9 @@ fn SetCamera(gameState: *game.state, newCameraP: game.world_position) void {
                     var entityIndexIndex = @as(u32, 0);
                     while (entityIndexIndex < b.entityCount) : (entityIndexIndex += 1) {
                         const lowEntityIndex = b.lowEntityIndex[entityIndexIndex];
+                        if (lowEntityIndex == local_persist.testEntityIndex) {
+                            @breakpoint();
+                        }
                         const low = &gameState.lowEntities[lowEntityIndex];
                         if (low.highEntityIndex == 0) {
                             const cameraSpaceP = GetCameraSpaceP(gameState, low);
@@ -686,6 +713,29 @@ fn SetCamera(gameState: *game.state, newCameraP: game.world_position) void {
     }
 
     std.debug.assert(ValidateEnitiyPairs(gameState));
+}
+
+fn DrawHitpoints(lowEntity: *game.low_entity, pieceGroup: *game.entity_visible_piece_group) void {
+    if (lowEntity.hitPointMax >= 1) {
+        const healthDim = .{ .x = 0.2, .y = 0.2 };
+        const spacingX = 1.5 * healthDim.x;
+        var hitP = game.v2{
+            .x = -0.5 * @intToFloat(f32, lowEntity.hitPointMax - 1) * spacingX,
+            .y = -0.25,
+        };
+        const dHitP = game.v2{ .x = spacingX };
+        var healthIndex = @as(u32, 0);
+        while (healthIndex < lowEntity.hitPointMax) : (healthIndex += 1) {
+            const hitPoint = lowEntity.hitPoint[healthIndex];
+            var colour = game.v4{ .e = [4]f32{ 1, 0, 0, 1 } };
+            if (hitPoint.filledAmount == 0) {
+                colour = game.v4{ .e = [4]f32{ 0.2, 0.2, 0.2, 1 } };
+            }
+
+            PushRect(pieceGroup, hitP, 0, healthDim, colour, 0);
+            _ = hitP.Add(dHitP);
+        }
+    }
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
@@ -720,6 +770,7 @@ pub export fn UpdateAndRender(
         gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
         gameState.shadow = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp");
         gameState.tree = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tree00.bmp");
+        gameState.sword = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock03.bmp");
 
         gameState.heroBitmaps[0].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
         gameState.heroBitmaps[0].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");
@@ -921,11 +972,33 @@ pub export fn UpdateAndRender(
                 }
             }
 
-            if (controller.buttons.mapped.actionDown.endedDown != 0) {
+            if (controller.buttons.mapped.start.endedDown != 0) {
                 controllingEntity.high.?.dZ = 3.0;
             }
 
+            var dSword = game.v2{};
+            if (controller.buttons.mapped.actionUp.endedDown != 0) {
+                dSword.y = 1.0;
+            }
+            if (controller.buttons.mapped.actionDown.endedDown != 0) {
+                dSword.y = -1.0;
+            }
+            if (controller.buttons.mapped.actionLeft.endedDown != 0) {
+                dSword.x = -1.0;
+            }
+            if (controller.buttons.mapped.actionRight.endedDown != 0) {
+                dSword.x = 1.0;
+            }
+
             MoveEntity(gameState, controllingEntity, gameInput.dtForFrame, ddP);
+            if ((dSword.x != 0) or (dSword.y != 0)) {
+                if (GetLowEntity(gameState, controllingEntity.low.swordLowIndex)) |sword| {
+                    if (!game.IsValid(sword.p)) {
+                        const swordP = controllingEntity.low.p;
+                        game.ChangeEntityLocation(&gameState.worldArena, gameState.world, controllingEntity.low.swordLowIndex, sword, null, &swordP);
+                    }
+                }
+            }
         }
     }
 
@@ -997,30 +1070,16 @@ pub export fn UpdateAndRender(
                 PushBitmap(&pieceGroup, &heroBitmaps.cape, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
                 PushBitmap(&pieceGroup, &heroBitmaps.head, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
 
-                if (lowEntity.hitPointMax >= 1) {
-                    const healthDim = .{ .x = 0.2, .y = 0.2 };
-                    const spacingX = 1.5 * healthDim.x;
-                    var hitP = game.v2{
-                        .x = -0.5 * @intToFloat(f32, lowEntity.hitPointMax - 1) * spacingX,
-                        .y = -0.25,
-                    };
-                    const dHitP = game.v2{ .x = spacingX };
-                    var healthIndex = @as(u32, 0);
-                    while (healthIndex < lowEntity.hitPointMax) : (healthIndex += 1) {
-                        const hitPoint = lowEntity.hitPoint[healthIndex];
-                        var colour = game.v4{ .e = [4]f32{ 1, 0, 0, 1 } };
-                        if (hitPoint.filledAmount == 0) {
-                            colour = game.v4{ .e = [4]f32{ 0.2, 0.2, 0.2, 1 } };
-                        }
-
-                        PushRect(&pieceGroup, hitP, 0, healthDim, colour, 0);
-                        _ = hitP.Add(dHitP);
-                    }
-                }
+                DrawHitpoints(lowEntity, &pieceGroup);
             },
 
             .Wall => {
                 PushBitmap(&pieceGroup, &gameState.tree, .{}, 0, .{ .x = 40, .y = 80 }, 1.0, 1.0);
+            },
+
+            .Sword => {
+                PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                PushBitmap(&pieceGroup, &gameState.sword, .{}, 0, .{ .x = 29, .y = 10 }, 1.0, 1.0);
             },
 
             .Familiar => {
@@ -1032,6 +1091,8 @@ pub export fn UpdateAndRender(
                 const bobSin = game.Sin(2 * entity.high.?.tBob);
                 PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, (0.5 * shadowAlpha) + (0.2 * bobSin), 0.0);
                 PushBitmap(&pieceGroup, &heroBitmaps.head, .{}, 0.25 * bobSin, heroBitmaps.alignment, 1.0, 1.0);
+
+                DrawHitpoints(lowEntity, &pieceGroup);
             },
 
             .Monstar => {

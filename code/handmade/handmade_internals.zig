@@ -83,6 +83,7 @@ pub const entity_type = enum {
     Wall,
     Familiar,
     Monstar,
+    Sword,
 };
 
 pub const hit_point = struct {
@@ -103,6 +104,9 @@ pub const low_entity = struct {
 
     hitPointMax: u32 = 0,
     hitPoint: [16]hit_point = [1]hit_point{.{}} ** 16,
+
+    swordLowIndex: u32 = 0,
+    distanceRemaining: f32 = 0,
 };
 
 pub const entity = struct {
@@ -151,5 +155,6 @@ pub const state = struct {
     heroBitmaps: [4]hero_bitmaps,
 
     tree: loaded_bitmap,
+    sword: loaded_bitmap,
     metersToPixels: f32,
 };

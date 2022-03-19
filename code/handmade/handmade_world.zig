@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 
 const math = @import("handmade_math.zig");
 const memory_arena = @import("handmade_internals.zig").memory_arena;
+const low_entity = @import("handmade_internals.zig").low_entity;
 const RoundF32ToInt = @import("handmade_intrinsics.zig").RoundF32ToInt;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
@@ -52,6 +53,18 @@ pub const world = struct {
 };
 
 // public inline functions ----------------------------------------------------------------------------------------------------------------
+
+inline fn NullPosition() world_position {
+    const result: world_position = .{
+        .chunkX = TILE_CHUNK_UNINITIALIZED,
+    };
+    return result;
+}
+
+pub inline fn IsValid(p: world_position) bool {
+    const result = p.chunkX != TILE_CHUNK_UNINITIALIZED;
+    return result;
+}
 
 inline fn IsCanonicalCoord(w: *const world, tileRel: f32) bool {
     const result = (tileRel >= -0.5 * w.chunkSideInMeters) and (tileRel <= 0.5 * w.chunkSideInMeters);
@@ -186,8 +199,11 @@ inline fn CenteredChunkPoint(chunkX: u32, chunkY: u32, chunkZ: u32) world_positi
     return result;
 }
 
-pub fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*const world_position, newP: *const world_position) void {
-    if ((oldP != null) and AreInSameChunk(w, &(oldP.?.*), newP)) {} else {
+pub fn ChangeEntityLocationRaw(arena: *memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*const world_position, newP: ?*const world_position) void {
+    std.debug.assert((oldP == null) or IsValid(oldP.?.*));
+    std.debug.assert((newP == null) or IsValid(newP.?.*));
+
+    if ((oldP != null) and AreInSameChunk(w, oldP.?, newP.?)) {} else {
         if (oldP) |p| {
             if (GetWorldChunk(null, w, p.chunkX, p.chunkY, p.chunkZ)) |chunk| {
                 var notFound = true;
@@ -222,30 +238,42 @@ pub fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32
             }
         }
 
-        if (GetWorldChunk(arena, w, newP.chunkX, newP.chunkY, newP.chunkZ)) |chunk| {
-            var block = &chunk.firstBlock;
-            if (block.entityCount == block.lowEntityIndex.len) {
-                var oldBlock = w.firstFree;
-                if (oldBlock) |_| {
-                    w.firstFree = oldBlock.?.next;
-                } else {
-                    oldBlock = arena.PushStruct(world_entity_block);
+        if (newP) |p| {
+            if (GetWorldChunk(arena, w, p.chunkX, p.chunkY, p.chunkZ)) |chunk| {
+                var block = &chunk.firstBlock;
+                if (block.entityCount == block.lowEntityIndex.len) {
+                    var oldBlock = w.firstFree;
+                    if (oldBlock) |b| {
+                        w.firstFree = b.next;
+                    } else {
+                        oldBlock = arena.PushStruct(world_entity_block);
+                    }
+
+                    oldBlock.?.* = block.*;
+                    block.next = oldBlock;
+                    block.entityCount = 0;
                 }
 
-                oldBlock.?.* = block.*;
-                block.next = oldBlock;
-                block.entityCount = 0;
+                std.debug.assert(block.entityCount < block.lowEntityIndex.len);
+                block.lowEntityIndex[block.entityCount] = lowEntityIndex;
+                block.entityCount += 1;
+            } else {
+                unreachable;
             }
-
-            block.lowEntityIndex[block.entityCount] = lowEntityIndex;
-            block.entityCount += 1;
-        } else {
-            unreachable;
         }
     }
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
+
+pub fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, lowEntity: *low_entity, oldP: ?*const world_position, newP: ?*const world_position) void {
+    ChangeEntityLocationRaw(arena, w, lowEntityIndex, oldP, newP);
+    if (newP) |p| {
+        lowEntity.p = p.*;
+    } else {
+        lowEntity.p = NullPosition();
+    }
+}
 
 pub fn InitializeWorld(w: *world, tileSideInMeters: f32) void {
     w.tileSideInMeters = tileSideInMeters;
