@@ -203,7 +203,7 @@ pub fn ChangeEntityLocationRaw(arena: *memory_arena, w: *world, lowEntityIndex: 
     std.debug.assert((oldP == null) or IsValid(oldP.?.*));
     std.debug.assert((newP == null) or IsValid(newP.?.*));
 
-    if ((oldP != null) and AreInSameChunk(w, oldP.?, newP.?)) {} else {
+    if ((oldP != null) and (newP != null) and AreInSameChunk(w, oldP.?, newP.?)) {} else {
         if (oldP) |p| {
             if (GetWorldChunk(null, w, p.chunkX, p.chunkY, p.chunkZ)) |chunk| {
                 var notFound = true;

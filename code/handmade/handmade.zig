@@ -234,6 +234,10 @@ inline fn MakeEntityHighFrequencyWithLowEntity(gameState: *game.state, entityLow
             gameState.highEntityCount += 1;
             entityHigh = &gameState.highEntities[highIndex];
 
+            if (entityLow.entityType == .Sword) {
+                // @breakpoint();
+            }
+
             entityHigh.?.p = cameraSpaceP;
             entityHigh.?.dP = .{};
             entityHigh.?.chunkZ = @intCast(u32, entityLow.p.chunkZ);
@@ -282,6 +286,10 @@ inline fn MakeEntityLowFrequency(gameState: *game.state, lowIndex: u32) void {
     const highIndex = entityLow.highEntityIndex;
 
     if (highIndex != 0) {
+        if (entityLow.entityType == .Sword) {
+            // @breakpoint();
+        }
+
         const lastHighIndex = gameState.highEntityCount - 1;
         if (highIndex != lastHighIndex) {
             const lastEntity = &gameState.highEntities[lastHighIndex];
@@ -311,9 +319,10 @@ inline fn OffsetAndCheckFrequencyByArea(gameState: *game.state, offset: game.v2,
     var highEntityIndex = @as(u32, 1);
     while (highEntityIndex < gameState.highEntityCount) {
         var high = &gameState.highEntities[highEntityIndex];
+        var low = &gameState.lowEntities[high.lowEntityIndex];
 
         _ = high.p.Add(offset);
-        if (game.IsInRectangle(highFrequencyBounds, high.p)) {
+        if (game.IsValid(low.p) and game.IsInRectangle(highFrequencyBounds, high.p)) {
             highEntityIndex += 1;
         } else {
             std.debug.assert(gameState.lowEntities[high.lowEntityIndex].highEntityIndex == highEntityIndex);
@@ -443,19 +452,36 @@ fn TestWall(wallX: f32, relX: f32, relY: f32, playerDeltaX: f32, playerDeltaY: f
     return hit;
 }
 
-fn MoveEntity(gameState: *game.state, entity: game.entity, dt: f32, accelaration: game.v2) void {
+const move_spec = struct {
+    unitMaxAccelVector: bool,
+    speed: f32,
+    drag: f32,
+};
+
+inline fn DefaultMoveSpec() move_spec {
+    const result = move_spec{
+        .unitMaxAccelVector = false,
+        .speed = 1,
+        .drag = 0,
+    };
+
+    return result;
+}
+
+fn MoveEntity(gameState: *game.state, entity: game.entity, dt: f32, moveSpec: *const move_spec, accelaration: game.v2) void {
     var ddP = accelaration;
     // const world = gameState.world;
 
-    const ddPLength = game.LengthSq(ddP);
-    if (ddPLength > 1.0) {
-        _ = ddP.Scale(1.0 / game.SquareRoot(ddPLength));
+    if (moveSpec.unitMaxAccelVector) {
+        const ddPLength = game.LengthSq(ddP);
+        if (ddPLength > 1.0) {
+            _ = ddP.Scale(1.0 / game.SquareRoot(ddPLength));
+        }
     }
 
-    const playerSpeed = @as(f32, 50.0);
-    _ = ddP.Scale(playerSpeed);
+    _ = ddP.Scale(moveSpec.speed);
 
-    _ = ddP.Add(game.Scale(entity.high.?.dP, -8.0)); // NOTE (Manav): ddP += -8.0 * entity.high.dP;
+    _ = ddP.Add(game.Scale(entity.high.?.dP, -moveSpec.drag)); // NOTE (Manav): ddP += -moveSpec.drag * entity.high.dP;
 
     // const oldPlayerP = entity.high.p;
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
@@ -488,39 +514,41 @@ fn MoveEntity(gameState: *game.state, entity: game.entity, dt: f32, accelaration
         // NOTE (Manav): desiredPosition = entity.high.p + playerDelta;
         const desiredPosition = game.Add(entity.high.?.p, playerDelta);
 
-        var testHighEntityIndex = @as(u32, 1);
-        while (testHighEntityIndex < gameState.highEntityCount) : (testHighEntityIndex += 1) {
-            if (testHighEntityIndex != entity.low.highEntityIndex) {
-                var testEntity = game.entity{
-                    .low = undefined,
-                    .high = &gameState.highEntities[testHighEntityIndex],
-                };
-                testEntity.lowIndex = testEntity.high.?.lowEntityIndex;
-                testEntity.low = &gameState.lowEntities[testEntity.lowIndex];
-                if (testEntity.low.collides) {
-                    const diameterW = testEntity.low.width + entity.low.width;
-                    const diameterH = testEntity.low.height + entity.low.height;
+        if (entity.low.collides) {
+            var testHighEntityIndex = @as(u32, 1);
+            while (testHighEntityIndex < gameState.highEntityCount) : (testHighEntityIndex += 1) {
+                if (testHighEntityIndex != entity.low.highEntityIndex) {
+                    var testEntity = game.entity{
+                        .low = undefined,
+                        .high = &gameState.highEntities[testHighEntityIndex],
+                    };
+                    testEntity.lowIndex = testEntity.high.?.lowEntityIndex;
+                    testEntity.low = &gameState.lowEntities[testEntity.lowIndex];
+                    if (testEntity.low.collides) {
+                        const diameterW = testEntity.low.width + entity.low.width;
+                        const diameterH = testEntity.low.height + entity.low.height;
 
-                    const minCorner = game.v2{ .x = -0.5 * diameterW, .y = -0.5 * diameterH };
-                    const maxCorner = game.v2{ .x = 0.5 * diameterW, .y = 0.5 * diameterH };
+                        const minCorner = game.v2{ .x = -0.5 * diameterW, .y = -0.5 * diameterH };
+                        const maxCorner = game.v2{ .x = 0.5 * diameterW, .y = 0.5 * diameterH };
 
-                    const rel = game.Sub(entity.high.?.p, testEntity.high.?.p); // NOTE: (Manav): entity.high.p - testEntity.high.p
+                        const rel = game.Sub(entity.high.?.p, testEntity.high.?.p); // NOTE: (Manav): entity.high.p - testEntity.high.p
 
-                    if (TestWall(minCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
-                        wallNormal = .{ .x = -1, .y = 0 };
-                        hitHighEntityIndex = testHighEntityIndex;
-                    }
-                    if (TestWall(maxCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
-                        wallNormal = .{ .x = 1, .y = 0 };
-                        hitHighEntityIndex = testHighEntityIndex;
-                    }
-                    if (TestWall(minCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
-                        wallNormal = .{ .x = 0, .y = -1 };
-                        hitHighEntityIndex = testHighEntityIndex;
-                    }
-                    if (TestWall(maxCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
-                        wallNormal = .{ .x = 0, .y = 1 };
-                        hitHighEntityIndex = testHighEntityIndex;
+                        if (TestWall(minCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
+                            wallNormal = .{ .x = -1, .y = 0 };
+                            hitHighEntityIndex = testHighEntityIndex;
+                        }
+                        if (TestWall(maxCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
+                            wallNormal = .{ .x = 1, .y = 0 };
+                            hitHighEntityIndex = testHighEntityIndex;
+                        }
+                        if (TestWall(minCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
+                            wallNormal = .{ .x = 0, .y = -1 };
+                            hitHighEntityIndex = testHighEntityIndex;
+                        }
+                        if (TestWall(maxCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
+                            wallNormal = .{ .x = 0, .y = 1 };
+                            hitHighEntityIndex = testHighEntityIndex;
+                        }
                     }
                 }
             }
@@ -650,10 +678,31 @@ inline fn UpdateFamiliar(gameState: *game.state, entity: game.entity, dt: f32) v
         }
     }
 
-    MoveEntity(gameState, entity, dt, dPP);
+    var moveSpec = DefaultMoveSpec();
+    moveSpec.unitMaxAccelVector = true;
+    moveSpec.speed = 50;
+    moveSpec.drag = 8;
+
+    MoveEntity(gameState, entity, dt, &moveSpec, dPP);
 }
 
 inline fn UpdateMonstar(_: *game.state, _: game.entity, _: f32) void {}
+
+inline fn UpdateSword(gameState: *game.state, entity: game.entity, dt: f32) void {
+    var moveSpec = DefaultMoveSpec();
+    moveSpec.unitMaxAccelVector = false;
+    moveSpec.speed = 0;
+    moveSpec.drag = 0;
+
+    const oldP = entity.high.?.p;
+    MoveEntity(gameState, entity, dt, &moveSpec, .{});
+    const distanceTravelled = game.Length(game.Sub(entity.high.?.p, oldP));
+
+    entity.low.distanceRemaining -= distanceTravelled;
+    if (entity.low.distanceRemaining < 0) {
+        game.ChangeEntityLocation(&gameState.worldArena, gameState.world, entity.lowIndex, entity.low, &entity.low.p, null);
+    }
+}
 
 fn SetCamera(gameState: *game.state, newCameraP: game.world_position) void {
     const local_persist = struct {
@@ -990,12 +1039,20 @@ pub export fn UpdateAndRender(
                 dSword.x = 1.0;
             }
 
-            MoveEntity(gameState, controllingEntity, gameInput.dtForFrame, ddP);
+            var moveSpec = DefaultMoveSpec();
+            moveSpec.unitMaxAccelVector = true;
+            moveSpec.speed = 50;
+            moveSpec.drag = 8;
+            MoveEntity(gameState, controllingEntity, gameInput.dtForFrame, &moveSpec, ddP);
             if ((dSword.x != 0) or (dSword.y != 0)) {
-                if (GetLowEntity(gameState, controllingEntity.low.swordLowIndex)) |sword| {
-                    if (!game.IsValid(sword.p)) {
+                if (GetLowEntity(gameState, controllingEntity.low.swordLowIndex)) |lowSword| {
+                    if (!game.IsValid(lowSword.p)) {
                         const swordP = controllingEntity.low.p;
-                        game.ChangeEntityLocation(&gameState.worldArena, gameState.world, controllingEntity.low.swordLowIndex, sword, null, &swordP);
+                        game.ChangeEntityLocation(&gameState.worldArena, gameState.world, controllingEntity.low.swordLowIndex, lowSword, null, &swordP);
+                        const sword = ForceEntityIntoHigh(gameState, controllingEntity.low.swordLowIndex);
+
+                        sword.low.distanceRemaining = 5;
+                        sword.high.?.dP = game.Scale(dSword, 5);
                     }
                 }
             }
@@ -1078,6 +1135,7 @@ pub export fn UpdateAndRender(
             },
 
             .Sword => {
+                UpdateSword(gameState, entity, dt);
                 PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
                 PushBitmap(&pieceGroup, &gameState.sword, .{}, 0, .{ .x = 29, .y = 10 }, 1.0, 1.0);
             },
@@ -1091,14 +1149,14 @@ pub export fn UpdateAndRender(
                 const bobSin = game.Sin(2 * entity.high.?.tBob);
                 PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, (0.5 * shadowAlpha) + (0.2 * bobSin), 0.0);
                 PushBitmap(&pieceGroup, &heroBitmaps.head, .{}, 0.25 * bobSin, heroBitmaps.alignment, 1.0, 1.0);
-
-                DrawHitpoints(lowEntity, &pieceGroup);
             },
 
             .Monstar => {
                 UpdateMonstar(gameState, entity, dt);
                 PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
                 PushBitmap(&pieceGroup, &heroBitmaps.torso, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
+
+                DrawHitpoints(lowEntity, &pieceGroup);
             },
 
             .Null => {
