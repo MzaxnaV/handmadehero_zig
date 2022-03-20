@@ -2,13 +2,10 @@ const std = @import("std");
 
 const CONTROLLERS = @import("handmade_platform").CONTROLLERS;
 const memory_index = @import("handmade_platform").memory_index;
+const sim_entity = @import("handmade_sim_region.zig").sim_entity;
 const world_position = @import("handmade_world.zig").world_position;
 const world = @import("handmade_world.zig").world;
 const v2 = @import("handmade_math.zig").v2;
-
-// constants ------------------------------------------------------------------------------------------------------------------------------
-
-pub const HIT_POINT_SUB_COUNT = 4;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
@@ -23,7 +20,7 @@ pub const memory_arena = struct {
         self.used = 0;
     }
 
-    fn PushSize(self: *memory_arena, size: memory_index) [*]u8 {
+    inline fn PushSize(self: *memory_arena, size: memory_index) [*]u8 {
         std.debug.assert((self.used + size) <= self.size);
         const result = self.base + self.used;
         self.used += size;
@@ -62,57 +59,9 @@ pub const hero_bitmaps = struct {
     torso: loaded_bitmap,
 };
 
-pub const high_entity = struct {
-    p: v2 = .{},
-    dP: v2 = .{},
-    chunkZ: u32 = 0,
-    facingDirection: u32 = 0,
-
-    tBob: f32,
-
-    z: f32 = 0,
-    dZ: f32 = 0,
-
-    lowEntityIndex: u32 = 0,
-};
-
-pub const entity_type = enum {
-    Null,
-
-    Hero,
-    Wall,
-    Familiar,
-    Monstar,
-    Sword,
-};
-
-pub const hit_point = struct {
-    flags: u8 = 0,
-    filledAmount: u8 = 0,
-};
-
 pub const low_entity = struct {
-    entityType: entity_type = .Null,
-    p: world_position = .{},
-    width: f32 = 0,
-    height: f32 = 0,
-
-    collides: bool = false,
-    dAbsTileZ: i32 = 0,
-
-    highEntityIndex: u32 = 0,
-
-    hitPointMax: u32 = 0,
-    hitPoint: [16]hit_point = [1]hit_point{.{}} ** 16,
-
-    swordLowIndex: u32 = 0,
-    distanceRemaining: f32 = 0,
-};
-
-pub const entity = struct {
-    lowIndex: u32 = 0,
-    low: *low_entity,
-    high: ?*high_entity = null,
+    p: world_position,
+    sim: sim_entity,
 };
 
 pub const entity_visible_piece = struct {
@@ -135,6 +84,14 @@ pub const entity_visible_piece_group = struct {
     pieces: [8]entity_visible_piece,
 };
 
+pub const controlled_hero = struct {
+    entityIndex: u32 = 0,
+
+    ddP: v2 = .{},
+    dSword: v2 = .{},
+    dZ: f32 = 0,
+};
+
 pub const state = struct {
     worldArena: memory_arena,
     world: *world,
@@ -142,13 +99,10 @@ pub const state = struct {
     cameraFollowingEntityIndex: u32,
     cameraP: world_position = .{},
 
-    playerIndexForController: [CONTROLLERS]u32,
+    controlledHeroes: [CONTROLLERS]controlled_hero,
 
     lowEntityCount: u32,
     lowEntities: [100000]low_entity,
-
-    highEntityCount: u32,
-    highEntities: [256]high_entity,
 
     backdrop: loaded_bitmap,
     shadow: loaded_bitmap,
@@ -158,3 +112,29 @@ pub const state = struct {
     sword: loaded_bitmap,
     metersToPixels: f32,
 };
+
+// inline pub functions -------------------------------------------------------------------------------------------------------------------
+
+inline fn ZeroSize(size: memory_index, ptr: [*]u8) void {
+    var byte = ptr;
+    var s = size;
+    while (s > 0) : (s -= 1) {
+        byte.* = 0;
+        byte += 1;
+    }
+}
+
+// NOTE (Manav): works for slices too.
+pub inline fn ZeroStruct(comptime T: type, ptr: *T) void {
+    ZeroSize(@sizeOf(T), @ptrCast([*]u8, ptr));
+}
+
+pub inline fn GetLowEntity(gameState: *state, index: u32) ?*low_entity {
+    var result: ?*low_entity = null;
+
+    if ((index > 0) and (index < gameState.lowEntityCount)) {
+        result = &gameState.lowEntities[index];
+    }
+
+    return result;
+}

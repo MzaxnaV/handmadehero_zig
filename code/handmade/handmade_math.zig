@@ -1,5 +1,7 @@
 const SquareRoot = @import("handmade_intrinsics.zig").SquareRoot;
 
+// data types -----------------------------------------------------------------------------------------------------------------------------
+
 pub const v2 = struct {
     x: f32 = 0,
     y: f32 = 0,

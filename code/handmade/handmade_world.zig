@@ -1,9 +1,11 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const math = @import("handmade_math.zig");
-const memory_arena = @import("handmade_internals.zig").memory_arena;
-const low_entity = @import("handmade_internals.zig").low_entity;
+const hi = @import("handmade_internals.zig");
+const hm = @import("handmade_math.zig");
+const he = @import("handmade_entity.zig");
+const hsr = @import("handmade_sim_region.zig");
+
 const RoundF32ToInt = @import("handmade_intrinsics.zig").RoundF32ToInt;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
@@ -16,7 +18,7 @@ const TILES_PER_CHUNK = 16;
 // tile data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const world_difference = struct {
-    dXY: math.v2 = .{},
+    dXY: hm.v2 = .{},
     dZ: f32 = 0,
 };
 
@@ -25,7 +27,7 @@ pub const world_position = struct {
     chunkY: i32 = 0,
     chunkZ: i32 = 0,
 
-    offset_: math.v2 = .{},
+    offset_: hm.v2 = .{},
 };
 
 pub const world_entity_block = struct {
@@ -49,12 +51,13 @@ pub const world = struct {
     chunkSideInMeters: f32,
 
     firstFree: ?*world_entity_block,
+
     chunkHash: [4096]world_chunk,
 };
 
 // public inline functions ----------------------------------------------------------------------------------------------------------------
 
-inline fn NullPosition() world_position {
+pub inline fn NullPosition() world_position {
     const result: world_position = .{
         .chunkX = TILE_CHUNK_UNINITIALIZED,
     };
@@ -67,11 +70,12 @@ pub inline fn IsValid(p: world_position) bool {
 }
 
 inline fn IsCanonicalCoord(w: *const world, tileRel: f32) bool {
-    const result = (tileRel >= -0.5 * w.chunkSideInMeters) and (tileRel <= 0.5 * w.chunkSideInMeters);
+    const epsilon = 0.0001;
+    const result = (tileRel >= -(0.5 * w.chunkSideInMeters + epsilon)) and (tileRel <= (0.5 * w.chunkSideInMeters + epsilon));
     return result;
 }
 
-inline fn IsCanonical(w: *const world, offset: math.v2) bool {
+inline fn IsCanonical(w: *const world, offset: hm.v2) bool {
     const result = IsCanonicalCoord(w, offset.x) and IsCanonicalCoord(w, offset.y);
     return result;
 }
@@ -84,7 +88,7 @@ inline fn AreInSameChunk(w: *const world, a: *const world_position, b: *const wo
     return result;
 }
 
-pub fn GetWorldChunk(memoryArena: ?*memory_arena, w: *world, chunkX: i32, chunkY: i32, chunkZ: i32) ?*world_chunk {
+pub fn GetWorldChunk(memoryArena: ?*hi.memory_arena, w: *world, chunkX: i32, chunkY: i32, chunkZ: i32) ?*world_chunk {
     assert(chunkX > -TILE_CHUNK_SAFE_MARGIN);
     assert(chunkY > -TILE_CHUNK_SAFE_MARGIN);
     assert(chunkZ > -TILE_CHUNK_SAFE_MARGIN);
@@ -134,7 +138,7 @@ inline fn RecanonicalizeCoord(w: *const world, tile: *i32, tileRel: *f32) void {
     assert(IsCanonicalCoord(w, tileRel.*));
 }
 
-pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset: math.v2) world_position {
+pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset: hm.v2) world_position {
     var result = basePos;
 
     _ = result.offset_.Add(offset); // NOTE (Manav): result.offset_ += offset
@@ -182,7 +186,7 @@ pub inline fn Substract(w: *const world, a: *const world_position, b: *const wor
 
     const result = world_difference{
         // NOTE (Manav): .dxy = w.chunkSideInMeters * dTileXY  + (a.offset_ - b.offset_)
-        .dXY = math.Add(math.Scale(dTileXY, w.chunkSideInMeters), math.Sub(a.offset_, b.offset_)),
+        .dXY = hm.Add(hm.Scale(dTileXY, w.chunkSideInMeters), hm.Sub(a.offset_, b.offset_)),
         .dZ = w.chunkSideInMeters * dTileZ,
     };
 
@@ -199,7 +203,7 @@ inline fn CenteredChunkPoint(chunkX: u32, chunkY: u32, chunkZ: u32) world_positi
     return result;
 }
 
-pub fn ChangeEntityLocationRaw(arena: *memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*const world_position, newP: ?*const world_position) void {
+pub fn ChangeEntityLocationRaw(arena: *hi.memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*const world_position, newP: ?*const world_position) void {
     std.debug.assert((oldP == null) or IsValid(oldP.?.*));
     std.debug.assert((newP == null) or IsValid(newP.?.*));
 
@@ -266,12 +270,26 @@ pub fn ChangeEntityLocationRaw(arena: *memory_arena, w: *world, lowEntityIndex: 
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
-pub fn ChangeEntityLocation(arena: *memory_arena, w: *world, lowEntityIndex: u32, lowEntity: *low_entity, oldP: ?*const world_position, newP: ?*const world_position) void {
+pub fn ChangeEntityLocation(arena: *hi.memory_arena, w: *world, lowEntityIndex: u32, lowEntity: *hi.low_entity, newPInit: world_position) void {
+    var oldP: ?*const world_position = null;
+    var newP: ?*const world_position = null;
+
+    if (!he.IsSet(&lowEntity.sim, @enumToInt(hsr.sim_entity_flags.NonSpatial)) and IsValid(lowEntity.p)) {
+        oldP = &lowEntity.p;
+    }
+
+    if (IsValid(newPInit)) {
+        newP = &newPInit;
+    }
+
     ChangeEntityLocationRaw(arena, w, lowEntityIndex, oldP, newP);
+
     if (newP) |p| {
         lowEntity.p = p.*;
+        he.ClearFlag(&lowEntity.sim, @enumToInt(hsr.sim_entity_flags.NonSpatial));
     } else {
         lowEntity.p = NullPosition();
+        he.AddFlag(&lowEntity.sim, @enumToInt(hsr.sim_entity_flags.NonSpatial));
     }
 }
 
