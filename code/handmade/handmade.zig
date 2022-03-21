@@ -558,7 +558,9 @@ pub export fn UpdateAndRender(
         const cameraTileY = screenBaseY * tilesPerHeight + 9 / 2;
         const cameraTileZ = screenBaseZ;
 
-        // const newCameraP = game.ChunkPosFromTilePos(gameState.world, cameraTileX, cameraTileY, cameraTileZ);
+        const newCameraP = game.ChunkPosFromTilePos(gameState.world, cameraTileX, cameraTileY, cameraTileZ);
+
+        gameState.cameraP = newCameraP;
 
         _ = AddMonstar(gameState, cameraTileX + 2, cameraTileY + 2, cameraTileZ);
         var familiarIndex = @as(u32, 0);

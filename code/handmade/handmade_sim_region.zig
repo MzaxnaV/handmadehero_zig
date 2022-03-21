@@ -1,4 +1,4 @@
-const std = @import("std");
+const assert = @import("std").debug.assert;
 
 const hw = @import("handmade_world.zig");
 const hi = @import("handmade_internals.zig");
@@ -104,7 +104,7 @@ pub const sim_region = struct {
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub fn GetHashFromStorageIndex(simRegion: *sim_region, storageIndex: u32) *sim_entity_hash {
-    std.debug.assert(storageIndex > 0);
+    assert(storageIndex > 0);
 
     var result: *sim_entity_hash = undefined;
 
@@ -113,9 +113,9 @@ pub fn GetHashFromStorageIndex(simRegion: *sim_region, storageIndex: u32) *sim_e
     while (offset < simRegion.hash.len) : (offset += 1) {
         const hashMask = (simRegion.hash.len - 1);
         const hashIndex = (hashValue + offset) & hashMask;
-        const entity = &simRegion.hash[hashIndex];
-        if ((entity.index == 0) or (entity.index == storageIndex)) {
-            result = entity;
+        const entry = &simRegion.hash[hashIndex];
+        if ((entry.index == 0) or (entry.index == storageIndex)) {
+            result = entry;
             break;
         }
     }
@@ -143,7 +143,7 @@ pub inline fn LoadEntityReference(gameState: *hi.state, simRegion: *sim_region, 
             }
         },
 
-        else => {},
+        .ptr => {},
     }
 }
 
@@ -154,12 +154,12 @@ pub inline fn StoreEntityReference(ref: *entity_reference) void {
             ref.* = entity_reference{ .index = ptr.storageIndex };
         },
 
-        else => {},
+        .index => {},
     }
 }
 
-pub fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32, source: ?*hi.low_entity) ?*sim_entity {
-    std.debug.assert(storageIndex > 0);
+fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32, source: ?*hi.low_entity) ?*sim_entity {
+    assert(storageIndex > 0);
     var entity: ?*sim_entity = null;
 
     const entry = GetHashFromStorageIndex(simRegion, storageIndex);
@@ -176,7 +176,7 @@ pub fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: 
                 entity.?.* = lowEntity.sim;
                 LoadEntityReference(gameState, simRegion, &entity.?.sword);
 
-                std.debug.assert(!he.IsSet(&lowEntity.sim, @enumToInt(sim_entity_flags.Simming)));
+                assert(!he.IsSet(&lowEntity.sim, @enumToInt(sim_entity_flags.Simming)));
                 he.AddFlag(&lowEntity.sim, @enumToInt(sim_entity_flags.Simming));
             }
 
@@ -187,16 +187,6 @@ pub fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: 
     }
 
     return entity;
-}
-
-pub inline fn GetSimSpaceP(simRegion: *sim_region, stored: *hi.low_entity) hm.v2 {
-    var result = he.Invalid;
-    if (!he.IsSet(&stored.sim, @enumToInt(sim_entity_flags.NonSpatial))) {
-        const diff = hw.Substract(simRegion.world, &stored.p, &simRegion.origin);
-        result = diff.dXY;
-    }
-
-    return result;
 }
 
 pub fn AddEntity(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32, source: ?*hi.low_entity, simP: ?*hm.v2) ?*sim_entity {
@@ -212,9 +202,20 @@ pub fn AddEntity(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32
     return dest;
 }
 
+pub inline fn GetSimSpaceP(simRegion: *sim_region, stored: *hi.low_entity) hm.v2 {
+    var result = he.Invalid;
+    if (!he.IsSet(&stored.sim, @enumToInt(sim_entity_flags.NonSpatial))) {
+        const diff = hw.Substract(simRegion.world, &stored.p, &simRegion.origin);
+        result = diff.dXY;
+    }
+
+    return result;
+}
+
 pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.world, origin: hw.world_position, bounds: hm.rect2) *sim_region {
     var simRegion: *sim_region = simArena.PushStruct(sim_region);
     hi.ZeroStruct([4096]sim_entity_hash, &simRegion.hash);
+
     simRegion.world = world;
     simRegion.origin = origin;
     simRegion.bounds = bounds;
@@ -259,9 +260,9 @@ pub fn EndSim(region: *sim_region, gameState: *hi.state) void {
         const entity: *sim_entity = &region.entities[entityIndex];
         const stored = &gameState.lowEntities[entity.storageIndex];
 
-        std.debug.assert(he.IsSet(&stored.sim, @enumToInt(sim_entity_flags.Simming)));
+        assert(he.IsSet(&stored.sim, @enumToInt(sim_entity_flags.Simming)));
         stored.sim = entity.*;
-        std.debug.assert(!he.IsSet(&stored.sim, @enumToInt(sim_entity_flags.Simming)));
+        assert(!he.IsSet(&stored.sim, @enumToInt(sim_entity_flags.Simming)));
 
         StoreEntityReference(&stored.sim.sword);
 
@@ -317,7 +318,7 @@ pub fn TestWall(wallX: f32, relX: f32, relY: f32, playerDeltaX: f32, playerDelta
 }
 
 pub fn MoveEntity(simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec: *const move_spec, accelaration: hm.v2) void {
-    std.debug.assert(!he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial)));
+    assert(!he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial)));
 
     var ddP = accelaration;
     // const world = gameState.world;
@@ -330,7 +331,6 @@ pub fn MoveEntity(simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec
     }
 
     _ = ddP.Scale(moveSpec.speed);
-
     _ = ddP.Add(hm.Scale(entity.dP, -moveSpec.drag)); // NOTE (Manav): ddP += -moveSpec.drag * entity.dP;
 
     // const oldPlayerP = entity.p;
