@@ -56,6 +56,7 @@ pub const sim_entity_flags = enum(u32) {
 
 pub const sim_entity = struct {
     storageIndex: u32 = 0,
+    updatable: bool = false,
 
     entityType: entity_type,
     flags: u32 = 0,
@@ -93,6 +94,7 @@ pub const sim_region = struct {
 
     origin: hw.world_position,
     bounds: hm.rect2,
+    updatableBounds: hm.rect2,
 
     maxEntityCount: u32,
     entityCount: u32,
@@ -136,7 +138,9 @@ pub inline fn LoadEntityReference(gameState: *hi.state, simRegion: *sim_region, 
                 var entry = GetHashFromStorageIndex(simRegion, ref.index);
                 if (entry.ptr) |_| {} else {
                     entry.index = ref.index;
-                    entry.ptr = AddEntity(gameState, simRegion, ref.index, hi.GetLowEntity(gameState, ref.index), null);
+                    const lowEntity = hi.GetLowEntity(gameState, ref.index);
+                    const p = GetSimSpaceP(simRegion, lowEntity.?);
+                    entry.ptr = AddEntity(gameState, simRegion, ref.index, hi.GetLowEntity(gameState, ref.index), &p);
                 }
 
                 ref.* = entity_reference{ .ptr = entry.ptr.? };
@@ -181,6 +185,7 @@ fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32,
             }
 
             entity.?.storageIndex = storageIndex;
+            entity.?.updatable = false;
         } else {
             unreachable;
         }
@@ -189,11 +194,12 @@ fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32,
     return entity;
 }
 
-pub fn AddEntity(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32, source: ?*hi.low_entity, simP: ?*hm.v2) ?*sim_entity {
+pub fn AddEntity(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32, source: ?*hi.low_entity, simP: ?*const hm.v2) ?*sim_entity {
     var dest = AddEntityRaw(gameState, simRegion, storageIndex, source);
     if (dest) |_| {
         if (simP) |_| {
             dest.?.p = simP.?.*;
+            dest.?.updatable = hm.IsInRectangle(simRegion.updatableBounds, dest.?.p);
         } else {
             dest.?.p = GetSimSpaceP(simRegion, source.?);
         }
@@ -216,9 +222,12 @@ pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.wor
     var simRegion: *sim_region = simArena.PushStruct(sim_region);
     hi.ZeroStruct([4096]sim_entity_hash, &simRegion.hash);
 
+    const updateSafetyMargin = 1.0;
+
     simRegion.world = world;
     simRegion.origin = origin;
-    simRegion.bounds = bounds;
+    simRegion.updatableBounds = bounds;
+    simRegion.bounds = hm.AddRadiusTo(simRegion.updatableBounds, updateSafetyMargin, updateSafetyMargin);
 
     simRegion.maxEntityCount = 4096;
     simRegion.entityCount = 0;
@@ -338,6 +347,14 @@ pub fn MoveEntity(simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec
     var playerDelta = hm.Add(hm.Scale(ddP, 0.5 * hm.Square(dt)), hm.Scale(entity.dP, dt));
     _ = entity.dP.Add(hm.Scale(ddP, dt)); // NOTE (Manav): entity.dP += ddP * dt;
     // const newPlayerP = hm.Add(oldPlayerP, playerDelta);
+
+    const ddZ = -9.8;
+    entity.z += 0.5 * ddZ * hm.Square(dt) + entity.dZ * dt;
+    entity.dZ += ddZ * dt;
+
+    if (entity.z < 0) {
+        entity.z = 0;
+    }
 
     var iteration = @as(u32, 0);
     while (iteration < 4) : (iteration += 1) {

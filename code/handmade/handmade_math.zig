@@ -126,6 +126,14 @@ pub inline fn IsInRectangle(rectangle: rect2, testP: v2) bool {
     return result;
 }
 
+pub inline fn AddRadiusTo(rectangle: rect2, radiusW: f32, radiusH: f32) rect2 {
+    const result = rect2{
+        .min = Sub(rectangle.min, .{ .x = radiusW, .y = radiusH }),
+        .max = Add(rectangle.max, .{ .x = radiusW, .y = radiusH }),
+    };
+    return result;
+}
+
 pub inline fn Square(a: f32) f32 {
     const result = a * a;
     return result;

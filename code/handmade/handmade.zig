@@ -658,129 +658,170 @@ pub export fn UpdateAndRender(
     while (entityIndex < simRegion.entityCount) : (entityIndex += 1) {
         const entity: *game.sim_entity = &simRegion.entities[entityIndex];
 
-        pieceGroup.pieceCount = 0;
-        const dt = gameInput.dtForFrame;
+        if (entity.updatable) {
+            pieceGroup.pieceCount = 0;
+            const dt = gameInput.dtForFrame;
 
-        const alpha = 1 - 0.5 * entity.z;
-        const shadowAlpha = if (alpha > 0) alpha else 0;
+            const alpha = 1 - 0.5 * entity.z;
+            const shadowAlpha = if (alpha > 0) alpha else 0;
 
-        const heroBitmaps = &gameState.heroBitmaps[entity.facingDirection];
+            var moveSpec = game.DefaultMoveSpec();
+            var ddP = game.v2{};
 
-        switch (entity.entityType) {
-            .Hero => {
-                for (gameState.controlledHeroes) |conHero| {
-                    if (entity.storageIndex == conHero.entityIndex) {
-                        if (conHero.dZ != 0) {
-                            entity.dZ = conHero.dZ;
-                        }
+            const heroBitmaps = &gameState.heroBitmaps[entity.facingDirection];
 
-                        var moveSpec = game.DefaultMoveSpec();
-                        moveSpec.unitMaxAccelVector = true;
-                        moveSpec.speed = 50;
-                        moveSpec.drag = 8;
-                        game.MoveEntity(simRegion, entity, gameInput.dtForFrame, &moveSpec, conHero.ddP);
-                        if ((conHero.dSword.x != 0) or (conHero.dSword.y != 0)) {
-                            switch (entity.sword) {
-                                .ptr => {
-                                    const sword = entity.sword.ptr;
-                                    if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
-                                        sword.distanceRemaining = 5.0;
-                                        game.MakeEntitySpatial(sword, entity.p, game.Scale(conHero.dSword, 5));
-                                    }
-                                },
+            switch (entity.entityType) {
+                .Hero => {
+                    for (gameState.controlledHeroes) |conHero| {
+                        if (entity.storageIndex == conHero.entityIndex) {
+                            if (conHero.dZ != 0) {
+                                entity.dZ = conHero.dZ;
+                            }
 
-                                .index => {
-                                    unreachable;
-                                },
+                            moveSpec.unitMaxAccelVector = true;
+                            moveSpec.speed = 50;
+                            moveSpec.drag = 8;
+                            ddP = conHero.ddP;
+                            if ((conHero.dSword.x != 0) or (conHero.dSword.y != 0)) {
+                                switch (entity.sword) {
+                                    .ptr => {
+                                        const sword = entity.sword.ptr;
+                                        if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
+                                            sword.distanceRemaining = 5.0;
+                                            game.MakeEntitySpatial(sword, entity.p, game.Scale(conHero.dSword, 5));
+                                        }
+                                    },
+
+                                    .index => {
+                                        unreachable;
+                                    },
+                                }
                             }
                         }
                     }
+
+                    PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                    PushBitmap(&pieceGroup, &heroBitmaps.torso, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
+                    PushBitmap(&pieceGroup, &heroBitmaps.cape, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
+                    PushBitmap(&pieceGroup, &heroBitmaps.head, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
+
+                    DrawHitpoints(entity, &pieceGroup);
+                },
+
+                .Wall => {
+                    PushBitmap(&pieceGroup, &gameState.tree, .{}, 0, .{ .x = 40, .y = 80 }, 1.0, 1.0);
+                },
+
+                .Sword => {
+                    moveSpec.unitMaxAccelVector = false;
+                    moveSpec.speed = 0;
+                    moveSpec.drag = 0;
+
+                    const oldP = entity.p;
+                    const distanceTravelled = game.Length(game.Sub(entity.p, oldP));
+
+                    entity.distanceRemaining -= distanceTravelled;
+                    if (entity.distanceRemaining < 0) {
+                        game.MakeEntityNonSpatial(entity);
+                    }
+
+                    PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                    PushBitmap(&pieceGroup, &gameState.sword, .{}, 0, .{ .x = 29, .y = 10 }, 1.0, 1.0);
+                },
+
+                .Familiar => {
+                    var closestHero: ?*game.sim_entity = null;
+                    var closestHeroDSq = game.Square(10);
+
+                    var testEntityIndex = @as(u32, 0);
+                    while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
+                        const testEntity: *game.sim_entity = &simRegion.entities[testEntityIndex];
+                        if (testEntity.entityType == .Hero) {
+                            var testDSq = game.LengthSq(game.Sub(testEntity.p, entity.p));
+                            if (testEntity.entityType == .Hero) {
+                                testDSq *= 0.75;
+                            }
+
+                            if (closestHeroDSq > testDSq) {
+                                closestHero = testEntity;
+                                closestHeroDSq = testDSq;
+                            }
+                        }
+                    }
+
+                    if (closestHero) |hero| {
+                        if (closestHeroDSq > game.Square(3)) {
+                            const accelaration = 0.5;
+                            const oneOverLength = accelaration / game.SquareRoot(closestHeroDSq);
+                            ddP = game.Scale(game.Sub(hero.p, entity.p), oneOverLength);
+                        }
+                    }
+
+                    moveSpec.unitMaxAccelVector = true;
+                    moveSpec.speed = 50;
+                    moveSpec.drag = 8;
+
+                    entity.tBob += dt;
+                    if (entity.tBob > 2 * platform.PI32) {
+                        entity.tBob -= 2 * platform.PI32;
+                    }
+                    const bobSin = game.Sin(2 * entity.tBob);
+                    PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, (0.5 * shadowAlpha) + (0.2 * bobSin), 0.0);
+                    PushBitmap(&pieceGroup, &heroBitmaps.head, .{}, 0.25 * bobSin, heroBitmaps.alignment, 1.0, 1.0);
+                },
+
+                .Monstar => {
+                    PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                    PushBitmap(&pieceGroup, &heroBitmaps.torso, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
+
+                    DrawHitpoints(entity, &pieceGroup);
+                },
+
+                .Null => {
+                    unreachable;
+                },
+            }
+
+            // NOTE (Manav): is the check really required?
+            if (!game.IsSet(entity, @enumToInt(game.sim_entity_flags.NonSpatial))) {
+                game.MoveEntity(simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
+            }
+
+            const entityGroundPointX = screenCenterX + metersToPixels * entity.p.x;
+            const entityGroundPointY = screenCenterY - metersToPixels * entity.p.y;
+            const entityz = -metersToPixels * entity.z;
+
+            if (!NOT_IGNORE) {
+                const playerLeftTop = .{
+                    .x = entityGroundPointX - 0.5 * metersToPixels * entity.width,
+                    .y = entityGroundPointY - 0.5 * metersToPixels * entity.height,
+                };
+                const entityWidthHeight = .{ .x = entity.width, .y = entity.height };
+
+                DrawRectangle(
+                    buffer,
+                    playerLeftTop,
+                    game.Add(playerLeftTop, game.Scale(entityWidthHeight, metersToPixels)),
+                    1.0,
+                    1.0,
+                    0.0,
+                );
+            }
+
+            var pieceIndex = @as(u32, 0);
+            while (pieceIndex < pieceGroup.pieceCount) : (pieceIndex += 1) {
+                const piece = pieceGroup.pieces[pieceIndex];
+                const center = .{
+                    .x = entityGroundPointX + piece.offset.x,
+                    .y = entityGroundPointY + piece.offset.y + piece.offsetZ + piece.entityZC * entityz,
+                };
+
+                if (piece.bitmap) |b| {
+                    DrawBitmap(buffer, b, center.x, center.y, piece.a);
+                } else {
+                    const halfDim = game.Scale(piece.dim, 0.5 * metersToPixels);
+                    DrawRectangle(buffer, game.Sub(center, halfDim), game.Add(center, halfDim), piece.r, piece.g, piece.b);
                 }
-
-                PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                PushBitmap(&pieceGroup, &heroBitmaps.torso, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
-                PushBitmap(&pieceGroup, &heroBitmaps.cape, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
-                PushBitmap(&pieceGroup, &heroBitmaps.head, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
-
-                DrawHitpoints(entity, &pieceGroup);
-            },
-
-            .Wall => {
-                PushBitmap(&pieceGroup, &gameState.tree, .{}, 0, .{ .x = 40, .y = 80 }, 1.0, 1.0);
-            },
-
-            .Sword => {
-                game.UpdateSword(simRegion, entity, dt);
-                PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                PushBitmap(&pieceGroup, &gameState.sword, .{}, 0, .{ .x = 29, .y = 10 }, 1.0, 1.0);
-            },
-
-            .Familiar => {
-                game.UpdateFamiliar(simRegion, entity, dt);
-                entity.tBob += dt;
-                if (entity.tBob > 2 * platform.PI32) {
-                    entity.tBob -= 2 * platform.PI32;
-                }
-                const bobSin = game.Sin(2 * entity.tBob);
-                PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, (0.5 * shadowAlpha) + (0.2 * bobSin), 0.0);
-                PushBitmap(&pieceGroup, &heroBitmaps.head, .{}, 0.25 * bobSin, heroBitmaps.alignment, 1.0, 1.0);
-            },
-
-            .Monstar => {
-                game.UpdateMonstar(simRegion, entity, dt);
-                PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                PushBitmap(&pieceGroup, &heroBitmaps.torso, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
-
-                DrawHitpoints(entity, &pieceGroup);
-            },
-
-            .Null => {
-                unreachable;
-            },
-        }
-
-        const ddZ = -9.8;
-        entity.z += 0.5 * ddZ * game.Square(dt) + entity.dZ * dt;
-        entity.dZ += ddZ * dt;
-
-        if (entity.z < 0) {
-            entity.z = 0;
-        }
-
-        const entityGroundPointX = screenCenterX + metersToPixels * entity.p.x;
-        const entityGroundPointY = screenCenterY - metersToPixels * entity.p.y;
-        const entityz = -metersToPixels * entity.z;
-
-        if (!NOT_IGNORE) {
-            const playerLeftTop = .{
-                .x = entityGroundPointX - 0.5 * metersToPixels * entity.width,
-                .y = entityGroundPointY - 0.5 * metersToPixels * entity.height,
-            };
-            const entityWidthHeight = .{ .x = entity.width, .y = entity.height };
-
-            DrawRectangle(
-                buffer,
-                playerLeftTop,
-                game.Add(playerLeftTop, game.Scale(entityWidthHeight, metersToPixels)),
-                1.0,
-                1.0,
-                0.0,
-            );
-        }
-
-        var pieceIndex = @as(u32, 0);
-        while (pieceIndex < pieceGroup.pieceCount) : (pieceIndex += 1) {
-            const piece = pieceGroup.pieces[pieceIndex];
-            const center = .{
-                .x = entityGroundPointX + piece.offset.x,
-                .y = entityGroundPointY + piece.offset.y + piece.offsetZ + piece.entityZC * entityz,
-            };
-
-            if (piece.bitmap) |b| {
-                DrawBitmap(buffer, b, center.x, center.y, piece.a);
-            } else {
-                const halfDim = game.Scale(piece.dim, 0.5 * metersToPixels);
-                DrawRectangle(buffer, game.Sub(center, halfDim), game.Add(center, halfDim), piece.r, piece.g, piece.b);
             }
         }
     }

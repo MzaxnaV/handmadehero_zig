@@ -58,6 +58,8 @@ test "math" {
     try testing.expectEqual(hm.IsInRectangle(r, hm.v2{}), true);
     try testing.expectEqual(hm.IsInRectangle(r, .{ .x = 2, .y = 2 }), true);
 
+    try testing.expectEqual(hm.AddRadiusTo(r, 1, 2), .{ .min = .{ .x = -1, .y = -2}, .max = .{ .x = 4, .y = 5}});
+
     const c3 = hm.v3{ .e = [_]f32{ 3, 2, 1 } };
     try testing.expectEqual(c3.c.g, c3.e[1]);
     try testing.expectEqual(c3.c.g, c3.p.y);
