@@ -40,6 +40,7 @@ pub fn build(b: *std.build.Builder) void {
 
     var lib_tests = b.addTest("code/handmade/handmade_tests.zig");
     lib_tests.setBuildMode(mode);
+    lib_tests.addPackage(pkgs.platform);
 
     const test_step = b.step("test", "Run handmade tests");
     test_step.dependOn(&lib_tests.step);

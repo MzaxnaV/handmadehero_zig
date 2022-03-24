@@ -687,7 +687,7 @@ pub export fn UpdateAndRender(
                                     .ptr => {
                                         const sword = entity.sword.ptr;
                                         if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
-                                            sword.distanceRemaining = 5.0;
+                                            sword.distanceLimit = 5.0;
                                             game.MakeEntitySpatial(sword, entity.p, game.Scale(conHero.dSword, 5));
                                         }
                                     },
@@ -717,11 +717,7 @@ pub export fn UpdateAndRender(
                     moveSpec.speed = 0;
                     moveSpec.drag = 0;
 
-                    const oldP = entity.p;
-                    const distanceTravelled = game.Length(game.Sub(entity.p, oldP));
-
-                    entity.distanceRemaining -= distanceTravelled;
-                    if (entity.distanceRemaining < 0) {
+                    if (entity.distanceLimit == 0) {
                         game.MakeEntityNonSpatial(entity);
                     }
 
@@ -782,7 +778,6 @@ pub export fn UpdateAndRender(
                 },
             }
 
-            // NOTE (Manav): is the check really required?
             if (!game.IsSet(entity, @enumToInt(game.sim_entity_flags.NonSpatial))) {
                 game.MoveEntity(simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }

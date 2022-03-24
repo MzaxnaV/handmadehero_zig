@@ -67,6 +67,8 @@ pub const sim_entity = struct {
     z: f32 = 0,
     dZ: f32 = 0,
 
+    distanceLimit: f32 = 0,
+
     chunkZ: u32 = 0,
 
     width: f32 = 0,
@@ -81,7 +83,6 @@ pub const sim_entity = struct {
     hitPoint: [16]hit_point = [1]hit_point{.{}} ** 16,
 
     sword: entity_reference = .{ .index = 0 },
-    distanceRemaining: f32 = 0,
 };
 
 pub const sim_entity_hash = struct {
@@ -326,6 +327,13 @@ pub fn TestWall(wallX: f32, relX: f32, relY: f32, playerDeltaX: f32, playerDelta
     return hit;
 }
 
+pub fn HandleCollision(a: *sim_entity, b: *sim_entity) void {
+    if ((a.entityType == .Monstar) and (b.entityType == .Sword)) {
+        a.hitPointMax -= 1;
+        he.MakeEntityNonSpatial(b);
+    }
+}
+
 pub fn MoveEntity(simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec: *const move_spec, accelaration: hm.v2) void {
     assert(!he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial)));
 
@@ -356,61 +364,90 @@ pub fn MoveEntity(simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec
         entity.z = 0;
     }
 
+    var distanceRemaining = entity.distanceLimit;
+    if (distanceRemaining == 0) {
+        distanceRemaining = 10000.0;
+    }
+
     var iteration = @as(u32, 0);
     while (iteration < 4) : (iteration += 1) {
         var tMin = @as(f32, 1.0);
-        var wallNormal = hm.v2{};
-        var hitEntity: ?*sim_entity = null;
+        const playerDeltaLength = hm.Length(playerDelta);
+        if (playerDeltaLength > 0) {
+            if (playerDeltaLength > distanceRemaining) {
+                tMin = distanceRemaining / playerDeltaLength;
+            }
+            var wallNormal = hm.v2{};
+            var hitEntity: ?*sim_entity = null;
 
-        const desiredPosition = hm.Add(entity.p, playerDelta);
+            const desiredPosition = hm.Add(entity.p, playerDelta);
 
-        if (he.IsSet(entity, @enumToInt(sim_entity_flags.Collides)) and !he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial))) {
-            var testHighEntityIndex = @as(u32, 0);
-            while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
-                const testEntity = &simRegion.entities[testHighEntityIndex];
-                if (entity != testEntity) {
-                    if (he.IsSet(testEntity, @enumToInt(sim_entity_flags.Collides)) and !he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial))) {
-                        const diameterW = testEntity.width + entity.width;
-                        const diameterH = testEntity.height + entity.height;
+            const stopsOnCollision = he.IsSet(entity, @enumToInt(sim_entity_flags.Collides));
 
-                        const minCorner = hm.v2{ .x = -0.5 * diameterW, .y = -0.5 * diameterH };
-                        const maxCorner = hm.v2{ .x = 0.5 * diameterW, .y = 0.5 * diameterH };
+            if (!he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial))) {
+                var testHighEntityIndex = @as(u32, 0);
+                while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
+                    const testEntity = &simRegion.entities[testHighEntityIndex];
+                    if (entity != testEntity) {
+                        if (he.IsSet(testEntity, @enumToInt(sim_entity_flags.Collides)) and !he.IsSet(testEntity, @enumToInt(sim_entity_flags.NonSpatial))) {
+                            const diameterW = testEntity.width + entity.width;
+                            const diameterH = testEntity.height + entity.height;
 
-                        const rel = hm.Sub(entity.p, testEntity.p);
+                            const minCorner = hm.v2{ .x = -0.5 * diameterW, .y = -0.5 * diameterH };
+                            const maxCorner = hm.v2{ .x = 0.5 * diameterW, .y = 0.5 * diameterH };
 
-                        if (TestWall(minCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
-                            wallNormal = .{ .x = -1, .y = 0 };
-                            hitEntity = testEntity;
-                        }
-                        if (TestWall(maxCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
-                            wallNormal = .{ .x = 1, .y = 0 };
-                            hitEntity = testEntity;
-                        }
-                        if (TestWall(minCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
-                            wallNormal = .{ .x = 0, .y = -1 };
-                            hitEntity = testEntity;
-                        }
-                        if (TestWall(maxCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
-                            wallNormal = .{ .x = 0, .y = 1 };
-                            hitEntity = testEntity;
+                            const rel = hm.Sub(entity.p, testEntity.p);
+
+                            if (TestWall(minCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
+                                wallNormal = .{ .x = -1, .y = 0 };
+                                hitEntity = testEntity;
+                            }
+                            if (TestWall(maxCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
+                                wallNormal = .{ .x = 1, .y = 0 };
+                                hitEntity = testEntity;
+                            }
+                            if (TestWall(minCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
+                                wallNormal = .{ .x = 0, .y = -1 };
+                                hitEntity = testEntity;
+                            }
+                            if (TestWall(maxCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
+                                wallNormal = .{ .x = 0, .y = 1 };
+                                hitEntity = testEntity;
+                            }
                         }
                     }
                 }
             }
-        }
 
-        _ = entity.p.Add(hm.Scale(playerDelta, tMin));
-        if (hitEntity) |_| {
-            // NOTE (Manav): entity.dP -= (1 * Inner(entity.dP, wallNormal))*wallNormal;
-            _ = entity.dP.Sub(hm.Scale(wallNormal, 1 * hm.Inner(entity.dP, wallNormal)));
-            playerDelta = hm.Sub(desiredPosition, entity.p);
-            // NOTE (Manav): playerDelta -= (1 * Inner(playerDelta, wallNormal))*wallNormal;
-            _ = playerDelta.Sub(hm.Scale(wallNormal, 1 * hm.Inner(playerDelta, wallNormal)));
+            _ = entity.p.Add(hm.Scale(playerDelta, tMin));
+            distanceRemaining -= tMin * playerDeltaLength;
+            if (hitEntity) |_| {
+                playerDelta = hm.Sub(desiredPosition, entity.p);
+                if (stopsOnCollision) {
+                    // NOTE (Manav): entity.dP -= (1 * Inner(entity.dP, wallNormal))*wallNormal;
+                    _ = entity.dP.Sub(hm.Scale(wallNormal, 1 * hm.Inner(entity.dP, wallNormal)));
+                    // NOTE (Manav): playerDelta -= (1 * Inner(playerDelta, wallNormal))*wallNormal;
+                    _ = playerDelta.Sub(hm.Scale(wallNormal, 1 * hm.Inner(playerDelta, wallNormal)));
+                }
 
-            // entity.absTileZ = hm.AddI32ToU32(entity.absTileZ, hitLow.dAbsTileZ);
-        } else {
-            break;
+                var a = entity;
+                var b = hitEntity.?;
+                if (@enumToInt(a.entityType) > @enumToInt(b.entityType)) {
+                    var temp = a;
+                    a = b;
+                    b = temp;
+                }
+                HandleCollision(a, b);
+
+                // entity.absTileZ = hm.AddI32ToU32(entity.absTileZ, hitLow.dAbsTileZ);
+            } else {
+                break;
+            }
         }
+    }
+
+    if (entity.distanceLimit != 0) {
+        entity.distanceLimit = distanceRemaining;
     }
 
     if ((entity.dP.x == 0) and (entity.dP.y == 0)) {

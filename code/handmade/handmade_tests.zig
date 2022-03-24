@@ -2,6 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 
 const intrinsics = @import("handmade_intrinsics.zig");
+const hi = @import("handmade_internals.zig");
 const hm = @import("handmade_math.zig");
 
 test "intrinsics" {
@@ -58,7 +59,7 @@ test "math" {
     try testing.expectEqual(hm.IsInRectangle(r, hm.v2{}), true);
     try testing.expectEqual(hm.IsInRectangle(r, .{ .x = 2, .y = 2 }), true);
 
-    try testing.expectEqual(hm.AddRadiusTo(r, 1, 2), .{ .min = .{ .x = -1, .y = -2}, .max = .{ .x = 4, .y = 5}});
+    try testing.expectEqual(hm.AddRadiusTo(r, 1, 2), .{ .min = .{ .x = -1, .y = -2 }, .max = .{ .x = 4, .y = 5 } });
 
     const c3 = hm.v3{ .e = [_]f32{ 3, 2, 1 } };
     try testing.expectEqual(c3.c.g, c3.e[1]);
@@ -67,4 +68,17 @@ test "math" {
     const c4 = hm.v4{ .e = [_]f32{ 1, 2, 3, 4 } };
     try testing.expectEqual(c4.c.g, c4.e[1]);
     try testing.expectEqual(c4.c.g, c4.p.y);
+}
+
+test "misc_language" {
+    var memRegion = [1]u8{0} ** 1024;
+
+    var mem: hi.memory_arena = undefined;
+    mem.Initialize(1024, &memRegion);
+    try testing.expectEqual(mem.used, 0);
+
+    const x = mem.PushStruct(u8);
+    x.* = 24;
+    try testing.expectEqual(x.*, mem.base[0]);
+    try testing.expectEqual(@as(usize, 1), mem.used);
 }
