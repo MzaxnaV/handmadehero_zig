@@ -688,7 +688,8 @@ pub export fn UpdateAndRender(
                                         const sword = entity.sword.ptr;
                                         if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
-                                            game.MakeEntitySpatial(sword, entity.p, game.Scale(conHero.dSword, 5));
+                                            game.MakeEntitySpatial(sword, entity.p, game.Add(entity.dP, game.Scale(conHero.dSword, 5)));
+                                            game.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
                                         }
                                     },
 
@@ -718,6 +719,7 @@ pub export fn UpdateAndRender(
                     moveSpec.drag = 0;
 
                     if (entity.distanceLimit == 0) {
+                        game.ClearCollisionRulesFor(gameState, entity.storageIndex);
                         game.MakeEntityNonSpatial(entity);
                     }
 
@@ -779,7 +781,7 @@ pub export fn UpdateAndRender(
             }
 
             if (!game.IsSet(entity, @enumToInt(game.sim_entity_flags.NonSpatial))) {
-                game.MoveEntity(simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
+                game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
 
             const entityGroundPointX = screenCenterX + metersToPixels * entity.p.x;

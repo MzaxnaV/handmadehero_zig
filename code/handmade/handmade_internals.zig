@@ -92,6 +92,14 @@ pub const controlled_hero = struct {
     dZ: f32 = 0,
 };
 
+pub const pairwise_collision_rule = struct {
+    shouldCollide: bool,
+    storageIndexA: u32,
+    storageIndexB: u32,
+
+    nextInHash: ?*pairwise_collision_rule,
+};
+
 pub const state = struct {
     worldArena: memory_arena,
     world: *world,
@@ -111,6 +119,9 @@ pub const state = struct {
     tree: loaded_bitmap,
     sword: loaded_bitmap,
     metersToPixels: f32,
+
+    collisionRuleHash: [256]?*pairwise_collision_rule,
+    firstFreeCollisionRule: ?*pairwise_collision_rule,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------
@@ -137,4 +148,64 @@ pub inline fn GetLowEntity(gameState: *state, index: u32) ?*low_entity {
     }
 
     return result;
+}
+
+// public functions -----------------------------------------------------------------------------------------------------------------------
+
+pub fn ClearCollisionRulesFor(gameState: *state, storageIndex: u32) void {
+    var hashBucket = @as(u32, 0);
+    while (hashBucket < gameState.collisionRuleHash.len) : (hashBucket += 1) {
+        var collisionRule = &gameState.collisionRuleHash[hashBucket];
+        while (collisionRule.*) |rule| {
+            if ((rule.storageIndexA == storageIndex) or
+                (rule.storageIndexB == storageIndex))
+            {
+                const removedRule = rule;
+                collisionRule.* = rule.nextInHash;
+
+                removedRule.nextInHash = gameState.firstFreeCollisionRule;
+                gameState.firstFreeCollisionRule = removedRule;
+            } else {
+                collisionRule = &rule.nextInHash;
+            }
+        }
+    }
+}
+
+pub fn AddCollisionRule(gameState: *state, unsortedStorageIndexA: u32, unsortedStorageIndexB: u32, shouldCollide: bool) void {
+    var storageIndexA = unsortedStorageIndexA;
+    var storageIndexB = unsortedStorageIndexB;
+    if (storageIndexA > storageIndexB) {
+        storageIndexA = unsortedStorageIndexB;
+        storageIndexB = unsortedStorageIndexA;
+    }
+
+    var found: ?*pairwise_collision_rule = null;
+    const hashBucket = storageIndexA & (gameState.collisionRuleHash.len - 1);
+    var collisionRule: ?*pairwise_collision_rule = gameState.collisionRuleHash[hashBucket];
+    while (collisionRule) |rule| : (collisionRule = rule.nextInHash) {
+        if ((rule.storageIndexA == storageIndexA) and
+            (rule.storageIndexB == storageIndexB))
+        {
+            found = rule;
+            break;
+        }
+    }
+
+    if (found) |_| {} else {
+        found = gameState.firstFreeCollisionRule;
+        if (found) |_| {
+            gameState.firstFreeCollisionRule = found.?.nextInHash;
+        } else {
+            found = gameState.worldArena.PushStruct(pairwise_collision_rule);
+        }
+        found.?.nextInHash = gameState.collisionRuleHash[hashBucket];
+        gameState.collisionRuleHash[hashBucket] = found;
+    }
+
+    if (found) |rule| {
+        rule.shouldCollide = shouldCollide;
+        rule.storageIndexA = storageIndexA;
+        rule.storageIndexB = storageIndexB;
+    }
 }

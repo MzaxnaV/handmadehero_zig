@@ -13,6 +13,15 @@
             "command": "zig build --verbose & zig build test"
         },
         {
+            "label": "Build Lib",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "zig build --verbose lib"
+        },
+        {
             "label": "Build Project",
             "type": "shell",
             "group": {
