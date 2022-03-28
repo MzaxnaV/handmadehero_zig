@@ -332,23 +332,26 @@ fn ShouldCollide(gameState: *hi.state, unsortedA: *sim_entity, unsortedB: *sim_e
 
     var a = unsortedA;
     var b = unsortedB;
-    if (a.storageIndex > b.storageIndex) {
-        b = unsortedA;
-        a = unsortedB;
-    }
 
-    if (!he.IsSet(a, @enumToInt(sim_entity_flags.NonSpatial)) and
-        !he.IsSet(b, @enumToInt(sim_entity_flags.NonSpatial)))
-    {
-        result = true;
-    }
+    if (a != b) {
+        if (a.storageIndex > b.storageIndex) {
+            b = unsortedA;
+            a = unsortedB;
+        }
 
-    const hashBucket = a.storageIndex & (gameState.collisionRuleHash.len - 1);
-    var rule: ?*hi.pairwise_collision_rule = gameState.collisionRuleHash[hashBucket];
-    while (rule) |r| : (rule = r.nextInHash) {
-        if ((r.storageIndexA == a.storageIndex) and (r.storageIndexB == b.storageIndex)) {
-            result = r.shouldCollide;
-            break;
+        if (!he.IsSet(a, @enumToInt(sim_entity_flags.NonSpatial)) and
+            !he.IsSet(b, @enumToInt(sim_entity_flags.NonSpatial)))
+        {
+            result = true;
+        }
+
+        const hashBucket = a.storageIndex & (gameState.collisionRuleHash.len - 1);
+        var rule: ?*hi.pairwise_collision_rule = gameState.collisionRuleHash[hashBucket];
+        while (rule) |r| : (rule = r.nextInHash) {
+            if ((r.storageIndexA == a.storageIndex) and (r.storageIndexB == b.storageIndex)) {
+                result = r.shouldCollide;
+                break;
+            }
         }
     }
 
