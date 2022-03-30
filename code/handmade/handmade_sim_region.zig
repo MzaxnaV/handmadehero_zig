@@ -61,8 +61,8 @@ pub const sim_entity = struct {
     entityType: entity_type,
     flags: u32 = 0,
 
-    p: hm.v2 = .{},
-    dP: hm.v2 = .{},
+    p: hm.v2 = hm.v2{ 0, 0 },
+    dP: hm.v2 = hm.v2{ 0, 0 },
 
     z: f32 = 0,
     dZ: f32 = 0,
@@ -287,16 +287,16 @@ pub fn EndSim(region: *sim_region, gameState: *hi.state) void {
             newCameraP.chunkZ = stored.p.chunkZ;
 
             if (!NOT_IGNORE) {
-                // if (cameraFollowingEntity.high.?.p.x > (9 * world.tileSideInMeters)) {
+                // if (cameraFollowingEntity.high.?.p[0] > (9 * world.tileSideInMeters)) {
                 //     newCameraP.absTileX += 17;
                 // }
-                // if (cameraFollowingEntity.high.?.p.x < -(9 * world.tileSideInMeters)) {
+                // if (cameraFollowingEntity.high.?.p[0] < -(9 * world.tileSideInMeters)) {
                 //     newCameraP.absTileX -%= 17;
                 // }
-                // if (cameraFollowingEntity.high.?.p.y > (5 * world.tileSideInMeters)) {
+                // if (cameraFollowingEntity.high.?.p[1] > (5 * world.tileSideInMeters)) {
                 //     newCameraP.absTileY += 9;
                 // }
-                // if (cameraFollowingEntity.high.?.p.y < -(5 * world.tileSideInMeters)) {
+                // if (cameraFollowingEntity.high.?.p[1] < -(5 * world.tileSideInMeters)) {
                 //     newCameraP.absTileY -%= 9;
                 // }
             } else {
@@ -394,17 +394,17 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     if (moveSpec.unitMaxAccelVector) {
         const ddPLength = hm.LengthSq(ddP);
         if (ddPLength > 1.0) {
-            _ = ddP.Scale(1.0 / SquareRoot(ddPLength));
+            ddP *= @splat(2, 1.0 / SquareRoot(ddPLength));
         }
     }
 
-    _ = ddP.Scale(moveSpec.speed);
-    _ = ddP.Add(hm.Scale(entity.dP, -moveSpec.drag)); // NOTE (Manav): ddP += -moveSpec.drag * entity.dP;
+    ddP *= @splat(2, moveSpec.speed);
+    ddP += entity.dP * @splat(2, -moveSpec.drag);
 
     // const oldPlayerP = entity.p;
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
-    var playerDelta = hm.Add(hm.Scale(ddP, 0.5 * hm.Square(dt)), hm.Scale(entity.dP, dt));
-    _ = entity.dP.Add(hm.Scale(ddP, dt)); // NOTE (Manav): entity.dP += ddP * dt;
+    var playerDelta = (ddP * @splat(2, 0.5 * hm.Square(dt))) + entity.dP * @splat(2, dt);
+    entity.dP += ddP * @splat(2, dt);
     // const newPlayerP = hm.Add(oldPlayerP, playerDelta);
 
     const ddZ = -9.8;
@@ -428,10 +428,10 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
             if (playerDeltaLength > distanceRemaining) {
                 tMin = distanceRemaining / playerDeltaLength;
             }
-            var wallNormal = hm.v2{};
+            var wallNormal = hm.v2{ 0, 0 };
             var hitEntity: ?*sim_entity = null;
 
-            const desiredPosition = hm.Add(entity.p, playerDelta);
+            const desiredPosition = entity.p + playerDelta;
 
             if (!he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial))) {
                 var testHighEntityIndex = @as(u32, 0);
@@ -441,42 +441,42 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                         const diameterW = testEntity.width + entity.width;
                         const diameterH = testEntity.height + entity.height;
 
-                        const minCorner = hm.v2{ .x = -0.5 * diameterW, .y = -0.5 * diameterH };
-                        const maxCorner = hm.v2{ .x = 0.5 * diameterW, .y = 0.5 * diameterH };
+                        const minCorner = hm.v2{ -0.5 * diameterW, -0.5 * diameterH };
+                        const maxCorner = hm.v2{ 0.5 * diameterW, 0.5 * diameterH };
 
-                        const rel = hm.Sub(entity.p, testEntity.p);
+                        const rel = entity.p - testEntity.p;
 
-                        if (TestWall(minCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
-                            wallNormal = .{ .x = -1, .y = 0 };
+                        if (TestWall(minCorner[0], rel[0], rel[1], playerDelta[0], playerDelta[1], &tMin, minCorner[1], maxCorner[1])) {
+                            wallNormal = .{ -1, 0 };
                             hitEntity = testEntity;
                         }
-                        if (TestWall(maxCorner.x, rel.x, rel.y, playerDelta.x, playerDelta.y, &tMin, minCorner.y, maxCorner.y)) {
-                            wallNormal = .{ .x = 1, .y = 0 };
+                        if (TestWall(maxCorner[0], rel[0], rel[1], playerDelta[0], playerDelta[1], &tMin, minCorner[1], maxCorner[1])) {
+                            wallNormal = .{ 1, 0 };
                             hitEntity = testEntity;
                         }
-                        if (TestWall(minCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
-                            wallNormal = .{ .x = 0, .y = -1 };
+                        if (TestWall(minCorner[1], rel[1], rel[0], playerDelta[1], playerDelta[0], &tMin, minCorner[0], maxCorner[0])) {
+                            wallNormal = .{ 0, -1 };
                             hitEntity = testEntity;
                         }
-                        if (TestWall(maxCorner.y, rel.y, rel.x, playerDelta.y, playerDelta.x, &tMin, minCorner.x, maxCorner.x)) {
-                            wallNormal = .{ .x = 0, .y = 1 };
+                        if (TestWall(maxCorner[1], rel[1], rel[0], playerDelta[1], playerDelta[0], &tMin, minCorner[0], maxCorner[0])) {
+                            wallNormal = .{ 0, 1 };
                             hitEntity = testEntity;
                         }
                     }
                 }
             }
 
-            _ = entity.p.Add(hm.Scale(playerDelta, tMin));
+            entity.p += playerDelta * @splat(2, tMin);
             distanceRemaining -= tMin * playerDeltaLength;
             if (hitEntity) |_| {
-                playerDelta = hm.Sub(desiredPosition, entity.p);
+                playerDelta = desiredPosition - entity.p;
 
                 const stopsOnCollision = HandleCollision(entity, hitEntity.?);
                 if (stopsOnCollision) {
                     // NOTE (Manav): entity.dP -= (1 * Inner(entity.dP, wallNormal))*wallNormal;
-                    _ = entity.dP.Sub(hm.Scale(wallNormal, 1 * hm.Inner(entity.dP, wallNormal)));
+                    entity.dP -= @splat(2, 1 * hm.Inner(hm.VN2(entity.dP), hm.VN2(wallNormal))) * wallNormal;
                     // NOTE (Manav): playerDelta -= (1 * Inner(playerDelta, wallNormal))*wallNormal;
-                    _ = playerDelta.Sub(hm.Scale(wallNormal, 1 * hm.Inner(playerDelta, wallNormal)));
+                    playerDelta -= @splat(2, 1 * hm.Inner(hm.VN2(playerDelta), hm.VN2(wallNormal))) * wallNormal;
                 } else {
                     hi.AddCollisionRule(gameState, entity.storageIndex, hitEntity.?.storageIndex, false);
                 }
@@ -490,16 +490,16 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
         entity.distanceLimit = distanceRemaining;
     }
 
-    if ((entity.dP.x == 0) and (entity.dP.y == 0)) {
+    if ((entity.dP[0] == 0) and (entity.dP[1] == 0)) {
         // NOTE(casey): Leave FacingDirection whatever it was
-    } else if (AbsoluteValue(entity.dP.x) > AbsoluteValue(entity.dP.y)) {
-        if (entity.dP.x > 0) {
+    } else if (AbsoluteValue(entity.dP[0]) > AbsoluteValue(entity.dP[1])) {
+        if (entity.dP[0] > 0) {
             entity.facingDirection = 0;
         } else {
             entity.facingDirection = 2;
         }
     } else {
-        if (entity.dP.y > 0) {
+        if (entity.dP[1] > 0) {
             entity.facingDirection = 1;
         } else {
             entity.facingDirection = 3;

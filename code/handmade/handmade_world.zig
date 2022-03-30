@@ -18,7 +18,7 @@ const TILES_PER_CHUNK = 16;
 // tile data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const world_difference = struct {
-    dXY: hm.v2 = .{},
+    dXY: hm.v2 = hm.v2{ 0, 0 },
     dZ: f32 = 0,
 };
 
@@ -27,7 +27,7 @@ pub const world_position = struct {
     chunkY: i32 = 0,
     chunkZ: i32 = 0,
 
-    offset_: hm.v2 = .{},
+    offset_: hm.v2 = hm.v2{ 0, 0 },
 };
 
 pub const world_entity_block = struct {
@@ -76,7 +76,7 @@ inline fn IsCanonicalCoord(w: *const world, tileRel: f32) bool {
 }
 
 inline fn IsCanonical(w: *const world, offset: hm.v2) bool {
-    const result = IsCanonicalCoord(w, offset.x) and IsCanonicalCoord(w, offset.y);
+    const result = IsCanonicalCoord(w, offset[0]) and IsCanonicalCoord(w, offset[1]);
     return result;
 }
 
@@ -141,10 +141,14 @@ inline fn RecanonicalizeCoord(w: *const world, tile: *i32, tileRel: *f32) void {
 pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset: hm.v2) world_position {
     var result = basePos;
 
-    _ = result.offset_.Add(offset); // NOTE (Manav): result.offset_ += offset
+    result.offset_ += offset; // NOTE (Manav): result.offset_ += offset
 
-    RecanonicalizeCoord(w, &result.chunkX, &result.offset_.x);
-    RecanonicalizeCoord(w, &result.chunkY, &result.offset_.y);
+    var tileRel = .{ .x = result.offset_[0], .y = result.offset_[1] };
+
+    RecanonicalizeCoord(w, &result.chunkX, &tileRel.x);
+    RecanonicalizeCoord(w, &result.chunkY, &tileRel.y);
+
+    result.offset_ = .{ tileRel.x, tileRel.y };
 
     return result;
 }
@@ -168,8 +172,8 @@ pub inline fn ChunkPosFromTilePos(w: *world, absTileX: i32, absTileY: i32, absTi
 
     result.offset_ = .{
         // check against mod use
-        .x = @intToFloat(f32, (absTileX - TILES_PER_CHUNK / 2) - (result.chunkX * TILES_PER_CHUNK)) * w.tileSideInMeters,
-        .y = @intToFloat(f32, (absTileY - TILES_PER_CHUNK / 2) - (result.chunkY * TILES_PER_CHUNK)) * w.tileSideInMeters,
+        @intToFloat(f32, (absTileX - TILES_PER_CHUNK / 2) - (result.chunkX * TILES_PER_CHUNK)) * w.tileSideInMeters,
+        @intToFloat(f32, (absTileY - TILES_PER_CHUNK / 2) - (result.chunkY * TILES_PER_CHUNK)) * w.tileSideInMeters,
     };
 
     std.debug.assert(IsCanonical(w, result.offset_));
@@ -178,15 +182,14 @@ pub inline fn ChunkPosFromTilePos(w: *world, absTileX: i32, absTileY: i32, absTi
 }
 
 pub inline fn Substract(w: *const world, a: *const world_position, b: *const world_position) world_difference {
-    const dTileXY = .{
-        .x = @intToFloat(f32, a.chunkX) - @intToFloat(f32, b.chunkX),
-        .y = @intToFloat(f32, a.chunkY) - @intToFloat(f32, b.chunkY),
+    const dTileXY = hm.v2{
+        @intToFloat(f32, a.chunkX) - @intToFloat(f32, b.chunkX),
+        @intToFloat(f32, a.chunkY) - @intToFloat(f32, b.chunkY),
     };
     const dTileZ = @intToFloat(f32, a.chunkZ) - @intToFloat(f32, b.chunkZ);
 
     const result = world_difference{
-        // NOTE (Manav): .dxy = w.chunkSideInMeters * dTileXY  + (a.offset_ - b.offset_)
-        .dXY = hm.Add(hm.Scale(dTileXY, w.chunkSideInMeters), hm.Sub(a.offset_, b.offset_)),
+        .dXY = (@splat(2, w.chunkSideInMeters) * dTileXY) + (a.offset_ - b.offset_),
         .dZ = w.chunkSideInMeters * dTileZ,
     };
 

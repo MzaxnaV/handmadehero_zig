@@ -66,7 +66,7 @@ pub const low_entity = struct {
 
 pub const entity_visible_piece = struct {
     bitmap: ?*loaded_bitmap,
-    offset: v2 = .{},
+    offset: v2 = v2{ 0, 0 },
     offsetZ: f32 = 0,
     entityZC: f32 = 0,
 
@@ -75,7 +75,7 @@ pub const entity_visible_piece = struct {
     b: f32 = 0,
     a: f32 = 0,
 
-    dim: v2 = .{},
+    dim: v2 = v2{ 0, 0 },
 };
 
 pub const entity_visible_piece_group = struct {
@@ -87,8 +87,8 @@ pub const entity_visible_piece_group = struct {
 pub const controlled_hero = struct {
     entityIndex: u32 = 0,
 
-    ddP: v2 = .{},
-    dSword: v2 = .{},
+    ddP: v2 = v2{ 0, 0 },
+    dSword: v2 = v2{ 0, 0 },
     dZ: f32 = 0,
 };
 

@@ -29,6 +29,15 @@
                 "isDefault": true
             },
             "command": "zig build"
+        },
+        {
+            "label": "Test Project",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "zig build test"
         }
     ]
 }

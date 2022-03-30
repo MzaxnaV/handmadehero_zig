@@ -45,10 +45,10 @@ fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneH
 }
 
 fn DrawRectangle(buffer: *platform.offscreen_buffer, vMin: game.v2, vMax: game.v2, r: f32, g: f32, b: f32) void {
-    var minX = game.RoundF32ToInt(i32, vMin.x);
-    var minY = game.RoundF32ToInt(i32, vMin.y);
-    var maxX = game.RoundF32ToInt(i32, vMax.x);
-    var maxY = game.RoundF32ToInt(i32, vMax.y);
+    var minX = game.RoundF32ToInt(i32, vMin[0]);
+    var minY = game.RoundF32ToInt(i32, vMin[1]);
+    var maxX = game.RoundF32ToInt(i32, vMax[0]);
+    var maxY = game.RoundF32ToInt(i32, vMax[1]);
 
     if (minX < 0) {
         minX = 0;
@@ -333,43 +333,44 @@ inline fn PushPiece(
     const piece = &group.pieces[group.pieceCount];
     group.pieceCount += 1;
     piece.bitmap = bitmap;
-    piece.offset = game.Sub(game.Scale(.{ .x = offset.x, .y = -offset.y }, group.gameState.metersToPixels), alignment);
+    piece.offset = (@splat(2, group.gameState.metersToPixels) * game.v2{ offset[0], -offset[1] }) - alignment;
     piece.offsetZ = group.gameState.metersToPixels * offsetZ;
     piece.entityZC = entityZC;
-    piece.r = colour.c.r;
-    piece.g = colour.c.g;
-    piece.b = colour.c.b;
-    piece.a = colour.c.a;
+    const colourv = game.VN4(colour);
+    piece.r = colourv.R();
+    piece.g = colourv.G();
+    piece.b = colourv.B();
+    piece.a = colourv.A();
     piece.dim = dim;
 }
 
 inline fn PushBitmap(group: *game.entity_visible_piece_group, bitmap: *game.loaded_bitmap, offset: game.v2, offsetZ: f32, alignment: game.v2, alpha: f32, entityZC: f32) void {
-    PushPiece(group, bitmap, offset, offsetZ, alignment, .{}, .{ .e = [_]f32{ 1, 1, 1, alpha } }, entityZC);
+    PushPiece(group, bitmap, offset, offsetZ, alignment, .{ 0, 0 }, .{ 1, 1, 1, alpha }, entityZC);
 }
 
 inline fn PushRect(group: *game.entity_visible_piece_group, offset: game.v2, offsetZ: f32, dim: game.v2, colour: game.v4, entityZC: f32) void {
-    PushPiece(group, null, offset, offsetZ, .{}, dim, colour, entityZC);
+    PushPiece(group, null, offset, offsetZ, .{ 0, 0 }, dim, colour, entityZC);
 }
 
 fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.entity_visible_piece_group) void {
     if (entity.hitPointMax >= 1) {
-        const healthDim = .{ .x = 0.2, .y = 0.2 };
-        const spacingX = 1.5 * healthDim.x;
+        const healthDim = game.VN2(.{ 0.2, 0.2 });
+        const spacingX = 1.5 * healthDim.X();
         var hitP = game.v2{
-            .x = -0.5 * @intToFloat(f32, entity.hitPointMax - 1) * spacingX,
-            .y = -0.25,
+            -0.5 * @intToFloat(f32, entity.hitPointMax - 1) * spacingX,
+            -0.25,
         };
-        const dHitP = game.v2{ .x = spacingX };
+        const dHitP = game.v2{ spacingX, 0 };
         var healthIndex = @as(u32, 0);
         while (healthIndex < entity.hitPointMax) : (healthIndex += 1) {
             const hitPoint = entity.hitPoint[healthIndex];
-            var colour = game.v4{ .e = [4]f32{ 1, 0, 0, 1 } };
+            var colour = game.v4{ 1, 0, 0, 1 };
             if (hitPoint.filledAmount == 0) {
-                colour = game.v4{ .e = [4]f32{ 0.2, 0.2, 0.2, 1 } };
+                colour = .{ 0.2, 0.2, 0.2, 1 };
             }
 
-            PushRect(pieceGroup, hitP, 0, healthDim, colour, 0);
-            _ = hitP.Add(dHitP);
+            PushRect(pieceGroup, hitP, 0, healthDim.V2, colour, 0);
+            hitP += dHitP;
         }
     }
 }
@@ -410,22 +411,22 @@ pub export fn UpdateAndRender(
         gameState.heroBitmaps[0].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
         gameState.heroBitmaps[0].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");
         gameState.heroBitmaps[0].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_torso.bmp");
-        gameState.heroBitmaps[0].alignment = .{ .x = 72, .y = 182 };
+        gameState.heroBitmaps[0].alignment = .{ 72, 182 };
 
         gameState.heroBitmaps[1].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_head.bmp");
         gameState.heroBitmaps[1].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_cape.bmp");
         gameState.heroBitmaps[1].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_torso.bmp");
-        gameState.heroBitmaps[1].alignment = .{ .x = 72, .y = 182 };
+        gameState.heroBitmaps[1].alignment = .{ 72, 182 };
 
         gameState.heroBitmaps[2].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_head.bmp");
         gameState.heroBitmaps[2].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_cape.bmp");
         gameState.heroBitmaps[2].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_torso.bmp");
-        gameState.heroBitmaps[2].alignment = .{ .x = 72, .y = 182 };
+        gameState.heroBitmaps[2].alignment = .{ 72, 182 };
 
         gameState.heroBitmaps[3].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp");
         gameState.heroBitmaps[3].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
         gameState.heroBitmaps[3].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
-        gameState.heroBitmaps[3].alignment = .{ .x = 72, .y = 182 };
+        gameState.heroBitmaps[3].alignment = .{ 72, 182 };
 
         gameState.worldArena.Initialize(gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
         gameState.world = gameState.worldArena.PushStruct(game.world);
@@ -589,23 +590,23 @@ pub export fn UpdateAndRender(
             }
         } else {
             conHero.dZ = 0;
-            conHero.dSword = .{};
-            conHero.ddP = .{};
+            conHero.dSword = .{ 0, 0 };
+            conHero.ddP = .{ 0, 0 };
 
             if (controller.isAnalog) {
-                conHero.ddP = .{ .x = controller.stickAverageX, .y = controller.stickAverageX };
+                conHero.ddP = .{ controller.stickAverageX, controller.stickAverageX };
             } else {
                 if (controller.buttons.mapped.moveUp.endedDown != 0) {
-                    conHero.ddP.y = 1.0;
+                    conHero.ddP[1] = 1.0;
                 }
                 if (controller.buttons.mapped.moveDown.endedDown != 0) {
-                    conHero.ddP.y = -1.0;
+                    conHero.ddP[1] = -1.0;
                 }
                 if (controller.buttons.mapped.moveLeft.endedDown != 0) {
-                    conHero.ddP.x = -1.0;
+                    conHero.ddP[0] = -1.0;
                 }
                 if (controller.buttons.mapped.moveRight.endedDown != 0) {
-                    conHero.ddP.x = 1.0;
+                    conHero.ddP[0] = 1.0;
                 }
             }
 
@@ -613,32 +614,32 @@ pub export fn UpdateAndRender(
                 conHero.dZ = 3.0;
             }
 
-            conHero.dSword = .{};
+            conHero.dSword = .{ 0, 0 };
             if (controller.buttons.mapped.actionUp.endedDown != 0) {
-                conHero.dSword.y = 1.0;
+                conHero.dSword[1] = 1.0;
             }
             if (controller.buttons.mapped.actionDown.endedDown != 0) {
-                conHero.dSword.y = -1.0;
+                conHero.dSword[1] = -1.0;
             }
             if (controller.buttons.mapped.actionLeft.endedDown != 0) {
-                conHero.dSword.x = -1.0;
+                conHero.dSword[0] = -1.0;
             }
             if (controller.buttons.mapped.actionRight.endedDown != 0) {
-                conHero.dSword.x = 1.0;
+                conHero.dSword[0] = 1.0;
             }
         }
     }
 
     const tileSpanX = 17 * 3;
     const tileSpanY = 9 * 3;
-    const cameraBounds = game.rect2.InitCenterDim(.{}, game.Scale(.{ .x = tileSpanX, .y = tileSpanY }, world.tileSideInMeters));
+    const cameraBounds = game.rect2.InitCenterDim(.{ 0, 0 }, game.v2{ tileSpanX, tileSpanY } * @splat(2, world.tileSideInMeters));
 
     var simArena: game.memory_arena = undefined;
     simArena.Initialize(gameMemory.transientStorageSize, gameMemory.transientStorage);
     const simRegion = game.BeginSim(&simArena, gameState, gameState.world, gameState.cameraP, cameraBounds);
 
     if (NOT_IGNORE) {
-        DrawRectangle(buffer, .{}, .{ .x = @intToFloat(f32, buffer.width), .y = @intToFloat(f32, buffer.height) }, 0.5, 0.5, 0.5);
+        DrawRectangle(buffer, .{ 0, 0 }, .{ @intToFloat(f32, buffer.width), @intToFloat(f32, buffer.height) }, 0.5, 0.5, 0.5);
     } else {
         DrawBitmap(buffer, &gameState.backdrop, 0, 0, 1);
     }
@@ -666,7 +667,7 @@ pub export fn UpdateAndRender(
             const shadowAlpha = if (alpha > 0) alpha else 0;
 
             var moveSpec = game.DefaultMoveSpec();
-            var ddP = game.v2{};
+            var ddP = game.v2{ 0, 0 };
 
             const heroBitmaps = &gameState.heroBitmaps[entity.facingDirection];
 
@@ -682,13 +683,13 @@ pub export fn UpdateAndRender(
                             moveSpec.speed = 50;
                             moveSpec.drag = 8;
                             ddP = conHero.ddP;
-                            if ((conHero.dSword.x != 0) or (conHero.dSword.y != 0)) {
+                            if ((conHero.dSword[0] != 0) or (conHero.dSword[1] != 0)) {
                                 switch (entity.sword) {
                                     .ptr => {
                                         const sword = entity.sword.ptr;
                                         if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
-                                            game.MakeEntitySpatial(sword, entity.p, game.Add(entity.dP, game.Scale(conHero.dSword, 5)));
+                                            game.MakeEntitySpatial(sword, entity.p, entity.dP + (conHero.dSword * @splat(2, @as(f32, 5)))); //
                                             game.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
                                         }
                                     },
@@ -701,16 +702,16 @@ pub export fn UpdateAndRender(
                         }
                     }
 
-                    PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                    PushBitmap(&pieceGroup, &heroBitmaps.torso, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
-                    PushBitmap(&pieceGroup, &heroBitmaps.cape, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
-                    PushBitmap(&pieceGroup, &heroBitmaps.head, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
+                    PushBitmap(&pieceGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                    PushBitmap(&pieceGroup, &heroBitmaps.torso, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
+                    PushBitmap(&pieceGroup, &heroBitmaps.cape, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
+                    PushBitmap(&pieceGroup, &heroBitmaps.head, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
 
                     DrawHitpoints(entity, &pieceGroup);
                 },
 
                 .Wall => {
-                    PushBitmap(&pieceGroup, &gameState.tree, .{}, 0, .{ .x = 40, .y = 80 }, 1.0, 1.0);
+                    PushBitmap(&pieceGroup, &gameState.tree, .{ 0, 0 }, 0, .{ 40, 80 }, 1.0, 1.0);
                 },
 
                 .Sword => {
@@ -723,8 +724,8 @@ pub export fn UpdateAndRender(
                         game.MakeEntityNonSpatial(entity);
                     }
 
-                    PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                    PushBitmap(&pieceGroup, &gameState.sword, .{}, 0, .{ .x = 29, .y = 10 }, 1.0, 1.0);
+                    PushBitmap(&pieceGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                    PushBitmap(&pieceGroup, &gameState.sword, .{ 0, 0 }, 0, .{ 29, 10 }, 1.0, 1.0);
                 },
 
                 .Familiar => {
@@ -735,7 +736,7 @@ pub export fn UpdateAndRender(
                     while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
                         const testEntity: *game.sim_entity = &simRegion.entities[testEntityIndex];
                         if (testEntity.entityType == .Hero) {
-                            var testDSq = game.LengthSq(game.Sub(testEntity.p, entity.p));
+                            var testDSq = game.LengthSq(testEntity.p - entity.p);
                             if (testEntity.entityType == .Hero) {
                                 testDSq *= 0.75;
                             }
@@ -751,7 +752,7 @@ pub export fn UpdateAndRender(
                         if (closestHeroDSq > game.Square(3)) {
                             const accelaration = 0.5;
                             const oneOverLength = accelaration / game.SquareRoot(closestHeroDSq);
-                            ddP = game.Scale(game.Sub(hero.p, entity.p), oneOverLength);
+                            ddP = (hero.p - entity.p) * @splat(2, oneOverLength);
                         }
                     }
 
@@ -764,13 +765,13 @@ pub export fn UpdateAndRender(
                         entity.tBob -= 2 * platform.PI32;
                     }
                     const bobSin = game.Sin(2 * entity.tBob);
-                    PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, (0.5 * shadowAlpha) + (0.2 * bobSin), 0.0);
-                    PushBitmap(&pieceGroup, &heroBitmaps.head, .{}, 0.25 * bobSin, heroBitmaps.alignment, 1.0, 1.0);
+                    PushBitmap(&pieceGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, (0.5 * shadowAlpha) + (0.2 * bobSin), 0.0);
+                    PushBitmap(&pieceGroup, &heroBitmaps.head, .{ 0, 0 }, 0.25 * bobSin, heroBitmaps.alignment, 1.0, 1.0);
                 },
 
                 .Monstar => {
-                    PushBitmap(&pieceGroup, &gameState.shadow, .{}, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                    PushBitmap(&pieceGroup, &heroBitmaps.torso, .{}, 0, heroBitmaps.alignment, 1.0, 1.0);
+                    PushBitmap(&pieceGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                    PushBitmap(&pieceGroup, &heroBitmaps.torso, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
 
                     DrawHitpoints(entity, &pieceGroup);
                 },
@@ -784,8 +785,8 @@ pub export fn UpdateAndRender(
                 game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
 
-            const entityGroundPointX = screenCenterX + metersToPixels * entity.p.x;
-            const entityGroundPointY = screenCenterY - metersToPixels * entity.p.y;
+            const entityGroundPointX = screenCenterX + metersToPixels * entity.p[0];
+            const entityGroundPointY = screenCenterY - metersToPixels * entity.p[1];
             const entityz = -metersToPixels * entity.z;
 
             if (!NOT_IGNORE) {
@@ -793,12 +794,12 @@ pub export fn UpdateAndRender(
                     .x = entityGroundPointX - 0.5 * metersToPixels * entity.width,
                     .y = entityGroundPointY - 0.5 * metersToPixels * entity.height,
                 };
-                const entityWidthHeight = .{ .x = entity.width, .y = entity.height };
+                const entityWidthHeight = game.v{ .V2 = .{ entity.width, entity.height } };
 
                 DrawRectangle(
                     buffer,
                     playerLeftTop,
-                    game.Add(playerLeftTop, game.Scale(entityWidthHeight, metersToPixels)),
+                    playerLeftTop + game.Scale(entityWidthHeight, metersToPixels).V2,
                     1.0,
                     1.0,
                     0.0,
@@ -808,16 +809,16 @@ pub export fn UpdateAndRender(
             var pieceIndex = @as(u32, 0);
             while (pieceIndex < pieceGroup.pieceCount) : (pieceIndex += 1) {
                 const piece = pieceGroup.pieces[pieceIndex];
-                const center = .{
-                    .x = entityGroundPointX + piece.offset.x,
-                    .y = entityGroundPointY + piece.offset.y + piece.offsetZ + piece.entityZC * entityz,
+                const center = game.v2{
+                    entityGroundPointX + piece.offset[0],
+                    entityGroundPointY + piece.offset[1] + piece.offsetZ + piece.entityZC * entityz,
                 };
 
                 if (piece.bitmap) |b| {
-                    DrawBitmap(buffer, b, center.x, center.y, piece.a);
+                    DrawBitmap(buffer, b, center[0], center[1], piece.a);
                 } else {
-                    const halfDim = game.Scale(piece.dim, 0.5 * metersToPixels);
-                    DrawRectangle(buffer, game.Sub(center, halfDim), game.Add(center, halfDim), piece.r, piece.g, piece.b);
+                    const halfDim = piece.dim * @splat(2, 0.5 * metersToPixels);
+                    DrawRectangle(buffer, center - halfDim, center + halfDim, piece.r, piece.g, piece.b);
                 }
             }
         }
@@ -825,7 +826,7 @@ pub export fn UpdateAndRender(
 
     const worldOrigin: game.world_position = .{};
     const diff = game.Substract(simRegion.world, &worldOrigin, &simRegion.origin);
-    DrawRectangle(buffer, diff.dXY, .{ .x = 10, .y = 10 }, 1, 1, 0);
+    DrawRectangle(buffer, diff.dXY, .{ 10, 10 }, 1, 1, 0);
 
     game.EndSim(simRegion, gameState);
 }
