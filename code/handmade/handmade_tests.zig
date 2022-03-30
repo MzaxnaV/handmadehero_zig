@@ -41,29 +41,8 @@ test "math" {
     try testing.expectEqual(-vec1, hm.v2{ -1, -2 });
 
     try testing.expectEqual(hm.Inner(.{ .V2 = vec1 }, .{ .V2 = vec2 }), 7);
-
-    try testing.expectEqual(hm.AddI32ToU32(30, 2), 32);
-    try testing.expectEqual(hm.AddI32ToU32(32, -30), 2);
-    try testing.expectEqual(hm.AddI32ToU32(std.math.maxInt(u32), -2147483647), 2147483648);
-
-    // TODO (Manav): avoid emoty array initialization of @Vector, it's the same as using undefined
-    const r = hm.rect2.InitMinDim(.{ 0, 0 }, .{ 3, 3 });
-    const r1 = hm.rect2.InitCenterDim(.{ 1.5, 1.5 }, .{ 3, 3 });
-    const r2 = hm.rect2.InitCenterHalfDim(.{ 1.5, 1.5 }, .{ 1.5, 1.5 });
-
-    try testing.expectEqual(r, r1);
-    try testing.expectEqual(r, r2);
-
-    try testing.expectEqual(r1.GetMinCorner(), hm.v2{ 0, 0 });
-    try testing.expectEqual(r2.GetMaxCorner(), hm.v2{ 3, 3 });
-    try testing.expectEqual(r.GetCenter(), hm.v2{ 1.5, 1.5 });
-
-    try testing.expectEqual(hm.IsInRectangle(r, .{ 3, 3 }), false);
-    try testing.expectEqual(hm.IsInRectangle(r, .{ 1, 3 }), false);
-    try testing.expectEqual(hm.IsInRectangle(r, .{ 0, 0 }), true);
-    try testing.expectEqual(hm.IsInRectangle(r, .{ 2, 2 }), true);
-
-    try testing.expectEqual(hm.AddRadiusTo(r, 1, 2), hm.rect2{ .min = .{ -1, -2 }, .max = .{ 4, 5 } });
+    try testing.expectEqual(hm.LengthSq(hm.VN2(vec1)), 5);
+    try testing.expectEqual(hm.Length(hm.VN2(.{ 4, 3 })), 5);
 
     const c3 = hm.v3{ 3, 2, 1 };
     try testing.expectEqual(hm.VN3(c3).X(), c3[0]);
@@ -82,6 +61,31 @@ test "math" {
     try testing.expectEqual(hm.VN4(c4).G(), hm.VN4(c4).Y());
     try testing.expectEqual(hm.VN4(c4).B(), hm.VN4(c4).Z());
     try testing.expectEqual(hm.VN4(c4).A(), hm.VN4(c4).W());
+
+    try testing.expectEqual(hm.AddI32ToU32(30, 2), 32);
+    try testing.expectEqual(hm.AddI32ToU32(32, -30), 2);
+    try testing.expectEqual(hm.AddI32ToU32(std.math.maxInt(u32), -2147483647), 2147483648);
+
+    // NOTE (Manav): avoid emoty array initialization of @Vector, it's the same as using undefined
+    const r = hm.rect2.InitMinDim(.{ 0, 0 }, .{ 3, 3 });
+    const r1 = hm.rect2.InitCenterDim(.{ 1.5, 1.5 }, .{ 3, 3 });
+    const r2 = hm.rect2.InitCenterHalfDim(.{ 1.5, 1.5 }, .{ 1.5, 1.5 });
+
+    try testing.expectEqual(r, r1);
+    try testing.expectEqual(r, r2);
+
+    try testing.expectEqual(r1.GetMinCorner(), hm.v2{ 0, 0 });
+    try testing.expectEqual(r2.GetMaxCorner(), hm.v2{ 3, 3 });
+    try testing.expectEqual(r.GetCenter(), hm.v2{ 1.5, 1.5 });
+
+    try testing.expectEqual(hm.IsInRect2(r, .{ 3, 3 }), false);
+    try testing.expectEqual(hm.IsInRect2(r, .{ 1, 3 }), false);
+    try testing.expectEqual(hm.IsInRect2(r, .{ 0, 0 }), true);
+    try testing.expectEqual(hm.IsInRect2(r, .{ 2, 2 }), true);
+
+    try testing.expectEqual(hm.AddRadiusToRect2(r, .{ 1, 2 }), hm.rect2{ .min = .{ -1, -2 }, .max = .{ 4, 5 } });
+
+    //TODO (Manav): ADD rect3 tests
 }
 
 test "misc_language" {

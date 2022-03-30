@@ -3,7 +3,7 @@ const hs = @import("handmade_sim_region.zig");
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
-pub const Invalid = hm.v2{ 100000, 100000 };
+pub const Invalid = hm.v3{ 100000, 100000, 100000 };
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
 
@@ -26,7 +26,7 @@ pub inline fn MakeEntityNonSpatial(entity: *hs.sim_entity) void {
     entity.p = Invalid;
 }
 
-pub inline fn MakeEntitySpatial(entity: *hs.sim_entity, p: hm.v2, dP: hm.v2) void {
+pub inline fn MakeEntitySpatial(entity: *hs.sim_entity, p: hm.v3, dP: hm.v3) void {
     ClearFlag(entity, @enumToInt(hs.sim_entity_flags.NonSpatial));
     entity.p = p;
     entity.dP = dP;

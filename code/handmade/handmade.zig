@@ -209,13 +209,6 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
     return result;
 }
 
-inline fn GetCameraSpaceP(gameState: *const game.state, entityLow: *const game.low_entity) game.v2 {
-    const diff = game.Substract(gameState.world, &entityLow.sim.p, &gameState.cameraP);
-    const result = diff.dXY;
-
-    return result;
-}
-
 const add_low_entity_result = struct {
     low: *game.low_entity,
     lowIndex: u32,
@@ -632,7 +625,8 @@ pub export fn UpdateAndRender(
 
     const tileSpanX = 17 * 3;
     const tileSpanY = 9 * 3;
-    const cameraBounds = game.rect2.InitCenterDim(.{ 0, 0 }, game.v2{ tileSpanX, tileSpanY } * @splat(2, world.tileSideInMeters));
+    const tileSpanZ = 1;
+    const cameraBounds = game.rect3.InitCenterDim(.{ 0, 0, 0 }, game.v3{ tileSpanX, tileSpanY, tileSpanZ } * @splat(3, world.tileSideInMeters));
 
     var simArena: game.memory_arena = undefined;
     simArena.Initialize(gameMemory.transientStorageSize, gameMemory.transientStorage);
@@ -663,11 +657,11 @@ pub export fn UpdateAndRender(
             pieceGroup.pieceCount = 0;
             const dt = gameInput.dtForFrame;
 
-            const alpha = 1 - 0.5 * entity.z;
+            const alpha = 1 - 0.5 * entity.p[2];
             const shadowAlpha = if (alpha > 0) alpha else 0;
 
             var moveSpec = game.DefaultMoveSpec();
-            var ddP = game.v2{ 0, 0 };
+            var ddP = game.v3{ 0, 0, 0 };
 
             const heroBitmaps = &gameState.heroBitmaps[entity.facingDirection];
 
@@ -676,20 +670,21 @@ pub export fn UpdateAndRender(
                     for (gameState.controlledHeroes) |conHero| {
                         if (entity.storageIndex == conHero.entityIndex) {
                             if (conHero.dZ != 0) {
-                                entity.dZ = conHero.dZ;
+                                entity.dP[2] = conHero.dZ;
                             }
 
                             moveSpec.unitMaxAccelVector = true;
                             moveSpec.speed = 50;
                             moveSpec.drag = 8;
-                            ddP = conHero.ddP;
+                            ddP = .{ conHero.ddP[0], conHero.ddP[1], 0 };
                             if ((conHero.dSword[0] != 0) or (conHero.dSword[1] != 0)) {
                                 switch (entity.sword) {
                                     .ptr => {
                                         const sword = entity.sword.ptr;
                                         if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
-                                            game.MakeEntitySpatial(sword, entity.p, entity.dP + (conHero.dSword * @splat(2, @as(f32, 5)))); //
+                                            const dSwordV3 = game.v3{ conHero.dSword[0], conHero.dSword[1], 0 };
+                                            game.MakeEntitySpatial(sword, entity.p, entity.dP + (dSwordV3 * @splat(3, @as(f32, 5)))); //
                                             game.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
                                         }
                                     },
@@ -736,10 +731,7 @@ pub export fn UpdateAndRender(
                     while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
                         const testEntity: *game.sim_entity = &simRegion.entities[testEntityIndex];
                         if (testEntity.entityType == .Hero) {
-                            var testDSq = game.LengthSq(testEntity.p - entity.p);
-                            if (testEntity.entityType == .Hero) {
-                                testDSq *= 0.75;
-                            }
+                            var testDSq = game.LengthSq(game.VN3(testEntity.p - entity.p));
 
                             if (closestHeroDSq > testDSq) {
                                 closestHero = testEntity;
@@ -752,7 +744,7 @@ pub export fn UpdateAndRender(
                         if (closestHeroDSq > game.Square(3)) {
                             const accelaration = 0.5;
                             const oneOverLength = accelaration / game.SquareRoot(closestHeroDSq);
-                            ddP = (hero.p - entity.p) * @splat(2, oneOverLength);
+                            ddP = @splat(3, oneOverLength) * (hero.p - entity.p);
                         }
                     }
 
@@ -787,7 +779,7 @@ pub export fn UpdateAndRender(
 
             const entityGroundPointX = screenCenterX + metersToPixels * entity.p[0];
             const entityGroundPointY = screenCenterY - metersToPixels * entity.p[1];
-            const entityz = -metersToPixels * entity.z;
+            const entityz = -metersToPixels * entity.p[2];
 
             if (!NOT_IGNORE) {
                 const playerLeftTop = .{
@@ -825,8 +817,8 @@ pub export fn UpdateAndRender(
     }
 
     const worldOrigin: game.world_position = .{};
-    const diff = game.Substract(simRegion.world, &worldOrigin, &simRegion.origin);
-    DrawRectangle(buffer, diff.dXY, .{ 10, 10 }, 1, 1, 0);
+    const diff: [3]f32 = game.Substract(simRegion.world, &worldOrigin, &simRegion.origin);
+    DrawRectangle(buffer, diff[0..2].*, .{ 10, 10 }, 1, 1, 0);
 
     game.EndSim(simRegion, gameState);
 }

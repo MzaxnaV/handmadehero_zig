@@ -61,15 +61,10 @@ pub const sim_entity = struct {
     entityType: entity_type,
     flags: u32 = 0,
 
-    p: hm.v2 = hm.v2{ 0, 0 },
-    dP: hm.v2 = hm.v2{ 0, 0 },
-
-    z: f32 = 0,
-    dZ: f32 = 0,
+    p: hm.v3 = hm.v3{ 0, 0, 0 },
+    dP: hm.v3 = hm.v3{ 0, 0, 0 },
 
     distanceLimit: f32 = 0,
-
-    chunkZ: u32 = 0,
 
     width: f32 = 0,
     height: f32 = 0,
@@ -94,8 +89,8 @@ pub const sim_region = struct {
     world: *hw.world,
 
     origin: hw.world_position,
-    bounds: hm.rect2,
-    updatableBounds: hm.rect2,
+    bounds: hm.rect3,
+    updatableBounds: hm.rect3,
 
     maxEntityCount: u32,
     entityCount: u32,
@@ -195,12 +190,12 @@ fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32,
     return entity;
 }
 
-pub fn AddEntity(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32, source: ?*hi.low_entity, simP: ?*const hm.v2) ?*sim_entity {
+pub fn AddEntity(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32, source: ?*hi.low_entity, simP: ?*const hm.v3) ?*sim_entity {
     var dest = AddEntityRaw(gameState, simRegion, storageIndex, source);
     if (dest) |_| {
         if (simP) |_| {
             dest.?.p = simP.?.*;
-            dest.?.updatable = hm.IsInRectangle(simRegion.updatableBounds, dest.?.p);
+            dest.?.updatable = hm.IsInRect3(simRegion.updatableBounds, dest.?.p);
         } else {
             dest.?.p = GetSimSpaceP(simRegion, source.?);
         }
@@ -209,26 +204,26 @@ pub fn AddEntity(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32
     return dest;
 }
 
-pub inline fn GetSimSpaceP(simRegion: *sim_region, stored: *hi.low_entity) hm.v2 {
+pub inline fn GetSimSpaceP(simRegion: *sim_region, stored: *hi.low_entity) hm.v3 {
     var result = he.Invalid;
     if (!he.IsSet(&stored.sim, @enumToInt(sim_entity_flags.NonSpatial))) {
-        const diff = hw.Substract(simRegion.world, &stored.p, &simRegion.origin);
-        result = diff.dXY;
+        result = hw.Substract(simRegion.world, &stored.p, &simRegion.origin);
     }
 
     return result;
 }
 
-pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.world, origin: hw.world_position, bounds: hm.rect2) *sim_region {
+pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.world, origin: hw.world_position, bounds: hm.rect3) *sim_region {
     var simRegion: *sim_region = simArena.PushStruct(sim_region);
     hi.ZeroStruct([4096]sim_entity_hash, &simRegion.hash);
 
     const updateSafetyMargin = 1.0;
+    const updateSafetyMarginZ = 1.0;
 
     simRegion.world = world;
     simRegion.origin = origin;
     simRegion.updatableBounds = bounds;
-    simRegion.bounds = hm.AddRadiusTo(simRegion.updatableBounds, updateSafetyMargin, updateSafetyMargin);
+    simRegion.bounds = hm.AddRadiusToRect3(simRegion.updatableBounds, .{ updateSafetyMargin, updateSafetyMargin, updateSafetyMarginZ });
 
     simRegion.maxEntityCount = 4096;
     simRegion.entityCount = 0;
@@ -242,7 +237,6 @@ pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.wor
         var chunkX = minChunkP.chunkX;
         while (chunkX <= maxChunkP.chunkX) : (chunkX += 1) {
             if (hw.GetWorldChunk(null, world, chunkX, chunkY, simRegion.origin.chunkZ)) |chunk| {
-                // @breakpoint();
                 var block: ?*hw.world_entity_block = &chunk.firstBlock;
                 while (block) |b| : (block = b.next) {
                     var entityIndexIndex = @as(u32, 0);
@@ -251,7 +245,7 @@ pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.wor
                         const low = &gameState.lowEntities[lowEntityIndex];
                         if (!he.IsSet(&low.sim, @enumToInt(sim_entity_flags.NonSpatial))) {
                             var simSpaceP = GetSimSpaceP(simRegion, low);
-                            if (hm.IsInRectangle(simRegion.bounds, simSpaceP)) {
+                            if (hm.IsInRect3(simRegion.bounds, simSpaceP)) {
                                 _ = AddEntity(gameState, simRegion, lowEntityIndex, low, &simSpaceP);
                             }
                         }
@@ -385,35 +379,28 @@ fn HandleCollision(unsortedA: *sim_entity, unsortedB: *sim_entity) bool {
     return stopsOnCollision;
 }
 
-pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec: *const move_spec, accelaration: hm.v2) void {
+pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec: *const move_spec, accelaration: hm.v3) void {
     assert(!he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial)));
 
     var ddP = accelaration;
     // const world = gameState.world;
 
     if (moveSpec.unitMaxAccelVector) {
-        const ddPLength = hm.LengthSq(ddP);
+        const ddPLength = hm.LengthSq(hm.VN3(ddP));
         if (ddPLength > 1.0) {
-            ddP *= @splat(2, 1.0 / SquareRoot(ddPLength));
+            ddP *= @splat(3, 1.0 / SquareRoot(ddPLength));
         }
     }
 
-    ddP *= @splat(2, moveSpec.speed);
-    ddP += entity.dP * @splat(2, -moveSpec.drag);
+    ddP *= hm.v3{ moveSpec.speed, moveSpec.speed, moveSpec.speed };
+    ddP += entity.dP * hm.v3{ -moveSpec.drag, -moveSpec.drag, -moveSpec.drag };
+    ddP += hm.v3{ 0, 0, -9.8 };
 
     // const oldPlayerP = entity.p;
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
-    var playerDelta = (ddP * @splat(2, 0.5 * hm.Square(dt))) + entity.dP * @splat(2, dt);
-    entity.dP += ddP * @splat(2, dt);
-    // const newPlayerP = hm.Add(oldPlayerP, playerDelta);
-
-    const ddZ = -9.8;
-    entity.z += 0.5 * ddZ * hm.Square(dt) + entity.dZ * dt;
-    entity.dZ += ddZ * dt;
-
-    if (entity.z < 0) {
-        entity.z = 0;
-    }
+    var playerDelta = (ddP * @splat(3, 0.5 * hm.Square(dt))) + entity.dP * hm.v3{ dt, dt, dt };
+    entity.dP += ddP * hm.v3{ dt, dt, dt };
+    // const newPlayerP = oldPlayerP + playerDelta;
 
     var distanceRemaining = entity.distanceLimit;
     if (distanceRemaining == 0) {
@@ -423,12 +410,12 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     var iteration = @as(u32, 0);
     while (iteration < 4) : (iteration += 1) {
         var tMin = @as(f32, 1.0);
-        const playerDeltaLength = hm.Length(playerDelta);
+        const playerDeltaLength = hm.Length(hm.VN3(playerDelta));
         if (playerDeltaLength > 0) {
             if (playerDeltaLength > distanceRemaining) {
                 tMin = distanceRemaining / playerDeltaLength;
             }
-            var wallNormal = hm.v2{ 0, 0 };
+            var wallNormal = hm.v3{ 0, 0, 0 };
             var hitEntity: ?*sim_entity = null;
 
             const desiredPosition = entity.p + playerDelta;
@@ -438,35 +425,38 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
                     const testEntity = &simRegion.entities[testHighEntityIndex];
                     if (ShouldCollide(gameState, entity, testEntity)) {
-                        const diameterW = testEntity.width + entity.width;
-                        const diameterH = testEntity.height + entity.height;
+                        const minkowskiDiameter: hm.v3 = .{
+                            testEntity.width + entity.width,
+                            testEntity.height + entity.height,
+                            2 * gameState.world.tileDepthInMeters,
+                        };
 
-                        const minCorner = hm.v2{ -0.5 * diameterW, -0.5 * diameterH };
-                        const maxCorner = hm.v2{ 0.5 * diameterW, 0.5 * diameterH };
+                        const minCorner = hm.v3{ -0.5, -0.5, -0.5 } * minkowskiDiameter;
+                        const maxCorner = hm.v3{ 0.5, 0.5, 0.5 } * minkowskiDiameter;
 
                         const rel = entity.p - testEntity.p;
 
                         if (TestWall(minCorner[0], rel[0], rel[1], playerDelta[0], playerDelta[1], &tMin, minCorner[1], maxCorner[1])) {
-                            wallNormal = .{ -1, 0 };
+                            wallNormal = .{ -1, 0, 0 };
                             hitEntity = testEntity;
                         }
                         if (TestWall(maxCorner[0], rel[0], rel[1], playerDelta[0], playerDelta[1], &tMin, minCorner[1], maxCorner[1])) {
-                            wallNormal = .{ 1, 0 };
+                            wallNormal = .{ 1, 0, 0 };
                             hitEntity = testEntity;
                         }
                         if (TestWall(minCorner[1], rel[1], rel[0], playerDelta[1], playerDelta[0], &tMin, minCorner[0], maxCorner[0])) {
-                            wallNormal = .{ 0, -1 };
+                            wallNormal = .{ 0, -1, 0 };
                             hitEntity = testEntity;
                         }
                         if (TestWall(maxCorner[1], rel[1], rel[0], playerDelta[1], playerDelta[0], &tMin, minCorner[0], maxCorner[0])) {
-                            wallNormal = .{ 0, 1 };
+                            wallNormal = .{ 0, 1, 0 };
                             hitEntity = testEntity;
                         }
                     }
                 }
             }
 
-            entity.p += playerDelta * @splat(2, tMin);
+            entity.p += hm.v3{ tMin, tMin, tMin } * playerDelta;
             distanceRemaining -= tMin * playerDeltaLength;
             if (hitEntity) |_| {
                 playerDelta = desiredPosition - entity.p;
@@ -474,9 +464,9 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 const stopsOnCollision = HandleCollision(entity, hitEntity.?);
                 if (stopsOnCollision) {
                     // NOTE (Manav): entity.dP -= (1 * Inner(entity.dP, wallNormal))*wallNormal;
-                    entity.dP -= @splat(2, 1 * hm.Inner(hm.VN2(entity.dP), hm.VN2(wallNormal))) * wallNormal;
+                    entity.dP -= @splat(3, 1 * hm.Inner(hm.VN3(entity.dP), hm.VN3(wallNormal))) * wallNormal;
                     // NOTE (Manav): playerDelta -= (1 * Inner(playerDelta, wallNormal))*wallNormal;
-                    playerDelta -= @splat(2, 1 * hm.Inner(hm.VN2(playerDelta), hm.VN2(wallNormal))) * wallNormal;
+                    playerDelta -= @splat(3, 1 * hm.Inner(hm.VN3(playerDelta), hm.VN3(wallNormal))) * wallNormal;
                 } else {
                     hi.AddCollisionRule(gameState, entity.storageIndex, hitEntity.?.storageIndex, false);
                 }
@@ -484,6 +474,10 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 break;
             }
         }
+    }
+
+    if (entity.p[2] < 0) {
+        entity.p[2] = 0;
     }
 
     if (entity.distanceLimit != 0) {
