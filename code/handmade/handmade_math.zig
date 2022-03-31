@@ -1,4 +1,5 @@
 const SquareRoot = @import("handmade_intrinsics.zig").SquareRoot;
+const std = @import("std");
 
 // defs -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -196,8 +197,10 @@ pub inline fn AddRadiusToRect2(rectangle: rect2, radius: v2) rect2 {
 pub inline fn IsInRect3(rectangle: rect3, testP: v3) bool {
     const result = ((testP[0] >= rectangle.min[0]) and
         (testP[1] >= rectangle.min[1]) and
+        (testP[2] >= rectangle.min[2]) and
         (testP[0] < rectangle.max[0]) and
-        (testP[1] < rectangle.max[1]));
+        (testP[1] < rectangle.max[1]) and
+        (testP[2] < rectangle.max[2]));
     return result;
 }
 

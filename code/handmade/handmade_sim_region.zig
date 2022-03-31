@@ -65,9 +65,7 @@ pub const sim_entity = struct {
     dP: hm.v3 = hm.v3{ 0, 0, 0 },
 
     distanceLimit: f32 = 0,
-
-    width: f32 = 0,
-    height: f32 = 0,
+    dim: hm.v3 = hm.v3{ 0, 0, 0 },
 
     facingDirection: u32 = 0,
     tBob: f32 = 0,
@@ -87,6 +85,8 @@ pub const sim_entity_hash = struct {
 
 pub const sim_region = struct {
     world: *hw.world,
+    maxEntityRadius: f32,
+    maxEntityVelocity: f32,
 
     origin: hw.world_position,
     bounds: hm.rect3,
@@ -190,12 +190,18 @@ fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32,
     return entity;
 }
 
+pub inline fn EntityOverlapsRectangle(p: hm.v3, dim: hm.v3, rect: hm.rect3) bool {
+    const grown = hm.AddRadiusToRect3(rect, dim * @splat(3, @as(f32, 0.5)));
+    const result = hm.IsInRect3(grown, p);
+    return result;
+}
+
 pub fn AddEntity(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32, source: ?*hi.low_entity, simP: ?*const hm.v3) ?*sim_entity {
     var dest = AddEntityRaw(gameState, simRegion, storageIndex, source);
     if (dest) |_| {
         if (simP) |_| {
             dest.?.p = simP.?.*;
-            dest.?.updatable = hm.IsInRect3(simRegion.updatableBounds, dest.?.p);
+            dest.?.updatable = EntityOverlapsRectangle(dest.?.p, dest.?.dim, simRegion.updatableBounds);
         } else {
             dest.?.p = GetSimSpaceP(simRegion, source.?);
         }
@@ -213,16 +219,18 @@ pub inline fn GetSimSpaceP(simRegion: *sim_region, stored: *hi.low_entity) hm.v3
     return result;
 }
 
-pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.world, origin: hw.world_position, bounds: hm.rect3) *sim_region {
+pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.world, origin: hw.world_position, bounds: hm.rect3, dt: f32) *sim_region {
     var simRegion: *sim_region = simArena.PushStruct(sim_region);
     hi.ZeroStruct([4096]sim_entity_hash, &simRegion.hash);
 
-    const updateSafetyMargin = 1.0;
+    simRegion.maxEntityRadius = 5.0;
+    simRegion.maxEntityVelocity = 30.0;
+    const updateSafetyMargin = simRegion.maxEntityRadius + dt * simRegion.maxEntityVelocity;
     const updateSafetyMarginZ = 1.0;
 
     simRegion.world = world;
     simRegion.origin = origin;
-    simRegion.updatableBounds = bounds;
+    simRegion.updatableBounds = hm.AddRadiusToRect3(bounds, .{ simRegion.maxEntityRadius, simRegion.maxEntityRadius, simRegion.maxEntityRadius });
     simRegion.bounds = hm.AddRadiusToRect3(simRegion.updatableBounds, .{ updateSafetyMargin, updateSafetyMargin, updateSafetyMarginZ });
 
     simRegion.maxEntityCount = 4096;
@@ -245,7 +253,7 @@ pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.wor
                         const low = &gameState.lowEntities[lowEntityIndex];
                         if (!he.IsSet(&low.sim, @enumToInt(sim_entity_flags.NonSpatial))) {
                             var simSpaceP = GetSimSpaceP(simRegion, low);
-                            if (hm.IsInRect3(simRegion.bounds, simSpaceP)) {
+                            if (EntityOverlapsRectangle(simSpaceP, low.sim.dim, simRegion.bounds)) {
                                 _ = AddEntity(gameState, simRegion, lowEntityIndex, low, &simSpaceP);
                             }
                         }
@@ -294,7 +302,9 @@ pub fn EndSim(region: *sim_region, gameState: *hi.state) void {
                 //     newCameraP.absTileY -%= 9;
                 // }
             } else {
+                const camZOffset = newCameraP.offset_[2];
                 newCameraP = stored.p;
+                newCameraP.offset_[2] = camZOffset;
             }
 
             gameState.cameraP = newCameraP;
@@ -400,6 +410,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
     var playerDelta = (ddP * @splat(3, 0.5 * hm.Square(dt))) + entity.dP * hm.v3{ dt, dt, dt };
     entity.dP += ddP * hm.v3{ dt, dt, dt };
+    assert(hm.LengthSq(hm.VN3(entity.dP)) <= hm.Square(simRegion.maxEntityVelocity));
     // const newPlayerP = oldPlayerP + playerDelta;
 
     var distanceRemaining = entity.distanceLimit;
@@ -425,10 +436,12 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
                     const testEntity = &simRegion.entities[testHighEntityIndex];
                     if (ShouldCollide(gameState, entity, testEntity)) {
+                        const testEntityDim = hm.VN3(testEntity.dim);
+                        const entityDim = hm.VN3(entity.dim);
                         const minkowskiDiameter: hm.v3 = .{
-                            testEntity.width + entity.width,
-                            testEntity.height + entity.height,
-                            2 * gameState.world.tileDepthInMeters,
+                            testEntityDim.X() + entityDim.X(),
+                            testEntityDim.Y() + entityDim.Y(),
+                            testEntityDim.Z() + entityDim.Z(),
                         };
 
                         const minCorner = hm.v3{ -0.5, -0.5, -0.5 } * minkowskiDiameter;
@@ -478,6 +491,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
 
     if (entity.p[2] < 0) {
         entity.p[2] = 0;
+        entity.dP[2] = 0;
     }
 
     if (entity.distanceLimit != 0) {

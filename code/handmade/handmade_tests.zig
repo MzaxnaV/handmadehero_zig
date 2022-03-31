@@ -85,7 +85,23 @@ test "math" {
 
     try testing.expectEqual(hm.AddRadiusToRect2(r, .{ 1, 2 }), hm.rect2{ .min = .{ -1, -2 }, .max = .{ 4, 5 } });
 
-    //TODO (Manav): ADD rect3 tests
+    const r3 = hm.rect3.InitMinDim(.{ 0, 0, 0 }, .{ 3, 3, 3 });
+    const r31 = hm.rect3.InitCenterDim(.{ 1.5, 1.5, 1.5 }, .{ 3, 3, 3 });
+    const r32 = hm.rect3.InitCenterHalfDim(.{ 1.5, 1.5, 1.5 }, .{ 1.5, 1.5, 1.5 });
+
+    try testing.expectEqual(r3, r31);
+    try testing.expectEqual(r3, r32);
+
+    try testing.expectEqual(r31.GetMinCorner(), hm.v3{ 0, 0, 0 });
+    try testing.expectEqual(r32.GetMaxCorner(), hm.v3{ 3, 3, 3 });
+    try testing.expectEqual(r3.GetCenter(), hm.v3{ 1.5, 1.5, 1.5 });
+
+    try testing.expectEqual(hm.IsInRect3(r3, .{ 3, 3, 3 }), false);
+    try testing.expectEqual(hm.IsInRect3(r3, .{ 1, 3, 3 }), false);
+    try testing.expectEqual(hm.IsInRect3(r3, .{ 0, 0, 0 }), true);
+    try testing.expectEqual(hm.IsInRect3(r3, .{ 2, 2, 2 }), true);
+
+    try testing.expectEqual(hm.AddRadiusToRect3(r3, .{ 1, 2, 3 }), hm.rect3{ .min = .{ -1, -2, -3 }, .max = .{ 4, 5, 6 } });
 }
 
 test "misc_language" {

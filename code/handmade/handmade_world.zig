@@ -66,7 +66,7 @@ pub inline fn IsValid(p: world_position) bool {
 }
 
 inline fn IsCanonicalCoord(chunkDim: f32, tileRel: f32) bool {
-    const epsilon = 0.0001;
+    const epsilon = 0.01;
     const result = (tileRel >= -(0.5 * chunkDim + epsilon)) and (tileRel <= (0.5 * chunkDim + epsilon));
     return result;
 }
@@ -157,10 +157,10 @@ pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset
 pub inline fn ChunkPosFromTilePos(w: *world, absTileX: i32, absTileY: i32, absTileZ: i32) world_position {
     const basePos: world_position = .{};
 
-    const offset = w.chunkDimInMeters * hm.v3{
-        @intToFloat(f32, absTileX),
-        @intToFloat(f32, absTileY),
-        @intToFloat(f32, absTileZ),
+    const offset = hm.v3{
+        w.tileDepthInMeters * @intToFloat(f32, absTileX),
+        w.tileDepthInMeters * @intToFloat(f32, absTileY),
+        w.tileDepthInMeters * @intToFloat(f32, absTileZ),
     };
 
     const result: world_position = MapIntoChunkSpace(w, basePos, offset);

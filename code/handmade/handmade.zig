@@ -240,8 +240,9 @@ fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) 
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ));
     var entity = AddLowEntity(gameState, .Wall, p);
 
-    entity.low.sim.height = gameState.world.tileSideInMeters;
-    entity.low.sim.width = entity.low.sim.height;
+    const height = gameState.world.tileSideInMeters;
+    const width = height;
+    entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
     game.AddFlag(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
 
     return entity;
@@ -262,8 +263,9 @@ fn InitHitPoints(entityLow: *game.low_entity, hitPointCount: u32) void {
 fn AddSword(gameState: *game.state) add_low_entity_result {
     var entity = AddLowEntity(gameState, .Sword, game.NullPosition());
 
-    entity.low.sim.height = 0.5;
-    entity.low.sim.width = 1;
+    const height = 0.5;
+    const width = 1;
+    entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
 
     return entity;
 }
@@ -272,8 +274,10 @@ fn AddPlayer(gameState: *game.state) add_low_entity_result {
     const p = gameState.cameraP;
     var entity = AddLowEntity(gameState, .Hero, p);
 
-    entity.low.sim.height = 0.5;
-    entity.low.sim.width = 1;
+    const height = 0.5;
+    const width = 1;
+    entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
+
     game.AddFlag(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
 
     InitHitPoints(entity.low, 3);
@@ -292,8 +296,10 @@ fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u3
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ));
     var entity = AddLowEntity(gameState, .Monstar, p);
 
-    entity.low.sim.height = 0.5;
-    entity.low.sim.width = 1;
+    const height = 0.5;
+    const width = 1;
+    entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
+
     game.AddFlag(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
 
     InitHitPoints(entity.low, 3);
@@ -305,8 +311,10 @@ fn AddFamiliar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ));
     var entity = AddLowEntity(gameState, .Familiar, p);
 
-    entity.low.sim.height = 0.5;
-    entity.low.sim.width = 1;
+    const height = 0.5;
+    const width = 1;
+    entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
+
     game.AddFlag(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
 
     return entity;
@@ -630,7 +638,7 @@ pub export fn UpdateAndRender(
 
     var simArena: game.memory_arena = undefined;
     simArena.Initialize(gameMemory.transientStorageSize, gameMemory.transientStorage);
-    const simRegion = game.BeginSim(&simArena, gameState, gameState.world, gameState.cameraP, cameraBounds);
+    const simRegion = game.BeginSim(&simArena, gameState, gameState.world, gameState.cameraP, cameraBounds, gameInput.dtForFrame);
 
     if (NOT_IGNORE) {
         DrawRectangle(buffer, .{ 0, 0 }, .{ @intToFloat(f32, buffer.width), @intToFloat(f32, buffer.height) }, 0.5, 0.5, 0.5);
