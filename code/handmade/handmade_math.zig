@@ -204,6 +204,11 @@ pub inline fn IsInRect3(rectangle: rect3, testP: v3) bool {
     return result;
 }
 
+pub inline fn RectanglesIntersect(a: rect3, b: rect3) bool {
+    const result = !(@reduce(.Or, b.max < a.min) or @reduce(.Or, b.min > a.max));
+    return result;
+}
+
 pub inline fn AddRadiusToRect3(rectangle: rect3, radius: v3) rect3 {
     const result = rect3{
         .min = rectangle.min - radius,

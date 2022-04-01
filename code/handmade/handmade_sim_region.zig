@@ -30,6 +30,7 @@ pub const entity_type = enum {
     Familiar,
     Monstar,
     Sword,
+    Stairwell,
 };
 
 pub const hit_point = struct {
@@ -362,10 +363,12 @@ fn ShouldCollide(gameState: *hi.state, unsortedA: *sim_entity, unsortedB: *sim_e
     return result;
 }
 
-fn HandleCollision(unsortedA: *sim_entity, unsortedB: *sim_entity) bool {
+fn HandleCollision(gameState: *hi.state, unsortedA: *sim_entity, unsortedB: *sim_entity, wasOverlapping: bool) bool {
+    _ = wasOverlapping;
     var stopsOnCollision = false;
 
     if (unsortedA.entityType == .Sword) {
+        hi.AddCollisionRule(gameState, unsortedA.storageIndex, unsortedB.storageIndex, false);
         stopsOnCollision = false;
     } else {
         stopsOnCollision = true;
@@ -382,6 +385,10 @@ fn HandleCollision(unsortedA: *sim_entity, unsortedB: *sim_entity) bool {
         if (a.hitPointMax > 0) {
             a.hitPointMax -= 1;
         }
+    }
+
+    if ((a.entityType == .Hero) and (b.entityType == .Stairwell)) {
+        stopsOnCollision = false;
     }
 
     // entity.absTileZ = hm.AddI32ToU32(entity.absTileZ, hitLow.dAbsTileZ);
@@ -416,6 +423,30 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     var distanceRemaining = entity.distanceLimit;
     if (distanceRemaining == 0) {
         distanceRemaining = 10000.0;
+    }
+
+    var overlappingCount = @as(u32, 0);
+    var overlappingEntities: [16]?*sim_entity = .{null} ** 16;
+    {
+        const entityRect = hm.rect3.InitCenterDim(entity.p, entity.dim);
+        var testHighEntityIndex = @as(u32, 0);
+        while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
+            const testEntity = &simRegion.entities[testHighEntityIndex];
+            if (ShouldCollide(gameState, entity, testEntity)) {
+                const testEntityRect = hm.rect3.InitCenterDim(testEntity.p, testEntity.dim);
+                if (hm.RectanglesIntersect(entityRect, testEntityRect)) {
+                    if (overlappingCount < overlappingEntities.len) {
+                        // if (hi.AddCollisionRule(entity.storageIndex, testEntity.storageIndex, false))
+                        {
+                            overlappingEntities[overlappingCount] = testEntity;
+                            overlappingCount += 1;
+                        }
+                    } else {
+                        unreachable;
+                    }
+                }
+            }
+        }
     }
 
     var iteration = @as(u32, 0);
@@ -474,18 +505,38 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
             if (hitEntity) |_| {
                 playerDelta = desiredPosition - entity.p;
 
-                const stopsOnCollision = HandleCollision(entity, hitEntity.?);
+                var overlapIndex = overlappingCount;
+                var testOverlapIndex = @as(u32, 0);
+                while (testOverlapIndex < overlappingCount) : (testOverlapIndex += 1) {
+                    if (hitEntity == overlappingEntities[testOverlapIndex]) {
+                        overlapIndex = testOverlapIndex;
+                        break;
+                    }
+                }
+
+                const wasOverlapping = (overlapIndex != overlappingCount);
+                const stopsOnCollision = HandleCollision(gameState, entity, hitEntity.?, wasOverlapping);
                 if (stopsOnCollision) {
-                    // NOTE (Manav): entity.dP -= (1 * Inner(entity.dP, wallNormal))*wallNormal;
-                    entity.dP -= @splat(3, 1 * hm.Inner(hm.VN3(entity.dP), hm.VN3(wallNormal))) * wallNormal;
                     // NOTE (Manav): playerDelta -= (1 * Inner(playerDelta, wallNormal))*wallNormal;
                     playerDelta -= @splat(3, 1 * hm.Inner(hm.VN3(playerDelta), hm.VN3(wallNormal))) * wallNormal;
+                    // NOTE (Manav): entity.dP -= (1 * Inner(entity.dP, wallNormal))*wallNormal;
+                    entity.dP -= @splat(3, 1 * hm.Inner(hm.VN3(entity.dP), hm.VN3(wallNormal))) * wallNormal;
                 } else {
-                    hi.AddCollisionRule(gameState, entity.storageIndex, hitEntity.?.storageIndex, false);
+                    if (wasOverlapping) {
+                        overlappingEntities[overlapIndex] = overlappingEntities[overlappingCount];
+                        overlappingCount -= 1;
+                    } else if (overlappingCount < overlappingEntities.len) {
+                        overlappingEntities[overlappingCount] = hitEntity;
+                        overlappingCount += 1;
+                    } else {
+                        unreachable;
+                    }
                 }
             } else {
                 break;
             }
+        } else {
+            break;
         }
     }
 

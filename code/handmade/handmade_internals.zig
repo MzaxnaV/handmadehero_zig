@@ -92,6 +92,11 @@ pub const controlled_hero = struct {
     dZ: f32 = 0,
 };
 
+pub const pairwise_collision_flag = enum(u32) {
+    PairCollisionFlag_ShouldCollide = 0x1,
+    PairCollisionFlag_Temporary = 0x2,
+};
+
 pub const pairwise_collision_rule = struct {
     shouldCollide: bool,
     storageIndexA: u32,
@@ -118,6 +123,7 @@ pub const state = struct {
 
     tree: loaded_bitmap,
     sword: loaded_bitmap,
+    stairwell: loaded_bitmap,
     metersToPixels: f32,
 
     collisionRuleHash: [256]?*pairwise_collision_rule,

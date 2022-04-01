@@ -248,6 +248,17 @@ fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) 
     return entity;
 }
 
+fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
+    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ));
+    var entity = AddLowEntity(gameState, .Stairwell, p);
+
+    const height = gameState.world.tileSideInMeters;
+    const width = height;
+    entity.low.sim.dim = .{ width, height, gameState.world.tileDepthInMeters };
+
+    return entity;
+}
+
 fn InitHitPoints(entityLow: *game.low_entity, hitPointCount: u32) void {
     std.debug.assert(hitPointCount <= entityLow.sim.hitPoint.len);
     entityLow.sim.hitPointMax = hitPointCount;
@@ -407,6 +418,7 @@ pub export fn UpdateAndRender(
         gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
         gameState.shadow = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp");
         gameState.tree = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tree00.bmp");
+        gameState.stairwell = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock02.bmp");
         gameState.sword = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock03.bmp");
 
         gameState.heroBitmaps[0].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
@@ -459,14 +471,13 @@ pub export fn UpdateAndRender(
         while (screenIndex < 2000) : (screenIndex += 1) {
             var randomChoice: u32 = 0;
 
-            if (!NOT_IGNORE) {
-                // if (doorUp or doorDown) {
-                //     randomChoice = game.RandInt(u32) % 2;
-                // } else {
-                //     randomChoice = game.RandInt(u32) % 3;
-                // }
+            if (NOT_IGNORE) {
+                if (doorUp or doorDown) {
+                    randomChoice = game.RandInt(u32) % 2;
+                } else {
+                    randomChoice = game.RandInt(u32) % 3;
+                }
             }
-            randomChoice = game.RandInt(u32) % 2;
 
             var createdZDoor = false;
             if (randomChoice == 2) {
@@ -489,35 +500,29 @@ pub export fn UpdateAndRender(
                     const absTileX = screenX * tilesPerWidth + tileX;
                     const absTileY = screenY * tilesPerHeight + tileY;
 
-                    var tileValue = @as(u32, 1);
+                    var shouldBeDoor = false;
                     if ((tileX == 0) and (!doorLeft or (tileY != (tilesPerHeight / 2)))) {
-                        tileValue = 2;
+                        shouldBeDoor = true;
                     }
 
                     if ((tileX == (tilesPerWidth - 1)) and (!doorRight or (tileY != (tilesPerHeight / 2)))) {
-                        tileValue = 2;
+                        shouldBeDoor = true;
                     }
 
                     if ((tileY == 0) and (!doorBottom or (tileX != (tilesPerWidth / 2)))) {
-                        tileValue = 2;
+                        shouldBeDoor = true;
                     }
 
                     if ((tileY == (tilesPerHeight - 1)) and (!doorTop or (tileX != (tilesPerWidth / 2)))) {
-                        tileValue = 2;
+                        shouldBeDoor = true;
                     }
 
-                    if ((tileX == 10) and (tileY == 6)) {
-                        if (doorUp) {
-                            tileValue = 3;
-                        }
-
-                        if (doorDown) {
-                            tileValue = 4;
-                        }
-                    }
-
-                    if (tileValue == 2) {
+                    if (shouldBeDoor) {
                         _ = AddWall(gameState, absTileX, absTileY, absTileZ);
+                    } else if (createdZDoor) {
+                        if ((tileX == 10) and (tileY == 6)) {
+                            _ = AddStairs(gameState, absTileX, absTileY, if (doorDown) absTileZ - 1 else absTileZ);
+                        }
                     }
                 }
             }
@@ -564,7 +569,7 @@ pub export fn UpdateAndRender(
 
         gameState.cameraP = newCameraP;
 
-        _ = AddMonstar(gameState, cameraTileX + 2, cameraTileY + 2, cameraTileZ);
+        _ = AddMonstar(gameState, cameraTileX - 3, cameraTileY + 2, cameraTileZ);
         var familiarIndex = @as(u32, 0);
         while (familiarIndex < 1) : (familiarIndex += 1) {
             const familiarOffsetX = @intCast(i32, @rem(game.RandInt(u32), 10)) - 7;
@@ -715,6 +720,10 @@ pub export fn UpdateAndRender(
 
                 .Wall => {
                     PushBitmap(&pieceGroup, &gameState.tree, .{ 0, 0 }, 0, .{ 40, 80 }, 1.0, 1.0);
+                },
+
+                .Stairwell => {
+                    PushBitmap(&pieceGroup, &gameState.stairwell, .{ 0, 0 }, 0, .{ 37, 37 }, 1.0, 1.0);
                 },
 
                 .Sword => {
