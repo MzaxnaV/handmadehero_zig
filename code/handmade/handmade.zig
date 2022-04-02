@@ -326,7 +326,7 @@ fn AddFamiliar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u
 
     const height = 0.5;
     const width = 1;
-    entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
+    entity.low.sim.dim = .{ width, height, game.Z(3, entity.low.sim.dim) };
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
@@ -350,11 +350,10 @@ inline fn PushPiece(
     piece.offset = (@splat(2, group.gameState.metersToPixels) * game.v2{ offset[0], -offset[1] }) - alignment;
     piece.offsetZ = group.gameState.metersToPixels * offsetZ;
     piece.entityZC = entityZC;
-    const colourv = game.VN4(colour);
-    piece.r = colourv.R();
-    piece.g = colourv.G();
-    piece.b = colourv.B();
-    piece.a = colourv.A();
+    piece.r = game.R(4, colour);
+    piece.g = game.G(4, colour);
+    piece.b = game.B(4, colour);
+    piece.a = game.A(4, colour);
     piece.dim = dim;
 }
 
@@ -368,8 +367,8 @@ inline fn PushRect(group: *game.entity_visible_piece_group, offset: game.v2, off
 
 fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.entity_visible_piece_group) void {
     if (entity.hitPointMax >= 1) {
-        const healthDim = game.VN2(.{ 0.2, 0.2 });
-        const spacingX = 1.5 * healthDim.X();
+        const healthDim = game.v2{ 0.2, 0.2 };
+        const spacingX = 1.5 * game.X(2, healthDim);
         var hitP = game.v2{
             -0.5 * @intToFloat(f32, entity.hitPointMax - 1) * spacingX,
             -0.25,
@@ -383,7 +382,7 @@ fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.entity_visible_piec
                 colour = .{ 0.2, 0.2, 0.2, 1 };
             }
 
-            PushRect(pieceGroup, hitP, 0, healthDim.V2, colour, 0);
+            PushRect(pieceGroup, hitP, 0, healthDim, colour, 0);
             hitP += dHitP;
         }
     }
@@ -691,14 +690,14 @@ pub export fn UpdateAndRender(
                             moveSpec.unitMaxAccelVector = true;
                             moveSpec.speed = 50;
                             moveSpec.drag = 8;
-                            ddP = .{ conHero.ddP[0], conHero.ddP[1], 0 };
-                            if ((conHero.dSword[0] != 0) or (conHero.dSword[1] != 0)) {
+                            ddP = .{ game.X(2, conHero.ddP), game.Y(2, conHero.ddP), 0 };
+                            if ((game.X(2, conHero.dSword) != 0) or (game.Y(2, conHero.dSword) != 0)) {
                                 switch (entity.sword) {
                                     .ptr => {
                                         const sword = entity.sword.ptr;
                                         if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
-                                            const dSwordV3 = game.v3{ conHero.dSword[0], conHero.dSword[1], 0 };
+                                            const dSwordV3 = game.v3{ game.X(2, conHero.dSword), game.Y(2, conHero.dSword), 0 };
                                             game.MakeEntitySpatial(sword, entity.p, entity.dP + (dSwordV3 * @splat(3, @as(f32, 5)))); //
                                             game.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
                                         }
@@ -725,7 +724,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Stairwell => {
-                    PushRect(&pieceGroup, .{ 0, 0 }, 0, .{ entity.dim[0], entity.dim[1] }, .{ 1, 1, 0, 1 }, 0);
+                    PushRect(&pieceGroup, .{ 0, 0 }, 0, .{ game.X(3, entity.dim), game.Y(3, entity.dim) }, .{ 1, 1, 0, 1 }, 0);
                 },
 
                 .Sword => {
@@ -750,7 +749,7 @@ pub export fn UpdateAndRender(
                     while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
                         const testEntity: *game.sim_entity = &simRegion.entities[testEntityIndex];
                         if (testEntity.entityType == .Hero) {
-                            var testDSq = game.LengthSq(game.VN3(testEntity.p - entity.p));
+                            var testDSq = game.LengthSq(3, testEntity.p - entity.p);
 
                             if (closestHeroDSq > testDSq) {
                                 closestHero = testEntity;

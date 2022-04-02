@@ -40,27 +40,27 @@ test "math" {
     try testing.expectEqual(vec1 - vec2, hm.v2{ -4, 1 });
     try testing.expectEqual(-vec1, hm.v2{ -1, -2 });
 
-    try testing.expectEqual(hm.Inner(.{ .V2 = vec1 }, .{ .V2 = vec2 }), 7);
-    try testing.expectEqual(hm.LengthSq(hm.VN2(vec1)), 5);
-    try testing.expectEqual(hm.Length(hm.VN2(.{ 4, 3 })), 5);
+    try testing.expectEqual(hm.Inner(2, vec1, vec2), 7);
+    try testing.expectEqual(hm.LengthSq(2, vec1), 5);
+    try testing.expectEqual(hm.Length(2, hm.v2{ 4, 3 }), 5);
 
     const c3 = hm.v3{ 3, 2, 1 };
-    try testing.expectEqual(hm.VN3(c3).X(), c3[0]);
-    try testing.expectEqual(hm.VN3(c3).Y(), c3[1]);
-    try testing.expectEqual(hm.VN3(c3).Z(), c3[2]);
-    try testing.expectEqual(hm.VN3(c3).R(), hm.VN3(c3).X());
-    try testing.expectEqual(hm.VN3(c3).G(), hm.VN3(c3).Y());
-    try testing.expectEqual(hm.VN3(c3).B(), hm.VN3(c3).Z());
+    try testing.expectEqual(hm.X(3, c3), c3[0]);
+    try testing.expectEqual(hm.Y(3, c3), c3[1]);
+    try testing.expectEqual(hm.Z(3, c3), c3[2]);
+    try testing.expectEqual(hm.R(3, c3), hm.X(3, c3));
+    try testing.expectEqual(hm.G(3, c3), hm.Y(3, c3));
+    try testing.expectEqual(hm.B(3, c3), hm.Z(3, c3));
 
     const c4 = hm.v4{ 4, 3, 2, 1 };
-    try testing.expectEqual(hm.VN4(c4).X(), c4[0]);
-    try testing.expectEqual(hm.VN4(c4).Y(), c4[1]);
-    try testing.expectEqual(hm.VN4(c4).Z(), c4[2]);
-    try testing.expectEqual(hm.VN4(c4).W(), c4[3]);
-    try testing.expectEqual(hm.VN4(c4).R(), hm.VN4(c4).X());
-    try testing.expectEqual(hm.VN4(c4).G(), hm.VN4(c4).Y());
-    try testing.expectEqual(hm.VN4(c4).B(), hm.VN4(c4).Z());
-    try testing.expectEqual(hm.VN4(c4).A(), hm.VN4(c4).W());
+    try testing.expectEqual(hm.X(4, c4), c4[0]);
+    try testing.expectEqual(hm.Y(4, c4), c4[1]);
+    try testing.expectEqual(hm.Z(4, c4), c4[2]);
+    try testing.expectEqual(hm.W(4, c4), c4[3]);
+    try testing.expectEqual(hm.R(4, c4), hm.X(4, c4));
+    try testing.expectEqual(hm.G(4, c4), hm.Y(4, c4));
+    try testing.expectEqual(hm.B(4, c4), hm.Z(4, c4));
+    try testing.expectEqual(hm.A(4, c4), hm.W(4, c4));
 
     try testing.expectEqual(hm.AddI32ToU32(30, 2), 32);
     try testing.expectEqual(hm.AddI32ToU32(32, -30), 2);

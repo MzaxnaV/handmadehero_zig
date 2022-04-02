@@ -414,8 +414,8 @@ pub fn CanOverlap(_: *hi.state, mover: *sim_entity, region: *sim_entity) bool {
 pub fn HandleOverlap(_: *hi.state, mover: *sim_entity, region: *sim_entity, _: f32, ground: *f32) void {
     if (region.entityType == .Stairwell) {
         const regionRect = hm.rect3.InitCenterDim(region.p, region.dim);
-        const bary = hm.ClampV01(hm.VN3(hm.GetBarycentric(regionRect, mover.p)));
-        ground.* = hm.Lerp(hm.VN3(regionRect.min).Z(), bary.Y(), hm.VN3(regionRect.max).Z());
+        const bary = hm.ClampV01(hm.GetBarycentric(regionRect, mover.p));
+        ground.* = hm.Lerp(hm.Z(3, regionRect.min), hm.Y(3, bary), hm.Z(3, regionRect.max));
     }
 }
 
@@ -426,7 +426,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     // const world = gameState.world;
 
     if (moveSpec.unitMaxAccelVector) {
-        const ddPLength = hm.LengthSq(hm.VN3(ddP));
+        const ddPLength = hm.LengthSq(3, ddP);
         if (ddPLength > 1.0) {
             ddP *= @splat(3, 1.0 / SquareRoot(ddPLength));
         }
@@ -440,7 +440,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
     var playerDelta = (ddP * @splat(3, 0.5 * hm.Square(dt))) + entity.dP * hm.v3{ dt, dt, dt };
     entity.dP += ddP * hm.v3{ dt, dt, dt };
-    assert(hm.LengthSq(hm.VN3(entity.dP)) <= hm.Square(simRegion.maxEntityVelocity));
+    assert(hm.LengthSq(3, entity.dP) <= hm.Square(simRegion.maxEntityVelocity));
     // const newPlayerP = oldPlayerP + playerDelta;
 
     var distanceRemaining = entity.distanceLimit;
@@ -451,7 +451,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     var iteration = @as(u32, 0);
     while (iteration < 4) : (iteration += 1) {
         var tMin = @as(f32, 1.0);
-        const playerDeltaLength = hm.Length(hm.VN3(playerDelta));
+        const playerDeltaLength = hm.Length(3, playerDelta);
         if (playerDeltaLength > 0) {
             if (playerDeltaLength > distanceRemaining) {
                 tMin = distanceRemaining / playerDeltaLength;
@@ -465,13 +465,13 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 var testHighEntityIndex = @as(u32, 0);
                 while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
                     const testEntity = &simRegion.entities[testHighEntityIndex];
-                    if (CanCollide(gameState, entity, testEntity) and (testEntity.p[2] == entity.p[2])) {
-                        const testEntityDim = hm.VN3(testEntity.dim);
-                        const entityDim = hm.VN3(entity.dim);
+                    if (CanCollide(gameState, entity, testEntity) and (hm.Z(3, testEntity.p) == hm.Z(3, entity.p))) {
+                        const testEntityDim = testEntity.dim;
+                        const entityDim = entity.dim;
                         const minkowskiDiameter: hm.v3 = .{
-                            testEntityDim.X() + entityDim.X(),
-                            testEntityDim.Y() + entityDim.Y(),
-                            testEntityDim.Z() + entityDim.Z(),
+                            hm.X(3, testEntityDim) + hm.X(3, entityDim),
+                            hm.Y(3, testEntityDim) + hm.Y(3, entityDim),
+                            hm.Z(3, testEntityDim) + hm.Z(3, entityDim),
                         };
 
                         const minCorner = hm.v3{ -0.5, -0.5, -0.5 } * minkowskiDiameter;
@@ -479,19 +479,19 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
 
                         const rel = entity.p - testEntity.p;
 
-                        if (TestWall(minCorner[0], rel[0], rel[1], playerDelta[0], playerDelta[1], &tMin, minCorner[1], maxCorner[1])) {
+                        if (TestWall(hm.X(3, minCorner), hm.X(3, rel), hm.Y(3, rel), hm.X(3, playerDelta), hm.Y(3, playerDelta), &tMin, hm.Y(3, minCorner), hm.Y(3, maxCorner))) {
                             wallNormal = .{ -1, 0, 0 };
                             hitEntity = testEntity;
                         }
-                        if (TestWall(maxCorner[0], rel[0], rel[1], playerDelta[0], playerDelta[1], &tMin, minCorner[1], maxCorner[1])) {
+                        if (TestWall(hm.X(3, maxCorner), hm.X(3, rel), hm.Y(3, rel), hm.X(3, playerDelta), hm.Y(3, playerDelta), &tMin, hm.Y(3, minCorner), hm.Y(3, maxCorner))) {
                             wallNormal = .{ 1, 0, 0 };
                             hitEntity = testEntity;
                         }
-                        if (TestWall(minCorner[1], rel[1], rel[0], playerDelta[1], playerDelta[0], &tMin, minCorner[0], maxCorner[0])) {
+                        if (TestWall(hm.Y(3, minCorner), hm.Y(3, rel), hm.X(3, rel), hm.Y(3, playerDelta), hm.X(3, playerDelta), &tMin, hm.X(3, minCorner), hm.X(3, maxCorner))) {
                             wallNormal = .{ 0, -1, 0 };
                             hitEntity = testEntity;
                         }
-                        if (TestWall(maxCorner[1], rel[1], rel[0], playerDelta[1], playerDelta[0], &tMin, minCorner[0], maxCorner[0])) {
+                        if (TestWall(hm.Y(3, maxCorner), hm.Y(3, rel), hm.X(3, rel), hm.Y(3, playerDelta), hm.X(3, playerDelta), &tMin, hm.X(3, minCorner), hm.X(3, maxCorner))) {
                             wallNormal = .{ 0, 1, 0 };
                             hitEntity = testEntity;
                         }
@@ -507,9 +507,9 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 const stopsOnCollision = HandleCollision(gameState, entity, hitEntity.?);
                 if (stopsOnCollision) {
                     // NOTE (Manav): playerDelta -= (1 * Inner(playerDelta, wallNormal))*wallNormal;
-                    playerDelta -= @splat(3, 1 * hm.Inner(hm.VN3(playerDelta), hm.VN3(wallNormal))) * wallNormal;
+                    playerDelta -= @splat(3, 1 * hm.Inner(3, playerDelta, wallNormal)) * wallNormal;
                     // NOTE (Manav): entity.dP -= (1 * Inner(entity.dP, wallNormal))*wallNormal;
-                    entity.dP -= @splat(3, 1 * hm.Inner(hm.VN3(entity.dP), hm.VN3(wallNormal))) * wallNormal;
+                    entity.dP -= @splat(3, 1 * hm.Inner(3, entity.dP, wallNormal)) * wallNormal;
                 }
             } else {
                 break;
@@ -536,7 +536,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
         _ = entityRect;
     }
 
-    if (entity.p[2] < ground) {
+    if (hm.Z(3, entity.p) < ground) {
         entity.p[2] = ground;
         entity.dP[2] = 0;
     }
@@ -545,16 +545,16 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
         entity.distanceLimit = distanceRemaining;
     }
 
-    if ((entity.dP[0] == 0) and (entity.dP[1] == 0)) {
+    if ((hm.X(3, entity.dP) == 0) and (hm.Y(3, entity.dP) == 0)) {
         // NOTE(casey): Leave FacingDirection whatever it was
     } else if (AbsoluteValue(entity.dP[0]) > AbsoluteValue(entity.dP[1])) {
-        if (entity.dP[0] > 0) {
+        if (hm.X(3, entity.dP) > 0) {
             entity.facingDirection = 0;
         } else {
             entity.facingDirection = 2;
         }
     } else {
-        if (entity.dP[1] > 0) {
+        if (hm.Y(3, entity.dP) > 0) {
             entity.facingDirection = 1;
         } else {
             entity.facingDirection = 3;
