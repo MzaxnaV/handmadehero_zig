@@ -135,7 +135,7 @@ fn DrawBitmap(buffer: *platform.offscreen_buffer, bitmap: *const game.loaded_bit
             const g = (1 - a) * dG + a * sG;
             const b = (1 - a) * dB + a * sB;
 
-            dest[index] = (@floatToInt(u32, r + 0.5) << 16) | (@floatToInt(u32, g + 0.5) << 8) | (@floatToInt(u32, b + 0.5) << 0);
+            dest[index] = (@floatToInt(u32, if (r + 0.5 > 0) r + 0.5 else 0) << 16) | (@floatToInt(u32, if (g + 0.5 > 0) g + 0.5 else 0) << 8) | (@floatToInt(u32, if (b + 0.5 > 0) b + 0.5 else 0) << 0);
         }
 
         destRow += buffer.pitch;
@@ -237,24 +237,24 @@ fn AddLowEntity(gameState: *game.state, entityType: game.entity_type, pos: game.
 }
 
 fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ));
+    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
     var entity = AddLowEntity(gameState, .Wall, p);
 
     const height = gameState.world.tileSideInMeters;
     const width = height;
     entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
-    game.AddFlag(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
+    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
 
     return entity;
 }
 
 fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ));
+    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0.5 * gameState.world.tileDepthInMeters });
     var entity = AddLowEntity(gameState, .Stairwell, p);
 
     const height = gameState.world.tileSideInMeters;
     const width = height;
-    entity.low.sim.dim = .{ width, height, gameState.world.tileDepthInMeters };
+    entity.low.sim.dim = .{ width, height, 1.2 * gameState.world.tileDepthInMeters };
 
     return entity;
 }
@@ -278,6 +278,8 @@ fn AddSword(gameState: *game.state) add_low_entity_result {
     const width = 1;
     entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
 
+    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Movable));
+
     return entity;
 }
 
@@ -289,7 +291,7 @@ fn AddPlayer(gameState: *game.state) add_low_entity_result {
     const width = 1;
     entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
 
-    game.AddFlag(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
+    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
     InitHitPoints(entity.low, 3);
 
@@ -304,14 +306,14 @@ fn AddPlayer(gameState: *game.state) add_low_entity_result {
 }
 
 fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ));
+    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
     var entity = AddLowEntity(gameState, .Monstar, p);
 
     const height = 0.5;
     const width = 1;
     entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
 
-    game.AddFlag(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
+    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
     InitHitPoints(entity.low, 3);
 
@@ -319,14 +321,14 @@ fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u3
 }
 
 fn AddFamiliar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ));
+    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
     var entity = AddLowEntity(gameState, .Familiar, p);
 
     const height = 0.5;
     const width = 1;
     entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
 
-    game.AddFlag(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
+    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
     return entity;
 }
@@ -565,7 +567,7 @@ pub export fn UpdateAndRender(
         const cameraTileY = screenBaseY * tilesPerHeight + 9 / 2;
         const cameraTileZ = screenBaseZ;
 
-        const newCameraP = game.ChunkPosFromTilePos(gameState.world, cameraTileX, cameraTileY, cameraTileZ);
+        const newCameraP = game.ChunkPosFromTilePos(gameState.world, cameraTileX, cameraTileY, cameraTileZ, .{ 0, 0, 0 });
 
         gameState.cameraP = newCameraP;
 
@@ -723,7 +725,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Stairwell => {
-                    PushBitmap(&pieceGroup, &gameState.stairwell, .{ 0, 0 }, 0, .{ 37, 37 }, 1.0, 1.0);
+                    PushRect(&pieceGroup, .{ 0, 0 }, 0, .{ entity.dim[0], entity.dim[1] }, .{ 1, 1, 0, 1 }, 0);
                 },
 
                 .Sword => {
@@ -790,7 +792,9 @@ pub export fn UpdateAndRender(
                 },
             }
 
-            if (!game.IsSet(entity, @enumToInt(game.sim_entity_flags.NonSpatial))) {
+            if (!game.IsSet(entity, @enumToInt(game.sim_entity_flags.NonSpatial)) and
+                game.IsSet(entity, @enumToInt(game.sim_entity_flags.Movable)))
+            {
                 game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
 

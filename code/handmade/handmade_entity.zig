@@ -13,21 +13,21 @@ pub inline fn IsSet(entity: *hs.sim_entity, flag: u32) bool {
     return (result != 0);
 }
 
-pub inline fn AddFlag(entity: *hs.sim_entity, flag: u32) void {
+pub inline fn AddFlags(entity: *hs.sim_entity, flag: u32) void {
     entity.flags |= flag;
 }
 
-pub inline fn ClearFlag(entity: *hs.sim_entity, flag: u32) void {
+pub inline fn ClearFlags(entity: *hs.sim_entity, flag: u32) void {
     entity.flags &= ~flag;
 }
 
 pub inline fn MakeEntityNonSpatial(entity: *hs.sim_entity) void {
-    AddFlag(entity, @enumToInt(hs.sim_entity_flags.NonSpatial));
+    AddFlags(entity, @enumToInt(hs.sim_entity_flags.NonSpatial));
     entity.p = Invalid;
 }
 
 pub inline fn MakeEntitySpatial(entity: *hs.sim_entity, p: hm.v3, dP: hm.v3) void {
-    ClearFlag(entity, @enumToInt(hs.sim_entity_flags.NonSpatial));
+    ClearFlags(entity, @enumToInt(hs.sim_entity_flags.NonSpatial));
     entity.p = p;
     entity.dP = dP;
 }

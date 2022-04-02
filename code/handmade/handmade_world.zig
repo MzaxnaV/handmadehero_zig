@@ -154,7 +154,7 @@ pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset
     return result;
 }
 
-pub inline fn ChunkPosFromTilePos(w: *world, absTileX: i32, absTileY: i32, absTileZ: i32) world_position {
+pub inline fn ChunkPosFromTilePos(w: *world, absTileX: i32, absTileY: i32, absTileZ: i32, additionalOffset: hm.v3) world_position {
     const basePos: world_position = .{};
 
     const offset = hm.v3{
@@ -163,7 +163,7 @@ pub inline fn ChunkPosFromTilePos(w: *world, absTileX: i32, absTileY: i32, absTi
         w.tileDepthInMeters * @intToFloat(f32, absTileZ),
     };
 
-    const result: world_position = MapIntoChunkSpace(w, basePos, offset);
+    const result: world_position = MapIntoChunkSpace(w, basePos, offset + additionalOffset);
 
     std.debug.assert(IsCanonical(w, result.offset_));
 
@@ -275,10 +275,10 @@ pub fn ChangeEntityLocation(arena: *hi.memory_arena, w: *world, lowEntityIndex: 
 
     if (newP) |p| {
         lowEntity.p = p.*;
-        he.ClearFlag(&lowEntity.sim, @enumToInt(hsr.sim_entity_flags.NonSpatial));
+        he.ClearFlags(&lowEntity.sim, @enumToInt(hsr.sim_entity_flags.NonSpatial));
     } else {
         lowEntity.p = NullPosition();
-        he.AddFlag(&lowEntity.sim, @enumToInt(hsr.sim_entity_flags.NonSpatial));
+        he.AddFlags(&lowEntity.sim, @enumToInt(hsr.sim_entity_flags.NonSpatial));
     }
 }
 

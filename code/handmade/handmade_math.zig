@@ -217,10 +217,67 @@ pub inline fn AddRadiusToRect3(rectangle: rect3, radius: v3) rect3 {
     return result;
 }
 
+pub inline fn ClampV01(value: v) v {
+    const result = switch (value) {
+        .V2 => VN2(.{ Clampf01(value.X()), Clampf01(value.Y()) }),
+        .V3 => VN3(.{ Clampf01(value.X()), Clampf01(value.Y()), Clampf01(value.Z()) }),
+        .V4 => VN4(.{ Clampf01(value.X()), Clampf01(value.Y()), Clampf01(value.Z()), Clampf01(value.W()) }),
+    };
+
+    return result;
+}
+
+pub inline fn SafeRatioN(num: f32, div: f32, n: f32) f32 {
+    var result = if (div != 0) num / div else n;
+    return result;
+}
+
+pub inline fn SafeRatiof0(num: f32, div: f32) f32 {
+    var result = SafeRatioN(num, div, 0);
+    return result;
+}
+
+pub inline fn SafeRatiof1(num: f32, div: f32) f32 {
+    var result = SafeRatioN(num, div, 1);
+    return result;
+}
+
+pub inline fn GetBarycentric(a: rect3, p: v3) v3 {
+    var result: v3 = .{
+        SafeRatiof0(p[0] - a.min[0], a.max[0] - a.min[0]),
+        SafeRatiof0(p[0] - a.min[0], a.max[0] - a.min[0]),
+        SafeRatiof0(p[0] - a.min[0], a.max[0] - a.min[0]),
+    };
+
+    return result;
+}
+
 // functions (scalar operations) ----------------------------------------------------------------------------------------------------------
 
 pub inline fn Square(a: f32) f32 {
     const result = a * a;
+    return result;
+}
+
+pub inline fn Lerp(a: f32, t: f32, b: f32) f32 {
+    const result = (1 - t) * a + t * b;
+    return result;
+}
+
+pub inline fn Clamp(min: f32, value: f32, max: f32) f32 {
+    var result = value;
+
+    if (result < min) {
+        result = min;
+    } else if (result > max) {
+        result = max;
+    }
+
+    return result;
+}
+
+pub inline fn Clampf01(value: f32) f32 {
+    const result = Clamp(0, value, 1);
     return result;
 }
 

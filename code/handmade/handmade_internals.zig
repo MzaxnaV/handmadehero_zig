@@ -92,13 +92,8 @@ pub const controlled_hero = struct {
     dZ: f32 = 0,
 };
 
-pub const pairwise_collision_flag = enum(u32) {
-    PairCollisionFlag_ShouldCollide = 0x1,
-    PairCollisionFlag_Temporary = 0x2,
-};
-
 pub const pairwise_collision_rule = struct {
-    shouldCollide: bool,
+    canCollide: bool,
     storageIndexA: u32,
     storageIndexB: u32,
 
@@ -178,7 +173,7 @@ pub fn ClearCollisionRulesFor(gameState: *state, storageIndex: u32) void {
     }
 }
 
-pub fn AddCollisionRule(gameState: *state, unsortedStorageIndexA: u32, unsortedStorageIndexB: u32, shouldCollide: bool) void {
+pub fn AddCollisionRule(gameState: *state, unsortedStorageIndexA: u32, unsortedStorageIndexB: u32, canCollide: bool) void {
     var storageIndexA = unsortedStorageIndexA;
     var storageIndexB = unsortedStorageIndexB;
     if (storageIndexA > storageIndexB) {
@@ -210,7 +205,7 @@ pub fn AddCollisionRule(gameState: *state, unsortedStorageIndexA: u32, unsortedS
     }
 
     if (found) |rule| {
-        rule.shouldCollide = shouldCollide;
+        rule.canCollide = canCollide;
         rule.storageIndexA = storageIndexA;
         rule.storageIndexB = storageIndexB;
     }
