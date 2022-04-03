@@ -79,6 +79,8 @@ pub const sim_entity = struct {
     hitPoint: [16]hit_point = [1]hit_point{.{}} ** 16,
 
     sword: entity_reference = .{ .index = 0 },
+
+    walkableHeight: f32 = 0,
 };
 
 pub const sim_entity_hash = struct {
@@ -412,9 +414,7 @@ pub fn CanOverlap(_: *hi.state, mover: *sim_entity, region: *sim_entity) bool {
 
 pub fn HandleOverlap(_: *hi.state, mover: *sim_entity, region: *sim_entity, _: f32, ground: *f32) void {
     if (region.entityType == .Stairwell) {
-        const regionRect = hm.rect3.InitCenterDim(region.p, region.dim);
-        const bary = hm.ClampV01(hm.GetBarycentric(regionRect, mover.p));
-        ground.* = hm.Lerp(hm.Z(regionRect.min), hm.Y(bary), hm.Z(regionRect.max));
+        ground.* = he.GetStairGround(region, he.GetEntityGroundPoint(mover));
     }
 }
 
@@ -422,12 +422,13 @@ pub fn SpeculativeCollide(mover: *sim_entity, region: *sim_entity) bool {
     var result = true;
 
     if (region.entityType == .Stairwell) {
-        const regionRect = hm.rect3.InitCenterDim(region.p, region.dim);
-        const bary = hm.ClampV01(hm.GetBarycentric(regionRect, mover.p));
-
-        const ground = hm.Lerp(hm.Z(regionRect.min), hm.Y(bary), hm.Z(regionRect.max));
         const stepHeight = 0.1;
-        result = (AbsoluteValue(hm.Z(mover.p) - ground) > stepHeight) or ((hm.Y(bary) > 0.1) and (hm.Y(bary) < 0.9));
+        const moverGroundPoint = he.GetEntityGroundPoint(mover);
+        const ground = he.GetStairGround(region, moverGroundPoint);
+
+        // !NOT_IGNORE
+        // result = (AbsoluteValue(hm.Z(he.GetEntityGroundPoint(mover)) - ground) > stepHeight) or ((hm.Y(bary) > 0.1) and (hm.Y(bary) < 0.9));
+        result = (AbsoluteValue(hm.Z(he.GetEntityGroundPoint(mover)) - ground) > stepHeight);
     }
 
     return result;
@@ -567,6 +568,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
         _ = entityRect;
     }
 
+    ground += hm.Z(entity.p) - hm.Z(he.GetEntityGroundPoint(entity));
     if ((hm.Z(entity.p) <= ground) or
         (he.IsSet(entity, @enumToInt(sim_entity_flags.ZSupported)) and
         (hm.Z(entity.dP) == 0)))

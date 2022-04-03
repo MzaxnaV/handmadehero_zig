@@ -262,12 +262,14 @@ fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32
     const dim = game.v3{
         gameState.world.tileSideInMeters,
         2 * gameState.world.tileSideInMeters,
-        gameState.world.tileDepthInMeters,
+        1.1 * gameState.world.tileDepthInMeters,
     };
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Stairwell, p, dim);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
+
+    entity.low.sim.walkableHeight = gameState.world.tileDepthInMeters;
 
     return entity;
 }
@@ -353,7 +355,7 @@ inline fn PushPiece(
     group.pieceCount += 1;
     piece.bitmap = bitmap;
     piece.offset = (@splat(2, group.gameState.metersToPixels) * game.v2{ offset[0], -offset[1] }) - alignment;
-    piece.offsetZ = group.gameState.metersToPixels * offsetZ;
+    piece.offsetZ = offsetZ;
     piece.entityZC = entityZC;
     piece.r = game.R(colour);
     piece.g = game.G(colour);
@@ -676,7 +678,7 @@ pub export fn UpdateAndRender(
             pieceGroup.pieceCount = 0;
             const dt = gameInput.dtForFrame;
 
-            const alpha = 1 - 0.5 * entity.p[2];
+            const alpha = 1 - 0.5 * (game.Z(entity.p) - game.Z(entity.dim));
             const shadowAlpha = if (alpha > 0) alpha else 0;
 
             var moveSpec = game.DefaultMoveSpec();
@@ -729,7 +731,8 @@ pub export fn UpdateAndRender(
                 },
 
                 .Stairwell => {
-                    PushRect(&pieceGroup, .{ 0, 0 }, 0, .{ game.X(entity.dim), game.Y(entity.dim) }, .{ 1, 1, 0, 1 }, 0);
+                    PushRect(&pieceGroup, .{ 0, 0 }, 0, .{ game.X(entity.dim), game.Y(entity.dim) }, .{ 1, 0.5, 0, 1 }, 0);
+                    PushRect(&pieceGroup, .{ 0, 0 }, game.Z(entity.dim), .{ game.X(entity.dim), game.Y(entity.dim) }, .{ 1, 1, 0, 1 }, 0);
                 },
 
                 .Sword => {
@@ -805,35 +808,20 @@ pub export fn UpdateAndRender(
                 game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
 
-            const zFudge = 1 + 0.1 * game.Z(entity.p);
-
-            const entityGroundPointX = screenCenterX + metersToPixels * zFudge * game.X(entity.p);
-            const entityGroundPointY = screenCenterY - metersToPixels * zFudge * game.Y(entity.p);
-            const entityz = -metersToPixels * entity.p[2];
-
-            if (!NOT_IGNORE) {
-                const playerLeftTop = .{
-                    .x = entityGroundPointX - 0.5 * metersToPixels * entity.width,
-                    .y = entityGroundPointY - 0.5 * metersToPixels * entity.height,
-                };
-                const entityWidthHeight = game.v{ .V2 = .{ entity.width, entity.height } };
-
-                DrawRectangle(
-                    buffer,
-                    playerLeftTop,
-                    playerLeftTop + game.Scale(entityWidthHeight, metersToPixels).V2,
-                    1.0,
-                    1.0,
-                    0.0,
-                );
-            }
-
             var pieceIndex = @as(u32, 0);
             while (pieceIndex < pieceGroup.pieceCount) : (pieceIndex += 1) {
                 const piece = pieceGroup.pieces[pieceIndex];
+
+                const entityBaseP = game.GetEntityGroundPoint(entity);
+                const zFudge = 1 + 0.1 * (game.Z(entity.p) + piece.offsetZ);
+
+                const entityGroundPointX = screenCenterX + metersToPixels * zFudge * game.X(entityBaseP);
+                const entityGroundPointY = screenCenterY - metersToPixels * zFudge * game.Y(entityBaseP);
+                const entityz = -metersToPixels * game.Z(entityBaseP);
+
                 const center = game.v2{
                     entityGroundPointX + piece.offset[0],
-                    entityGroundPointY + piece.offset[1] + piece.offsetZ + piece.entityZC * entityz,
+                    entityGroundPointY + piece.offset[1] + piece.entityZC * entityz,
                 };
 
                 if (piece.bitmap) |b| {

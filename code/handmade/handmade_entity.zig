@@ -1,3 +1,4 @@
+const assert = @import("std").debug.assert;
 const hm = @import("handmade_math.zig");
 const hs = @import("handmade_sim_region.zig");
 
@@ -30,6 +31,20 @@ pub inline fn MakeEntitySpatial(entity: *hs.sim_entity, p: hm.v3, dP: hm.v3) voi
     ClearFlags(entity, @enumToInt(hs.sim_entity_flags.NonSpatial));
     entity.p = p;
     entity.dP = dP;
+}
+
+pub inline fn GetEntityGroundPoint(entity: *hs.sim_entity) hm.v3 {
+    const result = entity.p + hm.v3{ 0, 0, -0.5 * hm.Z(entity.dim) };
+    return result;
+}
+
+pub inline fn GetStairGround(entity: *hs.sim_entity, atGroundPoint: hm.v3) f32 {
+    assert(entity.entityType == .Stairwell);
+    const regionRect = hm.rect3.InitCenterDim(entity.p, entity.dim);
+    const bary = hm.ClampV01(hm.GetBarycentric(regionRect, atGroundPoint));
+    const result = hm.Z(regionRect.min) + hm.Y(bary) * entity.walkableHeight;
+
+    return result;
 }
 
 pub inline fn DefaultMoveSpec() hs.move_spec {
