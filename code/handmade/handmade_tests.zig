@@ -40,27 +40,27 @@ test "math" {
     try testing.expectEqual(vec1 - vec2, hm.v2{ -4, 1 });
     try testing.expectEqual(-vec1, hm.v2{ -1, -2 });
 
-    try testing.expectEqual(hm.Inner(2, vec1, vec2), 7);
-    try testing.expectEqual(hm.LengthSq(2, vec1), 5);
-    try testing.expectEqual(hm.Length(2, hm.v2{ 4, 3 }), 5);
+    try testing.expectEqual(hm.Inner(vec1, vec2), 7);
+    try testing.expectEqual(hm.LengthSq(vec1), 5);
+    try testing.expectEqual(hm.Length(hm.v2{ 4, 3 }), 5);
 
     const c3 = hm.v3{ 3, 2, 1 };
-    try testing.expectEqual(hm.X(3, c3), c3[0]);
-    try testing.expectEqual(hm.Y(3, c3), c3[1]);
-    try testing.expectEqual(hm.Z(3, c3), c3[2]);
-    try testing.expectEqual(hm.R(3, c3), hm.X(3, c3));
-    try testing.expectEqual(hm.G(3, c3), hm.Y(3, c3));
-    try testing.expectEqual(hm.B(3, c3), hm.Z(3, c3));
+    try testing.expectEqual(hm.X(c3), c3[0]);
+    try testing.expectEqual(hm.Y(c3), c3[1]);
+    try testing.expectEqual(hm.Z(c3), c3[2]);
+    try testing.expectEqual(hm.R(c3), hm.X(c3));
+    try testing.expectEqual(hm.G(c3), hm.Y(c3));
+    try testing.expectEqual(hm.B(c3), hm.Z(c3));
 
     const c4 = hm.v4{ 4, 3, 2, 1 };
-    try testing.expectEqual(hm.X(4, c4), c4[0]);
-    try testing.expectEqual(hm.Y(4, c4), c4[1]);
-    try testing.expectEqual(hm.Z(4, c4), c4[2]);
-    try testing.expectEqual(hm.W(4, c4), c4[3]);
-    try testing.expectEqual(hm.R(4, c4), hm.X(4, c4));
-    try testing.expectEqual(hm.G(4, c4), hm.Y(4, c4));
-    try testing.expectEqual(hm.B(4, c4), hm.Z(4, c4));
-    try testing.expectEqual(hm.A(4, c4), hm.W(4, c4));
+    try testing.expectEqual(hm.X(c4), c4[0]);
+    try testing.expectEqual(hm.Y(c4), c4[1]);
+    try testing.expectEqual(hm.Z(c4), c4[2]);
+    try testing.expectEqual(hm.W(c4), c4[3]);
+    try testing.expectEqual(hm.R(c4), hm.X(c4));
+    try testing.expectEqual(hm.G(c4), hm.Y(c4));
+    try testing.expectEqual(hm.B(c4), hm.Z(c4));
+    try testing.expectEqual(hm.A(c4), hm.W(c4));
 
     try testing.expectEqual(hm.AddI32ToU32(30, 2), 32);
     try testing.expectEqual(hm.AddI32ToU32(32, -30), 2);
@@ -102,6 +102,13 @@ test "math" {
     try testing.expectEqual(hm.IsInRect3(r3, .{ 2, 2, 2 }), true);
 
     try testing.expectEqual(hm.AddRadiusToRect3(r3, .{ 1, 2, 3 }), hm.rect3{ .min = .{ -1, -2, -3 }, .max = .{ 4, 5, 6 } });
+
+    try testing.expectEqual(hm.GetBarycentric(r3, r3.GetCenter()), hm.v3{ 0.5, 0.5, 0.5 });
+    try testing.expectEqual(hm.GetBarycentric(r3, r3.GetMinCorner()), hm.v3{ 0, 0, 0 });
+    try testing.expectEqual(hm.GetBarycentric(r3, r3.GetMaxCorner()), hm.v3{ 1, 1, 1 });
+    try testing.expectEqual(hm.GetBarycentric(r3, .{ 2, 2, 2 }), @splat(3, @as(f32, 2.0 / 3.0)));
+
+    try testing.expectEqual(hm.ClampV01(.{ 0.2, -0.4, 1.2 }), hm.v3{ 0.2, 0, 1 });
 }
 
 test "misc_language" {

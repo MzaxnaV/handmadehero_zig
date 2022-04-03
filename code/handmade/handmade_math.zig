@@ -1,17 +1,21 @@
 const SquareRoot = @import("handmade_intrinsics.zig").SquareRoot;
-const Vector = @import("std").meta.Vector;
 
 // private functions ----------------------------------------------------------------------------------------------------------------------
 
-fn v(comptime n: comptime_int) type {
-    return Vector(n, f32);
+fn checkVector(comptime t: type) comptime_int {
+    comptime {
+        return switch (@typeInfo(t)) {
+            .Vector => |value| value.len,
+            else => -1,
+        };
+    }
 }
 
 // defs -----------------------------------------------------------------------------------------------------------------------------------
 
-pub const v2 = v(2);
-pub const v3 = v(3);
-pub const v4 = v(4);
+pub const v2 = @Vector(2, f32);
+pub const v3 = @Vector(3, f32);
+pub const v4 = @Vector(4, f32);
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
@@ -103,37 +107,37 @@ pub const rect3 = struct {
 
 // functions (vector operations)-----------------------------------------------------------------------------------------------------------
 
-pub inline fn X(comptime n: comptime_int, vec: v(n)) f32 {
+pub inline fn X(vec: anytype) f32 {
     comptime {
-        if (n < 0) {
-            @compileError("Invalid vector size");
+        if (checkVector(@TypeOf(vec)) < 0) {
+            @compileError("Invalid operand type or vector size");
         }
     }
     return vec[0];
 }
 
-pub inline fn Y(comptime n: comptime_int, vec: v(n)) f32 {
+pub inline fn Y(vec: anytype) f32 {
     comptime {
-        if (n < 1) {
-            @compileError("Invalid vector size");
+        if (checkVector(@TypeOf(vec)) < 1) {
+            @compileError("Invalid operand type or vector size");
         }
     }
     return vec[1];
 }
 
-pub inline fn Z(comptime n: comptime_int, vec: v(n)) f32 {
+pub inline fn Z(vec: anytype) f32 {
     comptime {
-        if (n < 2) {
-            @compileError("Invalid vector size");
+        if (checkVector(@TypeOf(vec)) < 2) {
+            @compileError("Invalid operand type or vector size");
         }
     }
     return vec[2];
 }
 
-pub inline fn W(comptime n: comptime_int, vec: v(n)) f32 {
+pub inline fn W(vec: anytype) f32 {
     comptime {
-        if (n < 3) {
-            @compileError("Invalid vector size");
+        if (checkVector(@TypeOf(vec)) < 3) {
+            @compileError("Invalid operand type or vector size");
         }
     }
     return vec[3];
@@ -144,17 +148,22 @@ pub const G = Y;
 pub const B = Z;
 pub const A = W;
 
-pub inline fn Inner(comptime n: comptime_int, a: v(n), b: v(n)) f32 {
+pub inline fn Inner(a: anytype, b: @TypeOf(a)) f32 {
+    comptime {
+        if (checkVector(@TypeOf(a)) < 2) {
+            @compileError("Invalid operand type or vector size");
+        }
+    }
     return @reduce(.Add, a * b);
 }
 
-pub inline fn LengthSq(comptime n: comptime_int, a: v(n)) f32 {
-    const result = Inner(n, a, a);
+pub inline fn LengthSq(a: anytype) f32 {
+    const result = Inner(a, a);
     return result;
 }
 
-pub inline fn Length(comptime n: comptime_int, a: v(n)) f32 {
-    const result = SquareRoot(LengthSq(n, a));
+pub inline fn Length(a: anytype) f32 {
+    const result = SquareRoot(LengthSq(a));
     return result;
 }
 
@@ -177,12 +186,7 @@ pub inline fn AddRadiusToRect2(rectangle: rect2, radius: v2) rect2 {
 }
 
 pub inline fn IsInRect3(rectangle: rect3, testP: v3) bool {
-    const result = ((testP[0] >= rectangle.min[0]) and
-        (testP[1] >= rectangle.min[1]) and
-        (testP[2] >= rectangle.min[2]) and
-        (testP[0] < rectangle.max[0]) and
-        (testP[1] < rectangle.max[1]) and
-        (testP[2] < rectangle.max[2]));
+    const result = @reduce(.And, testP >= rectangle.min) and @reduce(.And, testP < rectangle.max);
     return result;
 }
 
@@ -202,8 +206,8 @@ pub inline fn AddRadiusToRect3(rectangle: rect3, radius: v3) rect3 {
 pub inline fn GetBarycentric(a: rect3, p: v3) v3 {
     var result: v3 = .{
         SafeRatiof0(p[0] - a.min[0], a.max[0] - a.min[0]),
-        SafeRatiof0(p[0] - a.min[0], a.max[0] - a.min[0]),
-        SafeRatiof0(p[0] - a.min[0], a.max[0] - a.min[0]),
+        SafeRatiof0(p[1] - a.min[1], a.max[1] - a.min[1]),
+        SafeRatiof0(p[2] - a.min[2], a.max[2] - a.min[2]),
     };
 
     return result;

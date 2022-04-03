@@ -252,9 +252,10 @@ fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0.5 * gameState.world.tileDepthInMeters });
     var entity = AddLowEntity(gameState, .Stairwell, p);
 
-    const height = gameState.world.tileSideInMeters;
-    const width = height;
-    entity.low.sim.dim = .{ width, height, 1.2 * gameState.world.tileDepthInMeters };
+    const width = gameState.world.tileSideInMeters;
+    const height = 2 * gameState.world.tileSideInMeters;
+    entity.low.sim.dim = .{ width, height, gameState.world.tileDepthInMeters };
+    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
 
     return entity;
 }
@@ -326,7 +327,7 @@ fn AddFamiliar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u
 
     const height = 0.5;
     const width = 1;
-    entity.low.sim.dim = .{ width, height, game.Z(3, entity.low.sim.dim) };
+    entity.low.sim.dim = .{ width, height, game.Z(entity.low.sim.dim) };
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
@@ -350,10 +351,10 @@ inline fn PushPiece(
     piece.offset = (@splat(2, group.gameState.metersToPixels) * game.v2{ offset[0], -offset[1] }) - alignment;
     piece.offsetZ = group.gameState.metersToPixels * offsetZ;
     piece.entityZC = entityZC;
-    piece.r = game.R(4, colour);
-    piece.g = game.G(4, colour);
-    piece.b = game.B(4, colour);
-    piece.a = game.A(4, colour);
+    piece.r = game.R(colour);
+    piece.g = game.G(colour);
+    piece.b = game.B(colour);
+    piece.a = game.A(colour);
     piece.dim = dim;
 }
 
@@ -368,7 +369,7 @@ inline fn PushRect(group: *game.entity_visible_piece_group, offset: game.v2, off
 fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.entity_visible_piece_group) void {
     if (entity.hitPointMax >= 1) {
         const healthDim = game.v2{ 0.2, 0.2 };
-        const spacingX = 1.5 * game.X(2, healthDim);
+        const spacingX = 1.5 * game.X(healthDim);
         var hitP = game.v2{
             -0.5 * @intToFloat(f32, entity.hitPointMax - 1) * spacingX,
             -0.25,
@@ -521,7 +522,7 @@ pub export fn UpdateAndRender(
                     if (shouldBeDoor) {
                         _ = AddWall(gameState, absTileX, absTileY, absTileZ);
                     } else if (createdZDoor) {
-                        if ((tileX == 10) and (tileY == 6)) {
+                        if ((tileX == 10) and (tileY == 5)) {
                             _ = AddStairs(gameState, absTileX, absTileY, if (doorDown) absTileZ - 1 else absTileZ);
                         }
                     }
@@ -690,14 +691,14 @@ pub export fn UpdateAndRender(
                             moveSpec.unitMaxAccelVector = true;
                             moveSpec.speed = 50;
                             moveSpec.drag = 8;
-                            ddP = .{ game.X(2, conHero.ddP), game.Y(2, conHero.ddP), 0 };
-                            if ((game.X(2, conHero.dSword) != 0) or (game.Y(2, conHero.dSword) != 0)) {
+                            ddP = .{ game.X(conHero.ddP), game.Y(conHero.ddP), 0 };
+                            if ((game.X(conHero.dSword) != 0) or (game.Y(conHero.dSword) != 0)) {
                                 switch (entity.sword) {
                                     .ptr => {
                                         const sword = entity.sword.ptr;
                                         if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
-                                            const dSwordV3 = game.v3{ game.X(2, conHero.dSword), game.Y(2, conHero.dSword), 0 };
+                                            const dSwordV3 = game.v3{ game.X(conHero.dSword), game.Y(conHero.dSword), 0 };
                                             game.MakeEntitySpatial(sword, entity.p, entity.dP + (dSwordV3 * @splat(3, @as(f32, 5)))); //
                                             game.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
                                         }
@@ -724,7 +725,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Stairwell => {
-                    PushRect(&pieceGroup, .{ 0, 0 }, 0, .{ game.X(3, entity.dim), game.Y(3, entity.dim) }, .{ 1, 1, 0, 1 }, 0);
+                    PushRect(&pieceGroup, .{ 0, 0 }, 0, .{ game.X(entity.dim), game.Y(entity.dim) }, .{ 1, 1, 0, 1 }, 0);
                 },
 
                 .Sword => {
@@ -744,16 +745,17 @@ pub export fn UpdateAndRender(
                 .Familiar => {
                     var closestHero: ?*game.sim_entity = null;
                     var closestHeroDSq = game.Square(10);
+                    if (!NOT_IGNORE) {
+                        var testEntityIndex = @as(u32, 0);
+                        while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
+                            const testEntity: *game.sim_entity = &simRegion.entities[testEntityIndex];
+                            if (testEntity.entityType == .Hero) {
+                                var testDSq = game.LengthSq(3, testEntity.p - entity.p);
 
-                    var testEntityIndex = @as(u32, 0);
-                    while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
-                        const testEntity: *game.sim_entity = &simRegion.entities[testEntityIndex];
-                        if (testEntity.entityType == .Hero) {
-                            var testDSq = game.LengthSq(3, testEntity.p - entity.p);
-
-                            if (closestHeroDSq > testDSq) {
-                                closestHero = testEntity;
-                                closestHeroDSq = testDSq;
+                                if (closestHeroDSq > testDSq) {
+                                    closestHero = testEntity;
+                                    closestHeroDSq = testDSq;
+                                }
                             }
                         }
                     }
@@ -797,8 +799,10 @@ pub export fn UpdateAndRender(
                 game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
 
-            const entityGroundPointX = screenCenterX + metersToPixels * entity.p[0];
-            const entityGroundPointY = screenCenterY - metersToPixels * entity.p[1];
+            const zFudge = 1 + 0.1 * game.Z(entity.p);
+
+            const entityGroundPointX = screenCenterX + metersToPixels * zFudge * game.X(entity.p);
+            const entityGroundPointY = screenCenterY - metersToPixels * zFudge * game.Y(entity.p);
             const entityz = -metersToPixels * entity.p[2];
 
             if (!NOT_IGNORE) {

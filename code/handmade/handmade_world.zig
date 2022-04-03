@@ -73,9 +73,9 @@ inline fn IsCanonicalCoord(chunkDim: f32, tileRel: f32) bool {
 
 inline fn IsCanonical(w: *const world, offset: hm.v3) bool {
     const chunkDimInMeters = w.chunkDimInMeters;
-    const result = (IsCanonicalCoord(hm.X(3, chunkDimInMeters), hm.X(3, offset)) and
-        IsCanonicalCoord(hm.Y(3, chunkDimInMeters), hm.Y(3, offset)) and
-        IsCanonicalCoord(hm.Z(3, chunkDimInMeters), hm.Z(3, offset)));
+    const result = (IsCanonicalCoord(hm.X(chunkDimInMeters), hm.X(offset)) and
+        IsCanonicalCoord(hm.Y(chunkDimInMeters), hm.Y(offset)) and
+        IsCanonicalCoord(hm.Z(chunkDimInMeters), hm.Z(offset)));
     return result;
 }
 
