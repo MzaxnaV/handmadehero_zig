@@ -191,7 +191,7 @@ pub inline fn IsInRect3(rectangle: rect3, testP: v3) bool {
 }
 
 pub inline fn RectanglesIntersect(a: rect3, b: rect3) bool {
-    const result = !(@reduce(.Or, b.max < a.min) or @reduce(.Or, b.min > a.max));
+    const result = !(@reduce(.Or, b.max <= a.min) or @reduce(.Or, b.min >= a.max));
     return result;
 }
 

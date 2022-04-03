@@ -236,25 +236,37 @@ fn AddLowEntity(gameState: *game.state, entityType: game.entity_type, pos: game.
     return result;
 }
 
-fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
-    var entity = AddLowEntity(gameState, .Wall, p);
+fn AddGroundedEntity(gameState: *game.state, entityType: game.entity_type, p: game.world_position, dim: game.v3) add_low_entity_result {
+    const offsetP = game.MapIntoChunkSpace(gameState.world, p, .{ 0, 0, 0.5 * game.Z(dim) });
+    const entity = AddLowEntity(gameState, entityType, offsetP);
+    entity.low.sim.dim = dim;
+    return entity;
+}
 
-    const height = gameState.world.tileSideInMeters;
-    const width = height;
-    entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
+fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
+    const dim = game.v3{
+        gameState.world.tileSideInMeters,
+        gameState.world.tileSideInMeters,
+        gameState.world.tileDepthInMeters,
+    };
+
+    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+    var entity = AddGroundedEntity(gameState, .Wall, p, dim);
+
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
 
     return entity;
 }
 
 fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0.5 * gameState.world.tileDepthInMeters });
-    var entity = AddLowEntity(gameState, .Stairwell, p);
+    const dim = game.v3{
+        gameState.world.tileSideInMeters,
+        2 * gameState.world.tileSideInMeters,
+        gameState.world.tileDepthInMeters,
+    };
+    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+    var entity = AddGroundedEntity(gameState, .Stairwell, p, dim);
 
-    const width = gameState.world.tileSideInMeters;
-    const height = 2 * gameState.world.tileSideInMeters;
-    entity.low.sim.dim = .{ width, height, gameState.world.tileDepthInMeters };
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
 
     return entity;
@@ -277,7 +289,8 @@ fn AddSword(gameState: *game.state) add_low_entity_result {
 
     const height = 0.5;
     const width = 1;
-    entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
+    const depth = 0.1;
+    entity.low.sim.dim = .{ width, height, depth };
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Movable));
 
@@ -285,12 +298,9 @@ fn AddSword(gameState: *game.state) add_low_entity_result {
 }
 
 fn AddPlayer(gameState: *game.state) add_low_entity_result {
+    const dim = game.v3{ 1, 0.5, 1.2 };
     const p = gameState.cameraP;
-    var entity = AddLowEntity(gameState, .Hero, p);
-
-    const height = 0.5;
-    const width = 1;
-    entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
+    var entity = AddGroundedEntity(gameState, .Hero, p, dim);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
@@ -307,12 +317,9 @@ fn AddPlayer(gameState: *game.state) add_low_entity_result {
 }
 
 fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
+    const dim = game.v3{ 1, 0.5, 0.5 };
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
-    var entity = AddLowEntity(gameState, .Monstar, p);
-
-    const height = 0.5;
-    const width = 1;
-    entity.low.sim.dim = .{ width, height, entity.low.sim.dim[2] };
+    var entity = AddGroundedEntity(gameState, .Monstar, p, dim);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
@@ -322,12 +329,9 @@ fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u3
 }
 
 fn AddFamiliar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
+    const dim = game.v3{ 1, 0.5, 0.5 };
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
-    var entity = AddLowEntity(gameState, .Familiar, p);
-
-    const height = 0.5;
-    const width = 1;
-    entity.low.sim.dim = .{ width, height, game.Z(entity.low.sim.dim) };
+    var entity = AddGroundedEntity(gameState, .Familiar, p, dim);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
@@ -447,7 +451,7 @@ pub export fn UpdateAndRender(
         gameState.world = gameState.worldArena.PushStruct(game.world);
 
         const world = gameState.world;
-        game.InitializeWorld(world, 1.4);
+        game.InitializeWorld(world, 1.4, 3.0);
 
         const tileSideInPixels = 60;
         gameState.metersToPixels = tileSideInPixels / world.tileSideInMeters;
@@ -736,10 +740,12 @@ pub export fn UpdateAndRender(
                     if (entity.distanceLimit == 0) {
                         game.ClearCollisionRulesFor(gameState, entity.storageIndex);
                         game.MakeEntityNonSpatial(entity);
+                    } else {
+                        // NOTE (Manav): invalid z position causes float overflow down the line when drawing bitmap because of zFudge,
+                        // we could set Invalid.Z to zero but not pushing bitmap is more cleaner for now.
+                        PushBitmap(&pieceGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                        PushBitmap(&pieceGroup, &gameState.sword, .{ 0, 0 }, 0, .{ 29, 10 }, 1.0, 1.0);
                     }
-
-                    PushBitmap(&pieceGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                    PushBitmap(&pieceGroup, &gameState.sword, .{ 0, 0 }, 0, .{ 29, 10 }, 1.0, 1.0);
                 },
 
                 .Familiar => {

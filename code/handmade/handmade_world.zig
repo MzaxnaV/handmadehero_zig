@@ -156,11 +156,8 @@ pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset
 pub inline fn ChunkPosFromTilePos(w: *world, absTileX: i32, absTileY: i32, absTileZ: i32, additionalOffset: hm.v3) world_position {
     const basePos: world_position = .{};
 
-    const offset = hm.v3{
-        w.tileDepthInMeters * @intToFloat(f32, absTileX),
-        w.tileDepthInMeters * @intToFloat(f32, absTileY),
-        w.tileDepthInMeters * @intToFloat(f32, absTileZ),
-    };
+    const tileDim = hm.v3{ w.tileSideInMeters, w.tileSideInMeters, w.tileDepthInMeters };
+    const offset = tileDim * hm.v3{ @intToFloat(f32, absTileX), @intToFloat(f32, absTileY), @intToFloat(f32, absTileZ) };
 
     const result: world_position = MapIntoChunkSpace(w, basePos, offset + additionalOffset);
 
@@ -281,14 +278,14 @@ pub fn ChangeEntityLocation(arena: *hi.memory_arena, w: *world, lowEntityIndex: 
     }
 }
 
-pub fn InitializeWorld(w: *world, tileSideInMeters: f32) void {
+pub fn InitializeWorld(w: *world, tileSideInMeters: f32, tileDepthInMeters: f32) void {
     w.tileSideInMeters = tileSideInMeters;
     w.chunkDimInMeters = .{
         TILES_PER_CHUNK * tileSideInMeters,
         TILES_PER_CHUNK * tileSideInMeters,
-        tileSideInMeters,
+        tileDepthInMeters,
     };
-    w.tileDepthInMeters = tileSideInMeters;
+    w.tileDepthInMeters = tileDepthInMeters;
     w.firstFree = null;
 
     for (w.chunkHash) |*chunk| {

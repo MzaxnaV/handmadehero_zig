@@ -493,35 +493,37 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
 
                         const rel = entity.p - testEntity.p;
 
-                        var tMinTest = tMin;
-                        var testWallNormal = hm.v3{ 0, 0, 0 };
+                        if ((hm.Z(rel) >= hm.Z(minCorner)) and (hm.Z(rel) < hm.Z(maxCorner))) {
+                            var tMinTest = tMin;
+                            var testWallNormal = hm.v3{ 0, 0, 0 };
 
-                        var hitThis = false;
-                        if (TestWall(hm.X(minCorner), hm.X(rel), hm.Y(rel), hm.X(playerDelta), hm.Y(playerDelta), &tMinTest, hm.Y(minCorner), hm.Y(maxCorner))) {
-                            testWallNormal = .{ -1, 0, 0 };
-                            hitThis = true;
-                        }
-                        if (TestWall(hm.X(maxCorner), hm.X(rel), hm.Y(rel), hm.X(playerDelta), hm.Y(playerDelta), &tMinTest, hm.Y(minCorner), hm.Y(maxCorner))) {
-                            testWallNormal = .{ 1, 0, 0 };
-                            hitThis = true;
-                        }
-                        if (TestWall(hm.Y(minCorner), hm.Y(rel), hm.X(rel), hm.Y(playerDelta), hm.X(playerDelta), &tMinTest, hm.X(minCorner), hm.X(maxCorner))) {
-                            testWallNormal = .{ 0, -1, 0 };
-                            hitThis = true;
-                        }
-                        if (TestWall(hm.Y(maxCorner), hm.Y(rel), hm.X(rel), hm.Y(playerDelta), hm.X(playerDelta), &tMinTest, hm.X(minCorner), hm.X(maxCorner))) {
-                            testWallNormal = .{ 0, 1, 0 };
-                            hitThis = true;
-                        }
+                            var hitThis = false;
+                            if (TestWall(hm.X(minCorner), hm.X(rel), hm.Y(rel), hm.X(playerDelta), hm.Y(playerDelta), &tMinTest, hm.Y(minCorner), hm.Y(maxCorner))) {
+                                testWallNormal = .{ -1, 0, 0 };
+                                hitThis = true;
+                            }
+                            if (TestWall(hm.X(maxCorner), hm.X(rel), hm.Y(rel), hm.X(playerDelta), hm.Y(playerDelta), &tMinTest, hm.Y(minCorner), hm.Y(maxCorner))) {
+                                testWallNormal = .{ 1, 0, 0 };
+                                hitThis = true;
+                            }
+                            if (TestWall(hm.Y(minCorner), hm.Y(rel), hm.X(rel), hm.Y(playerDelta), hm.X(playerDelta), &tMinTest, hm.X(minCorner), hm.X(maxCorner))) {
+                                testWallNormal = .{ 0, -1, 0 };
+                                hitThis = true;
+                            }
+                            if (TestWall(hm.Y(maxCorner), hm.Y(rel), hm.X(rel), hm.Y(playerDelta), hm.X(playerDelta), &tMinTest, hm.X(minCorner), hm.X(maxCorner))) {
+                                testWallNormal = .{ 0, 1, 0 };
+                                hitThis = true;
+                            }
 
-                        if (hitThis) {
-                            var testP = entity.p + hm.v3{ tMinTest, tMinTest, tMinTest } * playerDelta;
-                            _ = testP;
+                            if (hitThis) {
+                                var testP = entity.p + hm.v3{ tMinTest, tMinTest, tMinTest } * playerDelta;
+                                _ = testP;
 
-                            if (SpeculativeCollide(entity, testEntity)) {
-                                tMin = tMinTest;
-                                wallNormal = testWallNormal;
-                                hitEntity = testEntity;
+                                if (SpeculativeCollide(entity, testEntity)) {
+                                    tMin = tMinTest;
+                                    wallNormal = testWallNormal;
+                                    hitEntity = testEntity;
+                                }
                             }
                         }
                     }
