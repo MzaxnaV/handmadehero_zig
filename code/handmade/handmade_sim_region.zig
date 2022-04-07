@@ -25,6 +25,8 @@ pub const move_spec = struct {
 pub const entity_type = enum {
     Null,
 
+    Space,
+
     Hero,
     Wall,
     Familiar,
@@ -52,7 +54,8 @@ pub const sim_entity_flags = enum(u32) {
     Collides = 1 << 0,
     NonSpatial = 1 << 1,
     Movable = 1 << 2,
-    ZSupported = 1 << 4,
+    ZSupported = 1 << 3,
+    Traversable = 1 << 4,
 
     Simming = 1 << 30,
 };
@@ -366,18 +369,22 @@ fn CanCollide(gameState: *hi.state, unsortedA: *sim_entity, unsortedB: *sim_enti
             a = unsortedB;
         }
 
-        if (!he.IsSet(a, @enumToInt(sim_entity_flags.NonSpatial)) and
-            !he.IsSet(b, @enumToInt(sim_entity_flags.NonSpatial)))
+        if (he.IsSet(a, @enumToInt(sim_entity_flags.Collides)) and
+            he.IsSet(b, @enumToInt(sim_entity_flags.Collides)))
         {
-            result = true;
-        }
+            if (!he.IsSet(a, @enumToInt(sim_entity_flags.NonSpatial)) and
+                !he.IsSet(b, @enumToInt(sim_entity_flags.NonSpatial)))
+            {
+                result = true;
+            }
 
-        const hashBucket = a.storageIndex & (gameState.collisionRuleHash.len - 1);
-        var rule: ?*hi.pairwise_collision_rule = gameState.collisionRuleHash[hashBucket];
-        while (rule) |r| : (rule = r.nextInHash) {
-            if ((r.storageIndexA == a.storageIndex) and (r.storageIndexB == b.storageIndex)) {
-                result = r.canCollide;
-                break;
+            const hashBucket = a.storageIndex & (gameState.collisionRuleHash.len - 1);
+            var rule: ?*hi.pairwise_collision_rule = gameState.collisionRuleHash[hashBucket];
+            while (rule) |r| : (rule = r.nextInHash) {
+                if ((r.storageIndexA == a.storageIndex) and (r.storageIndexB == b.storageIndex)) {
+                    result = r.canCollide;
+                    break;
+                }
             }
         }
     }

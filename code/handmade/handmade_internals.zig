@@ -82,7 +82,7 @@ pub const entity_visible_piece = struct {
 pub const entity_visible_piece_group = struct {
     gameState: *state,
     pieceCount: u32,
-    pieces: [8]entity_visible_piece,
+    pieces: [32]entity_visible_piece,
 };
 
 pub const controlled_hero = struct {
@@ -132,6 +132,7 @@ pub const state = struct {
     monstarCollision: *sim_entity_collision_volume_group,
     familiarCollision: *sim_entity_collision_volume_group,
     wallCollision: *sim_entity_collision_volume_group,
+    standardRoomCollision: *sim_entity_collision_volume_group,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------

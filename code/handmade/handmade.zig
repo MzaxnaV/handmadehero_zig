@@ -245,6 +245,15 @@ fn AddGroundedEntity(gameState: *game.state, entityType: game.entity_type, p: ga
     return entity;
 }
 
+fn AddStandardRoom(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
+    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+    var entity = AddGroundedEntity(gameState, .Space, p, gameState.standardRoomCollision);
+
+    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Traversable));
+
+    return entity;
+}
+
 fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Wall, p, gameState.wallCollision);
@@ -357,6 +366,16 @@ inline fn PushRect(group: *game.entity_visible_piece_group, offset: game.v2, off
     PushPiece(group, null, offset, offsetZ, .{ 0, 0 }, dim, colour, entityZC);
 }
 
+inline fn PushRectOutline(group: *game.entity_visible_piece_group, offset: game.v2, offsetZ: f32, dim: game.v2, colour: game.v4, entityZC: f32) void {
+    const thickness = 0.1;
+
+    PushPiece(group, null, offset - game.v2{ 0, 0.5 * game.Y(dim) }, offsetZ, .{ 0, 0 }, .{ game.X(dim), thickness }, colour, entityZC);
+    PushPiece(group, null, offset + game.v2{ 0, 0.5 * game.Y(dim) }, offsetZ, .{ 0, 0 }, .{ game.X(dim), thickness }, colour, entityZC);
+
+    PushPiece(group, null, offset - game.v2{ 0.5 * game.X(dim), 0 }, offsetZ, .{ 0, 0 }, .{ thickness, game.Y(dim) }, colour, entityZC);
+    PushPiece(group, null, offset + game.v2{ 0.5 * game.X(dim), 0 }, offsetZ, .{ 0, 0 }, .{ thickness, game.Y(dim) }, colour, entityZC);
+}
+
 fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.entity_visible_piece_group) void {
     if (entity.hitPointMax >= 1) {
         const healthDim = game.v2{ 0.2, 0.2 };
@@ -429,6 +448,9 @@ pub export fn UpdateAndRender(
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
+        const tilesPerWidth = 17;
+        const tilesPerHeight = 9;
+
         gameState.worldArena.Initialize(gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
         gameState.world = gameState.worldArena.PushStruct(game.world);
 
@@ -458,6 +480,13 @@ pub export fn UpdateAndRender(
             gameState.world.tileDepthInMeters,
         );
 
+        gameState.standardRoomCollision = MakeSimpleGroundedCollision(
+            gameState,
+            tilesPerWidth * gameState.world.tileSideInMeters,
+            tilesPerHeight * gameState.world.tileSideInMeters,
+            0.9 * gameState.world.tileDepthInMeters,
+        );
+
         gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
         gameState.shadow = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp");
         gameState.tree = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tree00.bmp");
@@ -483,9 +512,6 @@ pub export fn UpdateAndRender(
         gameState.heroBitmaps[3].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
         gameState.heroBitmaps[3].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
         gameState.heroBitmaps[3].alignment = .{ 72, 182 };
-
-        const tilesPerWidth = 17;
-        const tilesPerHeight = 9;
 
         const screenBaseX = @as(u32, 0);
         const screenBaseY = @as(u32, 0);
@@ -526,6 +552,8 @@ pub export fn UpdateAndRender(
             } else {
                 doorTop = true;
             }
+
+            _ = AddStandardRoom(gameState, screenX * tilesPerWidth + tilesPerWidth / 2, screenY * tilesPerHeight + tilesPerHeight / 2, absTileZ);
 
             var tileY = @as(u32, 0);
             while (tileY < tilesPerHeight) : (tileY += 1) {
@@ -693,7 +721,7 @@ pub export fn UpdateAndRender(
         .pieceCount = 0,
         .pieces = [1]game.entity_visible_piece{.{
             .bitmap = undefined,
-        }} ** 8,
+        }} ** 32,
     };
 
     var entityIndex = @as(u32, 0);
@@ -821,6 +849,14 @@ pub export fn UpdateAndRender(
                     PushBitmap(&pieceGroup, &heroBitmaps.torso, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
 
                     DrawHitpoints(entity, &pieceGroup);
+                },
+
+                .Space => {
+                    var volumeIndex = @as(u32, 0);
+                    while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
+                        const volume = entity.collision.volumes[volumeIndex];
+                        PushRectOutline(&pieceGroup, game.XY(volume.offsetP), 0, game.XY(volume.dim), .{ 0, 0.5, 1, 1 }, 0);
+                    }
                 },
 
                 .Null => {
