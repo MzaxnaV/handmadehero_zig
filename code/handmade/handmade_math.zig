@@ -2,7 +2,7 @@ const SquareRoot = @import("handmade_intrinsics.zig").SquareRoot;
 
 // private functions ----------------------------------------------------------------------------------------------------------------------
 
-fn checkVector(comptime t: type) comptime_int {
+inline fn checkVector(comptime t: type) comptime_int {
     comptime {
         return switch (@typeInfo(t)) {
             .Vector => |value| value.len,
@@ -148,6 +148,17 @@ pub const G = Y;
 pub const B = Z;
 pub const A = W;
 
+pub inline fn XY(vec: anytype) [2]f32 {
+    comptime {
+        if (checkVector(@TypeOf(vec)) < 2) {
+            @compileError("Invalid operand type or vector size");
+        }
+    }
+
+    const result: [checkVector(@TypeOf(vec))]f32 = vec;
+    return result[0..2].*;
+}
+
 pub inline fn Inner(a: anytype, b: @TypeOf(a)) f32 {
     comptime {
         if (checkVector(@TypeOf(a)) < 2) {
@@ -185,13 +196,17 @@ pub inline fn AddRadiusToRect2(rectangle: rect2, radius: v2) rect2 {
     return result;
 }
 
-pub inline fn IsInRect3(rectangle: rect3, testP: v3) bool {
-    const result = @reduce(.And, testP >= rectangle.min) and @reduce(.And, testP < rectangle.max);
+pub inline fn GetBarycentricV2(a: rect2, p: v2) v2 {
+    var result: v2 = .{
+        SafeRatiof0(p[0] - a.min[0], a.max[0] - a.min[0]),
+        SafeRatiof0(p[1] - a.min[1], a.max[1] - a.min[1]),
+    };
+
     return result;
 }
 
-pub inline fn RectanglesIntersect(a: rect3, b: rect3) bool {
-    const result = !(@reduce(.Or, b.max <= a.min) or @reduce(.Or, b.min >= a.max));
+pub inline fn IsInRect3(rectangle: rect3, testP: v3) bool {
+    const result = @reduce(.And, testP >= rectangle.min) and @reduce(.And, testP < rectangle.max);
     return result;
 }
 
@@ -203,13 +218,26 @@ pub inline fn AddRadiusToRect3(rectangle: rect3, radius: v3) rect3 {
     return result;
 }
 
-pub inline fn GetBarycentric(a: rect3, p: v3) v3 {
+pub inline fn GetBarycentricV3(a: rect3, p: v3) v3 {
     var result: v3 = .{
         SafeRatiof0(p[0] - a.min[0], a.max[0] - a.min[0]),
         SafeRatiof0(p[1] - a.min[1], a.max[1] - a.min[1]),
         SafeRatiof0(p[2] - a.min[2], a.max[2] - a.min[2]),
     };
 
+    return result;
+}
+
+pub inline fn RectanglesIntersect(a: rect3, b: rect3) bool {
+    const result = !(@reduce(.Or, b.max <= a.min) or @reduce(.Or, b.min >= a.max));
+    return result;
+}
+
+pub inline fn ToRectXY(a: rect3) rect2 {
+    const result = rect2{
+        .min = XY(a.mix),
+        .max = XY(a.max),
+    };
     return result;
 }
 
@@ -242,11 +270,20 @@ pub inline fn Clampf01(value: f32) f32 {
     return result;
 }
 
-pub inline fn ClampV01(value: v3) v3 {
+pub inline fn ClampV301(value: v3) v3 {
     const result = v3{
         Clampf01(value[0]),
         Clampf01(value[1]),
         Clampf01(value[2]),
+    };
+
+    return result;
+}
+
+pub inline fn ClampV201(value: v2) v2 {
+    const result = v2{
+        Clampf01(value[0]),
+        Clampf01(value[1]),
     };
 
     return result;

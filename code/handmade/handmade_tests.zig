@@ -62,6 +62,8 @@ test "math" {
     try testing.expectEqual(hm.B(c4), hm.Z(c4));
     try testing.expectEqual(hm.A(c4), hm.W(c4));
 
+    try testing.expectEqual(hm.rect2.InitMinDim(.{ 3, 2 }, .{ 4, 3 }), hm.rect2.InitMinDim(hm.XY(c3), hm.XY(c4)));
+
     try testing.expectEqual(hm.AddI32ToU32(30, 2), 32);
     try testing.expectEqual(hm.AddI32ToU32(32, -30), 2);
     try testing.expectEqual(hm.AddI32ToU32(std.math.maxInt(u32), -2147483647), 2147483648);
@@ -103,12 +105,12 @@ test "math" {
 
     try testing.expectEqual(hm.AddRadiusToRect3(r3, .{ 1, 2, 3 }), hm.rect3{ .min = .{ -1, -2, -3 }, .max = .{ 4, 5, 6 } });
 
-    try testing.expectEqual(hm.GetBarycentric(r3, r3.GetCenter()), hm.v3{ 0.5, 0.5, 0.5 });
-    try testing.expectEqual(hm.GetBarycentric(r3, r3.GetMinCorner()), hm.v3{ 0, 0, 0 });
-    try testing.expectEqual(hm.GetBarycentric(r3, r3.GetMaxCorner()), hm.v3{ 1, 1, 1 });
-    try testing.expectEqual(hm.GetBarycentric(r3, .{ 2, 2, 2 }), @splat(3, @as(f32, 2.0 / 3.0)));
+    try testing.expectEqual(hm.GetBarycentricV3(r3, r3.GetCenter()), hm.v3{ 0.5, 0.5, 0.5 });
+    try testing.expectEqual(hm.GetBarycentricV3(r3, r3.GetMinCorner()), hm.v3{ 0, 0, 0 });
+    try testing.expectEqual(hm.GetBarycentricV3(r3, r3.GetMaxCorner()), hm.v3{ 1, 1, 1 });
+    try testing.expectEqual(hm.GetBarycentricV3(r3, .{ 2, 2, 2 }), @splat(3, @as(f32, 2.0 / 3.0)));
 
-    try testing.expectEqual(hm.ClampV01(.{ 0.2, -0.4, 1.2 }), hm.v3{ 0.2, 0, 1 });
+    try testing.expectEqual(hm.ClampV301(.{ 0.2, -0.4, 1.2 }), hm.v3{ 0.2, 0, 1 });
 }
 
 test "misc_language" {

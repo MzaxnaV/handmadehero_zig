@@ -3,6 +3,7 @@ const std = @import("std");
 const CONTROLLERS = @import("handmade_platform").CONTROLLERS;
 const memory_index = @import("handmade_platform").memory_index;
 const sim_entity = @import("handmade_sim_region.zig").sim_entity;
+const sim_entity_collision_volume_group = @import("handmade_sim_region.zig").sim_entity_collision_volume_group;
 const world_position = @import("handmade_world.zig").world_position;
 const world = @import("handmade_world.zig").world;
 const v2 = @import("handmade_math.zig").v2;
@@ -123,6 +124,14 @@ pub const state = struct {
 
     collisionRuleHash: [256]?*pairwise_collision_rule,
     firstFreeCollisionRule: ?*pairwise_collision_rule,
+
+    nullCollision: *sim_entity_collision_volume_group,
+    swordCollision: *sim_entity_collision_volume_group,
+    stairCollision: *sim_entity_collision_volume_group,
+    playerCollision: *sim_entity_collision_volume_group,
+    monstarCollision: *sim_entity_collision_volume_group,
+    familiarCollision: *sim_entity_collision_volume_group,
+    wallCollision: *sim_entity_collision_volume_group,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------

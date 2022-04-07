@@ -57,6 +57,18 @@ pub const sim_entity_flags = enum(u32) {
     Simming = 1 << 30,
 };
 
+pub const sim_entity_collision_volume = struct {
+    offsetP: hm.v3,
+    dim: hm.v3,
+};
+
+pub const sim_entity_collision_volume_group = struct {
+    totalVolume: sim_entity_collision_volume,
+
+    volumeCount: u32,
+    volumes: [*]sim_entity_collision_volume,
+};
+
 pub const sim_entity = struct {
     storageIndex: u32 = 0,
     updatable: bool = false,
@@ -68,7 +80,7 @@ pub const sim_entity = struct {
     dP: hm.v3 = hm.v3{ 0, 0, 0 },
 
     distanceLimit: f32 = 0,
-    dim: hm.v3 = hm.v3{ 0, 0, 0 },
+    collision: *sim_entity_collision_volume_group,
 
     facingDirection: u32 = 0,
     tBob: f32 = 0,
@@ -80,6 +92,7 @@ pub const sim_entity = struct {
 
     sword: entity_reference = .{ .index = 0 },
 
+    walkableDim: hm.v2 = hm.v2{ 0, 0 },
     walkableHeight: f32 = 0,
 };
 
@@ -197,9 +210,9 @@ fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32,
     return entity;
 }
 
-pub inline fn EntityOverlapsRectangle(p: hm.v3, dim: hm.v3, rect: hm.rect3) bool {
-    const grown = hm.AddRadiusToRect3(rect, dim * @splat(3, @as(f32, 0.5)));
-    const result = hm.IsInRect3(grown, p);
+pub inline fn EntityOverlapsRectangle(p: hm.v3, volume: sim_entity_collision_volume, rect: hm.rect3) bool {
+    const grown = hm.AddRadiusToRect3(rect, volume.dim * @splat(3, @as(f32, 0.5)));
+    const result = hm.IsInRect3(grown, p + volume.offsetP);
     return result;
 }
 
@@ -208,7 +221,7 @@ pub fn AddEntity(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32
     if (dest) |_| {
         if (simP) |_| {
             dest.?.p = simP.?.*;
-            dest.?.updatable = EntityOverlapsRectangle(dest.?.p, dest.?.dim, simRegion.updatableBounds);
+            dest.?.updatable = EntityOverlapsRectangle(dest.?.p, dest.?.collision.totalVolume, simRegion.updatableBounds);
         } else {
             dest.?.p = GetSimSpaceP(simRegion, source.?);
         }
@@ -262,7 +275,7 @@ pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.wor
                             const low = &gameState.lowEntities[lowEntityIndex];
                             if (!he.IsSet(&low.sim, @enumToInt(sim_entity_flags.NonSpatial))) {
                                 var simSpaceP = GetSimSpaceP(simRegion, low);
-                                if (EntityOverlapsRectangle(simSpaceP, low.sim.dim, simRegion.bounds)) {
+                                if (EntityOverlapsRectangle(simSpaceP, low.sim.collision.totalVolume, simRegion.bounds)) {
                                     _ = AddEntity(gameState, simRegion, lowEntityIndex, low, &simSpaceP);
                                 }
                             }
@@ -448,7 +461,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     }
 
     ddP *= hm.v3{ moveSpec.speed, moveSpec.speed, moveSpec.speed };
-    ddP += entity.dP * hm.v3{ -moveSpec.drag, -moveSpec.drag, -moveSpec.drag };
+    ddP += entity.dP * hm.v3{ -moveSpec.drag, -moveSpec.drag, 0 };
     if (!he.IsSet(entity, @enumToInt(sim_entity_flags.ZSupported))) {
         ddP += hm.v3{ 0, 0, -9.8 };
     }
@@ -483,47 +496,55 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
                     const testEntity = &simRegion.entities[testHighEntityIndex];
                     if (CanCollide(gameState, entity, testEntity)) {
-                        const minkowskiDiameter: hm.v3 = .{
-                            hm.X(testEntity.dim) + hm.X(entity.dim),
-                            hm.Y(testEntity.dim) + hm.Y(entity.dim),
-                            hm.Z(testEntity.dim) + hm.Z(entity.dim),
-                        };
+                        var volumeIndex = @as(u32, 0);
+                        while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
+                            var volume = entity.collision.volumes[volumeIndex];
+                            var testVolumeIndex = @as(u32, 0);
+                            while (testVolumeIndex < testEntity.collision.volumeCount) : (testVolumeIndex += 1) {
+                                var testVolume = testEntity.collision.volumes[testVolumeIndex];
+                                const minkowskiDiameter: hm.v3 = .{
+                                    hm.X(testVolume.dim) + hm.X(volume.dim),
+                                    hm.Y(testVolume.dim) + hm.Y(volume.dim),
+                                    hm.Z(testVolume.dim) + hm.Z(volume.dim),
+                                };
 
-                        const minCorner = hm.v3{ -0.5, -0.5, -0.5 } * minkowskiDiameter;
-                        const maxCorner = hm.v3{ 0.5, 0.5, 0.5 } * minkowskiDiameter;
+                                const minCorner = hm.v3{ -0.5, -0.5, -0.5 } * minkowskiDiameter;
+                                const maxCorner = hm.v3{ 0.5, 0.5, 0.5 } * minkowskiDiameter;
 
-                        const rel = entity.p - testEntity.p;
+                                const rel = (entity.p + volume.offsetP) - (testEntity.p + testVolume.offsetP);
 
-                        if ((hm.Z(rel) >= hm.Z(minCorner)) and (hm.Z(rel) < hm.Z(maxCorner))) {
-                            var tMinTest = tMin;
-                            var testWallNormal = hm.v3{ 0, 0, 0 };
+                                if ((hm.Z(rel) >= hm.Z(minCorner)) and (hm.Z(rel) < hm.Z(maxCorner))) {
+                                    var tMinTest = tMin;
+                                    var testWallNormal = hm.v3{ 0, 0, 0 };
 
-                            var hitThis = false;
-                            if (TestWall(hm.X(minCorner), hm.X(rel), hm.Y(rel), hm.X(playerDelta), hm.Y(playerDelta), &tMinTest, hm.Y(minCorner), hm.Y(maxCorner))) {
-                                testWallNormal = .{ -1, 0, 0 };
-                                hitThis = true;
-                            }
-                            if (TestWall(hm.X(maxCorner), hm.X(rel), hm.Y(rel), hm.X(playerDelta), hm.Y(playerDelta), &tMinTest, hm.Y(minCorner), hm.Y(maxCorner))) {
-                                testWallNormal = .{ 1, 0, 0 };
-                                hitThis = true;
-                            }
-                            if (TestWall(hm.Y(minCorner), hm.Y(rel), hm.X(rel), hm.Y(playerDelta), hm.X(playerDelta), &tMinTest, hm.X(minCorner), hm.X(maxCorner))) {
-                                testWallNormal = .{ 0, -1, 0 };
-                                hitThis = true;
-                            }
-                            if (TestWall(hm.Y(maxCorner), hm.Y(rel), hm.X(rel), hm.Y(playerDelta), hm.X(playerDelta), &tMinTest, hm.X(minCorner), hm.X(maxCorner))) {
-                                testWallNormal = .{ 0, 1, 0 };
-                                hitThis = true;
-                            }
+                                    var hitThis = false;
+                                    if (TestWall(hm.X(minCorner), hm.X(rel), hm.Y(rel), hm.X(playerDelta), hm.Y(playerDelta), &tMinTest, hm.Y(minCorner), hm.Y(maxCorner))) {
+                                        testWallNormal = .{ -1, 0, 0 };
+                                        hitThis = true;
+                                    }
+                                    if (TestWall(hm.X(maxCorner), hm.X(rel), hm.Y(rel), hm.X(playerDelta), hm.Y(playerDelta), &tMinTest, hm.Y(minCorner), hm.Y(maxCorner))) {
+                                        testWallNormal = .{ 1, 0, 0 };
+                                        hitThis = true;
+                                    }
+                                    if (TestWall(hm.Y(minCorner), hm.Y(rel), hm.X(rel), hm.Y(playerDelta), hm.X(playerDelta), &tMinTest, hm.X(minCorner), hm.X(maxCorner))) {
+                                        testWallNormal = .{ 0, -1, 0 };
+                                        hitThis = true;
+                                    }
+                                    if (TestWall(hm.Y(maxCorner), hm.Y(rel), hm.X(rel), hm.Y(playerDelta), hm.X(playerDelta), &tMinTest, hm.X(minCorner), hm.X(maxCorner))) {
+                                        testWallNormal = .{ 0, 1, 0 };
+                                        hitThis = true;
+                                    }
 
-                            if (hitThis) {
-                                var testP = entity.p + hm.v3{ tMinTest, tMinTest, tMinTest } * playerDelta;
-                                _ = testP;
+                                    if (hitThis) {
+                                        var testP = entity.p + hm.v3{ tMinTest, tMinTest, tMinTest } * playerDelta;
+                                        _ = testP;
 
-                                if (SpeculativeCollide(entity, testEntity)) {
-                                    tMin = tMinTest;
-                                    wallNormal = testWallNormal;
-                                    hitEntity = testEntity;
+                                        if (SpeculativeCollide(entity, testEntity)) {
+                                            tMin = tMinTest;
+                                            wallNormal = testWallNormal;
+                                            hitEntity = testEntity;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -554,18 +575,23 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     var ground = @as(f32, 0);
 
     {
-        const entityRect = hm.rect3.InitCenterDim(entity.p, entity.dim);
+        const entityRect = hm.rect3.InitCenterDim(
+            entity.p + entity.collision.totalVolume.offsetP,
+            entity.collision.totalVolume.dim,
+        );
         var testHighEntityIndex = @as(u32, 0);
         while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
             const testEntity = &simRegion.entities[testHighEntityIndex];
             if (CanOverlap(gameState, entity, testEntity)) {
-                const testEntityRect = hm.rect3.InitCenterDim(testEntity.p, testEntity.dim);
+                const testEntityRect = hm.rect3.InitCenterDim(
+                    testEntity.p + testEntity.collision.totalVolume.offsetP,
+                    testEntity.collision.totalVolume.dim,
+                );
                 if (hm.RectanglesIntersect(entityRect, testEntityRect)) {
                     HandleOverlap(gameState, entity, testEntity, dt, &ground);
                 }
             }
         }
-        _ = entityRect;
     }
 
     ground += hm.Z(entity.p) - hm.Z(he.GetEntityGroundPoint(entity));

@@ -222,7 +222,10 @@ fn AddLowEntity(gameState: *game.state, entityType: game.entity_type, pos: game.
     const entityLow = &gameState.lowEntities[entityIndex];
 
     entityLow.* = .{
-        .sim = .{ .entityType = entityType },
+        .sim = .{
+            .entityType = entityType,
+            .collision = gameState.nullCollision,
+        },
         .p = game.NullPosition(),
     };
 
@@ -236,22 +239,15 @@ fn AddLowEntity(gameState: *game.state, entityType: game.entity_type, pos: game.
     return result;
 }
 
-fn AddGroundedEntity(gameState: *game.state, entityType: game.entity_type, p: game.world_position, dim: game.v3) add_low_entity_result {
-    const offsetP = game.MapIntoChunkSpace(gameState.world, p, .{ 0, 0, 0.5 * game.Z(dim) });
-    const entity = AddLowEntity(gameState, entityType, offsetP);
-    entity.low.sim.dim = dim;
+fn AddGroundedEntity(gameState: *game.state, entityType: game.entity_type, p: game.world_position, collision: *game.sim_entity_collision_volume_group) add_low_entity_result {
+    const entity = AddLowEntity(gameState, entityType, p);
+    entity.low.sim.collision = collision;
     return entity;
 }
 
 fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const dim = game.v3{
-        gameState.world.tileSideInMeters,
-        gameState.world.tileSideInMeters,
-        gameState.world.tileDepthInMeters,
-    };
-
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
-    var entity = AddGroundedEntity(gameState, .Wall, p, dim);
+    var entity = AddGroundedEntity(gameState, .Wall, p, gameState.wallCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
 
@@ -259,16 +255,11 @@ fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) 
 }
 
 fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const dim = game.v3{
-        gameState.world.tileSideInMeters,
-        2 * gameState.world.tileSideInMeters,
-        1.1 * gameState.world.tileDepthInMeters,
-    };
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
-    var entity = AddGroundedEntity(gameState, .Stairwell, p, dim);
+    var entity = AddGroundedEntity(gameState, .Stairwell, p, gameState.stairCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
-
+    entity.low.sim.walkableDim = .{ game.X(entity.low.sim.collision.totalVolume.dim), game.Y(entity.low.sim.collision.totalVolume.dim) };
     entity.low.sim.walkableHeight = gameState.world.tileDepthInMeters;
 
     return entity;
@@ -289,10 +280,7 @@ fn InitHitPoints(entityLow: *game.low_entity, hitPointCount: u32) void {
 fn AddSword(gameState: *game.state) add_low_entity_result {
     var entity = AddLowEntity(gameState, .Sword, game.NullPosition());
 
-    const height = 0.5;
-    const width = 1;
-    const depth = 0.1;
-    entity.low.sim.dim = .{ width, height, depth };
+    entity.low.sim.collision = gameState.swordCollision;
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Movable));
 
@@ -300,9 +288,8 @@ fn AddSword(gameState: *game.state) add_low_entity_result {
 }
 
 fn AddPlayer(gameState: *game.state) add_low_entity_result {
-    const dim = game.v3{ 1, 0.5, 1.2 };
     const p = gameState.cameraP;
-    var entity = AddGroundedEntity(gameState, .Hero, p, dim);
+    var entity = AddGroundedEntity(gameState, .Hero, p, gameState.playerCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
@@ -319,9 +306,8 @@ fn AddPlayer(gameState: *game.state) add_low_entity_result {
 }
 
 fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const dim = game.v3{ 1, 0.5, 0.5 };
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
-    var entity = AddGroundedEntity(gameState, .Monstar, p, dim);
+    var entity = AddGroundedEntity(gameState, .Monstar, p, gameState.monstarCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
@@ -331,9 +317,8 @@ fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u3
 }
 
 fn AddFamiliar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const dim = game.v3{ 1, 0.5, 0.5 };
     const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
-    var entity = AddGroundedEntity(gameState, .Familiar, p, dim);
+    var entity = AddGroundedEntity(gameState, .Familiar, p, gameState.familiarCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
 
@@ -395,6 +380,29 @@ fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.entity_visible_piec
     }
 }
 
+fn MakeSimpleGroundedCollision(gameState: *game.state, dimX: f32, dimY: f32, dimZ: f32) *game.sim_entity_collision_volume_group {
+    const group: *game.sim_entity_collision_volume_group = gameState.worldArena.PushStruct(game.sim_entity_collision_volume_group);
+
+    group.volumeCount = 1;
+    group.volumes = gameState.worldArena.PushArrayPtr(game.sim_entity_collision_volume, group.volumeCount);
+    group.totalVolume.offsetP = game.v3{ 0, 0, 0.5 * dimZ };
+    group.totalVolume.dim = game.v3{ dimX, dimY, dimZ };
+    group.volumes[0] = group.totalVolume;
+
+    return group;
+}
+
+fn MakeNullCollision(gameState: *game.state) *game.sim_entity_collision_volume_group {
+    const group: *game.sim_entity_collision_volume_group = gameState.worldArena.PushStruct(game.sim_entity_collision_volume_group);
+
+    group.volumeCount = 0;
+    group.volumes = undefined; // TODO (Manav): change type from,  [*]sim_entity_collision_volume to ?[*]sim_entity_collision_volume
+    group.totalVolume.offsetP = game.v3{ 0, 0, 0 };
+    group.totalVolume.dim = game.v3{ 0, 0, 0 };
+
+    return group;
+}
+
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(
@@ -421,7 +429,34 @@ pub export fn UpdateAndRender(
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
+        gameState.worldArena.Initialize(gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
+        gameState.world = gameState.worldArena.PushStruct(game.world);
+
+        const world = gameState.world;
+        game.InitializeWorld(world, 1.4, 3.0);
+
+        const tileSideInPixels = 60;
+        gameState.metersToPixels = tileSideInPixels / world.tileSideInMeters;
+
         _ = AddLowEntity(gameState, .Null, game.NullPosition());
+
+        gameState.nullCollision = MakeNullCollision(gameState);
+        gameState.swordCollision = MakeSimpleGroundedCollision(gameState, 1, 0.5, 0.1);
+        gameState.stairCollision = MakeSimpleGroundedCollision(
+            gameState,
+            gameState.world.tileSideInMeters,
+            2 * gameState.world.tileSideInMeters,
+            1.1 * gameState.world.tileDepthInMeters,
+        );
+        gameState.playerCollision = MakeSimpleGroundedCollision(gameState, 1, 0.5, 1.2);
+        gameState.monstarCollision = MakeSimpleGroundedCollision(gameState, 1, 0.5, 0.5);
+        gameState.familiarCollision = MakeSimpleGroundedCollision(gameState, 1, 0.5, 0.5);
+        gameState.wallCollision = MakeSimpleGroundedCollision(
+            gameState,
+            gameState.world.tileSideInMeters,
+            gameState.world.tileSideInMeters,
+            gameState.world.tileDepthInMeters,
+        );
 
         gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
         gameState.shadow = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp");
@@ -448,15 +483,6 @@ pub export fn UpdateAndRender(
         gameState.heroBitmaps[3].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
         gameState.heroBitmaps[3].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
         gameState.heroBitmaps[3].alignment = .{ 72, 182 };
-
-        gameState.worldArena.Initialize(gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
-        gameState.world = gameState.worldArena.PushStruct(game.world);
-
-        const world = gameState.world;
-        game.InitializeWorld(world, 1.4, 3.0);
-
-        const tileSideInPixels = 60;
-        gameState.metersToPixels = tileSideInPixels / world.tileSideInMeters;
 
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
@@ -678,7 +704,7 @@ pub export fn UpdateAndRender(
             pieceGroup.pieceCount = 0;
             const dt = gameInput.dtForFrame;
 
-            const alpha = 1 - 0.5 * (game.Z(entity.p) - game.Z(entity.dim));
+            const alpha = 1 - 0.5 * game.Z(entity.p);
             const shadowAlpha = if (alpha > 0) alpha else 0;
 
             var moveSpec = game.DefaultMoveSpec();
@@ -731,8 +757,8 @@ pub export fn UpdateAndRender(
                 },
 
                 .Stairwell => {
-                    PushRect(&pieceGroup, .{ 0, 0 }, 0, .{ game.X(entity.dim), game.Y(entity.dim) }, .{ 1, 0.5, 0, 1 }, 0);
-                    PushRect(&pieceGroup, .{ 0, 0 }, game.Z(entity.dim), .{ game.X(entity.dim), game.Y(entity.dim) }, .{ 1, 1, 0, 1 }, 0);
+                    PushRect(&pieceGroup, .{ 0, 0 }, 0, entity.walkableDim, .{ 1, 0.5, 0, 1 }, 0);
+                    PushRect(&pieceGroup, .{ 0, 0 }, entity.walkableHeight, entity.walkableDim, .{ 1, 1, 0, 1 }, 0);
                 },
 
                 .Sword => {

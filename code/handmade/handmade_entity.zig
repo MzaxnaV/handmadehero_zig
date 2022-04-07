@@ -34,15 +34,15 @@ pub inline fn MakeEntitySpatial(entity: *hs.sim_entity, p: hm.v3, dP: hm.v3) voi
 }
 
 pub inline fn GetEntityGroundPoint(entity: *hs.sim_entity) hm.v3 {
-    const result = entity.p + hm.v3{ 0, 0, -0.5 * hm.Z(entity.dim) };
+    const result = entity.p;
     return result;
 }
 
 pub inline fn GetStairGround(entity: *hs.sim_entity, atGroundPoint: hm.v3) f32 {
     assert(entity.entityType == .Stairwell);
-    const regionRect = hm.rect3.InitCenterDim(entity.p, entity.dim);
-    const bary = hm.ClampV01(hm.GetBarycentric(regionRect, atGroundPoint));
-    const result = hm.Z(regionRect.min) + hm.Y(bary) * entity.walkableHeight;
+    const regionRect = hm.rect2.InitCenterDim(hm.XY(entity.p), entity.walkableDim);
+    const bary = hm.ClampV201(hm.GetBarycentricV2(regionRect, hm.XY(atGroundPoint)));
+    const result = hm.Z(entity.p) + hm.Y(bary) * entity.walkableHeight;
 
     return result;
 }
