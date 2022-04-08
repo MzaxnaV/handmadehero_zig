@@ -338,6 +338,17 @@ pub fn EndSim(region: *sim_region, gameState: *hi.state) void {
     }
 }
 
+const test_wall = struct {
+    x: f32,
+    relX: f32,
+    relY: f32,
+    deltaX: f32,
+    deltaY: f32,
+    minY: f32,
+    maxY: f32,
+    normal: hm.v3,
+};
+
 pub fn TestWall(wallX: f32, relX: f32, relY: f32, playerDeltaX: f32, playerDeltaY: f32, tMin: *f32, minY: f32, maxY: f32) bool {
     var hit = false;
 
@@ -454,6 +465,25 @@ pub fn SpeculativeCollide(mover: *sim_entity, region: *sim_entity) bool {
     return result;
 }
 
+pub fn EntitiesOverlap(entity: *sim_entity, testEntity: *sim_entity, epsilon: hm.v3) bool {
+    var result = false;
+    var volumeIndex = @as(u32, 0);
+    while (!result and (volumeIndex < entity.collision.volumeCount)) : (volumeIndex += 1) {
+        var volume = entity.collision.volumes[volumeIndex];
+
+        var testVolumeIndex = @as(u32, 0);
+        while (!result and testVolumeIndex < (testEntity.collision.volumeCount)) : (testVolumeIndex += 1) {
+            var testVolume = testEntity.collision.volumes[testVolumeIndex];
+
+            const entityRect = hm.rect3.InitCenterDim(entity.p + volume.offsetP, volume.dim + epsilon);
+            const testEntityRect = hm.rect3.InitCenterDim(testEntity.p + testVolume.offsetP, testVolume.dim);
+            result = hm.RectanglesIntersect(entityRect, testEntityRect);
+        }
+    }
+
+    return result;
+}
+
 pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec: *const move_spec, accelaration: hm.v3) void {
     assert(!he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial)));
 
@@ -488,13 +518,17 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     var iteration = @as(u32, 0);
     while (iteration < 4) : (iteration += 1) {
         var tMin = @as(f32, 1.0);
+        var tMax = @as(f32, 0.0);
         const playerDeltaLength = hm.Length(playerDelta);
         if (playerDeltaLength > 0) {
             if (playerDeltaLength > distanceRemaining) {
                 tMin = distanceRemaining / playerDeltaLength;
             }
-            var wallNormal = hm.v3{ 0, 0, 0 };
-            var hitEntity: ?*sim_entity = null;
+
+            var wallNormalMin = hm.v3{ 0, 0, 0 };
+            var wallNormalMax = hm.v3{ 0, 0, 0 };
+            var hitEntityMin: ?*sim_entity = null;
+            var hitEntityMax: ?*sim_entity = null;
 
             const desiredPosition = entity.p + playerDelta;
 
@@ -502,7 +536,12 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 var testHighEntityIndex = @as(u32, 0);
                 while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
                     const testEntity = &simRegion.entities[testHighEntityIndex];
-                    if (CanCollide(gameState, entity, testEntity)) {
+
+                    const overlapEpsilon = 0.001;
+                    if (((he.IsSet(testEntity, @enumToInt(sim_entity_flags.Traversable)) and
+                        EntitiesOverlap(entity, testEntity, .{ overlapEpsilon, overlapEpsilon, overlapEpsilon })) or
+                        CanCollide(gameState, entity, testEntity)))
+                    {
                         var volumeIndex = @as(u32, 0);
                         while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
                             var volume = entity.collision.volumes[volumeIndex];
@@ -521,35 +560,74 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                                 const rel = (entity.p + volume.offsetP) - (testEntity.p + testVolume.offsetP);
 
                                 if ((hm.Z(rel) >= hm.Z(minCorner)) and (hm.Z(rel) < hm.Z(maxCorner))) {
-                                    var tMinTest = tMin;
-                                    var testWallNormal = hm.v3{ 0, 0, 0 };
+                                    const walls: [4]test_wall = .{
+                                        test_wall{ .x = hm.X(minCorner), .relX = hm.X(rel), .relY = hm.Y(rel), .deltaX = hm.X(playerDelta), .deltaY = hm.Y(playerDelta), .minY = hm.Y(minCorner), .maxY = hm.Y(maxCorner), .normal = hm.v3{ -1, 0, 0 } },
+                                        test_wall{ .x = hm.X(maxCorner), .relX = hm.X(rel), .relY = hm.Y(rel), .deltaX = hm.X(playerDelta), .deltaY = hm.Y(playerDelta), .minY = hm.Y(minCorner), .maxY = hm.Y(maxCorner), .normal = hm.v3{ 1, 0, 0 } },
+                                        test_wall{ .x = hm.Y(minCorner), .relX = hm.Y(rel), .relY = hm.X(rel), .deltaX = hm.Y(playerDelta), .deltaY = hm.X(playerDelta), .minY = hm.X(minCorner), .maxY = hm.X(maxCorner), .normal = hm.v3{ 0, -1, 0 } },
+                                        test_wall{ .x = hm.Y(maxCorner), .relX = hm.Y(rel), .relY = hm.X(rel), .deltaX = hm.Y(playerDelta), .deltaY = hm.X(playerDelta), .minY = hm.X(minCorner), .maxY = hm.X(maxCorner), .normal = hm.v3{ 0, 1, 0 } },
+                                    };
 
-                                    var hitThis = false;
-                                    if (TestWall(hm.X(minCorner), hm.X(rel), hm.Y(rel), hm.X(playerDelta), hm.Y(playerDelta), &tMinTest, hm.Y(minCorner), hm.Y(maxCorner))) {
-                                        testWallNormal = .{ -1, 0, 0 };
-                                        hitThis = true;
-                                    }
-                                    if (TestWall(hm.X(maxCorner), hm.X(rel), hm.Y(rel), hm.X(playerDelta), hm.Y(playerDelta), &tMinTest, hm.Y(minCorner), hm.Y(maxCorner))) {
-                                        testWallNormal = .{ 1, 0, 0 };
-                                        hitThis = true;
-                                    }
-                                    if (TestWall(hm.Y(minCorner), hm.Y(rel), hm.X(rel), hm.Y(playerDelta), hm.X(playerDelta), &tMinTest, hm.X(minCorner), hm.X(maxCorner))) {
-                                        testWallNormal = .{ 0, -1, 0 };
-                                        hitThis = true;
-                                    }
-                                    if (TestWall(hm.Y(maxCorner), hm.Y(rel), hm.X(rel), hm.Y(playerDelta), hm.X(playerDelta), &tMinTest, hm.X(minCorner), hm.X(maxCorner))) {
-                                        testWallNormal = .{ 0, 1, 0 };
-                                        hitThis = true;
-                                    }
+                                    if (he.IsSet(testEntity, @enumToInt(sim_entity_flags.Traversable))) {
+                                        var tMaxTest = tMax;
+                                        var hitThis = false;
 
-                                    if (hitThis) {
-                                        var testP = entity.p + hm.v3{ tMinTest, tMinTest, tMinTest } * playerDelta;
-                                        _ = testP;
+                                        var testWallNormal = hm.v3{ 0, 0, 0 };
+                                        var wallIndex = @as(u32, 0);
+                                        while (wallIndex < walls.len) : (wallIndex += 1) {
+                                            const wall = walls[wallIndex];
 
-                                        if (SpeculativeCollide(entity, testEntity)) {
-                                            tMin = tMinTest;
-                                            wallNormal = testWallNormal;
-                                            hitEntity = testEntity;
+                                            const tEpsilon = 0.001;
+                                            if (wall.deltaX != 0) {
+                                                const tResult = (wall.x - wall.relX) / wall.deltaX;
+                                                const y = wall.relY + tResult * wall.deltaY;
+
+                                                if ((tResult >= 0) and (tMaxTest < tResult)) {
+                                                    if ((y >= wall.minY) and (y <= wall.maxY)) {
+                                                        tMaxTest = @maximum(0, tResult - tEpsilon);
+                                                        testWallNormal = wall.normal;
+                                                        hitThis = true;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (hitThis) {
+                                            tMax = tMaxTest;
+                                            wallNormalMax = testWallNormal;
+                                            hitEntityMax = testEntity;
+                                        }
+                                    } else {
+                                        var tMinTest = tMin;
+                                        var hitThis = false;
+
+                                        var testWallNormal = hm.v3{ 0, 0, 0 };
+                                        var wallIndex = @as(u32, 0);
+                                        while (wallIndex < walls.len) : (wallIndex += 1) {
+                                            const wall = walls[wallIndex];
+
+                                            const tEpsilon = 0.001;
+                                            if (wall.deltaX != 0) {
+                                                const tResult = (wall.x - wall.relX) / wall.deltaX;
+                                                const y = wall.relY + tResult * wall.deltaY;
+
+                                                if ((tResult >= 0) and (tMinTest > tResult)) {
+                                                    if ((y >= wall.minY) and (y <= wall.maxY)) {
+                                                        tMinTest = @maximum(0, tResult - tEpsilon);
+                                                        testWallNormal = wall.normal;
+                                                        hitThis = true;
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if (hitThis) {
+                                            var testP = entity.p + hm.v3{ tMinTest, tMinTest, tMinTest } * playerDelta;
+                                            _ = testP;
+
+                                            if (SpeculativeCollide(entity, testEntity)) {
+                                                tMin = tMinTest;
+                                                wallNormalMin = testWallNormal;
+                                                hitEntityMin = testEntity;
+                                            }
                                         }
                                     }
                                 }
@@ -559,8 +637,12 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 }
             }
 
-            entity.p += hm.v3{ tMin, tMin, tMin } * playerDelta;
-            distanceRemaining -= tMin * playerDeltaLength;
+            var wallNormal = if (tMin < tMax) wallNormalMin else wallNormalMax;
+            var hitEntity: ?*sim_entity = if (tMin < tMax) hitEntityMin else hitEntityMax;
+            var tStop = if (tMin < tMax) tMin else tMax;
+
+            entity.p += hm.v3{ tStop, tStop, tStop } * playerDelta;
+            distanceRemaining -= tStop * playerDeltaLength;
             if (hitEntity) |_| {
                 playerDelta = desiredPosition - entity.p;
 
@@ -582,21 +664,11 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     var ground = @as(f32, 0);
 
     {
-        const entityRect = hm.rect3.InitCenterDim(
-            entity.p + entity.collision.totalVolume.offsetP,
-            entity.collision.totalVolume.dim,
-        );
         var testHighEntityIndex = @as(u32, 0);
         while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
             const testEntity = &simRegion.entities[testHighEntityIndex];
-            if (CanOverlap(gameState, entity, testEntity)) {
-                const testEntityRect = hm.rect3.InitCenterDim(
-                    testEntity.p + testEntity.collision.totalVolume.offsetP,
-                    testEntity.collision.totalVolume.dim,
-                );
-                if (hm.RectanglesIntersect(entityRect, testEntityRect)) {
-                    HandleOverlap(gameState, entity, testEntity, dt, &ground);
-                }
+            if (CanOverlap(gameState, entity, testEntity) and EntitiesOverlap(entity, testEntity, .{ 0, 0, 0 })) {
+                HandleOverlap(gameState, entity, testEntity, dt, &ground);
             }
         }
     }

@@ -580,7 +580,9 @@ pub export fn UpdateAndRender(
                     }
 
                     if (shouldBeDoor) {
-                        _ = AddWall(gameState, absTileX, absTileY, absTileZ);
+                        if (screenIndex == 0) {
+                            _ = AddWall(gameState, absTileX, absTileY, absTileZ);
+                        }
                     } else if (createdZDoor) {
                         if ((tileX == 10) and (tileY == 5)) {
                             _ = AddStairs(gameState, absTileX, absTileY, if (doorDown) absTileZ - 1 else absTileZ);
