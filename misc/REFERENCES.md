@@ -1,0 +1,12 @@
+# References:
+Collection of references, not all are realted to Handmade Hero.
+
+## I 
+- [Intel 64 and IA-32 Architectures Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html)
+- [Intel Intrinsics Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
+
+## M
+- [MegaTextures](https://silverspaceship.com/src/svt/)
+
+## Z
+- [ZackLikes](https://www.zachtronics.com/zach-like/)
