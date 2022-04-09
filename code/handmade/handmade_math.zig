@@ -107,6 +107,20 @@ pub const rect3 = struct {
 
 // functions (vector operations)-----------------------------------------------------------------------------------------------------------
 
+pub inline fn V2(x: anytype, y: @TypeOf(x)) v2 {
+    comptime var t = switch (@TypeOf(x)) {
+        f32, comptime_float, comptime_int => 1,
+        i32, u32 => 2,
+        else => @compileError("Invalid type"),
+    };
+
+    return switch (t) {
+        1 => v2{ x, y },
+        2 => v2{ @intToFloat(f32, x), @intToFloat(f32, y) },
+        else => unreachable,
+    };
+}
+
 pub inline fn X(vec: anytype) f32 {
     comptime {
         if (checkVector(@TypeOf(vec)) < 0) {

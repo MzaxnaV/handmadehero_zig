@@ -422,6 +422,37 @@ fn MakeNullCollision(gameState: *game.state) *game.sim_entity_collision_volume_g
     return group;
 }
 
+fn DrawTestGround(gameState: *game.state, buffer: *platform.offscreen_buffer) void {
+    var grassIndex = @as(u32, 0);
+
+    const center = game.V2(0.5, 0.5) * game.V2(buffer.width, buffer.height);
+    game.fixed_rand.index = 0;
+    while (grassIndex < 100) : (grassIndex += 1) {
+        const stamp = if (game.fixed_rand.nextInt() % 2 == 1)
+            &gameState.grass[game.fixed_rand.nextInt() % gameState.grass.len]
+        else
+            &gameState.stones[game.fixed_rand.nextInt() % gameState.stones.len];
+        const radius = 5;
+        const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
+        const offset = game.v2{ 2 * game.fixed_rand.nextFloat() - 1, 2 * game.fixed_rand.nextFloat() - 1 };
+        const p = center + game.v2{ gameState.metersToPixels * radius, gameState.metersToPixels * radius } * offset - bitmapCenter;
+
+        DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
+    }
+
+    game.fixed_rand.index = 0;
+    grassIndex = 0;
+    while (grassIndex < 100) : (grassIndex += 1) {
+        const stamp = &gameState.tufts[game.fixed_rand.nextInt() % gameState.tufts.len];
+        const radius = 5;
+        const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
+        const offset = game.v2{ 2 * game.fixed_rand.nextFloat() - 1, 2 * game.fixed_rand.nextFloat() - 1 };
+        const p = center + game.v2{ gameState.metersToPixels * radius, gameState.metersToPixels * radius } * offset - bitmapCenter;
+
+        DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
+    }
+}
+
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(
@@ -448,6 +479,7 @@ pub export fn UpdateAndRender(
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
+        game.fixed_rand.shuffle();
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
 
@@ -492,6 +524,18 @@ pub export fn UpdateAndRender(
         gameState.tree = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tree00.bmp");
         gameState.stairwell = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock02.bmp");
         gameState.sword = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock03.bmp");
+
+        gameState.grass[0] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass00.bmp");
+        gameState.grass[1] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass01.bmp");
+
+        gameState.tufts[0] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp");
+        gameState.tufts[1] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft01.bmp");
+        gameState.tufts[2] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp");
+
+        gameState.stones[0] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground00.bmp");
+        gameState.stones[1] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground01.bmp");
+        gameState.stones[2] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground02.bmp");
+        gameState.stones[3] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground03.bmp");
 
         gameState.heroBitmaps[0].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
         gameState.heroBitmaps[0].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");
@@ -714,6 +758,8 @@ pub export fn UpdateAndRender(
     } else {
         DrawBitmap(buffer, &gameState.backdrop, 0, 0, 1);
     }
+
+    DrawTestGround(gameState, buffer);
 
     const screenCenterX = 0.5 * @intToFloat(f32, buffer.width);
     const screenCenterY = 0.5 * @intToFloat(f32, buffer.height);

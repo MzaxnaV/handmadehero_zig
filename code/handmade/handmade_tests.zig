@@ -4,6 +4,7 @@ const testing = std.testing;
 const intrinsics = @import("handmade_intrinsics.zig");
 const hi = @import("handmade_internals.zig");
 const hm = @import("handmade_math.zig");
+const hr = @import("handmade_random.zig");
 
 test "intrinsics" {
     try testing.expectEqual(intrinsics.AbsoluteValue(-0.2), 0.2);
@@ -35,6 +36,9 @@ test "intrinsics" {
 test "math" {
     var vec1 = hm.v2{ 1, 2 };
     const vec2 = hm.v2{ 5, 1 };
+
+    try testing.expectEqual(hm.V2(5.0, 1.0), vec2);
+    try testing.expectEqual(hm.V2(@as(u32, 1), @as(u32, 2)), vec1);
 
     try testing.expectEqual(vec1 + vec2, hm.v2{ 6, 3 });
     try testing.expectEqual(vec1 - vec2, hm.v2{ -4, 1 });
@@ -111,6 +115,16 @@ test "math" {
     try testing.expectEqual(hm.GetBarycentricV3(r3, .{ 2, 2, 2 }), @splat(3, @as(f32, 2.0 / 3.0)));
 
     try testing.expectEqual(hm.ClampV301(.{ 0.2, -0.4, 1.2 }), hm.v3{ 0.2, 0, 1 });
+}
+
+test "random" {
+    hr.fixed_rand.shuffle();
+
+    var i = @as(u32, 0);
+    while (i < hr.fixed_rand.floats.len) : (i += 1) {
+        try testing.expectEqual(hr.fixed_rand.floats[i], hr.fixed_rand.floats[i]);
+        try testing.expectEqual(hr.fixed_rand.ints[i], hr.fixed_rand.ints[i]);
+    }
 }
 
 test "misc_language" {

@@ -117,6 +117,10 @@ pub const state = struct {
     shadow: loaded_bitmap,
     heroBitmaps: [4]hero_bitmaps,
 
+    grass: [2]loaded_bitmap,
+    stones: [4]loaded_bitmap,
+    tufts: [3]loaded_bitmap,
+
     tree: loaded_bitmap,
     sword: loaded_bitmap,
     stairwell: loaded_bitmap,
