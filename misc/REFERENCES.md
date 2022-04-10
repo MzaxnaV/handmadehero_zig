@@ -9,4 +9,4 @@ Collection of references, not all are realted to Handmade Hero.
 - [MegaTextures](https://silverspaceship.com/src/svt/)
 
 ## Z
-- [ZackLikes](https://www.zachtronics.com/zach-like/)
+- [ZachLikes](https://www.zachtronics.com/zach-like/)
