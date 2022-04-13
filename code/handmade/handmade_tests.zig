@@ -117,14 +117,11 @@ test "math" {
     try testing.expectEqual(hm.ClampV301(.{ 0.2, -0.4, 1.2 }), hm.v3{ 0.2, 0, 1 });
 }
 
-test "random" {
-    hr.fixed_rand.shuffle();
+test "rand" {
+    var series = hr.RandomSeed(124);
 
-    var i = @as(u32, 0);
-    while (i < hr.fixed_rand.floats.len) : (i += 1) {
-        try testing.expectEqual(hr.fixed_rand.floats[i], hr.fixed_rand.floats[i]);
-        try testing.expectEqual(hr.fixed_rand.ints[i], hr.fixed_rand.ints[i]);
-    }
+    try testing.expect(series.RandomChoice(2) < 2);
+    try testing.expectEqual(series.index, 125);
 }
 
 test "misc_language" {

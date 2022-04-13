@@ -191,7 +191,7 @@ fn DEBUGWin32ReadEntireFile(thread: *handmade.thread_context, filename: [*:0]con
             if (win32.VirtualAlloc(null, fileSize32, allocationType, win32.PAGE_READWRITE)) |data| {
                 var bytesRead: DWORD = 0;
                 if (win32.ReadFile(fileHandle, data, fileSize32, &bytesRead, null) != 0 and fileSize32 == bytesRead) {
-                    result.contents = data;
+                    result.contents = @ptrCast([*]u8, data);
                     result.contentSize = fileSize32;
                 } else {
                     DEBUGWin32FreeFileMemory(thread, data);
@@ -1274,7 +1274,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 .width = globalBackBuffer.width,
                                 .height = globalBackBuffer.height,
                                 .pitch = globalBackBuffer.pitch,
-                                .bytesPerPixel = globalBackBuffer.bytesPerPixel,
                             };
 
                             if (win32State.inputRecordingIndex != 0) {

@@ -21,7 +21,7 @@ pub const memory_arena = struct {
         self.used = 0;
     }
 
-    inline fn PushSize(self: *memory_arena, size: memory_index) [*]u8 {
+    pub inline fn PushSize(self: *memory_arena, size: memory_index) [*]u8 {
         std.debug.assert((self.used + size) <= self.size);
         const result = self.base + self.used;
         self.used += size;
@@ -45,12 +45,8 @@ pub const memory_arena = struct {
 pub const loaded_bitmap = struct {
     width: i32 = 0,
     height: i32 = 0,
-    pixels: extern union {
-        // NOTE (Manav):, access colours
-        colour: [*]u8,
-        // NOTE (Manav):, access pixel array
-        access: [*]u32,
-    } = undefined,
+    pitch: i32 = 0,
+    memory: [*]u8 = undefined,
 };
 
 pub const hero_bitmaps = struct {
@@ -137,11 +133,13 @@ pub const state = struct {
     familiarCollision: *sim_entity_collision_volume_group,
     wallCollision: *sim_entity_collision_volume_group,
     standardRoomCollision: *sim_entity_collision_volume_group,
+
+    groundBuffer: loaded_bitmap,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------
 
-inline fn ZeroSize(size: memory_index, ptr: [*]u8) void {
+pub inline fn ZeroSize(size: memory_index, ptr: [*]u8) void {
     var byte = ptr;
     var s = size;
     while (s > 0) : (s -= 1) {

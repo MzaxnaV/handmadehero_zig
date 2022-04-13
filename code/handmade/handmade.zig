@@ -44,7 +44,7 @@ fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneH
     }
 }
 
-fn DrawRectangle(buffer: *platform.offscreen_buffer, vMin: game.v2, vMax: game.v2, r: f32, g: f32, b: f32) void {
+fn DrawRectangle(buffer: *game.loaded_bitmap, vMin: game.v2, vMax: game.v2, r: f32, g: f32, b: f32) void {
     var minX = game.RoundF32ToInt(i32, vMin[0]);
     var minY = game.RoundF32ToInt(i32, vMin[1]);
     var maxX = game.RoundF32ToInt(i32, vMax[0]);
@@ -58,17 +58,17 @@ fn DrawRectangle(buffer: *platform.offscreen_buffer, vMin: game.v2, vMax: game.v
         minY = 0;
     }
 
-    if (maxX > @intCast(i32, buffer.width)) {
-        maxX = @intCast(i32, buffer.width);
+    if (maxX > buffer.width) {
+        maxX = buffer.width;
     }
 
-    if (maxY > @intCast(i32, buffer.height)) {
-        maxY = @intCast(i32, buffer.height);
+    if (maxY > buffer.height) {
+        maxY = buffer.height;
     }
 
     const colour: u32 = (game.RoundF32ToInt(u32, r * 255.0) << 16) | (game.RoundF32ToInt(u32, g * 255.0) << 8) | (game.RoundF32ToInt(u32, b * 255) << 0);
 
-    var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * buffer.bytesPerPixel + @intCast(u32, minY) * buffer.pitch;
+    var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, minY * buffer.pitch);
 
     var y = minY;
     while (y < maxY) : (y += 1) {
@@ -78,11 +78,11 @@ fn DrawRectangle(buffer: *platform.offscreen_buffer, vMin: game.v2, vMax: game.v
             pixel.* = colour;
             pixel += 1;
         }
-        row += buffer.pitch;
+        row += @intCast(u32, buffer.pitch);
     }
 }
 
-fn DrawBitmap(buffer: *platform.offscreen_buffer, bitmap: *const game.loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
+fn DrawBitmap(buffer: *game.loaded_bitmap, bitmap: *const game.loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
     var minX = game.RoundF32ToInt(i32, realX);
     var minY = game.RoundF32ToInt(i32, realY);
     var maxX = minX + bitmap.width;
@@ -100,82 +100,83 @@ fn DrawBitmap(buffer: *platform.offscreen_buffer, bitmap: *const game.loaded_bit
         minY = 0;
     }
 
-    if (maxX > @intCast(i32, buffer.width)) {
-        maxX = @intCast(i32, buffer.width);
+    if (maxX > buffer.width) {
+        maxX = buffer.width;
     }
 
-    if (maxY > @intCast(i32, buffer.height)) {
-        maxY = @intCast(i32, buffer.height);
+    if (maxY > buffer.height) {
+        maxY = buffer.height;
     }
 
-    const offset = bitmap.width * (bitmap.height - 1) - sourceOffesetY * bitmap.width + sourceOffesetX;
-    // NOTE (Manav): something is buggy here \(_-_)/
+    const offset = sourceOffesetY * bitmap.pitch + platform.BITMAP_BYTES_PER_PIXEL * sourceOffesetX;
 
-    var sourceRow = bitmap.pixels.access + @intCast(u32, if (offset >= 0) offset else 0);
-    var destRow = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * buffer.bytesPerPixel + @intCast(u32, minY) * buffer.pitch;
+    var sourceRow = if (offset > 0) bitmap.memory + @intCast(usize, offset) else bitmap.memory - @intCast(usize, -offset);
+    var destRow = buffer.memory + @intCast(usize, minX * platform.BITMAP_BYTES_PER_PIXEL + minY * buffer.pitch);
 
     var y = minY;
     while (y < maxY) : (y += 1) {
         const dest = @ptrCast([*]u32, @alignCast(@alignOf(u32), destRow));
+        const source = @ptrCast([*]align(1) u32, sourceRow);
         var x = minX;
         while (x < maxX) : (x += 1) {
             const index = @intCast(u32, x - minX);
 
-            const a = (@intToFloat(f32, ((sourceRow[index] >> 24) & 0xff)) / 255.0) * cAlpha;
+            const sA = (@intToFloat(f32, ((source[index] >> 24) & 0xff)) / 255.0) * cAlpha;
+            const sR = @intToFloat(f32, ((source[index] >> 16) & 0xff));
+            const sG = @intToFloat(f32, ((source[index] >> 8) & 0xff));
+            const sB = @intToFloat(f32, ((source[index] >> 0) & 0xff));
 
-            const sR = @intToFloat(f32, ((sourceRow[index] >> 16) & 0xff));
-            const sG = @intToFloat(f32, ((sourceRow[index] >> 8) & 0xff));
-            const sB = @intToFloat(f32, ((sourceRow[index] >> 0) & 0xff));
-
+            const dA = @intToFloat(f32, ((dest[index] >> 24) & 0xff));
             const dR = @intToFloat(f32, ((dest[index] >> 16) & 0xff));
             const dG = @intToFloat(f32, ((dest[index] >> 8) & 0xff));
             const dB = @intToFloat(f32, ((dest[index] >> 0) & 0xff));
 
-            const r = (1 - a) * dR + a * sR;
-            const g = (1 - a) * dG + a * sG;
-            const b = (1 - a) * dB + a * sB;
+            const a = @maximum(255 * sA, dA);
+            const r = (1 - sA) * dR + sA * sR;
+            const g = (1 - sA) * dG + sA * sG;
+            const b = (1 - sA) * dB + sA * sB;
 
-            dest[index] = (@floatToInt(u32, if (r + 0.5 > 0) r + 0.5 else 0) << 16) | (@floatToInt(u32, if (g + 0.5 > 0) g + 0.5 else 0) << 8) | (@floatToInt(u32, if (b + 0.5 > 0) b + 0.5 else 0) << 0);
+            dest[index] = (@floatToInt(u32, if (a + 0.5 > 0) r + 0.5 else 0) << 24) | (@floatToInt(u32, if (r + 0.5 > 0) r + 0.5 else 0) << 16) | (@floatToInt(u32, if (g + 0.5 > 0) g + 0.5 else 0) << 8) | (@floatToInt(u32, if (b + 0.5 > 0) b + 0.5 else 0) << 0);
         }
 
-        destRow += buffer.pitch;
-        sourceRow -= @intCast(u32, bitmap.width);
+        destRow += @intCast(usize, buffer.pitch);
+        sourceRow = if (bitmap.pitch > 0) sourceRow + @intCast(usize, bitmap.pitch) else sourceRow - @intCast(usize, -bitmap.pitch);
     }
 }
 
-const bitmap_header = packed struct {
-    fileType: u16,
-    fileSize: u32,
-    reserved1: u16,
-    reserved2: u16,
-    bitmapOffset: u32,
-    size: u32,
-    width: i32,
-    height: i32,
-    planes: u16,
-    bitsPerPixel: u16,
-    compression: u32,
-    sizeOfBitmap: u32,
-    horzResolution: u32,
-    vertResolution: u32,
-    colorsUsed: u32,
-    colorsImportant: u32,
-
-    redMask: u32,
-    greenMask: u32,
-    blueMask: u32,
-};
-
 fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug_platform_read_entire_file, fileName: [*:0]const u8) game.loaded_bitmap {
+    const bitmap_header = packed struct {
+        fileType: u16,
+        fileSize: u32,
+        reserved1: u16,
+        reserved2: u16,
+        bitmapOffset: u32,
+        size: u32,
+        width: i32,
+        height: i32,
+        planes: u16,
+        bitsPerPixel: u16,
+        compression: u32,
+        sizeOfBitmap: u32,
+        horzResolution: u32,
+        vertResolution: u32,
+        colorsUsed: u32,
+        colorsImportant: u32,
+
+        redMask: u32,
+        greenMask: u32,
+        blueMask: u32,
+    };
+
     var result = game.loaded_bitmap{};
 
     const readResult = ReadEntireFile(thread, fileName);
     if (readResult.contentSize != 0) {
         const header = @ptrCast(*bitmap_header, readResult.contents);
-        var pixels = @ptrCast([*]u8, readResult.contents) + header.bitmapOffset;
+        const pixels:[*]u8 = readResult.contents + header.bitmapOffset;
         result.width = header.width;
         result.height = header.height;
-        result.pixels.colour = pixels;
+        result.memory = pixels;
 
         std.debug.assert(header.compression == 3);
 
@@ -194,7 +195,7 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
         const blueShift = 0 - @intCast(i8, blueScan);
         const alphaShift = 24 - @intCast(i8, alphaScan);
 
-        const sourceDest = result.pixels.access;
+        const sourceDest = @ptrCast([*]align(1) u32, result.memory); // Fix alignment
 
         var index = @as(u32, 0);
         while (index < @intCast(u32, header.height * header.width)) : (index += 1) {
@@ -205,6 +206,9 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
                 game.RotateLeft(c & alphaMask, alphaShift));
         }
     }
+
+    result.pitch = -result.width * platform.BITMAP_BYTES_PER_PIXEL;
+    result.memory += @intCast(usize, -result.pitch * (result.height - 1));
 
     return result;
 }
@@ -422,35 +426,47 @@ fn MakeNullCollision(gameState: *game.state) *game.sim_entity_collision_volume_g
     return group;
 }
 
-fn DrawTestGround(gameState: *game.state, buffer: *platform.offscreen_buffer) void {
-    var grassIndex = @as(u32, 0);
+fn DrawTestGround(gameState: *game.state, buffer: *game.loaded_bitmap) void {
+    var series = game.RandomSeed(1234);
 
+    var grassIndex = @as(u32, 0);
     const center = game.V2(0.5, 0.5) * game.V2(buffer.width, buffer.height);
-    game.fixed_rand.index = 0;
     while (grassIndex < 100) : (grassIndex += 1) {
-        const stamp = if (game.fixed_rand.nextInt() % 2 == 1)
-            &gameState.grass[game.fixed_rand.nextInt() % gameState.grass.len]
+        const stamp = if (series.RandomChoice(2) == 1)
+            &gameState.grass[series.RandomChoice(gameState.grass.len)]
         else
-            &gameState.stones[game.fixed_rand.nextInt() % gameState.stones.len];
+            &gameState.stones[series.RandomChoice(gameState.stones.len)];
         const radius = 5;
         const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
-        const offset = game.v2{ 2 * game.fixed_rand.nextFloat() - 1, 2 * game.fixed_rand.nextFloat() - 1 };
+        const offset = game.v2{ series.RandomBilateral(), series.RandomBilateral() };
         const p = center + game.v2{ gameState.metersToPixels * radius, gameState.metersToPixels * radius } * offset - bitmapCenter;
 
         DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
     }
 
-    game.fixed_rand.index = 0;
     grassIndex = 0;
     while (grassIndex < 100) : (grassIndex += 1) {
-        const stamp = &gameState.tufts[game.fixed_rand.nextInt() % gameState.tufts.len];
+        const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
         const radius = 5;
         const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
-        const offset = game.v2{ 2 * game.fixed_rand.nextFloat() - 1, 2 * game.fixed_rand.nextFloat() - 1 };
+        const offset = game.v2{ series.RandomBilateral(), series.RandomBilateral() };
         const p = center + game.v2{ gameState.metersToPixels * radius, gameState.metersToPixels * radius } * offset - bitmapCenter;
 
         DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
     }
+}
+
+fn MakeEmptyBitmap(arena: *game.memory_arena, width: i32, height: i32) game.loaded_bitmap {
+    var result = game.loaded_bitmap{};
+
+    result.width = width;
+    result.height = height;
+    result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
+    const totalBitmapSize = @intCast(usize, width * height * platform.BITMAP_BYTES_PER_PIXEL);
+    result.memory = arena.PushSize(totalBitmapSize);
+    game.ZeroSize(totalBitmapSize, result.memory);
+
+    return result;
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
@@ -479,7 +495,6 @@ pub export fn UpdateAndRender(
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     if (!gameMemory.isInitialized) {
-        game.fixed_rand.shuffle();
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
 
@@ -519,12 +534,6 @@ pub export fn UpdateAndRender(
             0.9 * gameState.world.tileDepthInMeters,
         );
 
-        gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
-        gameState.shadow = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp");
-        gameState.tree = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tree00.bmp");
-        gameState.stairwell = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock02.bmp");
-        gameState.sword = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock03.bmp");
-
         gameState.grass[0] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass00.bmp");
         gameState.grass[1] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass01.bmp");
 
@@ -536,6 +545,12 @@ pub export fn UpdateAndRender(
         gameState.stones[1] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground01.bmp");
         gameState.stones[2] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground02.bmp");
         gameState.stones[3] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground03.bmp");
+
+        gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
+        gameState.shadow = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp");
+        gameState.tree = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tree00.bmp");
+        gameState.stairwell = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock02.bmp");
+        gameState.sword = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock03.bmp");
 
         gameState.heroBitmaps[0].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
         gameState.heroBitmaps[0].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");
@@ -557,6 +572,8 @@ pub export fn UpdateAndRender(
         gameState.heroBitmaps[3].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
         gameState.heroBitmaps[3].alignment = .{ 72, 182 };
 
+        var series = game.RandomSeed(1234);
+
         const screenBaseX = @as(u32, 0);
         const screenBaseY = @as(u32, 0);
         const screenBaseZ = @as(u32, 0);
@@ -573,25 +590,17 @@ pub export fn UpdateAndRender(
 
         var screenIndex: u32 = 0;
         while (screenIndex < 2000) : (screenIndex += 1) {
-            var randomChoice: u32 = 0;
-
-            if (NOT_IGNORE) {
-                if (doorUp or doorDown) {
-                    randomChoice = game.RandInt(u32) % 2;
-                } else {
-                    randomChoice = game.RandInt(u32) % 3;
-                }
-            }
+            var doorDirection = series.RandomChoice(if (doorUp or doorDown) 2 else 3);
 
             var createdZDoor = false;
-            if (randomChoice == 2) {
+            if (doorDirection == 2) {
                 createdZDoor = true;
                 if (absTileZ == screenBaseZ) {
                     doorUp = true;
                 } else {
                     doorDown = true;
                 }
-            } else if (randomChoice == 1) {
+            } else if (doorDirection == 1) {
                 doorRight = true;
             } else {
                 doorTop = true;
@@ -649,13 +658,13 @@ pub export fn UpdateAndRender(
             doorRight = false;
             doorTop = false;
 
-            if (randomChoice == 2) {
+            if (doorDirection == 2) {
                 if (absTileZ == screenBaseZ) {
                     absTileZ = screenBaseZ + 1;
                 } else {
                     absTileZ = screenBaseZ;
                 }
-            } else if (randomChoice == 1) {
+            } else if (doorDirection == 1) {
                 screenX += 1;
             } else {
                 screenY += 1;
@@ -679,14 +688,17 @@ pub export fn UpdateAndRender(
 
         _ = AddMonstar(gameState, cameraTileX - 3, cameraTileY + 2, cameraTileZ);
         var familiarIndex = @as(u32, 0);
-        while (familiarIndex < 1) : (familiarIndex += 1) {
-            const familiarOffsetX = @intCast(i32, @rem(game.RandInt(u32), 10)) - 7;
-            const familiarOffsetY = @intCast(i32, @rem(game.RandInt(u32), 10)) - 3;
+        while (familiarIndex < 10) : (familiarIndex += 1) {
+            const familiarOffsetX = series.RandomBetweenI32(-7, 7);
+            const familiarOffsetY = series.RandomBetweenI32(-3, -1);
 
             if ((familiarOffsetX != 0) or (familiarOffsetY != 0)) {
                 _ = AddFamiliar(gameState, @intCast(u32, @intCast(i32, cameraTileX) + familiarOffsetX), @intCast(u32, @intCast(i32, cameraTileY) + familiarOffsetY), cameraTileZ);
             }
         }
+
+        gameState.groundBuffer = MakeEmptyBitmap(&gameState.worldArena, 512, 512);
+        DrawTestGround(gameState, &gameState.groundBuffer);
 
         gameMemory.isInitialized = true;
     }
@@ -753,16 +765,19 @@ pub export fn UpdateAndRender(
     simArena.Initialize(gameMemory.transientStorageSize, gameMemory.transientStorage);
     const simRegion = game.BeginSim(&simArena, gameState, gameState.world, gameState.cameraP, cameraBounds, gameInput.dtForFrame);
 
-    if (NOT_IGNORE) {
-        DrawRectangle(buffer, .{ 0, 0 }, .{ @intToFloat(f32, buffer.width), @intToFloat(f32, buffer.height) }, 0.5, 0.5, 0.5);
-    } else {
-        DrawBitmap(buffer, &gameState.backdrop, 0, 0, 1);
-    }
+    var drawBuffer_ = game.loaded_bitmap{
+        .width = @intCast(i32, buffer.width),
+        .height = @intCast(i32, buffer.height),
+        .pitch = @intCast(i32, buffer.pitch),
+        .memory = @ptrCast([*]u8, buffer.memory.?),
+    };
+    const drawBuffer = &drawBuffer_;
 
-    DrawTestGround(gameState, buffer);
+    DrawRectangle(drawBuffer, .{ 0, 0 }, .{ @intToFloat(f32, drawBuffer.width), @intToFloat(f32, drawBuffer.height) }, 0.5, 0.5, 0.5);
+    DrawBitmap(drawBuffer, &gameState.groundBuffer, 0, 0, 1);
 
-    const screenCenterX = 0.5 * @intToFloat(f32, buffer.width);
-    const screenCenterY = 0.5 * @intToFloat(f32, buffer.height);
+    const screenCenterX = 0.5 * @intToFloat(f32, drawBuffer.width);
+    const screenCenterY = 0.5 * @intToFloat(f32, drawBuffer.height);
 
     var pieceGroup = game.entity_visible_piece_group{
         .gameState = gameState,
@@ -900,10 +915,12 @@ pub export fn UpdateAndRender(
                 },
 
                 .Space => {
-                    var volumeIndex = @as(u32, 0);
-                    while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
-                        const volume = entity.collision.volumes[volumeIndex];
-                        PushRectOutline(&pieceGroup, game.XY(volume.offsetP), 0, game.XY(volume.dim), .{ 0, 0.5, 1, 1 }, 0);
+                    if (!NOT_IGNORE) {
+                        var volumeIndex = @as(u32, 0);
+                        while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
+                            const volume = entity.collision.volumes[volumeIndex];
+                            PushRectOutline(&pieceGroup, game.XY(volume.offsetP), 0, game.XY(volume.dim), .{ 0, 0.5, 1, 1 }, 0);
+                        }
                     }
                 },
 
@@ -935,10 +952,10 @@ pub export fn UpdateAndRender(
                 };
 
                 if (piece.bitmap) |b| {
-                    DrawBitmap(buffer, b, center[0], center[1], piece.a);
+                    DrawBitmap(drawBuffer, b, center[0], center[1], piece.a);
                 } else {
                     const halfDim = piece.dim * @splat(2, 0.5 * metersToPixels);
-                    DrawRectangle(buffer, center - halfDim, center + halfDim, piece.r, piece.g, piece.b);
+                    DrawRectangle(drawBuffer, center - halfDim, center + halfDim, piece.r, piece.g, piece.b);
                 }
             }
         }
@@ -946,7 +963,7 @@ pub export fn UpdateAndRender(
 
     const worldOrigin: game.world_position = .{};
     const diff: [3]f32 = game.Substract(simRegion.world, &worldOrigin, &simRegion.origin);
-    DrawRectangle(buffer, diff[0..2].*, .{ 10, 10 }, 1, 1, 0);
+    DrawRectangle(drawBuffer, diff[0..2].*, .{ 10, 10 }, 1, 1, 0);
 
     game.EndSim(simRegion, gameState);
 }

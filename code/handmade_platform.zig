@@ -2,6 +2,7 @@
 
 pub const PI32 = 3.14159265359;
 pub const CONTROLLERS = 5;
+pub const BITMAP_BYTES_PER_PIXEL = 4;
 
 // platform data types -----------------------------------------------------------------------------------------------------------------------------
 
@@ -16,7 +17,6 @@ pub const offscreen_buffer = struct {
     width: u32,
     height: u32,
     pitch: usize,
-    bytesPerPixel: u32,
 };
 
 pub const sound_output_buffer = struct {
@@ -89,7 +89,7 @@ pub const memory = struct {
 // IMPORTANT: These are NOT for doing anything in the shipping game - they are blocking and the write doesn't protect against lost data
 pub const debug_read_file_result = struct {
     contentSize: u32 = 0,
-    contents: *anyopaque = undefined,
+    contents: [*]u8 = undefined,
 };
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
