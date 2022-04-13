@@ -121,22 +121,28 @@ fn DrawBitmap(buffer: *game.loaded_bitmap, bitmap: *const game.loaded_bitmap, re
         while (x < maxX) : (x += 1) {
             const index = @intCast(u32, x - minX);
 
-            const sA = (@intToFloat(f32, ((source[index] >> 24) & 0xff)) / 255.0) * cAlpha;
-            const sR = @intToFloat(f32, ((source[index] >> 16) & 0xff));
-            const sG = @intToFloat(f32, ((source[index] >> 8) & 0xff));
-            const sB = @intToFloat(f32, ((source[index] >> 0) & 0xff));
+            const sA = cAlpha * @intToFloat(f32, ((source[index] >> 24) & 0xff));
+            const rSA = (sA / 255.0) * cAlpha;
+            const sR = cAlpha * @intToFloat(f32, ((source[index] >> 16) & 0xff));
+            const sG = cAlpha * @intToFloat(f32, ((source[index] >> 8) & 0xff));
+            const sB = cAlpha * @intToFloat(f32, ((source[index] >> 0) & 0xff));
 
             const dA = @intToFloat(f32, ((dest[index] >> 24) & 0xff));
             const dR = @intToFloat(f32, ((dest[index] >> 16) & 0xff));
             const dG = @intToFloat(f32, ((dest[index] >> 8) & 0xff));
             const dB = @intToFloat(f32, ((dest[index] >> 0) & 0xff));
+            const rDA = (dA / 255.0);
 
-            const a = @maximum(255 * sA, dA);
-            const r = (1 - sA) * dR + sA * sR;
-            const g = (1 - sA) * dG + sA * sG;
-            const b = (1 - sA) * dB + sA * sB;
+            const invRSA = 1 - rSA;
+            const a = (rSA + rDA - rSA * rDA) * 255.0;
+            const r = invRSA * dR + sR;
+            const g = invRSA * dG + sG;
+            const b = invRSA * dB + sB;
 
-            dest[index] = (@floatToInt(u32, if (a + 0.5 > 0) r + 0.5 else 0) << 24) | (@floatToInt(u32, if (r + 0.5 > 0) r + 0.5 else 0) << 16) | (@floatToInt(u32, if (g + 0.5 > 0) g + 0.5 else 0) << 8) | (@floatToInt(u32, if (b + 0.5 > 0) b + 0.5 else 0) << 0);
+            dest[index] = (@floatToInt(u32, a + 0.5) << 24) |
+                (@floatToInt(u32, r + 0.5) << 16) |
+                (@floatToInt(u32, g + 0.5) << 8) |
+                (@floatToInt(u32, b + 0.5) << 0);
         }
 
         destRow += @intCast(usize, buffer.pitch);
@@ -173,7 +179,7 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
     const readResult = ReadEntireFile(thread, fileName);
     if (readResult.contentSize != 0) {
         const header = @ptrCast(*bitmap_header, readResult.contents);
-        const pixels:[*]u8 = readResult.contents + header.bitmapOffset;
+        const pixels = readResult.contents + header.bitmapOffset;
         result.width = header.width;
         result.height = header.height;
         result.memory = pixels;
@@ -190,20 +196,32 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
         const blueScan = game.FindLeastSignificantSetBit(blueMask);
         const alphaScan = game.FindLeastSignificantSetBit(alphaMask);
 
-        const redShift = 16 - @intCast(i8, redScan);
-        const greenShift = 8 - @intCast(i8, greenScan);
-        const blueShift = 0 - @intCast(i8, blueScan);
-        const alphaShift = 24 - @intCast(i8, alphaScan);
+        const redShiftDown = @intCast(u5, redScan);
+        const greenShiftDown = @intCast(u5, greenScan);
+        const blueShiftDown = @intCast(u5, blueScan);
+        const alphaShiftDown = @intCast(u5, alphaScan);
 
-        const sourceDest = @ptrCast([*]align(1) u32, result.memory); // Fix alignment
+        const sourceDest = @ptrCast([*]align(1) u32, result.memory);
 
         var index = @as(u32, 0);
         while (index < @intCast(u32, header.height * header.width)) : (index += 1) {
             const c = sourceDest[index];
-            sourceDest[index] = (game.RotateLeft(c & redMask, redShift) |
-                game.RotateLeft(c & greenMask, greenShift) |
-                game.RotateLeft(c & blueMask, blueShift) |
-                game.RotateLeft(c & alphaMask, alphaShift));
+
+            var r = @intToFloat(f32, (c & redMask) >> redShiftDown);
+            var g = @intToFloat(f32, (c & greenMask) >> greenShiftDown);
+            var b = @intToFloat(f32, (c & blueMask) >> blueShiftDown);
+            var a = @intToFloat(f32, (c & alphaMask) >> alphaShiftDown);
+
+            const aN = (a / 255.0);
+
+            r = r * aN;
+            g = g * aN;
+            b = b * aN;
+
+            sourceDest[index] = (@floatToInt(u32, (a + 0.5)) << 24 |
+                @floatToInt(u32, (r + 0.5)) << 16 |
+                @floatToInt(u32, (g + 0.5)) << 8 |
+                @floatToInt(u32, (b + 0.5)) << 0);
         }
     }
 
@@ -436,6 +454,7 @@ fn DrawTestGround(gameState: *game.state, buffer: *game.loaded_bitmap) void {
             &gameState.grass[series.RandomChoice(gameState.grass.len)]
         else
             &gameState.stones[series.RandomChoice(gameState.stones.len)];
+
         const radius = 5;
         const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
         const offset = game.v2{ series.RandomBilateral(), series.RandomBilateral() };
