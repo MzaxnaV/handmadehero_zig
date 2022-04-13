@@ -8,5 +8,8 @@ Collection of references, not all are realted to Handmade Hero.
 ## M
 - [MegaTextures](https://silverspaceship.com/src/svt/)
 
+## U
+- [Unaligned Memory Access](https://www.kernel.org/doc/html/latest/core-api/unaligned-memory-access.html)
+
 ## Z
 - [ZachLikes](https://www.zachtronics.com/zach-like/)
