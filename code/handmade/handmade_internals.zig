@@ -134,6 +134,7 @@ pub const state = struct {
     wallCollision: *sim_entity_collision_volume_group,
     standardRoomCollision: *sim_entity_collision_volume_group,
 
+    groundBuggerP: world_position,
     groundBuffer: loaded_bitmap,
 };
 

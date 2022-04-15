@@ -162,15 +162,14 @@ pub const G = Y;
 pub const B = Z;
 pub const A = W;
 
-pub inline fn XY(vec: anytype) [2]f32 {
+pub inline fn XY(vec: anytype) v2 {
     comptime {
         if (checkVector(@TypeOf(vec)) < 2) {
             @compileError("Invalid operand type or vector size");
         }
     }
 
-    const result: [checkVector(@TypeOf(vec))]f32 = vec;
-    return result[0..2].*;
+    return v2{ vec[0], vec[1] };
 }
 
 pub inline fn Inner(a: anytype, b: @TypeOf(a)) f32 {

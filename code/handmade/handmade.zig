@@ -381,6 +381,8 @@ inline fn PushPiece(
 }
 
 inline fn PushBitmap(group: *game.entity_visible_piece_group, bitmap: *game.loaded_bitmap, offset: game.v2, offsetZ: f32, alignment: game.v2, alpha: f32, entityZC: f32) void {
+    // NOTE (Manav): alpha > 1 mess up our rendering, as cAlpha will make rSA > 1 and invRSA negative
+    std.debug.assert(alpha <= 1);
     PushPiece(group, bitmap, offset, offsetZ, alignment, .{ 0, 0 }, .{ 1, 1, 1, alpha }, entityZC);
 }
 
@@ -444,32 +446,33 @@ fn MakeNullCollision(gameState: *game.state) *game.sim_entity_collision_volume_g
     return group;
 }
 
-fn DrawTestGround(gameState: *game.state, buffer: *game.loaded_bitmap) void {
-    var series = game.RandomSeed(1234);
+fn DrawGroundChunk(gameState: *game.state, buffer: *game.loaded_bitmap, chunkP: *game.world_position) void {
+    var series = game.RandomSeed(@intCast(usize, 139 * chunkP.chunkX + 593 * chunkP.chunkY + 329 * chunkP.chunkZ));
+
+    const width = @intToFloat(f32, buffer.width);
+    const height = @intToFloat(f32, buffer.height);
 
     var grassIndex = @as(u32, 0);
-    const center = game.V2(0.5, 0.5) * game.V2(buffer.width, buffer.height);
-    while (grassIndex < 100) : (grassIndex += 1) {
+    // const center = game.V2(0.5, 0.5) * game.V2(width, height);
+    while (grassIndex < 1000) : (grassIndex += 1) {
         const stamp = if (series.RandomChoice(2) == 1)
             &gameState.grass[series.RandomChoice(gameState.grass.len)]
         else
             &gameState.stones[series.RandomChoice(gameState.stones.len)];
 
-        const radius = 5;
         const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
-        const offset = game.v2{ series.RandomBilateral(), series.RandomBilateral() };
-        const p = center + game.v2{ gameState.metersToPixels * radius, gameState.metersToPixels * radius } * offset - bitmapCenter;
-
+        const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
+        const p = offset - bitmapCenter;
         DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
     }
 
     grassIndex = 0;
-    while (grassIndex < 100) : (grassIndex += 1) {
+    while (grassIndex < 1000) : (grassIndex += 1) {
         const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
-        const radius = 5;
+
         const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
-        const offset = game.v2{ series.RandomBilateral(), series.RandomBilateral() };
-        const p = center + game.v2{ gameState.metersToPixels * radius, gameState.metersToPixels * radius } * offset - bitmapCenter;
+        const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
+        const p = offset - bitmapCenter;
 
         DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
     }
@@ -609,7 +612,8 @@ pub export fn UpdateAndRender(
 
         var screenIndex: u32 = 0;
         while (screenIndex < 2000) : (screenIndex += 1) {
-            var doorDirection = series.RandomChoice(if (doorUp or doorDown) 2 else 3);
+            // var doorDirection = series.RandomChoice(if (doorUp or doorDown) 2 else 3);
+            var doorDirection = series.RandomChoice(2);
 
             var createdZDoor = false;
             if (doorDirection == 2) {
@@ -652,9 +656,7 @@ pub export fn UpdateAndRender(
                     }
 
                     if (shouldBeDoor) {
-                        if (screenIndex == 0) {
-                            _ = AddWall(gameState, absTileX, absTileY, absTileZ);
-                        }
+                        _ = AddWall(gameState, absTileX, absTileY, absTileZ);
                     } else if (createdZDoor) {
                         if ((tileX == 10) and (tileY == 5)) {
                             _ = AddStairs(gameState, absTileX, absTileY, if (doorDown) absTileZ - 1 else absTileZ);
@@ -707,7 +709,7 @@ pub export fn UpdateAndRender(
 
         _ = AddMonstar(gameState, cameraTileX - 3, cameraTileY + 2, cameraTileZ);
         var familiarIndex = @as(u32, 0);
-        while (familiarIndex < 10) : (familiarIndex += 1) {
+        while (familiarIndex < 1) : (familiarIndex += 1) {
             const familiarOffsetX = series.RandomBetweenI32(-7, 7);
             const familiarOffsetY = series.RandomBetweenI32(-3, -1);
 
@@ -716,8 +718,16 @@ pub export fn UpdateAndRender(
             }
         }
 
-        gameState.groundBuffer = MakeEmptyBitmap(&gameState.worldArena, 512, 512);
-        DrawTestGround(gameState, &gameState.groundBuffer);
+        const screenWidth = @intToFloat(f32, buffer.width);
+        const screenHeight = @intToFloat(f32, buffer.height);
+        const maximumScalingFactor = 0.5;
+        _ = maximumScalingFactor;
+        const groundOverscan = 1.2;
+        const groundBufferWidth = game.RoundF32ToInt(i32, groundOverscan * screenWidth);
+        const groundBufferHeight = game.RoundF32ToInt(i32, groundOverscan * screenHeight);
+        gameState.groundBuffer = MakeEmptyBitmap(&gameState.worldArena, groundBufferWidth, groundBufferHeight);
+        gameState.groundBuggerP = gameState.cameraP;
+        DrawGroundChunk(gameState, &gameState.groundBuffer, &gameState.groundBuggerP);
 
         gameMemory.isInitialized = true;
     }
@@ -793,10 +803,18 @@ pub export fn UpdateAndRender(
     const drawBuffer = &drawBuffer_;
 
     DrawRectangle(drawBuffer, .{ 0, 0 }, .{ @intToFloat(f32, drawBuffer.width), @intToFloat(f32, drawBuffer.height) }, 0.5, 0.5, 0.5);
-    DrawBitmap(drawBuffer, &gameState.groundBuffer, 0, 0, 1);
 
     const screenCenterX = 0.5 * @intToFloat(f32, drawBuffer.width);
     const screenCenterY = 0.5 * @intToFloat(f32, drawBuffer.height);
+
+    var ground = game.v2{
+        screenCenterX - 0.5 * @intToFloat(f32, gameState.groundBuffer.width),
+        screenCenterY - 0.5 * @intToFloat(f32, gameState.groundBuffer.height),
+    };
+
+    const delta = game.Substract(world, &gameState.groundBuggerP, &gameState.cameraP);
+    ground += game.v2{ gameState.metersToPixels, -gameState.metersToPixels } * game.XY(delta);
+    DrawBitmap(drawBuffer, &gameState.groundBuffer, game.X(ground), game.Y(ground), 1);
 
     var pieceGroup = game.entity_visible_piece_group{
         .gameState = gameState,
@@ -815,7 +833,7 @@ pub export fn UpdateAndRender(
             const dt = gameInput.dtForFrame;
 
             const alpha = 1 - 0.5 * game.Z(entity.p);
-            const shadowAlpha = if (alpha > 0) alpha else 0;
+            const shadowAlpha = game.Clampf01(alpha);
 
             var moveSpec = game.DefaultMoveSpec();
             var ddP = game.v3{ 0, 0, 0 };
