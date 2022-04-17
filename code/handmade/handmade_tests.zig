@@ -133,6 +133,6 @@ test "misc_language" {
 
     const x = mem.PushStruct(u8);
     x.* = 24;
-    try testing.expectEqual(x.*, mem.base[0]);
+    try testing.expectEqual(x.*, @intToPtr([*]u8, mem.base_addr)[0]);
     try testing.expectEqual(@as(usize, 1), mem.used);
 }

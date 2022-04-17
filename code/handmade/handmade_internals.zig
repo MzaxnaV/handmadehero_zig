@@ -12,34 +12,48 @@ const v2 = @import("handmade_math.zig").v2;
 
 pub const memory_arena = struct {
     size: memory_index,
-    base: [*]u8,
+    base_addr: usize,
     used: memory_index,
+    tempCount: u32,
 
-    pub fn Initialize(self: *memory_arena, size: memory_index, base: [*]u8) void {
-        self.size = size;
-        self.base = base;
+    pub inline fn Initialize(self: *memory_arena, size: memory_index, base: [*]u8) void {
+        const base_addr = @ptrToInt(base);
+        const adjusted_addr = std.mem.alignForward(base_addr, 16);
+        // NOTE (Manav): think properly about this.
+        self.size = size - (adjusted_addr - base_addr);
+        self.base_addr = adjusted_addr;
         self.used = 0;
+        self.tempCount = 0;
     }
 
-    pub inline fn PushSize(self: *memory_arena, size: memory_index) [*]u8 {
+    pub inline fn PushSize(self: *memory_arena, comptime alignment: u32, size: memory_index) [*]align(alignment) u8 {
         std.debug.assert((self.used + size) <= self.size);
-        const result = self.base + self.used;
+        const result = @intToPtr([*]align(alignment) u8, self.base_addr + self.used);
         self.used += size;
 
         return result;
     }
 
     pub inline fn PushStruct(self: *memory_arena, comptime T: type) *T {
-        return @ptrCast(*T, @alignCast(@alignOf(T), self.PushSize(@sizeOf(T))));
+        return @ptrCast(*T, self.PushSize(@alignOf(T), @sizeOf(T)));
     }
 
     pub inline fn PushArraySlice(self: *memory_arena, comptime T: type, comptime count: memory_index) *[count]T {
-        return @ptrCast(*[count]T, @alignCast(@alignOf(T), self.PushSize(count * @sizeOf(T))));
+        return @ptrCast(*[count]T, self.PushSize(@alignOf(T), count * @sizeOf(*[]T)));
     }
 
     pub inline fn PushArrayPtr(self: *memory_arena, comptime T: type, count: memory_index) [*]T {
-        return @ptrCast([*]T, @alignCast(@alignOf(T), self.PushSize(count * @sizeOf(T))));
+        return @ptrCast([*]T, self.PushSize(@alignOf(T), count * @sizeOf(T)));
     }
+
+    pub inline fn CheckArena(self: *memory_arena) void {
+        std.debug.assert(self.tempCount == 0);
+    }
+};
+
+pub const temporary_memory = struct {
+    arena: *memory_arena,
+    used: memory_index,
 };
 
 pub const loaded_bitmap = struct {
@@ -97,6 +111,11 @@ pub const pairwise_collision_rule = struct {
     nextInHash: ?*pairwise_collision_rule,
 };
 
+pub const ground_buffer = struct {
+    p: world_position,
+    memory: [*]u8,
+};
+
 pub const state = struct {
     worldArena: memory_arena,
     world: *world,
@@ -133,9 +152,14 @@ pub const state = struct {
     familiarCollision: *sim_entity_collision_volume_group,
     wallCollision: *sim_entity_collision_volume_group,
     standardRoomCollision: *sim_entity_collision_volume_group,
+};
 
-    groundBuggerP: world_position,
-    groundBuffer: loaded_bitmap,
+pub const transient_state = struct {
+    initialized: bool,
+    tranArena: memory_arena,
+    groundBufferCount: u32,
+    groundBitmapTemplate: loaded_bitmap,
+    groundBuffers: [*]ground_buffer,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------
@@ -147,6 +171,25 @@ pub inline fn ZeroSize(size: memory_index, ptr: [*]u8) void {
         byte.* = 0;
         byte += 1;
     }
+}
+
+pub inline fn BeginTemporaryMemory(arena: *memory_arena) temporary_memory {
+    var result = temporary_memory{
+        .arena = arena,
+        .used = arena.used,
+    };
+
+    result.arena.tempCount += 1;
+
+    return result;
+}
+
+pub inline fn EndTemporaryMemory(tempMem: temporary_memory) void {
+    var arena = tempMem.arena;
+    std.debug.assert(arena.used >= tempMem.used);
+    arena.used = tempMem.used;
+    std.debug.assert(tempMem.arena.tempCount > 0);
+    arena.tempCount -= 1;
 }
 
 // NOTE (Manav): works for slices too.

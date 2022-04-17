@@ -86,7 +86,6 @@ pub const memory = struct {
     DEBUGPlatformWriteEntireFile: fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool = undefined,
 };
 
-// IMPORTANT: These are NOT for doing anything in the shipping game - they are blocking and the write doesn't protect against lost data
 pub const debug_read_file_result = struct {
     contentSize: u32 = 0,
     contents: [*]u8 = undefined,
