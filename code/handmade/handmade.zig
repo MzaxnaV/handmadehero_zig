@@ -158,6 +158,74 @@ fn DrawBitmap(buffer: *game.loaded_bitmap, bitmap: *const game.loaded_bitmap, re
     }
 }
 
+fn DrawMatte(buffer: *game.loaded_bitmap, bitmap: *const game.loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
+    var minX = game.RoundF32ToInt(i32, realX);
+    var minY = game.RoundF32ToInt(i32, realY);
+    var maxX = minX + bitmap.width;
+    var maxY = minY + bitmap.height;
+
+    var sourceOffesetX = @as(i32, 0);
+    if (minX < 0) {
+        sourceOffesetX = -minX;
+        minX = 0;
+    }
+
+    var sourceOffesetY = @as(i32, 0);
+    if (minY < 0) {
+        sourceOffesetY = -minY;
+        minY = 0;
+    }
+
+    if (maxX > buffer.width) {
+        maxX = buffer.width;
+    }
+
+    if (maxY > buffer.height) {
+        maxY = buffer.height;
+    }
+
+    const offset = sourceOffesetY * bitmap.pitch + platform.BITMAP_BYTES_PER_PIXEL * sourceOffesetX;
+
+    var sourceRow = if (offset > 0) bitmap.memory + @intCast(usize, offset) else bitmap.memory - @intCast(usize, -offset);
+    var destRow = buffer.memory + @intCast(usize, minX * platform.BITMAP_BYTES_PER_PIXEL + minY * buffer.pitch);
+
+    var y = minY;
+    while (y < maxY) : (y += 1) {
+        const dest = @ptrCast([*]u32, @alignCast(@alignOf(u32), destRow));
+        const source = @ptrCast([*]align(1) u32, sourceRow);
+        var x = minX;
+        while (x < maxX) : (x += 1) {
+            const index = @intCast(u32, x - minX);
+
+            const sA = cAlpha * @intToFloat(f32, ((source[index] >> 24) & 0xff));
+            const rSA = (sA / 255.0) * cAlpha;
+            // const sR = cAlpha * @intToFloat(f32, ((source[index] >> 16) & 0xff));
+            // const sG = cAlpha * @intToFloat(f32, ((source[index] >> 8) & 0xff));
+            // const sB = cAlpha * @intToFloat(f32, ((source[index] >> 0) & 0xff));
+
+            const dA = @intToFloat(f32, ((dest[index] >> 24) & 0xff));
+            const dR = @intToFloat(f32, ((dest[index] >> 16) & 0xff));
+            const dG = @intToFloat(f32, ((dest[index] >> 8) & 0xff));
+            const dB = @intToFloat(f32, ((dest[index] >> 0) & 0xff));
+            // const rDA = (dA / 255.0);
+
+            const invRSA = 1 - rSA;
+            const a = invRSA * dA;
+            const r = invRSA * dR;
+            const g = invRSA * dG;
+            const b = invRSA * dB;
+
+            dest[index] = (@floatToInt(u32, a + 0.5) << 24) |
+                (@floatToInt(u32, r + 0.5) << 16) |
+                (@floatToInt(u32, g + 0.5) << 8) |
+                (@floatToInt(u32, b + 0.5) << 0);
+        }
+
+        destRow += @intCast(usize, buffer.pitch);
+        sourceRow = if (bitmap.pitch > 0) sourceRow + @intCast(usize, bitmap.pitch) else sourceRow - @intCast(usize, -bitmap.pitch);
+    }
+}
+
 fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug_platform_read_entire_file, fileName: [*:0]const u8) game.loaded_bitmap {
     const bitmap_header = packed struct {
         fileType: u16,
@@ -460,34 +528,59 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
 
     groundBuffer.p = chunkP.*;
 
-    var series = game.RandomSeed(@bitCast(u32, 139 * chunkP.chunkX + 593 * chunkP.chunkY + 329 * chunkP.chunkZ));
-
     const width = @intToFloat(f32, buffer.width);
     const height = @intToFloat(f32, buffer.height);
 
-    var grassIndex = @as(u32, 0);
-    // const center = game.V2(0.5, 0.5) * game.V2(width, height);
-    while (grassIndex < 100) : (grassIndex += 1) {
-        const stamp = if (series.RandomChoice(2) == 1)
-            &gameState.grass[series.RandomChoice(gameState.grass.len)]
-        else
-            &gameState.stones[series.RandomChoice(gameState.stones.len)];
+    var chunkOffsetY = @as(i32, -1);
+    while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
+        var chunkOffsetX = @as(i32, -1);
+        while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
+            const chunkX = chunkP.chunkX + chunkOffsetX;
+            const chunkY = chunkP.chunkY + chunkOffsetY;
+            const chunkZ = chunkP.chunkZ;
 
-        const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
-        const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
-        const p = offset - bitmapCenter;
-        DrawBitmap(&buffer, stamp, game.X(p), game.Y(p), 1.0);
+            var series = game.RandomSeed(@bitCast(u32, 139 * chunkX + 593 * chunkY + 329 * chunkZ));
+            // TODO (Manav): inspect why 0.5 is needed as offset
+            const center = game.v2{ (0.5 + @intToFloat(f32, chunkOffsetX)) * width, (0.5 - @intToFloat(f32, chunkOffsetY)) * height };
+
+            var grassIndex = @as(u32, 0);
+            while (grassIndex < 100) : (grassIndex += 1) {
+                const stamp = if (series.RandomChoice(2) == 1)
+                    &gameState.grass[series.RandomChoice(gameState.grass.len)]
+                else
+                    &gameState.stones[series.RandomChoice(gameState.stones.len)];
+
+                const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
+                const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
+                const p = center + offset - bitmapCenter;
+                DrawBitmap(&buffer, stamp, game.X(p), game.Y(p), 1.0);
+            }
+        }
     }
 
-    grassIndex = 0;
-    while (grassIndex < 100) : (grassIndex += 1) {
-        const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
+    chunkOffsetY = -1;
+    while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
+        var chunkOffsetX = @as(i32, -1);
+        while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
+            const chunkX = chunkP.chunkX + chunkOffsetX;
+            const chunkY = chunkP.chunkY + chunkOffsetY;
+            const chunkZ = chunkP.chunkZ;
 
-        const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
-        const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
-        const p = offset - bitmapCenter;
+            var series = game.RandomSeed(@bitCast(u32, 139 * chunkX + 593 * chunkY + 329 * chunkZ));
+            // TODO (Manav): inspect why 0.5 is needed as offset
+            const center = game.v2{ (0.5 + @intToFloat(f32, chunkOffsetX)) * width, (0.5 - @intToFloat(f32, chunkOffsetY)) * height };
 
-        DrawBitmap(&buffer, stamp, game.X(p), game.Y(p), 1.0);
+            var grassIndex = @as(u32, 0);
+            while (grassIndex < 100) : (grassIndex += 1) {
+                const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
+
+                const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
+                const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
+                const p = center + offset - bitmapCenter;
+
+                DrawBitmap(&buffer, stamp, game.X(p), game.Y(p), 1.0);
+            }
+        }
     }
 }
 
@@ -767,11 +860,12 @@ pub export fn UpdateAndRender(
     std.debug.assert(@sizeOf(game.transient_state) <= gameMemory.transientStorageSize);
     const tranState = @ptrCast(*game.transient_state, @alignCast(@alignOf(game.transient_state), gameMemory.transientStorage));
     if (!tranState.initialized) {
-        var size = gameMemory.transientStorageSize - @sizeOf(game.transient_state);
-        var addr = gameMemory.transientStorage + @sizeOf(game.transient_state);
-        tranState.tranArena.Initialize(size, addr);
+        tranState.tranArena.Initialize(
+            gameMemory.transientStorageSize - @sizeOf(game.transient_state),
+            gameMemory.transientStorage + @sizeOf(game.transient_state),
+        );
 
-        tranState.groundBufferCount = 128;
+        tranState.groundBufferCount = 32; // 128
         tranState.groundBuffers = tranState.tranArena.PushArrayPtr(game.ground_buffer, tranState.groundBufferCount);
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
@@ -782,6 +876,14 @@ pub export fn UpdateAndRender(
         }
 
         tranState.initialized = true;
+    }
+
+    if (gameInput.executableReloaded) {
+        var groundBufferIndex = @as(u32, 0);
+        while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
+            var groundBuffer: *game.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
+            groundBuffer.p = game.NullPosition();
+        }
     }
 
     const world = gameState.world;
@@ -846,6 +948,8 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
+    DrawRectangle(drawBuffer, .{ 0, 0 }, .{ @intToFloat(f32, drawBuffer.width), @intToFloat(f32, drawBuffer.height) }, 1.0, 0.0, 1.0);
+
     const screenCenter = game.v2{
         0.5 * @intToFloat(f32, drawBuffer.width),
         0.5 * @intToFloat(f32, drawBuffer.height),
@@ -854,54 +958,6 @@ pub export fn UpdateAndRender(
     const screenWidthInMeters = @intToFloat(f32, drawBuffer.width) * pixelsToMeters;
     const screenHeightInMeters = @intToFloat(f32, drawBuffer.height) * pixelsToMeters;
     const cameraBoundsInMeters = game.rect3.InitCenterDim(.{ 0, 0, 0 }, game.v3{ screenWidthInMeters, screenHeightInMeters, 0 });
-
-    DrawRectangle(drawBuffer, .{ 0, 0 }, .{ @intToFloat(f32, drawBuffer.width), @intToFloat(f32, drawBuffer.height) }, 0.5, 0.5, 0.5);
-
-    {
-        const minChunkP = game.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMinCorner());
-        const maxChunkP = game.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMaxCorner());
-
-        var chunkZ = minChunkP.chunkZ;
-        while (chunkZ <= maxChunkP.chunkZ) : (chunkZ += 1) {
-            var chunkY = minChunkP.chunkY;
-            while (chunkY <= maxChunkP.chunkY) : (chunkY += 1) {
-                var chunkX = minChunkP.chunkX;
-                while (chunkX <= maxChunkP.chunkX) : (chunkX += 1) {
-                    // if (game.GetWorldChunk(null, world, )) |chunk|
-                    {
-                        const chunkCenterP = game.CenteredChunkPoint(chunkX, chunkY, chunkZ);
-                        const relP = game.Substract(world, &chunkCenterP, &gameState.cameraP);
-                        const screenP = screenCenter + game.v2{ metersToPixels, -metersToPixels } * game.XY(relP);
-                        const halfScreenDim = game.v2{ 0.5 * metersToPixels, 0.5 * metersToPixels } * game.XY(world.chunkDimInMeters);
-
-                        var found = false;
-                        var emptyBuffer: ?*game.ground_buffer = null;
-                        var groundBufferIndex = @as(u32, 0);
-                        while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
-                            const groundBuffer = &tranState.groundBuffers[groundBufferIndex];
-                            if (game.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
-                                found = true;
-                                break;
-                            } else if (!game.IsValid(groundBuffer.p)) {
-                                emptyBuffer = groundBuffer;
-                            }
-                        }
-
-                        if (!found and emptyBuffer != null) {
-                            FillGroundChunk(tranState, gameState, emptyBuffer.?, &chunkCenterP);
-                        }
-
-                        DrawRectangleOutline(drawBuffer, screenP - halfScreenDim, screenP + halfScreenDim, .{ 1, 1, 0 }, 2);
-                    }
-                }
-            }
-        }
-    }
-
-    const simBoundsExpansion = game.v3{ 15, 15, 15 };
-    const simBounds = game.AddRadiusToRect3(cameraBoundsInMeters, simBoundsExpansion);
-    const simMemory = game.BeginTemporaryMemory(&tranState.tranArena);
-    const simRegion = game.BeginSim(&tranState.tranArena, gameState, gameState.world, gameState.cameraP, simBounds, gameInput.dtForFrame);
 
     var groundBufferIndex = @as(u32, 0);
     while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
@@ -922,6 +978,62 @@ pub export fn UpdateAndRender(
             DrawBitmap(drawBuffer, bitmap, game.X(ground), game.Y(ground), 1);
         }
     }
+
+    {
+        const minChunkP = game.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMinCorner());
+        const maxChunkP = game.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMaxCorner());
+
+        var chunkZ = minChunkP.chunkZ;
+        while (chunkZ <= maxChunkP.chunkZ) : (chunkZ += 1) {
+            var chunkY = minChunkP.chunkY;
+            while (chunkY <= maxChunkP.chunkY) : (chunkY += 1) {
+                var chunkX = minChunkP.chunkX;
+                while (chunkX <= maxChunkP.chunkX) : (chunkX += 1) {
+                    // if (game.GetWorldChunk(null, world, )) |chunk|
+                    {
+                        const chunkCenterP = game.CenteredChunkPoint(chunkX, chunkY, chunkZ);
+                        const relP = game.Substract(world, &chunkCenterP, &gameState.cameraP);
+                        const screenP = screenCenter + game.v2{ metersToPixels, -metersToPixels } * game.XY(relP);
+                        const screenDim = game.v2{ metersToPixels, metersToPixels } * game.XY(world.chunkDimInMeters);
+
+                        var furthestBufferLengthSq = @as(f32, 0);
+                        var furthestBuffer: ?*game.ground_buffer = null;
+                        var index = @as(u32, 0);
+                        while (index < tranState.groundBufferCount) : (index += 1) {
+                            const groundBuffer = &tranState.groundBuffers[index];
+                            if (game.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
+                                furthestBuffer = null;
+                                break;
+                            } else if (game.IsValid(groundBuffer.p)) {
+                                const distance = game.Substract(world, &groundBuffer.p, &gameState.cameraP);
+                                const bufferLengthSq = game.LengthSq(game.XY(distance));
+                                if (furthestBufferLengthSq < bufferLengthSq) {
+                                    furthestBufferLengthSq = bufferLengthSq;
+                                    furthestBuffer = groundBuffer;
+                                }
+                            } else {
+                                furthestBufferLengthSq = platform.F32MAXIMUM;
+                                furthestBuffer = groundBuffer;
+                            }
+                        }
+
+                        if (furthestBuffer != null) {
+                            FillGroundChunk(tranState, gameState, furthestBuffer.?, &chunkCenterP);
+                        }
+
+                        if (!NOT_IGNORE) {
+                            DrawRectangleOutline(drawBuffer, screenP - game.v2{ 0.5, 0.5 } * screenDim, screenP + game.v2{ 0.5, 0.5 } * screenDim, .{ 1, 1, 0 }, 2);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    const simBoundsExpansion = game.v3{ 15, 15, 15 };
+    const simBounds = game.AddRadiusToRect3(cameraBoundsInMeters, simBoundsExpansion);
+    const simMemory = game.BeginTemporaryMemory(&tranState.tranArena);
+    const simRegion = game.BeginSim(&tranState.tranArena, gameState, gameState.world, gameState.cameraP, simBounds, gameInput.dtForFrame);
 
     var pieceGroup = game.entity_visible_piece_group{
         .gameState = gameState,

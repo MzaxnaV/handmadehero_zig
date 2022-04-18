@@ -1,8 +1,12 @@
+const f32_max = @import("std").math.f32_max;
+
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
 pub const PI32 = 3.14159265359;
 pub const CONTROLLERS = 5;
 pub const BITMAP_BYTES_PER_PIXEL = 4;
+
+pub const F32MAXIMUM = f32_max;
 
 // platform data types -----------------------------------------------------------------------------------------------------------------------------
 
@@ -68,6 +72,8 @@ pub const input = struct {
     mouseX: i32 = 0,
     mouseY: i32 = 0,
     mouseZ: i32 = 0,
+
+    executableReloaded: bool = false,
     dtForFrame: f32 = 0,
     controllers: [CONTROLLERS]controller_input = [1]controller_input{controller_input{}} ** CONTROLLERS,
 };

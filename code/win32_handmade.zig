@@ -1122,17 +1122,18 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     var soundIsValid = false;
 
                     var gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
-                    var loadCounter: u32 = 0;
 
                     var lastCycleCount = rdtsc();
 
                     while (globalRunning) {
                         newInput.dtForFrame = targetSecondsPerFrame;
+
+                        newInput.executableReloaded = false;
                         const newDLLWriteTime = Win32GetLastWriteTime(&sourceGameCodeDLLFullPath);
                         if (win32.CompareFileTime(&newDLLWriteTime, &gameCode.dllLastWriteTime) != 0) {
                             Win32UnloadGameCode(&gameCode);
                             gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
-                            loadCounter = 0;
+                            newInput.executableReloaded = true;
                         }
 
                         const oldKeyboardController: *handmade.controller_input = &oldInput.controllers[0];
