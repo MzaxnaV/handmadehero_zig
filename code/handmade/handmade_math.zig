@@ -241,6 +241,15 @@ pub inline fn GetBarycentricV3(a: rect3, p: v3) v3 {
     return result;
 }
 
+pub inline fn Offset(a: rect3, offset: v3) rect3 {
+    const result = rect3{
+        .min = a.min + offset,
+        .max = a.max + offset,
+    };
+
+    return result;
+}
+
 pub inline fn RectanglesIntersect(a: rect3, b: rect3) bool {
     const result = !(@reduce(.Or, b.max <= a.min) or @reduce(.Or, b.min >= a.max));
     return result;

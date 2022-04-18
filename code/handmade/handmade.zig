@@ -44,6 +44,14 @@ fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneH
     }
 }
 
+fn DrawRectangleOutline(buffer: *game.loaded_bitmap, vMin: game.v2, vMax: game.v2, colour: game.v3, r: f32) void {
+    DrawRectangle(buffer, .{ game.X(vMin) - r, game.Y(vMin) - r }, .{ game.X(vMax) + r, game.Y(vMin) + r }, game.R(colour), game.G(colour), game.B(colour));
+    DrawRectangle(buffer, .{ game.X(vMin) - r, game.Y(vMax) - r }, .{ game.X(vMax) + r, game.Y(vMax) + r }, game.R(colour), game.G(colour), game.B(colour));
+
+    DrawRectangle(buffer, .{ game.X(vMin) - r, game.Y(vMin) - r }, .{ game.X(vMin) + r, game.Y(vMax) + r }, game.R(colour), game.G(colour), game.B(colour));
+    DrawRectangle(buffer, .{ game.X(vMax) - r, game.Y(vMin) - r }, .{ game.X(vMax) + r, game.Y(vMax) + r }, game.R(colour), game.G(colour), game.B(colour));
+}
+
 fn DrawRectangle(buffer: *game.loaded_bitmap, vMin: game.v2, vMax: game.v2, r: f32, g: f32, b: f32) void {
     var minX = game.RoundF32ToInt(i32, vMin[0]);
     var minY = game.RoundF32ToInt(i32, vMin[1]);
@@ -268,7 +276,7 @@ fn AddGroundedEntity(gameState: *game.state, entityType: game.entity_type, p: ga
 }
 
 fn AddStandardRoom(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Space, p, gameState.standardRoomCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Traversable));
@@ -277,7 +285,7 @@ fn AddStandardRoom(gameState: *game.state, absTileX: u32, absTileY: u32, absTile
 }
 
 fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Wall, p, gameState.wallCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
@@ -286,12 +294,12 @@ fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) 
 }
 
 fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Stairwell, p, gameState.stairCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
     entity.low.sim.walkableDim = .{ game.X(entity.low.sim.collision.totalVolume.dim), game.Y(entity.low.sim.collision.totalVolume.dim) };
-    entity.low.sim.walkableHeight = gameState.world.tileDepthInMeters;
+    entity.low.sim.walkableHeight = gameState.typicalFloorHeight;
 
     return entity;
 }
@@ -337,7 +345,7 @@ fn AddPlayer(gameState: *game.state) add_low_entity_result {
 }
 
 fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Monstar, p, gameState.monstarCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
@@ -348,7 +356,7 @@ fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u3
 }
 
 fn AddFamiliar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = game.ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Familiar, p, gameState.familiarCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
@@ -446,13 +454,13 @@ fn MakeNullCollision(gameState: *game.state) *game.sim_entity_collision_volume_g
     return group;
 }
 
-fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, groundBuffer: *game.ground_buffer, chunkP: *game.world_position) void {
+fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, groundBuffer: *game.ground_buffer, chunkP: *const game.world_position) void {
     var buffer = tranState.groundBitmapTemplate;
     buffer.memory = groundBuffer.memory;
 
     groundBuffer.p = chunkP.*;
 
-    var series = game.RandomSeed(@intCast(usize, 139 * chunkP.chunkX + 593 * chunkP.chunkY + 329 * chunkP.chunkZ));
+    var series = game.RandomSeed(@bitCast(u32, 139 * chunkP.chunkX + 593 * chunkP.chunkY + 329 * chunkP.chunkZ));
 
     const width = @intToFloat(f32, buffer.width);
     const height = @intToFloat(f32, buffer.height);
@@ -503,6 +511,31 @@ fn MakeEmptyBitmap(arena: *game.memory_arena, width: i32, height: i32, clearToZe
     return result;
 }
 
+// fn RequestGroundBuffers(centerP: game.world_position, bounds: game.rect3) void {
+//     bounds = game.Offset(bounds, centerP.offset_);
+//     centerP.offset_ = .{0, 0, 0};
+
+//     var
+
+//     FillGroundChunk(tranState, gameState, &tranState.groundBuffers[0], &gameState.cameraP);
+// }
+
+pub inline fn ChunkPosFromTilePos(w: *game.world, absTileX: i32, absTileY: i32, absTileZ: i32, additionalOffset: game.v3) game.world_position {
+    const basePos: game.world_position = .{};
+
+    const tileSideInMeters = 1.4;
+    const tileDepthInMeters = 3.0;
+
+    const tileDim = game.v3{ tileSideInMeters, tileSideInMeters, tileDepthInMeters };
+    const offset = tileDim * game.v3{ @intToFloat(f32, absTileX), @intToFloat(f32, absTileY), @intToFloat(f32, absTileZ) };
+
+    const result: game.world_position = game.MapIntoChunkSpace(w, basePos, offset + additionalOffset);
+
+    std.debug.assert(game.IsCanonical(w, result.offset_));
+
+    return result;
+}
+
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(
@@ -526,6 +559,10 @@ pub export fn UpdateAndRender(
 
     std.debug.assert(@sizeOf(game.state) <= gameMemory.permanentStorageSize);
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
+
+    const groundBufferWidth = 256;
+    const groundBufferHeight = 256;
+
     if (!gameMemory.isInitialized) {
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
@@ -534,38 +571,33 @@ pub export fn UpdateAndRender(
 
         gameState.world = gameState.worldArena.PushStruct(game.world);
 
-        const world = gameState.world;
-        game.InitializeWorld(world, 1.4, 3.0);
+        gameState.typicalFloorHeight = 3.0;
+        gameState.metersToPixels = 42;
+        gameState.pixelsToMeters = 1.0 / gameState.metersToPixels;
 
-        const tileSideInPixels = 60;
-        gameState.metersToPixels = tileSideInPixels / world.tileSideInMeters;
+        const worldChunkDimInMeters = game.v3{
+            gameState.pixelsToMeters * groundBufferWidth,
+            gameState.pixelsToMeters * groundBufferHeight,
+            gameState.typicalFloorHeight,
+        };
+
+        const world = gameState.world;
+        game.InitializeWorld(world, worldChunkDimInMeters);
+
+        const tileSideInMeters = 1.4;
+        const tileDepthInMeters = gameState.typicalFloorHeight;
 
         _ = AddLowEntity(gameState, .Null, game.NullPosition());
 
         gameState.nullCollision = MakeNullCollision(gameState);
         gameState.swordCollision = MakeSimpleGroundedCollision(gameState, 1, 0.5, 0.1);
-        gameState.stairCollision = MakeSimpleGroundedCollision(
-            gameState,
-            gameState.world.tileSideInMeters,
-            2 * gameState.world.tileSideInMeters,
-            1.1 * gameState.world.tileDepthInMeters,
-        );
+        gameState.stairCollision = MakeSimpleGroundedCollision(gameState, tileSideInMeters, 2 * tileSideInMeters, 1.1 * tileDepthInMeters);
         gameState.playerCollision = MakeSimpleGroundedCollision(gameState, 1, 0.5, 1.2);
         gameState.monstarCollision = MakeSimpleGroundedCollision(gameState, 1, 0.5, 0.5);
         gameState.familiarCollision = MakeSimpleGroundedCollision(gameState, 1, 0.5, 0.5);
-        gameState.wallCollision = MakeSimpleGroundedCollision(
-            gameState,
-            gameState.world.tileSideInMeters,
-            gameState.world.tileSideInMeters,
-            gameState.world.tileDepthInMeters,
-        );
+        gameState.wallCollision = MakeSimpleGroundedCollision(gameState, tileSideInMeters, tileSideInMeters, tileDepthInMeters);
 
-        gameState.standardRoomCollision = MakeSimpleGroundedCollision(
-            gameState,
-            tilesPerWidth * gameState.world.tileSideInMeters,
-            tilesPerHeight * gameState.world.tileSideInMeters,
-            0.9 * gameState.world.tileDepthInMeters,
-        );
+        gameState.standardRoomCollision = MakeSimpleGroundedCollision(gameState, tilesPerWidth * tileSideInMeters, tilesPerHeight * tileSideInMeters, 0.9 * tileDepthInMeters);
 
         gameState.grass[0] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass00.bmp");
         gameState.grass[1] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass01.bmp");
@@ -714,7 +746,7 @@ pub export fn UpdateAndRender(
         const cameraTileY = screenBaseY * tilesPerHeight + 9 / 2;
         const cameraTileZ = screenBaseZ;
 
-        const newCameraP = game.ChunkPosFromTilePos(gameState.world, cameraTileX, cameraTileY, cameraTileZ, .{ 0, 0, 0 });
+        const newCameraP = ChunkPosFromTilePos(gameState.world, cameraTileX, cameraTileY, cameraTileZ, .{ 0, 0, 0 });
 
         gameState.cameraP = newCameraP;
 
@@ -733,14 +765,12 @@ pub export fn UpdateAndRender(
     }
 
     std.debug.assert(@sizeOf(game.transient_state) <= gameMemory.transientStorageSize);
-    const tranState: *game.transient_state = @ptrCast(*game.transient_state, @alignCast(@alignOf(game.transient_state), gameMemory.transientStorage));
+    const tranState = @ptrCast(*game.transient_state, @alignCast(@alignOf(game.transient_state), gameMemory.transientStorage));
     if (!tranState.initialized) {
         var size = gameMemory.transientStorageSize - @sizeOf(game.transient_state);
         var addr = gameMemory.transientStorage + @sizeOf(game.transient_state);
         tranState.tranArena.Initialize(size, addr);
 
-        const groundBufferWidth = 256;
-        const groundBufferHeight = 256;
         tranState.groundBufferCount = 128;
         tranState.groundBuffers = tranState.tranArena.PushArrayPtr(game.ground_buffer, tranState.groundBufferCount);
         var groundBufferIndex = @as(u32, 0);
@@ -751,14 +781,13 @@ pub export fn UpdateAndRender(
             groundBuffer.p = game.NullPosition();
         }
 
-        FillGroundChunk(tranState, gameState, &tranState.groundBuffers[0], &gameState.cameraP);
-
         tranState.initialized = true;
     }
 
     const world = gameState.world;
 
     const metersToPixels = gameState.metersToPixels;
+    const pixelsToMeters = 1.0 / gameState.metersToPixels;
 
     for (gameInput.controllers) |controller, controllerIndex| {
         const conHero = &gameState.controlledHeroes[controllerIndex];
@@ -809,14 +838,6 @@ pub export fn UpdateAndRender(
         }
     }
 
-    const tileSpanX = 17 * 3;
-    const tileSpanY = 9 * 3;
-    const tileSpanZ = 1;
-    const cameraBounds = game.rect3.InitCenterDim(.{ 0, 0, 0 }, game.v3{ tileSpanX, tileSpanY, tileSpanZ } * @splat(3, world.tileSideInMeters));
-
-    const simMemory = game.BeginTemporaryMemory(&tranState.tranArena);
-    const simRegion = game.BeginSim(&tranState.tranArena, gameState, gameState.world, gameState.cameraP, cameraBounds, gameInput.dtForFrame);
-
     var drawBuffer_ = game.loaded_bitmap{
         .width = @intCast(i32, buffer.width),
         .height = @intCast(i32, buffer.height),
@@ -825,10 +846,62 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
+    const screenCenter = game.v2{
+        0.5 * @intToFloat(f32, drawBuffer.width),
+        0.5 * @intToFloat(f32, drawBuffer.height),
+    };
+
+    const screenWidthInMeters = @intToFloat(f32, drawBuffer.width) * pixelsToMeters;
+    const screenHeightInMeters = @intToFloat(f32, drawBuffer.height) * pixelsToMeters;
+    const cameraBoundsInMeters = game.rect3.InitCenterDim(.{ 0, 0, 0 }, game.v3{ screenWidthInMeters, screenHeightInMeters, 0 });
+
     DrawRectangle(drawBuffer, .{ 0, 0 }, .{ @intToFloat(f32, drawBuffer.width), @intToFloat(f32, drawBuffer.height) }, 0.5, 0.5, 0.5);
 
-    const screenCenterX = 0.5 * @intToFloat(f32, drawBuffer.width);
-    const screenCenterY = 0.5 * @intToFloat(f32, drawBuffer.height);
+    {
+        const minChunkP = game.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMinCorner());
+        const maxChunkP = game.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMaxCorner());
+
+        var chunkZ = minChunkP.chunkZ;
+        while (chunkZ <= maxChunkP.chunkZ) : (chunkZ += 1) {
+            var chunkY = minChunkP.chunkY;
+            while (chunkY <= maxChunkP.chunkY) : (chunkY += 1) {
+                var chunkX = minChunkP.chunkX;
+                while (chunkX <= maxChunkP.chunkX) : (chunkX += 1) {
+                    // if (game.GetWorldChunk(null, world, )) |chunk|
+                    {
+                        const chunkCenterP = game.CenteredChunkPoint(chunkX, chunkY, chunkZ);
+                        const relP = game.Substract(world, &chunkCenterP, &gameState.cameraP);
+                        const screenP = screenCenter + game.v2{ metersToPixels, -metersToPixels } * game.XY(relP);
+                        const halfScreenDim = game.v2{ 0.5 * metersToPixels, 0.5 * metersToPixels } * game.XY(world.chunkDimInMeters);
+
+                        var found = false;
+                        var emptyBuffer: ?*game.ground_buffer = null;
+                        var groundBufferIndex = @as(u32, 0);
+                        while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
+                            const groundBuffer = &tranState.groundBuffers[groundBufferIndex];
+                            if (game.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
+                                found = true;
+                                break;
+                            } else if (!game.IsValid(groundBuffer.p)) {
+                                emptyBuffer = groundBuffer;
+                            }
+                        }
+
+                        if (!found and emptyBuffer != null) {
+                            FillGroundChunk(tranState, gameState, emptyBuffer.?, &chunkCenterP);
+                        }
+
+                        DrawRectangleOutline(drawBuffer, screenP - halfScreenDim, screenP + halfScreenDim, .{ 1, 1, 0 }, 2);
+                    }
+                }
+            }
+        }
+    }
+
+    const simBoundsExpansion = game.v3{ 15, 15, 15 };
+    const simBounds = game.AddRadiusToRect3(cameraBoundsInMeters, simBoundsExpansion);
+    const simMemory = game.BeginTemporaryMemory(&tranState.tranArena);
+    const simRegion = game.BeginSim(&tranState.tranArena, gameState, gameState.world, gameState.cameraP, simBounds, gameInput.dtForFrame);
 
     var groundBufferIndex = @as(u32, 0);
     while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
@@ -841,9 +914,9 @@ pub export fn UpdateAndRender(
                 gameState.metersToPixels,
                 gameState.metersToPixels,
             } * game.Substract(world, &groundBuffer.p, &gameState.cameraP);
-            const ground = game.v2{
-                screenCenterX + game.X(delta) - 0.5 * @intToFloat(f32, bitmap.width),
-                screenCenterY - game.Y(delta) - 0.5 * @intToFloat(f32, bitmap.height),
+            const ground = screenCenter + game.v2{
+                game.X(delta) - 0.5 * @intToFloat(f32, bitmap.width),
+                -game.Y(delta) - 0.5 * @intToFloat(f32, bitmap.height),
             };
 
             DrawBitmap(drawBuffer, bitmap, game.X(ground), game.Y(ground), 1);
@@ -1011,8 +1084,8 @@ pub export fn UpdateAndRender(
                 const entityBaseP = game.GetEntityGroundPoint(entity);
                 const zFudge = 1 + 0.1 * (game.Z(entity.p) + piece.offsetZ);
 
-                const entityGroundPointX = screenCenterX + metersToPixels * zFudge * game.X(entityBaseP);
-                const entityGroundPointY = screenCenterY - metersToPixels * zFudge * game.Y(entityBaseP);
+                const entityGroundPointX = game.X(screenCenter) + metersToPixels * zFudge * game.X(entityBaseP);
+                const entityGroundPointY = game.Y(screenCenter) - metersToPixels * zFudge * game.Y(entityBaseP);
                 const entityz = -metersToPixels * game.Z(entityBaseP);
 
                 const center = game.v2{

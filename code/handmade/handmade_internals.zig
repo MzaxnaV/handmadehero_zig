@@ -12,7 +12,7 @@ const v2 = @import("handmade_math.zig").v2;
 
 pub const memory_arena = struct {
     size: memory_index,
-    base_addr: usize,
+    base_addr: memory_index,
     used: memory_index,
     tempCount: u32,
 
@@ -120,6 +120,8 @@ pub const state = struct {
     worldArena: memory_arena,
     world: *world,
 
+    typicalFloorHeight: f32,
+
     cameraFollowingEntityIndex: u32,
     cameraP: world_position = .{},
 
@@ -140,6 +142,7 @@ pub const state = struct {
     sword: loaded_bitmap,
     stairwell: loaded_bitmap,
     metersToPixels: f32,
+    pixelsToMeters: f32,
 
     collisionRuleHash: [256]?*pairwise_collision_rule,
     firstFreeCollisionRule: ?*pairwise_collision_rule,
