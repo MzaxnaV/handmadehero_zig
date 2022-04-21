@@ -184,8 +184,8 @@ pub inline fn CenteredChunkPoint(chunkX: i32, chunkY: i32, chunkZ: i32) world_po
 // }
 
 pub fn ChangeEntityLocationRaw(arena: *hi.memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*const world_position, newP: ?*const world_position) void {
-    std.debug.assert((oldP == null) or IsValid(oldP.?.*));
-    std.debug.assert((newP == null) or IsValid(newP.?.*));
+    assert((oldP == null) or IsValid(oldP.?.*));
+    assert((newP == null) or IsValid(newP.?.*));
 
     if ((oldP != null) and (newP != null) and AreInSameChunk(w, oldP.?, newP.?)) {} else {
         if (oldP) |p| {
@@ -238,7 +238,7 @@ pub fn ChangeEntityLocationRaw(arena: *hi.memory_arena, w: *world, lowEntityInde
                     block.entityCount = 0;
                 }
 
-                std.debug.assert(block.entityCount < block.lowEntityIndex.len);
+                assert(block.entityCount < block.lowEntityIndex.len);
                 block.lowEntityIndex[block.entityCount] = lowEntityIndex;
                 block.entityCount += 1;
             } else {

@@ -7,6 +7,7 @@ const game = struct {
     usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_random.zig");
     usingnamespace @import("handmade_sim_region.zig");
+    usingnamespace @import("handmade_render_group.zig");
     usingnamespace @import("handmade_world.zig");
 };
 
@@ -432,51 +433,7 @@ fn AddFamiliar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u
     return entity;
 }
 
-inline fn PushPiece(
-    group: *game.entity_visible_piece_group,
-    bitmap: ?*game.loaded_bitmap,
-    offset: game.v2,
-    offsetZ: f32,
-    alignment: game.v2,
-    dim: game.v2,
-    colour: game.v4,
-    entityZC: f32,
-) void {
-    std.debug.assert(group.pieceCount < group.pieces.len);
-    const piece = &group.pieces[group.pieceCount];
-    group.pieceCount += 1;
-    piece.bitmap = bitmap;
-    piece.offset = (@splat(2, group.gameState.metersToPixels) * game.v2{ offset[0], -offset[1] }) - alignment;
-    piece.offsetZ = offsetZ;
-    piece.entityZC = entityZC;
-    piece.r = game.R(colour);
-    piece.g = game.G(colour);
-    piece.b = game.B(colour);
-    piece.a = game.A(colour);
-    piece.dim = dim;
-}
-
-inline fn PushBitmap(group: *game.entity_visible_piece_group, bitmap: *game.loaded_bitmap, offset: game.v2, offsetZ: f32, alignment: game.v2, alpha: f32, entityZC: f32) void {
-    // NOTE (Manav): alpha > 1 mess up our rendering, as cAlpha will make rSA > 1 and invRSA negative
-    std.debug.assert(alpha <= 1);
-    PushPiece(group, bitmap, offset, offsetZ, alignment, .{ 0, 0 }, .{ 1, 1, 1, alpha }, entityZC);
-}
-
-inline fn PushRect(group: *game.entity_visible_piece_group, offset: game.v2, offsetZ: f32, dim: game.v2, colour: game.v4, entityZC: f32) void {
-    PushPiece(group, null, offset, offsetZ, .{ 0, 0 }, dim, colour, entityZC);
-}
-
-inline fn PushRectOutline(group: *game.entity_visible_piece_group, offset: game.v2, offsetZ: f32, dim: game.v2, colour: game.v4, entityZC: f32) void {
-    const thickness = 0.1;
-
-    PushPiece(group, null, offset - game.v2{ 0, 0.5 * game.Y(dim) }, offsetZ, .{ 0, 0 }, .{ game.X(dim), thickness }, colour, entityZC);
-    PushPiece(group, null, offset + game.v2{ 0, 0.5 * game.Y(dim) }, offsetZ, .{ 0, 0 }, .{ game.X(dim), thickness }, colour, entityZC);
-
-    PushPiece(group, null, offset - game.v2{ 0.5 * game.X(dim), 0 }, offsetZ, .{ 0, 0 }, .{ thickness, game.Y(dim) }, colour, entityZC);
-    PushPiece(group, null, offset + game.v2{ 0.5 * game.X(dim), 0 }, offsetZ, .{ 0, 0 }, .{ thickness, game.Y(dim) }, colour, entityZC);
-}
-
-fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.entity_visible_piece_group) void {
+fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.render_group) void {
     if (entity.hitPointMax >= 1) {
         const healthDim = game.v2{ 0.2, 0.2 };
         const spacingX = 1.5 * game.X(healthDim);
@@ -493,7 +450,7 @@ fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.entity_visible_piec
                 colour = .{ 0.2, 0.2, 0.2, 1 };
             }
 
-            PushRect(pieceGroup, hitP, 0, healthDim, colour, 0);
+            game.PushRect(pieceGroup, hitP, 0, healthDim, colour, 0);
             hitP += dHitP;
         }
     }
@@ -503,7 +460,7 @@ fn MakeSimpleGroundedCollision(gameState: *game.state, dimX: f32, dimY: f32, dim
     const group: *game.sim_entity_collision_volume_group = gameState.worldArena.PushStruct(game.sim_entity_collision_volume_group);
 
     group.volumeCount = 1;
-    group.volumes = gameState.worldArena.PushArrayPtr(game.sim_entity_collision_volume, group.volumeCount);
+    group.volumes = gameState.worldArena.PushArray(game.sim_entity_collision_volume, group.volumeCount);
     group.totalVolume.offsetP = game.v3{ 0, 0, 0.5 * dimZ };
     group.totalVolume.dim = game.v3{ dimX, dimY, dimZ };
     group.volumes[0] = group.totalVolume;
@@ -522,9 +479,8 @@ fn MakeNullCollision(gameState: *game.state) *game.sim_entity_collision_volume_g
     return group;
 }
 
-fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, groundBuffer: *game.ground_buffer, chunkP: *const game.world_position) void {
-    var buffer = tranState.groundBitmapTemplate;
-    buffer.memory = groundBuffer.memory;
+fn FillGroundChunk(_: *game.transient_state, gameState: *game.state, groundBuffer: *game.ground_buffer, chunkP: *const game.world_position) void {
+    var buffer = &groundBuffer.bitmap;
 
     groundBuffer.p = chunkP.*;
 
@@ -553,7 +509,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                 const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
                 const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
                 const p = center + offset - bitmapCenter;
-                DrawBitmap(&buffer, stamp, game.X(p), game.Y(p), 1.0);
+                DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
             }
         }
     }
@@ -578,7 +534,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                 const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
                 const p = center + offset - bitmapCenter;
 
-                DrawBitmap(&buffer, stamp, game.X(p), game.Y(p), 1.0);
+                DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
             }
         }
     }
@@ -660,10 +616,6 @@ pub export fn UpdateAndRender(
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
 
-        gameState.worldArena.Initialize(gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
-
-        gameState.world = gameState.worldArena.PushStruct(game.world);
-
         gameState.typicalFloorHeight = 3.0;
         gameState.metersToPixels = 42;
         gameState.pixelsToMeters = 1.0 / gameState.metersToPixels;
@@ -674,13 +626,16 @@ pub export fn UpdateAndRender(
             gameState.typicalFloorHeight,
         };
 
+        gameState.worldArena.Initialize(gameMemory.permanentStorageSize - @sizeOf(game.state), gameMemory.permanentStorage + @sizeOf(game.state));
+
+        _ = AddLowEntity(gameState, .Null, game.NullPosition());
+
+        gameState.world = gameState.worldArena.PushStruct(game.world);
         const world = gameState.world;
         game.InitializeWorld(world, worldChunkDimInMeters);
 
         const tileSideInMeters = 1.4;
         const tileDepthInMeters = gameState.typicalFloorHeight;
-
-        _ = AddLowEntity(gameState, .Null, game.NullPosition());
 
         gameState.nullCollision = MakeNullCollision(gameState);
         gameState.swordCollision = MakeSimpleGroundedCollision(gameState, 1, 0.5, 0.1);
@@ -865,13 +820,12 @@ pub export fn UpdateAndRender(
             gameMemory.transientStorage + @sizeOf(game.transient_state),
         );
 
-        tranState.groundBufferCount = 32; // 128
-        tranState.groundBuffers = tranState.tranArena.PushArrayPtr(game.ground_buffer, tranState.groundBufferCount);
+        tranState.groundBufferCount = 64; // 128
+        tranState.groundBuffers = tranState.tranArena.PushArray(game.ground_buffer, tranState.groundBufferCount);
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
             var groundBuffer: *game.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
-            tranState.groundBitmapTemplate = MakeEmptyBitmap(&tranState.tranArena, groundBufferWidth, groundBufferHeight, false);
-            groundBuffer.memory = tranState.groundBitmapTemplate.memory;
+            groundBuffer.bitmap = MakeEmptyBitmap(&tranState.tranArena, groundBufferWidth, groundBufferHeight, false);
             groundBuffer.p = game.NullPosition();
         }
 
@@ -940,6 +894,9 @@ pub export fn UpdateAndRender(
         }
     }
 
+    const renderMemory = game.BeginTemporaryMemory(&tranState.tranArena);
+    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), gameState.metersToPixels);
+
     var drawBuffer_ = game.loaded_bitmap{
         .width = @intCast(i32, buffer.width),
         .height = @intCast(i32, buffer.height),
@@ -961,21 +918,11 @@ pub export fn UpdateAndRender(
 
     var groundBufferIndex = @as(u32, 0);
     while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
-        const groundBuffer = tranState.groundBuffers[groundBufferIndex];
+        var groundBuffer: *game.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
         if (game.IsValid(groundBuffer.p)) {
-            var bitmap = &tranState.groundBitmapTemplate;
-            bitmap.memory = groundBuffer.memory;
-            const delta = game.v3{
-                gameState.metersToPixels,
-                gameState.metersToPixels,
-                gameState.metersToPixels,
-            } * game.Substract(world, &groundBuffer.p, &gameState.cameraP);
-            const ground = screenCenter + game.v2{
-                game.X(delta) - 0.5 * @intToFloat(f32, bitmap.width),
-                -game.Y(delta) - 0.5 * @intToFloat(f32, bitmap.height),
-            };
-
-            DrawBitmap(drawBuffer, bitmap, game.X(ground), game.Y(ground), 1);
+            const bitmap = &groundBuffer.bitmap;
+            const delta = game.Substract(world, &groundBuffer.p, &gameState.cameraP);
+            game.PushBitmap(renderGroup, bitmap, game.XY(delta), game.Z(delta), .{ 0.5 * @intToFloat(f32, bitmap.width), 0.5 * @intToFloat(f32, bitmap.height) }, 1, 1);
         }
     }
 
@@ -1035,20 +982,11 @@ pub export fn UpdateAndRender(
     const simMemory = game.BeginTemporaryMemory(&tranState.tranArena);
     const simRegion = game.BeginSim(&tranState.tranArena, gameState, gameState.world, gameState.cameraP, simBounds, gameInput.dtForFrame);
 
-    var pieceGroup = game.entity_visible_piece_group{
-        .gameState = gameState,
-        .pieceCount = 0,
-        .pieces = [1]game.entity_visible_piece{.{
-            .bitmap = undefined,
-        }} ** 32,
-    };
-
     var entityIndex = @as(u32, 0);
     while (entityIndex < simRegion.entityCount) : (entityIndex += 1) {
         const entity: *game.sim_entity = &simRegion.entities[entityIndex];
 
         if (entity.updatable) {
-            pieceGroup.pieceCount = 0;
             const dt = gameInput.dtForFrame;
 
             const alpha = 1 - 0.5 * game.Z(entity.p);
@@ -1057,8 +995,10 @@ pub export fn UpdateAndRender(
             var moveSpec = game.DefaultMoveSpec();
             var ddP = game.v3{ 0, 0, 0 };
 
-            const heroBitmaps = &gameState.heroBitmaps[entity.facingDirection];
+            const basis = tranState.tranArena.PushStruct(game.render_basis);
+            renderGroup.defaultBasis = basis;
 
+            const heroBitmaps = &gameState.heroBitmaps[entity.facingDirection];
             switch (entity.entityType) {
                 .Hero => {
                     for (gameState.controlledHeroes) |conHero| {
@@ -1091,21 +1031,21 @@ pub export fn UpdateAndRender(
                         }
                     }
 
-                    PushBitmap(&pieceGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                    PushBitmap(&pieceGroup, &heroBitmaps.torso, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
-                    PushBitmap(&pieceGroup, &heroBitmaps.cape, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
-                    PushBitmap(&pieceGroup, &heroBitmaps.head, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
+                    game.PushBitmap(renderGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                    game.PushBitmap(renderGroup, &heroBitmaps.torso, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
+                    game.PushBitmap(renderGroup, &heroBitmaps.cape, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
+                    game.PushBitmap(renderGroup, &heroBitmaps.head, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
 
-                    DrawHitpoints(entity, &pieceGroup);
+                    DrawHitpoints(entity, renderGroup);
                 },
 
                 .Wall => {
-                    PushBitmap(&pieceGroup, &gameState.tree, .{ 0, 0 }, 0, .{ 40, 80 }, 1.0, 1.0);
+                    game.PushBitmap(renderGroup, &gameState.tree, .{ 0, 0 }, 0, .{ 40, 80 }, 1.0, 1.0);
                 },
 
                 .Stairwell => {
-                    PushRect(&pieceGroup, .{ 0, 0 }, 0, entity.walkableDim, .{ 1, 0.5, 0, 1 }, 0);
-                    PushRect(&pieceGroup, .{ 0, 0 }, entity.walkableHeight, entity.walkableDim, .{ 1, 1, 0, 1 }, 0);
+                    game.PushRect(renderGroup, .{ 0, 0 }, 0, entity.walkableDim, .{ 1, 0.5, 0, 1 }, 0);
+                    game.PushRect(renderGroup, .{ 0, 0 }, entity.walkableHeight, entity.walkableDim, .{ 1, 1, 0, 1 }, 0);
                 },
 
                 .Sword => {
@@ -1117,8 +1057,10 @@ pub export fn UpdateAndRender(
                         game.ClearCollisionRulesFor(gameState, entity.storageIndex);
                         game.MakeEntityNonSpatial(entity);
                     } else {
-                        PushBitmap(&pieceGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                        PushBitmap(&pieceGroup, &gameState.sword, .{ 0, 0 }, 0, .{ 29, 10 }, 1.0, 1.0);
+                        // NOTE (Manav): invalid z position causes float overflow down the line when drawing bitmap because of zFudge,
+                        // so not pushing bitmap when entity becomes non spatial
+                        game.PushBitmap(renderGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                        game.PushBitmap(renderGroup, &gameState.sword, .{ 0, 0 }, 0, .{ 29, 10 }, 1.0, 1.0);
                     }
                 },
 
@@ -1157,15 +1099,15 @@ pub export fn UpdateAndRender(
                         entity.tBob -= 2 * platform.PI32;
                     }
                     const bobSin = game.Sin(2 * entity.tBob);
-                    PushBitmap(&pieceGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, (0.5 * shadowAlpha) + (0.2 * bobSin), 0.0);
-                    PushBitmap(&pieceGroup, &heroBitmaps.head, .{ 0, 0 }, 0.25 * bobSin, heroBitmaps.alignment, 1.0, 1.0);
+                    game.PushBitmap(renderGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, (0.5 * shadowAlpha) + (0.2 * bobSin), 0.0);
+                    game.PushBitmap(renderGroup, &heroBitmaps.head, .{ 0, 0 }, 0.25 * bobSin, heroBitmaps.alignment, 1.0, 1.0);
                 },
 
                 .Monstar => {
-                    PushBitmap(&pieceGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                    PushBitmap(&pieceGroup, &heroBitmaps.torso, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
+                    game.PushBitmap(renderGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
+                    game.PushBitmap(renderGroup, &heroBitmaps.torso, .{ 0, 0 }, 0, heroBitmaps.alignment, 1.0, 1.0);
 
-                    DrawHitpoints(entity, &pieceGroup);
+                    DrawHitpoints(entity, renderGroup);
                 },
 
                 .Space => {
@@ -1173,7 +1115,7 @@ pub export fn UpdateAndRender(
                         var volumeIndex = @as(u32, 0);
                         while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
                             const volume = entity.collision.volumes[volumeIndex];
-                            PushRectOutline(&pieceGroup, game.XY(volume.offsetP), 0, game.XY(volume.dim), .{ 0, 0.5, 1, 1 }, 0);
+                            game.PushRectOutline(renderGroup, game.XY(volume.offsetP), 0, game.XY(volume.dim), .{ 0, 0.5, 1, 1 }, 0);
                         }
                     }
                 },
@@ -1189,38 +1131,38 @@ pub export fn UpdateAndRender(
                 game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
 
-            var pieceIndex = @as(u32, 0);
-            while (pieceIndex < pieceGroup.pieceCount) : (pieceIndex += 1) {
-                const piece = pieceGroup.pieces[pieceIndex];
-
-                const entityBaseP = game.GetEntityGroundPoint(entity);
-                const zFudge = 1 + 0.1 * (game.Z(entity.p) + piece.offsetZ);
-
-                const entityGroundPointX = game.X(screenCenter) + metersToPixels * zFudge * game.X(entityBaseP);
-                const entityGroundPointY = game.Y(screenCenter) - metersToPixels * zFudge * game.Y(entityBaseP);
-                const entityz = -metersToPixels * game.Z(entityBaseP);
-
-                const center = game.v2{
-                    entityGroundPointX + piece.offset[0],
-                    entityGroundPointY + piece.offset[1] + piece.entityZC * entityz,
-                };
-
-                if (piece.bitmap) |b| {
-                    DrawBitmap(drawBuffer, b, center[0], center[1], piece.a);
-                } else {
-                    const halfDim = piece.dim * @splat(2, 0.5 * metersToPixels);
-                    DrawRectangle(drawBuffer, center - halfDim, center + halfDim, piece.r, piece.g, piece.b);
-                }
-            }
+            basis.p = game.GetEntityGroundPoint(entity);
         }
     }
 
-    const worldOrigin: game.world_position = .{};
-    const diff: [3]f32 = game.Substract(simRegion.world, &worldOrigin, &simRegion.origin);
-    DrawRectangle(drawBuffer, diff[0..2].*, .{ 10, 10 }, 1, 1, 0);
+    var baseAddress = @as(u32, 0);
+    while (baseAddress < renderGroup.pushBufferSize) {
+        const piece = @ptrCast(*game.entity_visible_piece, @alignCast(@alignOf(game.entity_visible_piece), renderGroup.pushBufferBase + baseAddress));
+        baseAddress += @sizeOf(game.entity_visible_piece);
+
+        const entityBaseP = piece.basis.p;
+        const zFudge = 1 + 0.1 * (game.Z(entityBaseP) + piece.offsetZ);
+
+        const entityGroundPointX = game.X(screenCenter) + metersToPixels * zFudge * game.X(entityBaseP);
+        const entityGroundPointY = game.Y(screenCenter) - metersToPixels * zFudge * game.Y(entityBaseP);
+        const entityz = -metersToPixels * game.Z(entityBaseP);
+
+        const center = game.v2{
+            entityGroundPointX + piece.offset[0],
+            entityGroundPointY + piece.offset[1] + piece.entityZC * entityz,
+        };
+
+        if (piece.bitmap) |b| {
+            DrawBitmap(drawBuffer, b, center[0], center[1], piece.a);
+        } else {
+            const halfDim = piece.dim * @splat(2, 0.5 * metersToPixels);
+            DrawRectangle(drawBuffer, center - halfDim, center + halfDim, piece.r, piece.g, piece.b);
+        }
+    }
 
     game.EndSim(simRegion, gameState); // TODO (Manav): use defer
     game.EndTemporaryMemory(simMemory);
+    game.EndTemporaryMemory(renderMemory);
 
     gameState.worldArena.CheckArena();
     tranState.tranArena.CheckArena();

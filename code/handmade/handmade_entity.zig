@@ -33,8 +33,13 @@ pub inline fn MakeEntitySpatial(entity: *hs.sim_entity, p: hm.v3, dP: hm.v3) voi
     entity.dP = dP;
 }
 
+pub inline fn GetEntityGroundPointForEntityP(_: *hs.sim_entity, forEntityP: hm.v3) hm.v3 {
+    const result = forEntityP;
+    return result;
+}
+
 pub inline fn GetEntityGroundPoint(entity: *hs.sim_entity) hm.v3 {
-    const result = entity.p;
+    const result = GetEntityGroundPointForEntityP(entity, entity.p);
     return result;
 }
 

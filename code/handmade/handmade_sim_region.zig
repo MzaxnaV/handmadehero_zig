@@ -258,7 +258,7 @@ pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.wor
 
     simRegion.maxEntityCount = 4096;
     simRegion.entityCount = 0;
-    simRegion.entities = simArena.PushArrayPtr(sim_entity, simRegion.maxEntityCount);
+    simRegion.entities = simArena.PushArray(sim_entity, simRegion.maxEntityCount);
 
     const minChunkP = hw.MapIntoChunkSpace(world, simRegion.origin, simRegion.bounds.GetMinCorner());
     const maxChunkP = hw.MapIntoChunkSpace(world, simRegion.origin, simRegion.bounds.GetMaxCorner());
@@ -449,12 +449,12 @@ pub fn HandleOverlap(_: *hi.state, mover: *sim_entity, region: *sim_entity, _: f
     }
 }
 
-pub fn SpeculativeCollide(mover: *sim_entity, region: *sim_entity) bool {
+pub fn SpeculativeCollide(mover: *sim_entity, region: *sim_entity, testP: hm.v3) bool {
     var result = true;
 
     if (region.entityType == .Stairwell) {
         const stepHeight = 0.1;
-        const moverGroundPoint = he.GetEntityGroundPoint(mover);
+        const moverGroundPoint = he.GetEntityGroundPointForEntityP(mover, testP);
         const ground = he.GetStairGround(region, moverGroundPoint);
 
         // !NOT_IGNORE
@@ -621,9 +621,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
 
                                         if (hitThis) {
                                             var testP = entity.p + hm.v3{ tMinTest, tMinTest, tMinTest } * playerDelta;
-                                            _ = testP;
-
-                                            if (SpeculativeCollide(entity, testEntity)) {
+                                            if (SpeculativeCollide(entity, testEntity, testP)) {
                                                 tMin = tMinTest;
                                                 wallNormalMin = testWallNormal;
                                                 hitEntityMin = testEntity;

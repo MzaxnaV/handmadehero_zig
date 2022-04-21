@@ -99,17 +99,17 @@ pub const debug_read_file_result = struct {
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
 
-pub inline fn KiloBytes(value: u64) u64 {
-    return 1000 * value;
+pub inline fn KiloBytes(comptime value: comptime_int) comptime_int {
+    return 1024 * value;
 }
-pub inline fn MegaBytes(value: u64) u64 {
-    return 1000 * KiloBytes(value);
+pub inline fn MegaBytes(comptime value: comptime_int) comptime_int {
+    return 1024 * KiloBytes(value);
 }
-pub inline fn GigaBytes(value: u64) u64 {
-    return 1000 * MegaBytes(value);
+pub inline fn GigaBytes(comptime value: comptime_int) comptime_int {
+    return 1024 * MegaBytes(value);
 }
-pub inline fn TeraBytes(value: u64) u64 {
-    return 1000 * GigaBytes(value);
+pub inline fn TeraBytes(comptime value: comptime_int) comptime_int {
+    return 1024 * GigaBytes(value);
 }
 
 // exported functions ---------------------------------------------------------------------------------------------------------------------

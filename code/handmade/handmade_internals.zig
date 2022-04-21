@@ -17,19 +17,19 @@ pub const memory_arena = struct {
     tempCount: u32,
 
     pub inline fn Initialize(self: *memory_arena, size: memory_index, base: [*]u8) void {
-        const base_addr = @ptrToInt(base);
-        const adjusted_addr = std.mem.alignForward(base_addr, 16);
-        // NOTE (Manav): think properly about this.
-        self.size = size - (adjusted_addr - base_addr);
-        self.base_addr = adjusted_addr;
+        self.size = size;
+        self.base_addr = @ptrToInt(base);
         self.used = 0;
         self.tempCount = 0;
     }
 
-    pub inline fn PushSize(self: *memory_arena, comptime alignment: u32, size: memory_index) [*]align(alignment) u8 {
-        std.debug.assert((self.used + size) <= self.size);
-        const result = @intToPtr([*]align(alignment) u8, self.base_addr + self.used);
-        self.used += size;
+    pub inline fn PushSize(self: *memory_arena, comptime alignment: u5, size: memory_index) [*]align(alignment) u8 {
+        const adjusted_addr = std.mem.alignForward(self.base_addr + self.used, alignment);
+        const padding = adjusted_addr - (self.base_addr + self.used);
+
+        std.debug.assert((self.used + size + padding) <= self.size);
+        const result = @intToPtr([*]align(alignment) u8, adjusted_addr);
+        self.used += size + padding;
 
         return result;
     }
@@ -38,11 +38,11 @@ pub const memory_arena = struct {
         return @ptrCast(*T, self.PushSize(@alignOf(T), @sizeOf(T)));
     }
 
-    pub inline fn PushArraySlice(self: *memory_arena, comptime T: type, comptime count: memory_index) *[count]T {
+    pub inline fn PushSlice(self: *memory_arena, comptime T: type, comptime count: memory_index) *[count]T {
         return @ptrCast(*[count]T, self.PushSize(@alignOf(T), count * @sizeOf(*[]T)));
     }
 
-    pub inline fn PushArrayPtr(self: *memory_arena, comptime T: type, count: memory_index) [*]T {
+    pub inline fn PushArray(self: *memory_arena, comptime T: type, count: memory_index) [*]T {
         return @ptrCast([*]T, self.PushSize(@alignOf(T), count * @sizeOf(T)));
     }
 
@@ -75,26 +75,6 @@ pub const low_entity = struct {
     sim: sim_entity,
 };
 
-pub const entity_visible_piece = struct {
-    bitmap: ?*loaded_bitmap,
-    offset: v2 = v2{ 0, 0 },
-    offsetZ: f32 = 0,
-    entityZC: f32 = 0,
-
-    r: f32 = 0,
-    g: f32 = 0,
-    b: f32 = 0,
-    a: f32 = 0,
-
-    dim: v2 = v2{ 0, 0 },
-};
-
-pub const entity_visible_piece_group = struct {
-    gameState: *state,
-    pieceCount: u32,
-    pieces: [32]entity_visible_piece,
-};
-
 pub const controlled_hero = struct {
     entityIndex: u32 = 0,
 
@@ -113,7 +93,7 @@ pub const pairwise_collision_rule = struct {
 
 pub const ground_buffer = struct {
     p: world_position,
-    memory: [*]u8,
+    bitmap: loaded_bitmap,
 };
 
 pub const state = struct {
@@ -161,7 +141,6 @@ pub const transient_state = struct {
     initialized: bool,
     tranArena: memory_arena,
     groundBufferCount: u32,
-    groundBitmapTemplate: loaded_bitmap,
     groundBuffers: [*]ground_buffer,
 };
 
