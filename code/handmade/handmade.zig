@@ -45,187 +45,6 @@ fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneH
     }
 }
 
-fn DrawRectangleOutline(buffer: *game.loaded_bitmap, vMin: game.v2, vMax: game.v2, colour: game.v3, r: f32) void {
-    DrawRectangle(buffer, .{ game.X(vMin) - r, game.Y(vMin) - r }, .{ game.X(vMax) + r, game.Y(vMin) + r }, game.R(colour), game.G(colour), game.B(colour));
-    DrawRectangle(buffer, .{ game.X(vMin) - r, game.Y(vMax) - r }, .{ game.X(vMax) + r, game.Y(vMax) + r }, game.R(colour), game.G(colour), game.B(colour));
-
-    DrawRectangle(buffer, .{ game.X(vMin) - r, game.Y(vMin) - r }, .{ game.X(vMin) + r, game.Y(vMax) + r }, game.R(colour), game.G(colour), game.B(colour));
-    DrawRectangle(buffer, .{ game.X(vMax) - r, game.Y(vMin) - r }, .{ game.X(vMax) + r, game.Y(vMax) + r }, game.R(colour), game.G(colour), game.B(colour));
-}
-
-fn DrawRectangle(buffer: *game.loaded_bitmap, vMin: game.v2, vMax: game.v2, r: f32, g: f32, b: f32) void {
-    var minX = game.RoundF32ToInt(i32, vMin[0]);
-    var minY = game.RoundF32ToInt(i32, vMin[1]);
-    var maxX = game.RoundF32ToInt(i32, vMax[0]);
-    var maxY = game.RoundF32ToInt(i32, vMax[1]);
-
-    if (minX < 0) {
-        minX = 0;
-    }
-
-    if (minY < 0) {
-        minY = 0;
-    }
-
-    if (maxX > buffer.width) {
-        maxX = buffer.width;
-    }
-
-    if (maxY > buffer.height) {
-        maxY = buffer.height;
-    }
-
-    const colour: u32 = (game.RoundF32ToInt(u32, r * 255.0) << 16) | (game.RoundF32ToInt(u32, g * 255.0) << 8) | (game.RoundF32ToInt(u32, b * 255) << 0);
-
-    var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, minY * buffer.pitch);
-
-    var y = minY;
-    while (y < maxY) : (y += 1) {
-        var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
-        var x = minX;
-        while (x < maxX) : (x += 1) {
-            pixel.* = colour;
-            pixel += 1;
-        }
-        row += @intCast(u32, buffer.pitch);
-    }
-}
-
-fn DrawBitmap(buffer: *game.loaded_bitmap, bitmap: *const game.loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
-    var minX = game.RoundF32ToInt(i32, realX);
-    var minY = game.RoundF32ToInt(i32, realY);
-    var maxX = minX + bitmap.width;
-    var maxY = minY + bitmap.height;
-
-    var sourceOffesetX = @as(i32, 0);
-    if (minX < 0) {
-        sourceOffesetX = -minX;
-        minX = 0;
-    }
-
-    var sourceOffesetY = @as(i32, 0);
-    if (minY < 0) {
-        sourceOffesetY = -minY;
-        minY = 0;
-    }
-
-    if (maxX > buffer.width) {
-        maxX = buffer.width;
-    }
-
-    if (maxY > buffer.height) {
-        maxY = buffer.height;
-    }
-
-    const offset = sourceOffesetY * bitmap.pitch + platform.BITMAP_BYTES_PER_PIXEL * sourceOffesetX;
-
-    var sourceRow = if (offset > 0) bitmap.memory + @intCast(usize, offset) else bitmap.memory - @intCast(usize, -offset);
-    var destRow = buffer.memory + @intCast(usize, minX * platform.BITMAP_BYTES_PER_PIXEL + minY * buffer.pitch);
-
-    var y = minY;
-    while (y < maxY) : (y += 1) {
-        const dest = @ptrCast([*]u32, @alignCast(@alignOf(u32), destRow));
-        const source = @ptrCast([*]align(1) u32, sourceRow);
-        var x = minX;
-        while (x < maxX) : (x += 1) {
-            const index = @intCast(u32, x - minX);
-
-            const sA = cAlpha * @intToFloat(f32, ((source[index] >> 24) & 0xff));
-            const rSA = (sA / 255.0) * cAlpha;
-            const sR = cAlpha * @intToFloat(f32, ((source[index] >> 16) & 0xff));
-            const sG = cAlpha * @intToFloat(f32, ((source[index] >> 8) & 0xff));
-            const sB = cAlpha * @intToFloat(f32, ((source[index] >> 0) & 0xff));
-
-            const dA = @intToFloat(f32, ((dest[index] >> 24) & 0xff));
-            const dR = @intToFloat(f32, ((dest[index] >> 16) & 0xff));
-            const dG = @intToFloat(f32, ((dest[index] >> 8) & 0xff));
-            const dB = @intToFloat(f32, ((dest[index] >> 0) & 0xff));
-            const rDA = (dA / 255.0);
-
-            const invRSA = 1 - rSA;
-            const a = (rSA + rDA - rSA * rDA) * 255.0;
-            const r = invRSA * dR + sR;
-            const g = invRSA * dG + sG;
-            const b = invRSA * dB + sB;
-
-            dest[index] = (@floatToInt(u32, a + 0.5) << 24) |
-                (@floatToInt(u32, r + 0.5) << 16) |
-                (@floatToInt(u32, g + 0.5) << 8) |
-                (@floatToInt(u32, b + 0.5) << 0);
-        }
-
-        destRow += @intCast(usize, buffer.pitch);
-        sourceRow = if (bitmap.pitch > 0) sourceRow + @intCast(usize, bitmap.pitch) else sourceRow - @intCast(usize, -bitmap.pitch);
-    }
-}
-
-fn DrawMatte(buffer: *game.loaded_bitmap, bitmap: *const game.loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
-    var minX = game.RoundF32ToInt(i32, realX);
-    var minY = game.RoundF32ToInt(i32, realY);
-    var maxX = minX + bitmap.width;
-    var maxY = minY + bitmap.height;
-
-    var sourceOffesetX = @as(i32, 0);
-    if (minX < 0) {
-        sourceOffesetX = -minX;
-        minX = 0;
-    }
-
-    var sourceOffesetY = @as(i32, 0);
-    if (minY < 0) {
-        sourceOffesetY = -minY;
-        minY = 0;
-    }
-
-    if (maxX > buffer.width) {
-        maxX = buffer.width;
-    }
-
-    if (maxY > buffer.height) {
-        maxY = buffer.height;
-    }
-
-    const offset = sourceOffesetY * bitmap.pitch + platform.BITMAP_BYTES_PER_PIXEL * sourceOffesetX;
-
-    var sourceRow = if (offset > 0) bitmap.memory + @intCast(usize, offset) else bitmap.memory - @intCast(usize, -offset);
-    var destRow = buffer.memory + @intCast(usize, minX * platform.BITMAP_BYTES_PER_PIXEL + minY * buffer.pitch);
-
-    var y = minY;
-    while (y < maxY) : (y += 1) {
-        const dest = @ptrCast([*]u32, @alignCast(@alignOf(u32), destRow));
-        const source = @ptrCast([*]align(1) u32, sourceRow);
-        var x = minX;
-        while (x < maxX) : (x += 1) {
-            const index = @intCast(u32, x - minX);
-
-            const sA = cAlpha * @intToFloat(f32, ((source[index] >> 24) & 0xff));
-            const rSA = (sA / 255.0) * cAlpha;
-            // const sR = cAlpha * @intToFloat(f32, ((source[index] >> 16) & 0xff));
-            // const sG = cAlpha * @intToFloat(f32, ((source[index] >> 8) & 0xff));
-            // const sB = cAlpha * @intToFloat(f32, ((source[index] >> 0) & 0xff));
-
-            const dA = @intToFloat(f32, ((dest[index] >> 24) & 0xff));
-            const dR = @intToFloat(f32, ((dest[index] >> 16) & 0xff));
-            const dG = @intToFloat(f32, ((dest[index] >> 8) & 0xff));
-            const dB = @intToFloat(f32, ((dest[index] >> 0) & 0xff));
-            // const rDA = (dA / 255.0);
-
-            const invRSA = 1 - rSA;
-            const a = invRSA * dA;
-            const r = invRSA * dR;
-            const g = invRSA * dG;
-            const b = invRSA * dB;
-
-            dest[index] = (@floatToInt(u32, a + 0.5) << 24) |
-                (@floatToInt(u32, r + 0.5) << 16) |
-                (@floatToInt(u32, g + 0.5) << 8) |
-                (@floatToInt(u32, b + 0.5) << 0);
-        }
-
-        destRow += @intCast(usize, buffer.pitch);
-        sourceRow = if (bitmap.pitch > 0) sourceRow + @intCast(usize, bitmap.pitch) else sourceRow - @intCast(usize, -bitmap.pitch);
-    }
-}
 
 fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug_platform_read_entire_file, fileName: [*:0]const u8) game.loaded_bitmap {
     const bitmap_header = packed struct {
@@ -509,7 +328,7 @@ fn FillGroundChunk(_: *game.transient_state, gameState: *game.state, groundBuffe
                 const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
                 const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
                 const p = center + offset - bitmapCenter;
-                DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
+                game.DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
             }
         }
     }
@@ -534,7 +353,7 @@ fn FillGroundChunk(_: *game.transient_state, gameState: *game.state, groundBuffe
                 const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
                 const p = center + offset - bitmapCenter;
 
-                DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
+                game.DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
             }
         }
     }
@@ -905,7 +724,7 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
-    DrawRectangle(drawBuffer, .{ 0, 0 }, .{ @intToFloat(f32, drawBuffer.width), @intToFloat(f32, drawBuffer.height) }, 1.0, 0.0, 1.0);
+    game.DrawRectangle(drawBuffer, .{ 0, 0 }, .{ @intToFloat(f32, drawBuffer.width), @intToFloat(f32, drawBuffer.height) }, 1.0, 0.0, 1.0);
 
     const screenCenter = game.v2{
         0.5 * @intToFloat(f32, drawBuffer.width),
@@ -969,7 +788,7 @@ pub export fn UpdateAndRender(
                         }
 
                         if (!NOT_IGNORE) {
-                            DrawRectangleOutline(drawBuffer, screenP - game.v2{ 0.5, 0.5 } * screenDim, screenP + game.v2{ 0.5, 0.5 } * screenDim, .{ 1, 1, 0 }, 2);
+                            game.DrawRectangleOutline(drawBuffer, screenP - game.v2{ 0.5, 0.5 } * screenDim, screenP + game.v2{ 0.5, 0.5 } * screenDim, .{ 1, 1, 0 }, 2);
                         }
                     }
                 }
@@ -1135,30 +954,7 @@ pub export fn UpdateAndRender(
         }
     }
 
-    var baseAddress = @as(u32, 0);
-    while (baseAddress < renderGroup.pushBufferSize) {
-        const piece = @ptrCast(*game.entity_visible_piece, @alignCast(@alignOf(game.entity_visible_piece), renderGroup.pushBufferBase + baseAddress));
-        baseAddress += @sizeOf(game.entity_visible_piece);
-
-        const entityBaseP = piece.basis.p;
-        const zFudge = 1 + 0.1 * (game.Z(entityBaseP) + piece.offsetZ);
-
-        const entityGroundPointX = game.X(screenCenter) + metersToPixels * zFudge * game.X(entityBaseP);
-        const entityGroundPointY = game.Y(screenCenter) - metersToPixels * zFudge * game.Y(entityBaseP);
-        const entityz = -metersToPixels * game.Z(entityBaseP);
-
-        const center = game.v2{
-            entityGroundPointX + piece.offset[0],
-            entityGroundPointY + piece.offset[1] + piece.entityZC * entityz,
-        };
-
-        if (piece.bitmap) |b| {
-            DrawBitmap(drawBuffer, b, center[0], center[1], piece.a);
-        } else {
-            const halfDim = piece.dim * @splat(2, 0.5 * metersToPixels);
-            DrawRectangle(drawBuffer, center - halfDim, center + halfDim, piece.r, piece.g, piece.b);
-        }
-    }
+    game.RenderGroupToOutput(renderGroup, drawBuffer);
 
     game.EndSim(simRegion, gameState); // TODO (Manav): use defer
     game.EndTemporaryMemory(simMemory);

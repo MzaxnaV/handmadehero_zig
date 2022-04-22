@@ -4,6 +4,9 @@ Collection of references, not all are realted to Handmade Hero.
 ## A
 - [Arcsynthesis OpenGL Tutorials, archieved](https://www.roiatalla.com/public/arcsynthesis/html/index.html)
 
+## F
+- [Fabian Giesen blog](https://fgiesen.wordpress.com/)
+
 ## I 
 - [Intel 64 and IA-32 Architectures Manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html)
 - [Intel Intrinsics Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
