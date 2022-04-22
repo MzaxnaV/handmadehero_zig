@@ -42,10 +42,7 @@ pub const render_group_entry_header = struct {
 
 pub const render_entry_clear = struct {
     header: render_group_entry_header,
-    r: f32 = 0,
-    g: f32 = 0,
-    b: f32 = 0,
-    a: f32 = 0,
+    colour: hm.v4,
 };
 
 pub const render_entry_bitmap = struct {
@@ -82,14 +79,14 @@ pub const render_group = struct {
 // functions ------------------------------------------------------------------------------------------------------------------------------
 
 pub fn DrawRectangleOutline(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, colour: hm.v3, r: f32) void {
-    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMin) + r }, hm.R(colour), hm.G(colour), hm.B(colour));
-    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMax) - r }, .{ hm.X(vMax) + r, hm.Y(vMax) + r }, hm.R(colour), hm.G(colour), hm.B(colour));
+    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMin) + r }, hm.R(colour), hm.G(colour), hm.B(colour), 1);
+    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMax) - r }, .{ hm.X(vMax) + r, hm.Y(vMax) + r }, hm.R(colour), hm.G(colour), hm.B(colour), 1);
 
-    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMin) + r, hm.Y(vMax) + r }, hm.R(colour), hm.G(colour), hm.B(colour));
-    DrawRectangle(buffer, .{ hm.X(vMax) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMax) + r }, hm.R(colour), hm.G(colour), hm.B(colour));
+    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMin) + r, hm.Y(vMax) + r }, hm.R(colour), hm.G(colour), hm.B(colour), 1);
+    DrawRectangle(buffer, .{ hm.X(vMax) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMax) + r }, hm.R(colour), hm.G(colour), hm.B(colour), 1);
 }
 
-pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32, g: f32, b: f32) void {
+pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32, g: f32, b: f32, a: f32) void {
     var minX = RoundF32ToInt(i32, vMin[0]);
     var minY = RoundF32ToInt(i32, vMin[1]);
     var maxX = RoundF32ToInt(i32, vMax[0]);
@@ -111,7 +108,7 @@ pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32
         maxY = buffer.height;
     }
 
-    const colour: u32 = (RoundF32ToInt(u32, r * 255.0) << 16) | (RoundF32ToInt(u32, g * 255.0) << 8) | (RoundF32ToInt(u32, b * 255) << 0);
+    const colour: u32 = (RoundF32ToInt(u32, a * 255.0) << 24) | (RoundF32ToInt(u32, r * 255.0) << 16) | (RoundF32ToInt(u32, g * 255.0) << 8) | (RoundF32ToInt(u32, b * 255) << 0);
 
     var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, minY * buffer.pitch);
 
@@ -326,8 +323,6 @@ pub fn PushBitmap(group: *render_group, bitmap: *hi.loaded_bitmap, offset: hm.v2
 }
 
 pub inline fn PushRect(group: *render_group, offset: hm.v2, offsetZ: f32, dim: hm.v2, colour: hm.v4, entityZC: f32) void {
-    // PushPiece(group, null, offset, offsetZ, .{ 0, 0 }, dim, colour, entityZC);
-
     const halfDim = dim * @splat(2, 0.5 * group.metersToPixels);
 
     if (PushRenderElements(group, .Rectangle)) |piece| {
@@ -346,11 +341,17 @@ pub inline fn PushRect(group: *render_group, offset: hm.v2, offsetZ: f32, dim: h
 pub inline fn PushRectOutline(group: *render_group, offset: hm.v2, offsetZ: f32, dim: hm.v2, colour: hm.v4, entityZC: f32) void {
     const thickness = 0.1;
 
-    PushPiece(group, null, offset - hm.v2{ 0, 0.5 * hm.Y(dim) }, offsetZ, .{ 0, 0 }, .{ hm.X(dim), thickness }, colour, entityZC);
-    PushPiece(group, null, offset + hm.v2{ 0, 0.5 * hm.Y(dim) }, offsetZ, .{ 0, 0 }, .{ hm.X(dim), thickness }, colour, entityZC);
+    PushRect(group, offset - hm.v2{ 0, 0.5 * hm.Y(dim) }, offsetZ, .{ hm.X(dim), thickness }, colour, entityZC);
+    PushRect(group, offset + hm.v2{ 0, 0.5 * hm.Y(dim) }, offsetZ, .{ hm.X(dim), thickness }, colour, entityZC);
 
-    PushPiece(group, null, offset - hm.v2{ 0.5 * hm.X(dim), 0 }, offsetZ, .{ 0, 0 }, .{ thickness, hm.Y(dim) }, colour, entityZC);
-    PushPiece(group, null, offset + hm.v2{ 0.5 * hm.X(dim), 0 }, offsetZ, .{ 0, 0 }, .{ thickness, hm.Y(dim) }, colour, entityZC);
+    PushRect(group, offset - hm.v2{ 0.5 * hm.X(dim), 0 }, offsetZ, .{ thickness, hm.Y(dim) }, colour, entityZC);
+    PushRect(group, offset + hm.v2{ 0.5 * hm.X(dim), 0 }, offsetZ, .{ thickness, hm.Y(dim) }, colour, entityZC);
+}
+
+pub inline fn Clear(group: *render_group, colour: hm.v4) void {
+    if (PushRenderElements(group, .Clear)) |entry| {
+        entry.colour = colour;
+    }
 }
 
 pub fn AllocateRenderGroup(arena: *hi.memory_arena, maxPushBufferSize: u32, metersToPixels: f32) *render_group {
@@ -380,6 +381,15 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
             .Clear => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_clear, header);
                 baseAddress += @sizeOf(@TypeOf(entry.*));
+                DrawRectangle(
+                    outputTarget,
+                    .{ 0, 0 },
+                    .{ @intToFloat(f32, outputTarget.width), @intToFloat(f32, outputTarget.height) },
+                    hm.R(entry.colour),
+                    hm.G(entry.colour),
+                    hm.B(entry.colour),
+                    hm.A(entry.colour),
+                );
             },
             .Bitmap => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_bitmap, header);
@@ -391,7 +401,7 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
             .Rectangle => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_rectangle, header);
                 const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
-                DrawRectangle(outputTarget, p, p + entry.dim, entry.r, entry.g, entry.b);
+                DrawRectangle(outputTarget, p, p + entry.dim, entry.r, entry.g, entry.b, 1);
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },

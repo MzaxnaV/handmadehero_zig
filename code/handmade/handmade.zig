@@ -45,7 +45,6 @@ fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneH
     }
 }
 
-
 fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug_platform_read_entire_file, fileName: [*:0]const u8) game.loaded_bitmap {
     const bitmap_header = packed struct {
         fileType: u16,
@@ -298,7 +297,14 @@ fn MakeNullCollision(gameState: *game.state) *game.sim_entity_collision_volume_g
     return group;
 }
 
-fn FillGroundChunk(_: *game.transient_state, gameState: *game.state, groundBuffer: *game.ground_buffer, chunkP: *const game.world_position) void {
+fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, groundBuffer: *game.ground_buffer, chunkP: *const game.world_position) void {
+    const groundMemory = game.BeginTemporaryMemory(&tranState.tranArena);
+    defer game.EndTemporaryMemory(groundMemory);
+
+    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), 1);
+
+    game.Clear(renderGroup, .{1, 1, 0, 1});
+
     var buffer = &groundBuffer.bitmap;
 
     groundBuffer.p = chunkP.*;
@@ -328,7 +334,7 @@ fn FillGroundChunk(_: *game.transient_state, gameState: *game.state, groundBuffe
                 const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
                 const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
                 const p = center + offset - bitmapCenter;
-                game.DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
+                game.PushBitmap(renderGroup, stamp, p, 0, .{0, 0}, 1.0, 1.0);
             }
         }
     }
@@ -353,10 +359,12 @@ fn FillGroundChunk(_: *game.transient_state, gameState: *game.state, groundBuffe
                 const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
                 const p = center + offset - bitmapCenter;
 
-                game.DrawBitmap(buffer, stamp, game.X(p), game.Y(p), 1.0);
+                game.PushBitmap(renderGroup, stamp, p, 0, .{0, 0}, 1.0, 1.0);
             }
         }
     }
+
+    game.RenderGroupToOutput(renderGroup, buffer);
 }
 
 fn ClearBitmap(bitmap: *game.loaded_bitmap) void {
@@ -661,7 +669,7 @@ pub export fn UpdateAndRender(
 
     const world = gameState.world;
 
-    const metersToPixels = gameState.metersToPixels;
+    // const metersToPixels = gameState.metersToPixels;
     const pixelsToMeters = 1.0 / gameState.metersToPixels;
 
     for (gameInput.controllers) |controller, controllerIndex| {
@@ -724,12 +732,12 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
-    game.DrawRectangle(drawBuffer, .{ 0, 0 }, .{ @intToFloat(f32, drawBuffer.width), @intToFloat(f32, drawBuffer.height) }, 1.0, 0.0, 1.0);
+    game.Clear(renderGroup, game.v4{ 1, 0, 1, 0 });
 
-    const screenCenter = game.v2{
-        0.5 * @intToFloat(f32, drawBuffer.width),
-        0.5 * @intToFloat(f32, drawBuffer.height),
-    };
+    // const screenCenter = game.v2{
+    //     0.5 * @intToFloat(f32, drawBuffer.width),
+    //     0.5 * @intToFloat(f32, drawBuffer.height),
+    // };
 
     const screenWidthInMeters = @intToFloat(f32, drawBuffer.width) * pixelsToMeters;
     const screenHeightInMeters = @intToFloat(f32, drawBuffer.height) * pixelsToMeters;
@@ -759,8 +767,6 @@ pub export fn UpdateAndRender(
                     {
                         const chunkCenterP = game.CenteredChunkPoint(chunkX, chunkY, chunkZ);
                         const relP = game.Substract(world, &chunkCenterP, &gameState.cameraP);
-                        const screenP = screenCenter + game.v2{ metersToPixels, -metersToPixels } * game.XY(relP);
-                        const screenDim = game.v2{ metersToPixels, metersToPixels } * game.XY(world.chunkDimInMeters);
 
                         var furthestBufferLengthSq = @as(f32, 0);
                         var furthestBuffer: ?*game.ground_buffer = null;
@@ -787,9 +793,7 @@ pub export fn UpdateAndRender(
                             FillGroundChunk(tranState, gameState, furthestBuffer.?, &chunkCenterP);
                         }
 
-                        if (!NOT_IGNORE) {
-                            game.DrawRectangleOutline(drawBuffer, screenP - game.v2{ 0.5, 0.5 } * screenDim, screenP + game.v2{ 0.5, 0.5 } * screenDim, .{ 1, 1, 0 }, 2);
-                        }
+                        game.PushRectOutline(renderGroup, game.XY(relP), 0, game.XY(world.chunkDimInMeters), .{ 1, 1, 0, 1 }, 1);
                     }
                 }
             }
@@ -930,7 +934,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Space => {
-                    if (!NOT_IGNORE) {
+                    if (NOT_IGNORE) {
                         var volumeIndex = @as(u32, 0);
                         while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
                             const volume = entity.collision.volumes[volumeIndex];
