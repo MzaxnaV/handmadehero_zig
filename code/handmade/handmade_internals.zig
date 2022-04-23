@@ -135,6 +135,8 @@ pub const state = struct {
     familiarCollision: *sim_entity_collision_volume_group,
     wallCollision: *sim_entity_collision_volume_group,
     standardRoomCollision: *sim_entity_collision_volume_group,
+
+    time: f32,
 };
 
 pub const transient_state = struct {

@@ -303,7 +303,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
 
     const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), 1);
 
-    game.Clear(renderGroup, .{1, 1, 0, 1});
+    game.Clear(renderGroup, .{ 1, 1, 0, 1 });
 
     var buffer = &groundBuffer.bitmap;
 
@@ -334,7 +334,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                 const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
                 const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
                 const p = center + offset - bitmapCenter;
-                game.PushBitmap(renderGroup, stamp, p, 0, .{0, 0}, 1.0, 1.0);
+                game.PushBitmap(renderGroup, stamp, p, 0, .{ 0, 0 }, 1.0, 1.0);
             }
         }
     }
@@ -359,7 +359,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                 const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
                 const p = center + offset - bitmapCenter;
 
-                game.PushBitmap(renderGroup, stamp, p, 0, .{0, 0}, 1.0, 1.0);
+                game.PushBitmap(renderGroup, stamp, p, 0, .{ 0, 0 }, 1.0, 1.0);
             }
         }
     }
@@ -659,7 +659,7 @@ pub export fn UpdateAndRender(
         tranState.initialized = true;
     }
 
-    if (gameInput.executableReloaded) {
+    if (!NOT_IGNORE and gameInput.executableReloaded) {
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
             var groundBuffer: *game.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
@@ -734,10 +734,10 @@ pub export fn UpdateAndRender(
 
     game.Clear(renderGroup, game.v4{ 1, 0, 1, 0 });
 
-    // const screenCenter = game.v2{
-    //     0.5 * @intToFloat(f32, drawBuffer.width),
-    //     0.5 * @intToFloat(f32, drawBuffer.height),
-    // };
+    const screenCenter = game.v2{
+        0.5 * @intToFloat(f32, drawBuffer.width),
+        0.5 * @intToFloat(f32, drawBuffer.height),
+    };
 
     const screenWidthInMeters = @intToFloat(f32, drawBuffer.width) * pixelsToMeters;
     const screenHeightInMeters = @intToFloat(f32, drawBuffer.height) * pixelsToMeters;
@@ -955,6 +955,25 @@ pub export fn UpdateAndRender(
             }
 
             basis.p = game.GetEntityGroundPoint(entity);
+        }
+    }
+
+    gameState.time += gameInput.dtForFrame;
+    const angle = gameState.time;
+
+    var origin = screenCenter; // + game.v2{ 10 * game.Sin(angle), 0 };
+    var xAxis = @splat(2, @as(f32, 100)) * game.v2{ game.Cos(angle), game.Sin(angle) }; //@splat(2, @as(f32, 100 + 25 * game.Cos(4.2 * angle))) * game.v2{ game.Cos(angle), game.Sin(angle) };
+    var yAxis = @splat(2, @as(f32, 100)) * game.v2{ game.Cos(angle + 0.5 * platform.PI32), game.Sin(angle + 0.5 * platform.PI32) }; //@splat(2, @as(f32, 100 + 50 * game.Cos(3.9 * angle))) * game.v2{ game.Cos(angle + 1), game.Sin(angle + 1) };
+
+    const c = game.CoordinateSystem(renderGroup, origin, xAxis, yAxis, .{ 0.5 + 0.5 * game.Sin(angle), 0.5 + 0.5 * game.Sin(2.9 * angle), 0.5 + 0.5 * game.Sin(9.9 * angle), 1 });
+
+    var pointIndex = @as(u32, 0);
+    var y = @as(f32, 0);
+    while (y < 1) : (y += 0.25) {
+        var x = @as(f32, 0);
+        while (x < 1) : (x += 0.25) {
+            c.points[pointIndex] = .{ x, y };
+            pointIndex += 1;
         }
     }
 

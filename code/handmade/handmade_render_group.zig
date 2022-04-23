@@ -26,12 +26,14 @@ pub const render_group_entry_type = enum {
     Clear,
     Bitmap,
     Rectangle,
+    CoordinateSystem,
 
     pub fn Type(self: render_group_entry_type) type {
         return switch (self) {
             .Clear => render_entry_clear,
             .Bitmap => render_entry_bitmap,
             .Rectangle => render_entry_rectangle,
+            .CoordinateSystem => render_entry_coordinate_system,
         };
     }
 };
@@ -42,29 +44,42 @@ pub const render_group_entry_header = struct {
 
 pub const render_entry_clear = struct {
     header: render_group_entry_header,
-    colour: hm.v4,
+    // NOTE (Manav): Vectors in zig have 16 byte alignment so use arrays here for safety
+    colour: [4]f32,
+};
+
+pub const render_entry_coordinate_system = struct {
+    header: render_group_entry_header,
+    // NOTE (Manav): Vectors in zig have 16 byte alignment so use arrays here for safety
+    origin: [2]f32,
+    xAxis: [2]f32,
+    yAxis: [2]f32,
+    colour: [4]f32,
+
+    points: [16]hm.v2,
 };
 
 pub const render_entry_bitmap = struct {
     header: render_group_entry_header,
     entityBasis: render_entity_basis,
     bitmap: *hi.loaded_bitmap,
-    r: f32 = 0,
-    g: f32 = 0,
-    b: f32 = 0,
-    a: f32 = 0,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
 };
 
 pub const render_entry_rectangle = struct {
     header: render_group_entry_header,
     entityBasis: render_entity_basis,
 
-    r: f32 = 0,
-    g: f32 = 0,
-    b: f32 = 0,
-    a: f32 = 0,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
 
-    dim: hm.v2 = hm.v2{ 0, 0 },
+    // NOTE (Manav): Vectors in zig have 16 byte alignment so use arrays here for safety
+    dim: [2]f32,
 };
 
 pub const render_group = struct {
@@ -277,21 +292,21 @@ inline fn GetRenderEntityBasisP(group: *render_group, entityBasis: *render_entit
 }
 
 pub fn PushRenderElements(group: *render_group, comptime t: render_group_entry_type) ?*align(@alignOf(u8)) t.Type() {
-    const header_type = ?*align(@alignOf(u8)) render_group_entry_header;
     const element_type = t.Type();
+    const element_ptr_type = ?*align(@alignOf(u8)) element_type;
 
-    var result: header_type = null;
+    var result: element_ptr_type = null;
 
     const size = @sizeOf(element_type);
     if ((group.pushBufferSize + size) < group.maxPushBufferSize) {
-        result = @ptrCast(header_type, group.pushBufferBase + group.pushBufferSize);
-        result.?.entryType = t;
+        result = @ptrCast(element_ptr_type, group.pushBufferBase + group.pushBufferSize);
+        result.?.header.entryType = t;
         group.pushBufferSize += size;
     } else {
         unreachable;
     }
 
-    return @ptrCast(?*align(@alignOf(u8)) element_type, result);
+    return result;
 }
 
 // zig fmt: off
@@ -354,6 +369,18 @@ pub inline fn Clear(group: *render_group, colour: hm.v4) void {
     }
 }
 
+pub fn CoordinateSystem(group: *render_group, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, colour: hm.v4) *align(1) render_entry_coordinate_system {
+    const entryElement = PushRenderElements(group, .CoordinateSystem);
+    if (entryElement) |entry| {
+        entry.origin = origin;
+        entry.xAxis = xAxis;
+        entry.yAxis = yAxis;
+        entry.colour = colour;
+    }
+
+    return entryElement.?;
+}
+
 pub fn AllocateRenderGroup(arena: *hi.memory_arena, maxPushBufferSize: u32, metersToPixels: f32) *render_group {
     var result: *render_group = arena.PushStruct(render_group);
     result.pushBufferBase = arena.PushSize(@alignOf(u8), maxPushBufferSize);
@@ -380,15 +407,16 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
         switch (header.entryType) {
             .Clear => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_clear, header);
+                const colour: hm.v4 = entry.colour;
                 baseAddress += @sizeOf(@TypeOf(entry.*));
                 DrawRectangle(
                     outputTarget,
                     .{ 0, 0 },
                     .{ @intToFloat(f32, outputTarget.width), @intToFloat(f32, outputTarget.height) },
-                    hm.R(entry.colour),
-                    hm.G(entry.colour),
-                    hm.B(entry.colour),
-                    hm.A(entry.colour),
+                    hm.R(colour),
+                    hm.G(colour),
+                    hm.B(colour),
+                    hm.A(colour),
                 );
             },
             .Bitmap => {
@@ -401,7 +429,32 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
             .Rectangle => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_rectangle, header);
                 const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
-                DrawRectangle(outputTarget, p, p + entry.dim, entry.r, entry.g, entry.b, 1);
+                const dim: hm.v2 = entry.dim;
+                DrawRectangle(outputTarget, p, p + dim, entry.r, entry.g, entry.b, 1);
+
+                baseAddress += @sizeOf(@TypeOf(entry.*));
+            },
+
+            .CoordinateSystem => {
+                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_coordinate_system, header);
+                const origin: hm.v2 = entry.origin;
+                const xAxis: hm.v2 = entry.xAxis;
+                const yAxis: hm.v2 = entry.yAxis;
+                const dim = hm.v2{ 2, 2 };
+                var p = origin;
+                DrawRectangle(outputTarget, p - dim, p + dim, entry.colour[0], entry.colour[1], entry.colour[2], entry.colour[3]);
+
+                p = origin + xAxis;
+                DrawRectangle(outputTarget, p - dim, p + dim, entry.colour[0], entry.colour[1], entry.colour[2], entry.colour[3]);
+
+                p = origin + yAxis;
+                DrawRectangle(outputTarget, p - dim, p + dim, entry.colour[0], entry.colour[1], entry.colour[2], entry.colour[3]);
+
+                for (entry.points) |point| {
+                    p = point;
+                    p = origin + @splat(2, hm.X(p)) * xAxis + @splat(2, hm.Y(p)) * yAxis;
+                    DrawRectangle(outputTarget, p - dim, p + dim, entry.colour[0], entry.colour[1], entry.colour[2], entry.colour[3]);
+                }
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },
