@@ -5,8 +5,11 @@ const platform = @import("handmade_platform");
 
 const hi = @import("handmade_internals.zig");
 const hm = @import("handmade_math.zig");
+const hintrinsics = @import("handmade_intrinsics.zig");
 
-const RoundF32ToInt = @import("handmade_intrinsics.zig").RoundF32ToInt;
+const Round = hintrinsics.RoundF32ToInt;
+const Floor = hintrinsics.FloorF32ToI32;
+const Ceil = hintrinsics.CeilF32ToI32;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
@@ -102,10 +105,10 @@ pub fn DrawRectangleOutline(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2,
 }
 
 pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32, g: f32, b: f32, a: f32) void {
-    var minX = RoundF32ToInt(i32, vMin[0]);
-    var minY = RoundF32ToInt(i32, vMin[1]);
-    var maxX = RoundF32ToInt(i32, vMax[0]);
-    var maxY = RoundF32ToInt(i32, vMax[1]);
+    var minX = Round(i32, vMin[0]);
+    var minY = Round(i32, vMin[1]);
+    var maxX = Round(i32, vMax[0]);
+    var maxY = Round(i32, vMax[1]);
 
     if (minX < 0) {
         minX = 0;
@@ -123,7 +126,12 @@ pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32
         maxY = buffer.height;
     }
 
-    const colour: u32 = (RoundF32ToInt(u32, a * 255.0) << 24) | (RoundF32ToInt(u32, r * 255.0) << 16) | (RoundF32ToInt(u32, g * 255.0) << 8) | (RoundF32ToInt(u32, b * 255) << 0);
+    // zig fmt: off
+    const colour: u32 = (Round(u32, a * 255.0) << 24) | 
+                        (Round(u32, r * 255.0) << 16) | 
+                        (Round(u32, g * 255.0) << 8) | 
+                        (Round(u32, b * 255) << 0);
+    // zig fmt: on
 
     var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, minY * buffer.pitch);
 
@@ -139,9 +147,68 @@ pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32
     }
 }
 
+pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, colour: hm.v4) void {
+    // zig fmt: off
+    const colour32: u32 = (Round(u32, hm.A(colour) * 255.0) << 24) | 
+                          (Round(u32, hm.R(colour) * 255.0) << 16) | 
+                          (Round(u32, hm.G(colour) * 255.0) << 8) | 
+                          (Round(u32, hm.B(colour) * 255) << 0);
+    // zig fmt: on
+
+    const widthMax = buffer.width - 1;
+    const heightMax = buffer.height - 1;
+
+    var xMin = widthMax;
+    var xMax = @as(i32, 0);
+
+    var yMin = heightMax;
+    var yMax = @as(i32, 0);
+
+    const points: [4]hm.v2 = .{ origin, origin + xAxis, origin + xAxis + yAxis, origin + yAxis };
+
+    for (points) |p| {
+        const floorX = Floor(hm.X(p));
+        const ceilX = Ceil(hm.X(p));
+        const floorY = Floor(hm.Y(p));
+        const ceilY = Ceil(hm.Y(p));
+
+        if (xMin > floorX) xMin = floorX;
+        if (yMin > floorY) yMin = floorY;
+        if (xMax < ceilX) xMax = ceilX;
+        if (yMax < ceilY) yMax = ceilY;
+    }
+
+    if (xMin < 0) xMin = 0;
+    if (yMin < 0) yMin = 0;
+    if (xMax > widthMax) xMax = widthMax;
+    if (yMax > heightMax) yMax = heightMax;
+
+    var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, xMin) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, yMin * buffer.pitch);
+
+    var y = yMin;
+    while (y <= yMax) : (y += 1) {
+        var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
+        var x = xMin;
+        while (x <= xMax) : (x += 1) {
+            const pixelP = hm.V2(x, y);
+
+            const edge0 = hm.Inner(pixelP - origin, -hm.Perp(xAxis));
+            const edge1 = hm.Inner(pixelP - (origin + xAxis), -hm.Perp(yAxis));
+            const edge2 = hm.Inner(pixelP - (origin + xAxis + yAxis), hm.Perp(xAxis));
+            const edge3 = hm.Inner(pixelP - (origin + yAxis), hm.Perp(yAxis));
+
+            if (edge0 < 0 and edge1 < 0 and edge2 < 0 and edge3 < 0) {
+                pixel.* = colour32;
+            }
+            pixel += 1;
+        }
+        row += @intCast(u32, buffer.pitch);
+    }
+}
+
 pub fn DrawBitmap(buffer: *hi.loaded_bitmap, bitmap: *const hi.loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
-    var minX = RoundF32ToInt(i32, realX);
-    var minY = RoundF32ToInt(i32, realY);
+    var minX = Round(i32, realX);
+    var minY = Round(i32, realY);
     var maxX = minX + bitmap.width;
     var maxY = minY + bitmap.height;
 
@@ -208,8 +275,8 @@ pub fn DrawBitmap(buffer: *hi.loaded_bitmap, bitmap: *const hi.loaded_bitmap, re
 }
 
 pub fn DrawMatte(buffer: *hi.loaded_bitmap, bitmap: *const hi.loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
-    var minX = RoundF32ToInt(i32, realX);
-    var minY = RoundF32ToInt(i32, realY);
+    var minX = Round(i32, realX);
+    var minY = Round(i32, realY);
     var maxX = minX + bitmap.width;
     var maxY = minY + bitmap.height;
 
@@ -436,25 +503,33 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
             },
 
             .CoordinateSystem => {
-                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_coordinate_system, header);
+                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_coordinate_system, header); // zig fmt: off
                 const origin: hm.v2 = entry.origin;
                 const xAxis: hm.v2 = entry.xAxis;
                 const yAxis: hm.v2 = entry.yAxis;
-                const dim = hm.v2{ 2, 2 };
+                var colour: hm.v4 = entry.colour;
+
+                const vMax: hm.v2 = (origin + xAxis + yAxis);
+                DrawRectangleSlowly(outputTarget, origin, xAxis, yAxis, colour);
+
+                colour = .{ 1, 1, 0, 1 };
                 var p = origin;
-                DrawRectangle(outputTarget, p - dim, p + dim, entry.colour[0], entry.colour[1], entry.colour[2], entry.colour[3]);
+                const dim = hm.v2{ 2, 2 };
+                DrawRectangle(outputTarget, p - dim, p + dim, colour[0], colour[1], colour[2], colour[3]);
 
                 p = origin + xAxis;
-                DrawRectangle(outputTarget, p - dim, p + dim, entry.colour[0], entry.colour[1], entry.colour[2], entry.colour[3]);
+                DrawRectangle(outputTarget, p - dim, p + dim, colour[0], colour[1], colour[2], colour[3]);
 
                 p = origin + yAxis;
-                DrawRectangle(outputTarget, p - dim, p + dim, entry.colour[0], entry.colour[1], entry.colour[2], entry.colour[3]);
+                DrawRectangle(outputTarget, p - dim, p + dim, colour[0], colour[1], colour[2], colour[3]);
 
-                for (entry.points) |point| {
-                    p = point;
-                    p = origin + @splat(2, hm.X(p)) * xAxis + @splat(2, hm.Y(p)) * yAxis;
-                    DrawRectangle(outputTarget, p - dim, p + dim, entry.colour[0], entry.colour[1], entry.colour[2], entry.colour[3]);
-                }
+                DrawRectangle(outputTarget, vMax - dim, vMax + dim, colour[0], colour[1], colour[2], colour[3]);
+
+                // for (entry.points) |point| {
+                //     p = point;
+                //     p = origin + @splat(2, hm.X(p)) * xAxis + @splat(2, hm.Y(p)) * yAxis;
+                //     DrawRectangle(outputTarget, p - dim, p + dim, entry.colour[0], entry.colour[1], entry.colour[2], entry.colour[3]);
+                // }
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },

@@ -959,11 +959,12 @@ pub export fn UpdateAndRender(
     }
 
     gameState.time += gameInput.dtForFrame;
-    const angle = gameState.time;
+    const angle = if (false) @as(f32, 0) else gameState.time;
 
-    var origin = screenCenter; // + game.v2{ 10 * game.Sin(angle), 0 };
-    var xAxis = @splat(2, @as(f32, 100)) * game.v2{ game.Cos(angle), game.Sin(angle) }; //@splat(2, @as(f32, 100 + 25 * game.Cos(4.2 * angle))) * game.v2{ game.Cos(angle), game.Sin(angle) };
-    var yAxis = @splat(2, @as(f32, 100)) * game.v2{ game.Cos(angle + 0.5 * platform.PI32), game.Sin(angle + 0.5 * platform.PI32) }; //@splat(2, @as(f32, 100 + 50 * game.Cos(3.9 * angle))) * game.v2{ game.Cos(angle + 1), game.Sin(angle + 1) };
+    var origin = screenCenter;
+    var xAxis = @splat(2, @as(f32, 50 + 50 * game.Cos(angle))) * game.v2{ game.Cos(angle), game.Sin(angle) };
+    // var yAxis = game.Perp(xAxis);
+    var yAxis = @splat(2, @as(f32, 50 + 50 * game.Cos(angle))) * game.v2{ game.Cos(angle + 1), game.Sin(angle + 1) };
 
     const c = game.CoordinateSystem(renderGroup, origin, xAxis, yAxis, .{ 0.5 + 0.5 * game.Sin(angle), 0.5 + 0.5 * game.Sin(2.9 * angle), 0.5 + 0.5 * game.Sin(9.9 * angle), 1 });
 

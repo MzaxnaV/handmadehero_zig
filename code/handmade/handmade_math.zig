@@ -191,6 +191,11 @@ pub inline fn Length(a: anytype) f32 {
     return result;
 }
 
+pub inline fn Perp(a: v2) v2 {
+    const result = v2{ -Y(a), X(a) };
+    return result;
+}
+
 // functions (rects operations)------------------------------------------------------------------------------------------------------------
 
 pub inline fn IsInRect2(rectangle: rect2, testP: v2) bool {
