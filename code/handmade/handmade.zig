@@ -841,7 +841,7 @@ pub export fn UpdateAndRender(
                                         if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
                                             const dSwordV3 = game.v3{ game.X(conHero.dSword), game.Y(conHero.dSword), 0 };
-                                            game.MakeEntitySpatial(sword, entity.p, entity.dP + (dSwordV3 * @splat(3, @as(f32, 5)))); //
+                                            game.MakeEntitySpatial(sword, entity.p, entity.dP + (game.Scale(dSwordV3, 5)));
                                             game.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
                                         }
                                     },
@@ -909,7 +909,7 @@ pub export fn UpdateAndRender(
                         if (closestHeroDSq > game.Square(3)) {
                             const accelaration = 0.5;
                             const oneOverLength = accelaration / game.SquareRoot(closestHeroDSq);
-                            ddP = @splat(3, oneOverLength) * (hero.p - entity.p);
+                            ddP = game.Scale(hero.p - entity.p, oneOverLength);
                         }
                     }
 
@@ -959,14 +959,25 @@ pub export fn UpdateAndRender(
     }
 
     gameState.time += gameInput.dtForFrame;
-    const angle = if (false) @as(f32, 0) else gameState.time;
+    const angle = 0.1 * gameState.time;
+    const disp = 100 * game.Cos(5 * angle);
 
     var origin = screenCenter;
-    var xAxis = @splat(2, @as(f32, 50 + 50 * game.Cos(angle))) * game.v2{ game.Cos(angle), game.Sin(angle) };
-    // var yAxis = game.Perp(xAxis);
-    var yAxis = @splat(2, @as(f32, 50 + 50 * game.Cos(angle))) * game.v2{ game.Cos(angle + 1), game.Sin(angle + 1) };
-
-    const c = game.CoordinateSystem(renderGroup, origin, xAxis, yAxis, .{ 0.5 + 0.5 * game.Sin(angle), 0.5 + 0.5 * game.Sin(2.9 * angle), 0.5 + 0.5 * game.Sin(9.9 * angle), 1 });
+    var xAxis: game.v2 = undefined;
+    var yAxis: game.v2 = undefined;
+    if (NOT_IGNORE) {
+        xAxis = game.Scale(game.v2{ game.Cos(angle), game.Sin(angle) }, 150);
+        yAxis = game.Perp(xAxis);
+    } else {
+        xAxis = game.v2{ 150, 0 };
+        yAxis = game.v2{ 0, 150 };
+    }
+    const c = game.CoordinateSystem(renderGroup, game.V2(disp, 0) + origin - game.Scale(xAxis + yAxis, 0.5), xAxis, yAxis, .{
+        0.5 + 0.5 * game.Sin(angle),
+        0.5 + 0.5 * game.Sin(2.9 * angle),
+        0.5 + 0.5 * game.Sin(9.9 * angle),
+        1,
+    }, &gameState.tree);
 
     var pointIndex = @as(u32, 0);
     var y = @as(f32, 0);

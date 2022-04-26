@@ -214,7 +214,7 @@ fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32,
 }
 
 pub inline fn EntityOverlapsRectangle(p: hm.v3, volume: sim_entity_collision_volume, rect: hm.rect3) bool {
-    const grown = hm.AddRadiusToRect3(rect, volume.dim * @splat(3, @as(f32, 0.5)));
+    const grown = hm.AddRadiusToRect3(rect, hm.Scale(volume.dim, 0.5));
     const result = hm.IsInRect3(grown, p + volume.offsetP);
     return result;
 }
@@ -493,7 +493,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
     if (moveSpec.unitMaxAccelVector) {
         const ddPLength = hm.LengthSq(ddP);
         if (ddPLength > 1.0) {
-            ddP *= @splat(3, 1.0 / SquareRoot(ddPLength));
+            ddP = hm.Scale(ddP, 1.0 / SquareRoot(ddPLength));
         }
     }
 
@@ -505,8 +505,8 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
 
     // const oldPlayerP = entity.p;
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
-    var playerDelta = (ddP * @splat(3, 0.5 * hm.Square(dt))) + entity.dP * hm.v3{ dt, dt, dt };
-    entity.dP += ddP * hm.v3{ dt, dt, dt };
+    var playerDelta = (hm.Scale(ddP, 0.5 * hm.Square(dt))) + hm.Scale(entity.dP, dt);
+    entity.dP += hm.Scale(ddP, dt);
     assert(hm.LengthSq(entity.dP) <= hm.Square(simRegion.maxEntityVelocity));
     // const newPlayerP = oldPlayerP + playerDelta;
 
@@ -647,9 +647,9 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 const stopsOnCollision = HandleCollision(gameState, entity, hitEntity.?);
                 if (stopsOnCollision) {
                     // NOTE (Manav): playerDelta -= (1 * Inner(playerDelta, wallNormal))*wallNormal;
-                    playerDelta -= @splat(3, 1 * hm.Inner(playerDelta, wallNormal)) * wallNormal;
+                    playerDelta -= hm.Scale(wallNormal, 1 * hm.Inner(playerDelta, wallNormal));
                     // NOTE (Manav): entity.dP -= (1 * Inner(entity.dP, wallNormal))*wallNormal;
-                    entity.dP -= @splat(3, 1 * hm.Inner(entity.dP, wallNormal)) * wallNormal;
+                    entity.dP -= hm.Scale(wallNormal, 1 * hm.Inner(entity.dP, wallNormal));
                 }
             } else {
                 break;

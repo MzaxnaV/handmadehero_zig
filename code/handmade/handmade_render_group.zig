@@ -11,6 +11,10 @@ const Round = hintrinsics.RoundF32ToInt;
 const Floor = hintrinsics.FloorF32ToI32;
 const Ceil = hintrinsics.CeilF32ToI32;
 
+// constants ------------------------------------------------------------------------------------------------------------------------------
+
+const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
+
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const render_basis = struct {
@@ -58,6 +62,7 @@ pub const render_entry_coordinate_system = struct {
     xAxis: [2]f32,
     yAxis: [2]f32,
     colour: [4]f32,
+    texture: *hi.loaded_bitmap,
 
     points: [16]hm.v2,
 };
@@ -147,13 +152,18 @@ pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32
     }
 }
 
-pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, colour: hm.v4) void {
+pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, colour: hm.v4, texture: *hi.loaded_bitmap) void {
+    const invXAxisLengthSq = 1 / hm.LengthSq(xAxis);
+    const invYAxisLengthSq = 1 / hm.LengthSq(yAxis);
+
     // zig fmt: off
     const colour32: u32 = (Round(u32, hm.A(colour) * 255.0) << 24) | 
                           (Round(u32, hm.R(colour) * 255.0) << 16) | 
                           (Round(u32, hm.G(colour) * 255.0) << 8) | 
                           (Round(u32, hm.B(colour) * 255) << 0);
     // zig fmt: on
+
+    _ = texture;
 
     const widthMax = buffer.width - 1;
     const heightMax = buffer.height - 1;
@@ -190,14 +200,107 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
         var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
         var x = xMin;
         while (x <= xMax) : (x += 1) {
-            const pixelP = hm.V2(x, y);
+            if (NOT_IGNORE) {
+                const pixelP = hm.V2(x, y);
+                const d = pixelP - origin;
 
-            const edge0 = hm.Inner(pixelP - origin, -hm.Perp(xAxis));
-            const edge1 = hm.Inner(pixelP - (origin + xAxis), -hm.Perp(yAxis));
-            const edge2 = hm.Inner(pixelP - (origin + xAxis + yAxis), hm.Perp(xAxis));
-            const edge3 = hm.Inner(pixelP - (origin + yAxis), hm.Perp(yAxis));
+                const edge0 = hm.Inner(d, -hm.Perp(xAxis));
+                const edge1 = hm.Inner(d - xAxis, -hm.Perp(yAxis));
+                const edge2 = hm.Inner(d - xAxis - yAxis, hm.Perp(xAxis));
+                const edge3 = hm.Inner(d - yAxis, hm.Perp(yAxis));
 
-            if (edge0 < 0 and edge1 < 0 and edge2 < 0 and edge3 < 0) {
+                if (edge0 < 0 and edge1 < 0 and edge2 < 0 and edge3 < 0) {
+                    const u = invXAxisLengthSq * hm.Inner(d, xAxis);
+                    const v = invYAxisLengthSq * hm.Inner(d, yAxis);
+
+                    assert((u >= 0) and (u <= 1.001));
+                    assert((v >= 0) and (v <= 1.001));
+
+                    const tX = (u * @intToFloat(f32, texture.width - 2));
+                    const tY = (v * @intToFloat(f32, texture.height - 2));
+
+                    const X: i32 = @floatToInt(i32, tX);
+                    const Y: i32 = @floatToInt(i32, tY);
+
+                    const fX = tX - @intToFloat(f32, X);
+                    const fY = tY - @intToFloat(f32, Y);
+
+                    assert((X >= 0) and (X < texture.width));
+                    assert((Y >= 0) and (Y < texture.height));
+
+                    const texelOffset = Y * texture.pitch + X * @sizeOf(u32);
+                    const texelPtr = if (texelOffset > 0) texture.memory + @intCast(usize, texelOffset) else texture.memory - @intCast(usize, -texelOffset);
+
+                    const pitchOffset = if (texture.pitch > 0) texelPtr + @intCast(usize, texture.pitch) else texelPtr - @intCast(usize, -texture.pitch);
+
+                    const texelPtrA = @ptrCast(*align(@alignOf(u8)) u32, texelPtr).*;
+                    const texelPtrB = @ptrCast(*align(@alignOf(u8)) u32, texelPtr + @sizeOf(u32)).*;
+                    const texelPtrC = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset).*;
+                    const texelPtrD = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset + @sizeOf(u32)).*;
+
+                    const texelA: hm.v4 = .{
+                        @intToFloat(f32, ((texelPtrA >> 16) & 0xff)),
+                        @intToFloat(f32, ((texelPtrA >> 8) & 0xff)),
+                        @intToFloat(f32, ((texelPtrA >> 0) & 0xff)),
+                        @intToFloat(f32, ((texelPtrA >> 24) & 0xff)),
+                    };
+
+                    const texelB: hm.v4 = .{
+                        @intToFloat(f32, ((texelPtrB >> 16) & 0xff)),
+                        @intToFloat(f32, ((texelPtrB >> 8) & 0xff)),
+                        @intToFloat(f32, ((texelPtrB >> 0) & 0xff)),
+                        @intToFloat(f32, ((texelPtrB >> 24) & 0xff)),
+                    };
+
+                    const texelC: hm.v4 = .{
+                        @intToFloat(f32, ((texelPtrC >> 16) & 0xff)),
+                        @intToFloat(f32, ((texelPtrC >> 8) & 0xff)),
+                        @intToFloat(f32, ((texelPtrC >> 0) & 0xff)),
+                        @intToFloat(f32, ((texelPtrC >> 24) & 0xff)),
+                    };
+
+                    const texelD: hm.v4 = .{
+                        @intToFloat(f32, ((texelPtrD >> 16) & 0xff)),
+                        @intToFloat(f32, ((texelPtrD >> 8) & 0xff)),
+                        @intToFloat(f32, ((texelPtrD >> 0) & 0xff)),
+                        @intToFloat(f32, ((texelPtrD >> 24) & 0xff)),
+                    };
+
+                    const texel = if (NOT_IGNORE)
+                        hm.LerpV(
+                            hm.LerpV(texelA, fX, texelB),
+                            fY,
+                            hm.LerpV(texelC, fX, texelD),
+                        )
+                    else
+                        texelA;
+
+                    const sA = hm.A(texel);
+                    const sR = hm.R(texel);
+                    const sG = hm.G(texel);
+                    const sB = hm.B(texel);
+
+                    const rSA = (sA / 255.0) * hm.A(colour);
+
+                    const dR = @intToFloat(f32, ((pixel[0] >> 16) & 0xff));
+                    const dG = @intToFloat(f32, ((pixel[0] >> 8) & 0xff));
+                    const dB = @intToFloat(f32, ((pixel[0] >> 0) & 0xff));
+                    const dA = @intToFloat(f32, ((pixel[0] >> 24) & 0xff));
+
+                    const rDA = (dA / 255.0);
+
+                    const invRSA = 1 - rSA;
+                    const a = (rSA + rDA - rSA * rDA) * 255.0;
+                    const r = invRSA * dR + sR;
+                    const g = invRSA * dG + sG;
+                    const b = invRSA * dB + sB;
+
+                    pixel.* = (@floatToInt(u32, a + 0.5) << 24) |
+                        (@floatToInt(u32, r + 0.5) << 16) |
+                        (@floatToInt(u32, g + 0.5) << 8) |
+                        (@floatToInt(u32, b + 0.5) << 0);
+                }
+            } else {
                 pixel.* = colour32;
             }
             pixel += 1;
@@ -405,7 +508,7 @@ pub fn PushBitmap(group: *render_group, bitmap: *hi.loaded_bitmap, offset: hm.v2
 }
 
 pub inline fn PushRect(group: *render_group, offset: hm.v2, offsetZ: f32, dim: hm.v2, colour: hm.v4, entityZC: f32) void {
-    const halfDim = dim * @splat(2, 0.5 * group.metersToPixels);
+    const halfDim = hm.Scale(dim, 0.5 * group.metersToPixels);
 
     if (PushRenderElements(group, .Rectangle)) |piece| {
         piece.entityBasis.basis = group.defaultBasis;
@@ -416,7 +519,7 @@ pub inline fn PushRect(group: *render_group, offset: hm.v2, offsetZ: f32, dim: h
         piece.g = hm.G(colour);
         piece.b = hm.B(colour);
         piece.a = hm.A(colour);
-        piece.dim = @splat(2, group.metersToPixels) * dim;
+        piece.dim = hm.Scale(dim, group.metersToPixels);
     }
 }
 
@@ -436,13 +539,14 @@ pub inline fn Clear(group: *render_group, colour: hm.v4) void {
     }
 }
 
-pub fn CoordinateSystem(group: *render_group, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, colour: hm.v4) *align(1) render_entry_coordinate_system {
+pub fn CoordinateSystem(group: *render_group, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, colour: hm.v4, texture: *hi.loaded_bitmap) *align(1) render_entry_coordinate_system {
     const entryElement = PushRenderElements(group, .CoordinateSystem);
     if (entryElement) |entry| {
         entry.origin = origin;
         entry.xAxis = xAxis;
         entry.yAxis = yAxis;
         entry.colour = colour;
+        entry.texture = texture;
     }
 
     return entryElement.?;
@@ -510,7 +614,7 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
                 var colour: hm.v4 = entry.colour;
 
                 const vMax: hm.v2 = (origin + xAxis + yAxis);
-                DrawRectangleSlowly(outputTarget, origin, xAxis, yAxis, colour);
+                DrawRectangleSlowly(outputTarget, origin, xAxis, yAxis, colour, entry.texture);
 
                 colour = .{ 1, 1, 0, 1 };
                 var p = origin;
@@ -527,7 +631,7 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
 
                 // for (entry.points) |point| {
                 //     p = point;
-                //     p = origin + @splat(2, hm.X(p)) * xAxis + @splat(2, hm.Y(p)) * yAxis;
+                //     p = origin + hm.Scale(xAxis,  hm.X(p)) + hm.Scale(yAxis,  hm.Y(p));
                 //     DrawRectangle(outputTarget, p - dim, p + dim, entry.colour[0], entry.colour[1], entry.colour[2], entry.colour[3]);
                 // }
 

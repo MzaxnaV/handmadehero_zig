@@ -2,7 +2,7 @@ const SquareRoot = @import("handmade_intrinsics.zig").SquareRoot;
 
 // private functions ----------------------------------------------------------------------------------------------------------------------
 
-inline fn checkVector(comptime t: type) comptime_int {
+inline fn VectorLen(comptime t: type) comptime_int {
     comptime {
         return switch (@typeInfo(t)) {
             .Vector => |value| value.len,
@@ -42,7 +42,7 @@ pub const rect2 = struct {
     }
 
     pub inline fn InitCenterDim(center: v2, dim: v2) Self {
-        const result = InitCenterHalfDim(center, dim * @splat(2, @as(f32, 0.5)));
+        const result = InitCenterHalfDim(center, Scale(dim, 0.5));
         return result;
     }
 
@@ -57,7 +57,7 @@ pub const rect2 = struct {
     }
 
     pub inline fn GetCenter(self: *const Self) v2 {
-        const result = (self.max + self.min) * @splat(2, @as(f32, 0.5));
+        const result = Scale(self.max + self.min, 0.5);
         return result;
     }
 };
@@ -85,7 +85,7 @@ pub const rect3 = struct {
     }
 
     pub inline fn InitCenterDim(center: v3, dim: v3) Self {
-        const result = InitCenterHalfDim(center, dim * @splat(3, @as(f32, 0.5)));
+        const result = InitCenterHalfDim(center, Scale(dim, 0.5));
         return result;
     }
 
@@ -100,12 +100,16 @@ pub const rect3 = struct {
     }
 
     pub inline fn GetCenter(self: *const Self) v3 {
-        const result = (self.max + self.min) * @splat(3, @as(f32, 0.5));
+        const result = Scale(self.max + self.min, 0.5);
         return result;
     }
 };
 
 // functions (vector operations)-----------------------------------------------------------------------------------------------------------
+
+pub inline fn Scale(vec: anytype, val: f32) @TypeOf(vec) {
+    return vec * @splat(VectorLen(@TypeOf(vec)), val);
+}
 
 pub inline fn V2(x: anytype, y: @TypeOf(x)) v2 {
     comptime var t = switch (@TypeOf(x)) {
@@ -123,7 +127,7 @@ pub inline fn V2(x: anytype, y: @TypeOf(x)) v2 {
 
 pub inline fn X(vec: anytype) f32 {
     comptime {
-        if (checkVector(@TypeOf(vec)) < 0) {
+        if (VectorLen(@TypeOf(vec)) < 0) {
             @compileError("Invalid operand type or vector size");
         }
     }
@@ -132,7 +136,7 @@ pub inline fn X(vec: anytype) f32 {
 
 pub inline fn Y(vec: anytype) f32 {
     comptime {
-        if (checkVector(@TypeOf(vec)) < 1) {
+        if (VectorLen(@TypeOf(vec)) < 1) {
             @compileError("Invalid operand type or vector size");
         }
     }
@@ -141,7 +145,7 @@ pub inline fn Y(vec: anytype) f32 {
 
 pub inline fn Z(vec: anytype) f32 {
     comptime {
-        if (checkVector(@TypeOf(vec)) < 2) {
+        if (VectorLen(@TypeOf(vec)) < 2) {
             @compileError("Invalid operand type or vector size");
         }
     }
@@ -150,7 +154,7 @@ pub inline fn Z(vec: anytype) f32 {
 
 pub inline fn W(vec: anytype) f32 {
     comptime {
-        if (checkVector(@TypeOf(vec)) < 3) {
+        if (VectorLen(@TypeOf(vec)) < 3) {
             @compileError("Invalid operand type or vector size");
         }
     }
@@ -164,7 +168,7 @@ pub const A = W;
 
 pub inline fn XY(vec: anytype) v2 {
     comptime {
-        if (checkVector(@TypeOf(vec)) < 2) {
+        if (VectorLen(@TypeOf(vec)) < 2) {
             @compileError("Invalid operand type or vector size");
         }
     }
@@ -174,7 +178,7 @@ pub inline fn XY(vec: anytype) v2 {
 
 pub inline fn Inner(a: anytype, b: @TypeOf(a)) f32 {
     comptime {
-        if (checkVector(@TypeOf(a)) < 2) {
+        if (VectorLen(@TypeOf(a)) < 2) {
             @compileError("Invalid operand type or vector size");
         }
     }
@@ -193,6 +197,16 @@ pub inline fn Length(a: anytype) f32 {
 
 pub inline fn Perp(a: v2) v2 {
     const result = v2{ -Y(a), X(a) };
+    return result;
+}
+
+pub inline fn LerpV(a: anytype, t: f32, b: @TypeOf(a)) @TypeOf(a) {
+    comptime {
+        if (VectorLen(@TypeOf(a)) < 2) {
+            @compileError("Invalid operand type or vector size");
+        }
+    }
+    const result = Scale(a, (1 - t)) + Scale(b, t);
     return result;
 }
 
