@@ -960,7 +960,7 @@ pub export fn UpdateAndRender(
 
     gameState.time += gameInput.dtForFrame;
     const angle = 0.1 * gameState.time;
-    const disp = 100 * game.Cos(5 * angle);
+    const disp = 0 * game.Cos(5 * angle);
 
     var origin = screenCenter;
     var xAxis: game.v2 = undefined;
@@ -972,12 +972,17 @@ pub export fn UpdateAndRender(
         xAxis = game.v2{ 150, 0 };
         yAxis = game.v2{ 0, 150 };
     }
-    const c = game.CoordinateSystem(renderGroup, game.V2(disp, 0) + origin - game.Scale(xAxis + yAxis, 0.5), xAxis, yAxis, .{
-        0.5 + 0.5 * game.Sin(angle),
-        0.5 + 0.5 * game.Sin(2.9 * angle),
-        0.5 + 0.5 * game.Sin(9.9 * angle),
-        1,
-    }, &gameState.tree);
+
+    const cAngle = 5 * angle;
+
+    const colour = game.v4{
+        0.5 + 0.5 * game.Sin(cAngle),
+        0.5 + 0.5 * game.Sin(2.9 * cAngle),
+        0.5 + 0.5 * game.Cos(9.9 * cAngle),
+        0.5 + 0.5 * game.Sin(10 * cAngle),
+    };
+
+    const c = game.CoordinateSystem(renderGroup, game.V2(disp, 0) + origin - game.Scale(xAxis + yAxis, 0.5), xAxis, yAxis, colour, &gameState.tree);
 
     var pointIndex = @as(u32, 0);
     var y = @as(f32, 0);

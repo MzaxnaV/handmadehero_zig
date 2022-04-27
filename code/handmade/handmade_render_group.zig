@@ -10,6 +10,7 @@ const hintrinsics = @import("handmade_intrinsics.zig");
 const Round = hintrinsics.RoundF32ToInt;
 const Floor = hintrinsics.FloorF32ToI32;
 const Ceil = hintrinsics.CeilF32ToI32;
+const SquareRoot = hintrinsics.SquareRoot;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -100,6 +101,30 @@ pub const render_group = struct {
 };
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
+
+inline fn SRGB255ToLinear1(c: hm.v4) hm.v4 {
+    const inv255 = 1.0 / 255.0;
+    const result = hm.v4{
+        hm.Square(inv255 * hm.R(c)),
+        hm.Square(inv255 * hm.G(c)),
+        hm.Square(inv255 * hm.B(c)),
+        inv255 * hm.A(c),
+    };
+
+    return result;
+}
+
+inline fn Linear1ToSRGB255(c: hm.v4) hm.v4 {
+    const one255 = 255;
+    const result = hm.v4{
+        one255 * SquareRoot(hm.R(c)),
+        one255 * SquareRoot(hm.G(c)),
+        one255 * SquareRoot(hm.B(c)),
+        one255 * hm.A(c),
+    };
+
+    return result;
+}
 
 pub fn DrawRectangleOutline(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, colour: hm.v3, r: f32) void {
     DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMin) + r }, hm.R(colour), hm.G(colour), hm.B(colour), 1);
@@ -238,33 +263,38 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
                     const texelPtrC = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset).*;
                     const texelPtrD = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset + @sizeOf(u32)).*;
 
-                    const texelA: hm.v4 = .{
+                    var texelA: hm.v4 = .{
                         @intToFloat(f32, ((texelPtrA >> 16) & 0xff)),
                         @intToFloat(f32, ((texelPtrA >> 8) & 0xff)),
                         @intToFloat(f32, ((texelPtrA >> 0) & 0xff)),
                         @intToFloat(f32, ((texelPtrA >> 24) & 0xff)),
                     };
 
-                    const texelB: hm.v4 = .{
+                    var texelB: hm.v4 = .{
                         @intToFloat(f32, ((texelPtrB >> 16) & 0xff)),
                         @intToFloat(f32, ((texelPtrB >> 8) & 0xff)),
                         @intToFloat(f32, ((texelPtrB >> 0) & 0xff)),
                         @intToFloat(f32, ((texelPtrB >> 24) & 0xff)),
                     };
 
-                    const texelC: hm.v4 = .{
+                    var texelC: hm.v4 = .{
                         @intToFloat(f32, ((texelPtrC >> 16) & 0xff)),
                         @intToFloat(f32, ((texelPtrC >> 8) & 0xff)),
                         @intToFloat(f32, ((texelPtrC >> 0) & 0xff)),
                         @intToFloat(f32, ((texelPtrC >> 24) & 0xff)),
                     };
 
-                    const texelD: hm.v4 = .{
+                    var texelD: hm.v4 = .{
                         @intToFloat(f32, ((texelPtrD >> 16) & 0xff)),
                         @intToFloat(f32, ((texelPtrD >> 8) & 0xff)),
                         @intToFloat(f32, ((texelPtrD >> 0) & 0xff)),
                         @intToFloat(f32, ((texelPtrD >> 24) & 0xff)),
                     };
+
+                    texelA = SRGB255ToLinear1(texelA);
+                    texelB = SRGB255ToLinear1(texelB);
+                    texelC = SRGB255ToLinear1(texelC);
+                    texelD = SRGB255ToLinear1(texelD);
 
                     const texel = if (NOT_IGNORE)
                         hm.LerpV(
@@ -275,30 +305,33 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
                     else
                         texelA;
 
-                    const sA = hm.A(texel);
-                    const sR = hm.R(texel);
-                    const sG = hm.G(texel);
-                    const sB = hm.B(texel);
+                    const rSA = hm.A(texel) * hm.A(colour);
 
-                    const rSA = (sA / 255.0) * hm.A(colour);
+                    var dest: hm.v4 = .{
+                        @intToFloat(f32, ((pixel[0] >> 16) & 0xff)),
+                        @intToFloat(f32, ((pixel[0] >> 8) & 0xff)),
+                        @intToFloat(f32, ((pixel[0] >> 0) & 0xff)),
+                        @intToFloat(f32, ((pixel[0] >> 24) & 0xff)),
+                    };
 
-                    const dR = @intToFloat(f32, ((pixel[0] >> 16) & 0xff));
-                    const dG = @intToFloat(f32, ((pixel[0] >> 8) & 0xff));
-                    const dB = @intToFloat(f32, ((pixel[0] >> 0) & 0xff));
-                    const dA = @intToFloat(f32, ((pixel[0] >> 24) & 0xff));
+                    dest = SRGB255ToLinear1(dest);
 
-                    const rDA = (dA / 255.0);
+                    const rDA = hm.A(dest);
 
                     const invRSA = 1 - rSA;
-                    const a = (rSA + rDA - rSA * rDA) * 255.0;
-                    const r = invRSA * dR + sR;
-                    const g = invRSA * dG + sG;
-                    const b = invRSA * dB + sB;
+                    const blended: hm.v4 = .{
+                        invRSA * hm.R(dest) + hm.A(colour) * hm.R(colour) * hm.R(texel),
+                        invRSA * hm.G(dest) + hm.A(colour) * hm.G(colour) * hm.G(texel),
+                        invRSA * hm.B(dest) + hm.A(colour) * hm.B(colour) * hm.B(texel),
+                        (rSA + rDA - rSA * rDA),
+                    };
 
-                    pixel.* = (@floatToInt(u32, a + 0.5) << 24) |
-                        (@floatToInt(u32, r + 0.5) << 16) |
-                        (@floatToInt(u32, g + 0.5) << 8) |
-                        (@floatToInt(u32, b + 0.5) << 0);
+                    var blended255 = Linear1ToSRGB255(blended);
+
+                    pixel.* = (@floatToInt(u32, hm.A(blended255) + 0.5) << 24) |
+                        (@floatToInt(u32, hm.R(blended255) + 0.5) << 16) |
+                        (@floatToInt(u32, hm.G(blended255) + 0.5) << 8) |
+                        (@floatToInt(u32, hm.B(blended255) + 0.5) << 0);
                 }
             } else {
                 pixel.* = colour32;
