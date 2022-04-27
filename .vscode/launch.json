@@ -27,6 +27,17 @@
             "cwd": "${workspaceFolder}/data",
             "environment": [],
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Zig Run",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/win32_handmade.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/data",
+            "environment": [],
+            "console": "integratedTerminal"
         }
     ]
 }

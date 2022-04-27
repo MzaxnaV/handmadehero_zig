@@ -102,21 +102,26 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
         while (index < @intCast(u32, header.height * header.width)) : (index += 1) {
             const c = sourceDest[index];
 
-            var r = @intToFloat(f32, (c & redMask) >> redShiftDown);
-            var g = @intToFloat(f32, (c & greenMask) >> greenShiftDown);
-            var b = @intToFloat(f32, (c & blueMask) >> blueShiftDown);
-            var a = @intToFloat(f32, (c & alphaMask) >> alphaShiftDown);
+            var texel = game.v4{
+                @intToFloat(f32, (c & redMask) >> redShiftDown),
+                @intToFloat(f32, (c & greenMask) >> greenShiftDown),
+                @intToFloat(f32, (c & blueMask) >> blueShiftDown),
+                @intToFloat(f32, (c & alphaMask) >> alphaShiftDown),
+            };
 
-            const aN = (a / 255.0);
+            texel = game.SRGB255ToLinear1(texel);
 
-            r = r * aN;
-            g = g * aN;
-            b = b * aN;
+            if (NOT_IGNORE) {
+                texel *= game.v4{ game.A(texel), game.A(texel), game.A(texel), 1 };
+            }
 
-            sourceDest[index] = (@floatToInt(u32, (a + 0.5)) << 24 |
-                @floatToInt(u32, (r + 0.5)) << 16 |
-                @floatToInt(u32, (g + 0.5)) << 8 |
-                @floatToInt(u32, (b + 0.5)) << 0);
+            texel = game.Linear1ToSRGB255(texel);
+
+            sourceDest[index] =
+                (@floatToInt(u32, (game.A(texel) + 0.5)) << 24 |
+                @floatToInt(u32, (game.R(texel) + 0.5)) << 16 |
+                @floatToInt(u32, (game.G(texel) + 0.5)) << 8 |
+                @floatToInt(u32, (game.B(texel) + 0.5)) << 0);
         }
     }
 
@@ -975,12 +980,18 @@ pub export fn UpdateAndRender(
 
     const cAngle = 5 * angle;
 
-    const colour = game.v4{
-        0.5 + 0.5 * game.Sin(cAngle),
-        0.5 + 0.5 * game.Sin(2.9 * cAngle),
-        0.5 + 0.5 * game.Cos(9.9 * cAngle),
-        0.5 + 0.5 * game.Sin(10 * cAngle),
-    };
+    var colour: game.v4 = undefined;
+
+    if (NOT_IGNORE) {
+        colour = .{
+            0.5 + 0.5 * game.Sin(cAngle),
+            0.5 + 0.5 * game.Sin(2.9 * cAngle),
+            0.5 + 0.5 * game.Cos(9.9 * cAngle),
+            0.5 + 0.5 * game.Sin(10 * cAngle),
+        };
+    } else {
+        colour = .{ 1, 1, 1, 1 };
+    }
 
     const c = game.CoordinateSystem(renderGroup, game.V2(disp, 0) + origin - game.Scale(xAxis + yAxis, 0.5), xAxis, yAxis, colour, &gameState.tree);
 

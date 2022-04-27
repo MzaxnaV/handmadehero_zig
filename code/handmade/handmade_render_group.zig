@@ -51,13 +51,11 @@ pub const render_group_entry_header = struct {
 };
 
 pub const render_entry_clear = struct {
-    header: render_group_entry_header,
     // NOTE (Manav): Vectors in zig have 16 byte alignment so use arrays here for safety
     colour: [4]f32,
 };
 
 pub const render_entry_coordinate_system = struct {
-    header: render_group_entry_header,
     // NOTE (Manav): Vectors in zig have 16 byte alignment so use arrays here for safety
     origin: [2]f32,
     xAxis: [2]f32,
@@ -69,7 +67,6 @@ pub const render_entry_coordinate_system = struct {
 };
 
 pub const render_entry_bitmap = struct {
-    header: render_group_entry_header,
     entityBasis: render_entity_basis,
     bitmap: *hi.loaded_bitmap,
     r: f32,
@@ -79,7 +76,6 @@ pub const render_entry_bitmap = struct {
 };
 
 pub const render_entry_rectangle = struct {
-    header: render_group_entry_header,
     entityBasis: render_entity_basis,
 
     r: f32,
@@ -102,7 +98,7 @@ pub const render_group = struct {
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
 
-inline fn SRGB255ToLinear1(c: hm.v4) hm.v4 {
+pub inline fn SRGB255ToLinear1(c: hm.v4) hm.v4 {
     const inv255 = 1.0 / 255.0;
     const result = hm.v4{
         hm.Square(inv255 * hm.R(c)),
@@ -114,7 +110,7 @@ inline fn SRGB255ToLinear1(c: hm.v4) hm.v4 {
     return result;
 }
 
-inline fn Linear1ToSRGB255(c: hm.v4) hm.v4 {
+pub inline fn Linear1ToSRGB255(c: hm.v4) hm.v4 {
     const one255 = 255;
     const result = hm.v4{
         one255 * SquareRoot(hm.R(c)),
@@ -177,7 +173,9 @@ pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32
     }
 }
 
-pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, colour: hm.v4, texture: *hi.loaded_bitmap) void {
+pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, notPremultipliedColour: hm.v4, texture: *hi.loaded_bitmap) void {
+    const colour = notPremultipliedColour * hm.v4{ hm.A(notPremultipliedColour), hm.A(notPremultipliedColour), hm.A(notPremultipliedColour), 1 };
+
     const invXAxisLengthSq = 1 / hm.LengthSq(xAxis);
     const invYAxisLengthSq = 1 / hm.LengthSq(yAxis);
 
@@ -253,8 +251,8 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
                     assert((X >= 0) and (X < texture.width));
                     assert((Y >= 0) and (Y < texture.height));
 
-                    const texelOffset = Y * texture.pitch + X * @sizeOf(u32);
-                    const texelPtr = if (texelOffset > 0) texture.memory + @intCast(usize, texelOffset) else texture.memory - @intCast(usize, -texelOffset);
+                    const texelPtrOffset = Y * texture.pitch + X * @sizeOf(u32);
+                    const texelPtr = if (texelPtrOffset > 0) texture.memory + @intCast(usize, texelPtrOffset) else texture.memory - @intCast(usize, -texelPtrOffset);
 
                     const pitchOffset = if (texture.pitch > 0) texelPtr + @intCast(usize, texture.pitch) else texelPtr - @intCast(usize, -texture.pitch);
 
@@ -296,7 +294,7 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
                     texelC = SRGB255ToLinear1(texelC);
                     texelD = SRGB255ToLinear1(texelD);
 
-                    const texel = if (NOT_IGNORE)
+                    var texel = if (NOT_IGNORE)
                         hm.LerpV(
                             hm.LerpV(texelA, fX, texelB),
                             fY,
@@ -305,7 +303,7 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
                     else
                         texelA;
 
-                    const rSA = hm.A(texel) * hm.A(colour);
+                    texel *= colour;
 
                     var dest: hm.v4 = .{
                         @intToFloat(f32, ((pixel[0] >> 16) & 0xff)),
@@ -316,15 +314,7 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
 
                     dest = SRGB255ToLinear1(dest);
 
-                    const rDA = hm.A(dest);
-
-                    const invRSA = 1 - rSA;
-                    const blended: hm.v4 = .{
-                        invRSA * hm.R(dest) + hm.A(colour) * hm.R(colour) * hm.R(texel),
-                        invRSA * hm.G(dest) + hm.A(colour) * hm.G(colour) * hm.G(texel),
-                        invRSA * hm.B(dest) + hm.A(colour) * hm.B(colour) * hm.B(texel),
-                        (rSA + rDA - rSA * rDA),
-                    };
+                    const blended: hm.v4 = hm.Scale(dest, 1 - hm.A(texel)) + texel;
 
                     var blended255 = Linear1ToSRGB255(blended);
 
@@ -381,28 +371,34 @@ pub fn DrawBitmap(buffer: *hi.loaded_bitmap, bitmap: *const hi.loaded_bitmap, re
         while (x < maxX) : (x += 1) {
             const index = @intCast(u32, x - minX);
 
-            const sA = cAlpha * @intToFloat(f32, ((source[index] >> 24) & 0xff));
-            const rSA = (sA / 255.0) * cAlpha;
-            const sR = cAlpha * @intToFloat(f32, ((source[index] >> 16) & 0xff));
-            const sG = cAlpha * @intToFloat(f32, ((source[index] >> 8) & 0xff));
-            const sB = cAlpha * @intToFloat(f32, ((source[index] >> 0) & 0xff));
+            var texel: hm.v4 = .{
+                @intToFloat(f32, ((source[index] >> 16) & 0xff)),
+                @intToFloat(f32, ((source[index] >> 8) & 0xff)),
+                @intToFloat(f32, ((source[index] >> 0) & 0xff)),
+                @intToFloat(f32, ((source[index] >> 24) & 0xff)),
+            };
 
-            const dA = @intToFloat(f32, ((dest[index] >> 24) & 0xff));
-            const dR = @intToFloat(f32, ((dest[index] >> 16) & 0xff));
-            const dG = @intToFloat(f32, ((dest[index] >> 8) & 0xff));
-            const dB = @intToFloat(f32, ((dest[index] >> 0) & 0xff));
-            const rDA = (dA / 255.0);
+            texel = SRGB255ToLinear1(texel);
+            texel = hm.Scale(texel, cAlpha);
 
-            const invRSA = 1 - rSA;
-            const a = (rSA + rDA - rSA * rDA) * 255.0;
-            const r = invRSA * dR + sR;
-            const g = invRSA * dG + sG;
-            const b = invRSA * dB + sB;
+            var d: hm.v4 = .{
+                @intToFloat(f32, ((dest[index] >> 16) & 0xff)),
+                @intToFloat(f32, ((dest[index] >> 8) & 0xff)),
+                @intToFloat(f32, ((dest[index] >> 0) & 0xff)),
+                @intToFloat(f32, ((dest[index] >> 24) & 0xff)),
+            };
 
-            dest[index] = (@floatToInt(u32, a + 0.5) << 24) |
-                (@floatToInt(u32, r + 0.5) << 16) |
-                (@floatToInt(u32, g + 0.5) << 8) |
-                (@floatToInt(u32, b + 0.5) << 0);
+            d = SRGB255ToLinear1(d);
+
+            var result: hm.v4 = hm.Scale(d, 1 - hm.A(texel)) + texel;
+
+            result = Linear1ToSRGB255(result);
+
+            dest[index] =
+                (@floatToInt(u32, hm.A(result) + 0.5) << 24) |
+                (@floatToInt(u32, hm.R(result) + 0.5) << 16) |
+                (@floatToInt(u32, hm.G(result) + 0.5) << 8) |
+                (@floatToInt(u32, hm.B(result) + 0.5) << 0);
         }
 
         destRow += @intCast(usize, buffer.pitch);
@@ -500,10 +496,13 @@ pub fn PushRenderElements(group: *render_group, comptime t: render_group_entry_t
 
     var result: element_ptr_type = null;
 
-    const size = @sizeOf(element_type);
+    var size: u32 = @sizeOf(element_type) + @sizeOf(render_group_entry_header);
+
     if ((group.pushBufferSize + size) < group.maxPushBufferSize) {
-        result = @ptrCast(element_ptr_type, group.pushBufferBase + group.pushBufferSize);
-        result.?.header.entryType = t;
+        const ptr = group.pushBufferBase + group.pushBufferSize;
+        const header = @ptrCast(*render_group_entry_header, ptr);
+        header.entryType = t;
+        result = @ptrCast(element_ptr_type, ptr + @sizeOf(render_group_entry_header));
         group.pushBufferSize += size;
     } else {
         unreachable;
@@ -566,7 +565,7 @@ pub inline fn PushRectOutline(group: *render_group, offset: hm.v2, offsetZ: f32,
     PushRect(group, offset + hm.v2{ 0.5 * hm.X(dim), 0 }, offsetZ, .{ thickness, hm.Y(dim) }, colour, entityZC);
 }
 
-pub inline fn Clear(group: *render_group, colour: hm.v4) void {
+pub fn Clear(group: *render_group, colour: hm.v4) void {
     if (PushRenderElements(group, .Clear)) |entry| {
         entry.colour = colour;
     }
@@ -606,13 +605,16 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
 
     var baseAddress = @as(u32, 0);
     while (baseAddress < renderGroup.pushBufferSize) {
-        const header: *render_group_entry_header = @ptrCast(*render_group_entry_header, @alignCast(@alignOf(render_group_entry_header), renderGroup.pushBufferBase + baseAddress));
+        const ptr: [*]u8 = renderGroup.pushBufferBase + baseAddress;
+        const header = @ptrCast(*render_group_entry_header, @alignCast(@alignOf(render_group_entry_header), ptr));
+        baseAddress += @sizeOf(render_group_entry_header);
+
+        const data: [*]u8 = ptr + @sizeOf(render_group_entry_header);
 
         switch (header.entryType) {
             .Clear => {
-                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_clear, header);
+                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_clear, data);
                 const colour: hm.v4 = entry.colour;
-                baseAddress += @sizeOf(@TypeOf(entry.*));
                 DrawRectangle(
                     outputTarget,
                     .{ 0, 0 },
@@ -622,16 +624,18 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
                     hm.B(colour),
                     hm.A(colour),
                 );
+
+                baseAddress += @sizeOf(@TypeOf(entry.*));
             },
             .Bitmap => {
-                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_bitmap, header);
+                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_bitmap, data);
                 const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
                 DrawBitmap(outputTarget, entry.bitmap, hm.X(p), hm.Y(p), entry.a);
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },
             .Rectangle => {
-                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_rectangle, header);
+                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_rectangle, data);
                 const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
                 const dim: hm.v2 = entry.dim;
                 DrawRectangle(outputTarget, p, p + dim, entry.r, entry.g, entry.b, 1);
@@ -640,7 +644,7 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
             },
 
             .CoordinateSystem => {
-                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_coordinate_system, header); // zig fmt: off
+                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_coordinate_system, data); // zig fmt: off
                 const origin: hm.v2 = entry.origin;
                 const xAxis: hm.v2 = entry.xAxis;
                 const yAxis: hm.v2 = entry.yAxis;
