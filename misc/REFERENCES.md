@@ -18,9 +18,11 @@ Collection of references, not all are realted to Handmade Hero.
 ## M
 - [MegaTextures](https://silverspaceship.com/src/svt/), [Sean Barrel Gamedev](https://nothings.org/gamedev/)
 
+## P
+- [Physically Based Rendering, (Matt Pharr, Wenzel Jakob, and Greg Humphreys)](https://www.pbr-book.org/)
+
 ## U
 - [Unaligned Memory Access](https://www.kernel.org/doc/html/latest/core-api/unaligned-memory-access.html)
-
 
 ## Z
 - [ZachLikes](https://www.zachtronics.com/zach-like/)

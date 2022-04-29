@@ -629,8 +629,10 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
             },
             .Bitmap => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_bitmap, data);
-                const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
-                DrawBitmap(outputTarget, entry.bitmap, hm.X(p), hm.Y(p), entry.a);
+                if (!NOT_IGNORE) {
+                    const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
+                    DrawBitmap(outputTarget, entry.bitmap, hm.X(p), hm.Y(p), entry.a);
+                }
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },

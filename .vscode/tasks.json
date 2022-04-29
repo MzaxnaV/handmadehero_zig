@@ -13,6 +13,15 @@
             "command": "zig build --verbose & zig build test"
         },
         {
+            "label": "Build Lib optimized",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "zig build -Drelease-fast=true --verbose lib"
+        },
+        {
             "label": "Build Lib",
             "type": "shell",
             "group": {

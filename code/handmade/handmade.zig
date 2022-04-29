@@ -737,7 +737,7 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
-    game.Clear(renderGroup, game.v4{ 1, 0, 1, 0 });
+    game.Clear(renderGroup, game.v4{ 0.5, 0.5, 0.5, 0 });
 
     const screenCenter = game.v2{
         0.5 * @intToFloat(f32, drawBuffer.width),
@@ -964,8 +964,10 @@ pub export fn UpdateAndRender(
     }
 
     gameState.time += gameInput.dtForFrame;
-    const angle = 0.1 * gameState.time;
+    var angle = 0.1 * gameState.time;
     const disp = 0 * game.Cos(5 * angle);
+
+    angle = 0;
 
     var origin = screenCenter;
     var xAxis: game.v2 = undefined;
@@ -982,7 +984,7 @@ pub export fn UpdateAndRender(
 
     var colour: game.v4 = undefined;
 
-    if (NOT_IGNORE) {
+    if (!NOT_IGNORE) {
         colour = .{
             0.5 + 0.5 * game.Sin(cAngle),
             0.5 + 0.5 * game.Sin(2.9 * cAngle),
