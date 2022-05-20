@@ -1,29 +1,27 @@
 const std = @import("std");
 
-const CONTROLLERS = @import("handmade_platform").CONTROLLERS;
-const memory_index = @import("handmade_platform").memory_index;
-const sim_entity = @import("handmade_sim_region.zig").sim_entity;
-const sim_entity_collision_volume_group = @import("handmade_sim_region.zig").sim_entity_collision_volume_group;
-const world_position = @import("handmade_world.zig").world_position;
-const world = @import("handmade_world.zig").world;
-const v2 = @import("handmade_math.zig").v2;
+const platform = @import("handmade_platform");
+const hsr = @import("handmade_sim_region.zig");
+const hw = @import("handmade_world.zig");
+const hm = @import("handmade_math.zig");
+const hrg = @import("handmade_render_group.zig");
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const memory_arena = struct {
-    size: memory_index,
-    base_addr: memory_index,
-    used: memory_index,
+    size: platform.memory_index,
+    base_addr: platform.memory_index,
+    used: platform.memory_index,
     tempCount: u32,
 
-    pub inline fn Initialize(self: *memory_arena, size: memory_index, base: [*]u8) void {
+    pub inline fn Initialize(self: *memory_arena, size: platform.memory_index, base: [*]u8) void {
         self.size = size;
         self.base_addr = @ptrToInt(base);
         self.used = 0;
         self.tempCount = 0;
     }
 
-    pub inline fn PushSize(self: *memory_arena, comptime alignment: u5, size: memory_index) [*]align(alignment) u8 {
+    pub inline fn PushSize(self: *memory_arena, comptime alignment: u5, size: platform.memory_index) [*]align(alignment) u8 {
         const adjusted_addr = std.mem.alignForward(self.base_addr + self.used, alignment);
         const padding = adjusted_addr - (self.base_addr + self.used);
 
@@ -38,11 +36,11 @@ pub const memory_arena = struct {
         return @ptrCast(*T, self.PushSize(@alignOf(T), @sizeOf(T)));
     }
 
-    pub inline fn PushSlice(self: *memory_arena, comptime T: type, comptime count: memory_index) *[count]T {
+    pub inline fn PushSlice(self: *memory_arena, comptime T: type, comptime count: platform.memory_index) *[count]T {
         return @ptrCast(*[count]T, self.PushSize(@alignOf(T), count * @sizeOf(*[]T)));
     }
 
-    pub inline fn PushArray(self: *memory_arena, comptime T: type, count: memory_index) [*]T {
+    pub inline fn PushArray(self: *memory_arena, comptime T: type, count: platform.memory_index) [*]T {
         return @ptrCast([*]T, self.PushSize(@alignOf(T), count * @sizeOf(T)));
     }
 
@@ -53,33 +51,26 @@ pub const memory_arena = struct {
 
 pub const temporary_memory = struct {
     arena: *memory_arena,
-    used: memory_index,
-};
-
-pub const loaded_bitmap = struct {
-    width: i32 = 0,
-    height: i32 = 0,
-    pitch: i32 = 0,
-    memory: [*]u8 = undefined,
+    used: platform.memory_index,
 };
 
 pub const hero_bitmaps = struct {
-    alignment: v2,
-    head: loaded_bitmap,
-    cape: loaded_bitmap,
-    torso: loaded_bitmap,
+    alignment: hm.v2,
+    head: hrg.loaded_bitmap,
+    cape: hrg.loaded_bitmap,
+    torso: hrg.loaded_bitmap,
 };
 
 pub const low_entity = struct {
-    p: world_position,
-    sim: sim_entity,
+    p: hw.world_position,
+    sim: hsr.sim_entity,
 };
 
 pub const controlled_hero = struct {
     entityIndex: u32 = 0,
 
-    ddP: v2 = v2{ 0, 0 },
-    dSword: v2 = v2{ 0, 0 },
+    ddP: hm.v2 = hm.v2{ 0, 0 },
+    dSword: hm.v2 = hm.v2{ 0, 0 },
     dZ: f32 = 0,
 };
 
@@ -92,51 +83,54 @@ pub const pairwise_collision_rule = struct {
 };
 
 pub const ground_buffer = struct {
-    p: world_position,
-    bitmap: loaded_bitmap,
+    p: hw.world_position,
+    bitmap: hrg.loaded_bitmap,
 };
 
 pub const state = struct {
     worldArena: memory_arena,
-    world: *world,
+    world: *hw.world,
 
     typicalFloorHeight: f32,
 
     cameraFollowingEntityIndex: u32,
-    cameraP: world_position = .{},
+    cameraP: hw.world_position = .{},
 
-    controlledHeroes: [CONTROLLERS]controlled_hero,
+    controlledHeroes: [platform.CONTROLLERS]controlled_hero,
 
     lowEntityCount: u32,
     lowEntities: [100000]low_entity,
 
-    backdrop: loaded_bitmap,
-    shadow: loaded_bitmap,
+    backdrop: hrg.loaded_bitmap,
+    shadow: hrg.loaded_bitmap,
     heroBitmaps: [4]hero_bitmaps,
 
-    grass: [2]loaded_bitmap,
-    stones: [4]loaded_bitmap,
-    tufts: [3]loaded_bitmap,
+    grass: [2]hrg.loaded_bitmap,
+    stones: [4]hrg.loaded_bitmap,
+    tufts: [3]hrg.loaded_bitmap,
 
-    tree: loaded_bitmap,
-    sword: loaded_bitmap,
-    stairwell: loaded_bitmap,
+    tree: hrg.loaded_bitmap,
+    sword: hrg.loaded_bitmap,
+    stairwell: hrg.loaded_bitmap,
     metersToPixels: f32,
     pixelsToMeters: f32,
 
     collisionRuleHash: [256]?*pairwise_collision_rule,
     firstFreeCollisionRule: ?*pairwise_collision_rule,
 
-    nullCollision: *sim_entity_collision_volume_group,
-    swordCollision: *sim_entity_collision_volume_group,
-    stairCollision: *sim_entity_collision_volume_group,
-    playerCollision: *sim_entity_collision_volume_group,
-    monstarCollision: *sim_entity_collision_volume_group,
-    familiarCollision: *sim_entity_collision_volume_group,
-    wallCollision: *sim_entity_collision_volume_group,
-    standardRoomCollision: *sim_entity_collision_volume_group,
+    nullCollision: *hsr.sim_entity_collision_volume_group,
+    swordCollision: *hsr.sim_entity_collision_volume_group,
+    stairCollision: *hsr.sim_entity_collision_volume_group,
+    playerCollision: *hsr.sim_entity_collision_volume_group,
+    monstarCollision: *hsr.sim_entity_collision_volume_group,
+    familiarCollision: *hsr.sim_entity_collision_volume_group,
+    wallCollision: *hsr.sim_entity_collision_volume_group,
+    standardRoomCollision: *hsr.sim_entity_collision_volume_group,
 
     time: f32,
+
+    testDiffuse: hrg.loaded_bitmap,
+    testNormal: hrg.loaded_bitmap,
 };
 
 pub const transient_state = struct {
@@ -144,11 +138,15 @@ pub const transient_state = struct {
     tranArena: memory_arena,
     groundBufferCount: u32,
     groundBuffers: [*]ground_buffer,
+
+    envMapWidth: u32,
+    envMapHeight: u32,
+    envMaps: [3]hrg.environment_map,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------
 
-pub inline fn ZeroSize(size: memory_index, ptr: [*]u8) void {
+pub inline fn ZeroSize(size: platform.memory_index, ptr: [*]u8) void {
     var byte = ptr;
     var s = size;
     while (s > 0) : (s -= 1) {

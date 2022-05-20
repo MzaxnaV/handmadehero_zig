@@ -503,12 +503,10 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
         ddP += hm.v3{ 0, 0, -9.8 };
     }
 
-    // const oldPlayerP = entity.p;
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
     var playerDelta = (hm.Scale(ddP, 0.5 * hm.Square(dt))) + hm.Scale(entity.dP, dt);
     entity.dP += hm.Scale(ddP, dt);
     assert(hm.LengthSq(entity.dP) <= hm.Square(simRegion.maxEntityVelocity));
-    // const newPlayerP = oldPlayerP + playerDelta;
 
     var distanceRemaining = entity.distanceLimit;
     if (distanceRemaining == 0) {

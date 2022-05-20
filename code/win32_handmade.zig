@@ -838,7 +838,7 @@ inline fn Win32GetSecondsElapsed(start: win32.LARGE_INTEGER, end: win32.LARGE_IN
 inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) void {
     @memcpy(@ptrCast([*]u8, dest), @ptrCast([*]const u8, source), size);
 
-    // NOTE (Manav): loop below is notoriously slow.
+    // NOTE (Manav): loop below is incredibly slow.
     // for (@ptrCast([*]const u8, source)[0..size]) |byte, index| {
     //     @ptrCast([*]u8, dest)[index] = byte;
     // }

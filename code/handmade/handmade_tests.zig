@@ -66,6 +66,8 @@ test "math" {
     try testing.expectEqual(hm.B(c4), hm.Z(c4));
     try testing.expectEqual(hm.A(c4), hm.W(c4));
 
+    try testing.expectEqual(hm.Length(hm.Normalize(c4)), 1.0); // float precision problems
+
     try testing.expectEqual(hm.rect2.InitMinDim(.{ 3, 2 }, .{ 4, 3 }), hm.rect2.InitMinDim(hm.XY(c3), hm.XY(c4)));
 
     try testing.expectEqual(hm.AddI32ToU32(30, 2), 32);

@@ -176,6 +176,24 @@ pub inline fn XY(vec: anytype) v2 {
     return v2{ vec[0], vec[1] };
 }
 
+pub inline fn XYZ(vec: anytype) v3 {
+    comptime {
+        if (VectorLen(@TypeOf(vec)) < 3) {
+            @compileError("Invalid operand type or vector size");
+        }
+    }
+
+    return v3{ vec[0], vec[1], vec[2] };
+}
+
+pub inline fn ToV3(xy: v2, z: f32) v3 {
+    return v3{ xy[0], xy[1], z };
+}
+
+pub inline fn ToV4(xyz: v3, w: f32) v4 {
+    return v4{ xyz[0], xyz[1], xyz[2], w };
+}
+
 pub inline fn Inner(a: anytype, b: @TypeOf(a)) f32 {
     comptime {
         if (VectorLen(@TypeOf(a)) < 2) {
@@ -183,6 +201,11 @@ pub inline fn Inner(a: anytype, b: @TypeOf(a)) f32 {
         }
     }
     return @reduce(.Add, a * b);
+}
+
+pub inline fn Normalize(a: anytype) @TypeOf(a) {
+    const result = Scale(a, 1.0 / Length(a));
+    return result;
 }
 
 pub inline fn LengthSq(a: anytype) f32 {

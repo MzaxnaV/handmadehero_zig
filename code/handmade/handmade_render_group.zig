@@ -18,6 +18,17 @@ const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
+pub const loaded_bitmap = struct {
+    width: i32 = 0,
+    height: i32 = 0,
+    pitch: i32 = 0,
+    memory: [*]u8 = undefined,
+};
+
+pub const environment_map = struct {
+    lod: [4]loaded_bitmap,
+};
+
 pub const render_basis = struct {
     p: hm.v3 = hm.v3{ 0, 0, 0 },
 };
@@ -35,6 +46,7 @@ pub const render_group_entry_type = enum {
     Bitmap,
     Rectangle,
     CoordinateSystem,
+    Saturation,
 
     pub fn Type(self: render_group_entry_type) type {
         return switch (self) {
@@ -42,6 +54,7 @@ pub const render_group_entry_type = enum {
             .Bitmap => render_entry_bitmap,
             .Rectangle => render_entry_rectangle,
             .CoordinateSystem => render_entry_coordinate_system,
+            .Saturation => render_entry_saturation,
         };
     }
 };
@@ -55,33 +68,33 @@ pub const render_entry_clear = struct {
     colour: [4]f32,
 };
 
+pub const render_entry_saturation = struct {
+    level: f32,
+};
+
 pub const render_entry_coordinate_system = struct {
     // NOTE (Manav): Vectors in zig have 16 byte alignment so use arrays here for safety
     origin: [2]f32,
     xAxis: [2]f32,
     yAxis: [2]f32,
     colour: [4]f32,
-    texture: *hi.loaded_bitmap,
+    texture: *const loaded_bitmap,
+    normalMap: ?*loaded_bitmap,
 
-    points: [16]hm.v2,
+    top: ?*environment_map,
+    middle: ?*environment_map,
+    bottom: ?*environment_map,
 };
 
 pub const render_entry_bitmap = struct {
     entityBasis: render_entity_basis,
-    bitmap: *hi.loaded_bitmap,
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
+    bitmap: *const loaded_bitmap,
+    colour: [4]f32,
 };
 
 pub const render_entry_rectangle = struct {
     entityBasis: render_entity_basis,
-
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
+    colour: [4]f32,
 
     // NOTE (Manav): Vectors in zig have 16 byte alignment so use arrays here for safety
     dim: [2]f32,
@@ -122,15 +135,32 @@ pub inline fn Linear1ToSRGB255(c: hm.v4) hm.v4 {
     return result;
 }
 
-pub fn DrawRectangleOutline(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, colour: hm.v3, r: f32) void {
-    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMin) + r }, hm.R(colour), hm.G(colour), hm.B(colour), 1);
-    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMax) - r }, .{ hm.X(vMax) + r, hm.Y(vMax) + r }, hm.R(colour), hm.G(colour), hm.B(colour), 1);
+pub inline fn UnScaleAndBiasNormal(normal: hm.v4) hm.v4 {
+    const inv255 = 1.0 / 255.0;
+    const result: hm.v4 = .{
+        -1.0 + 2 * (inv255 * normal[0]),
+        -1.0 + 2 * (inv255 * normal[1]),
+        -1.0 + 2 * (inv255 * normal[2]),
+        inv255 * normal[3],
+    };
 
-    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMin) + r, hm.Y(vMax) + r }, hm.R(colour), hm.G(colour), hm.B(colour), 1);
-    DrawRectangle(buffer, .{ hm.X(vMax) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMax) + r }, hm.R(colour), hm.G(colour), hm.B(colour), 1);
+    return result;
 }
 
-pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32, g: f32, b: f32, a: f32) void {
+pub fn DrawRectangleOutline(buffer: *loaded_bitmap, vMin: hm.v2, vMax: hm.v2, colour: hm.v3, r: f32) void {
+    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMin) + r }, hm.ToV4(colour, 1));
+    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMax) - r }, .{ hm.X(vMax) + r, hm.Y(vMax) + r }, hm.ToV4(colour, 1));
+
+    DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMin) + r, hm.Y(vMax) + r }, hm.ToV4(colour, 1));
+    DrawRectangle(buffer, .{ hm.X(vMax) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMax) + r }, hm.ToV4(colour, 1));
+}
+
+pub fn DrawRectangle(buffer: *const loaded_bitmap, vMin: hm.v2, vMax: hm.v2, colour: hm.v4) void {
+    const r = hm.R(colour);
+    const g = hm.G(colour);
+    const b = hm.B(colour);
+    const a = hm.A(colour);
+
     var minX = Round(i32, vMin[0]);
     var minY = Round(i32, vMin[1]);
     var maxX = Round(i32, vMax[0]);
@@ -153,7 +183,7 @@ pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32
     }
 
     // zig fmt: off
-    const colour: u32 = (Round(u32, a * 255.0) << 24) | 
+    const colour32: u32 = (Round(u32, a * 255.0) << 24) | 
                         (Round(u32, r * 255.0) << 16) | 
                         (Round(u32, g * 255.0) << 8) | 
                         (Round(u32, b * 255) << 0);
@@ -166,15 +196,98 @@ pub fn DrawRectangle(buffer: *hi.loaded_bitmap, vMin: hm.v2, vMax: hm.v2, r: f32
         var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
         var x = minX;
         while (x < maxX) : (x += 1) {
-            pixel.* = colour;
+            pixel.* = colour32;
             pixel += 1;
         }
         row += @intCast(u32, buffer.pitch);
     }
 }
 
-pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, notPremultipliedColour: hm.v4, texture: *hi.loaded_bitmap) void {
-    const colour = notPremultipliedColour * hm.v4{ hm.A(notPremultipliedColour), hm.A(notPremultipliedColour), hm.A(notPremultipliedColour), 1 };
+inline fn Unpack4x8(packedValue: u32) hm.v4 {
+    const result = hm.v4{
+        @intToFloat(f32, ((packedValue >> 16) & 0xff)),
+        @intToFloat(f32, ((packedValue >> 8) & 0xff)),
+        @intToFloat(f32, ((packedValue >> 0) & 0xff)),
+        @intToFloat(f32, ((packedValue >> 24) & 0xff)),
+    };
+
+    return result;
+}
+
+inline fn SRGBBilinearBlend(texelSample: bilinear_sample, fX: f32, fY: f32) hm.v4 {
+    var texelA: hm.v4 = Unpack4x8(texelSample.a);
+    var texelB: hm.v4 = Unpack4x8(texelSample.b);
+    var texelC: hm.v4 = Unpack4x8(texelSample.c);
+    var texelD: hm.v4 = Unpack4x8(texelSample.d);
+
+    texelA = SRGB255ToLinear1(texelA);
+    texelB = SRGB255ToLinear1(texelB);
+    texelC = SRGB255ToLinear1(texelC);
+    texelD = SRGB255ToLinear1(texelD);
+
+    const result = hm.LerpV(
+        hm.LerpV(texelA, fX, texelB),
+        fY,
+        hm.LerpV(texelC, fX, texelD),
+    );
+
+    return result;
+}
+
+// inline fn SampleEnvironmentMap(screenSpaceUV: hm.v2, normal: hm.v3, roughness: f32, map: *environment_map) hm.v3 {
+inline fn SampleEnvironmentMap(_: hm.v2, normal: hm.v3, roughness: f32, map: *environment_map) hm.v3 {
+    const lodIndex = @floatToInt(u32, roughness * @intToFloat(f32, map.lod.len - 1) + 0.5);
+    assert(lodIndex < map.lod.len);
+
+    const lod: *loaded_bitmap = &map.lod[lodIndex];
+
+    const tX = (hm.X(normal) + 1) * @intToFloat(f32, @divFloor(lod.width, 2));
+    const tY = (hm.Y(normal) + 1) * @intToFloat(f32, @divFloor(lod.height, 2));
+
+    const x: i32 = @floatToInt(i32, tX);
+    const y: i32 = @floatToInt(i32, tY);
+
+    const fX = tX - @intToFloat(f32, x);
+    const fY = tY - @intToFloat(f32, y);
+
+    assert((x >= 0) and (x < lod.width));
+    assert((y >= 0) and (y < lod.height));
+
+    const sample: bilinear_sample = BilinearSample(lod, x, y);
+    const result: hm.v3 = hm.XYZ(SRGBBilinearBlend(sample, fX, fY));
+
+    return result;
+}
+
+const bilinear_sample = struct { a: u32 = 0, b: u32 = 0, c: u32 = 0, d: u32 = 0 };
+
+inline fn BilinearSample(texture: *const loaded_bitmap, x: i32, y: i32) bilinear_sample {
+    const ptrOffset = y * texture.pitch + x * @sizeOf(u32);
+    const texelPtr = if (ptrOffset > 0) texture.memory + @intCast(usize, ptrOffset) else texture.memory - @intCast(usize, -ptrOffset);
+    const pitchOffset = if (texture.pitch > 0) texelPtr + @intCast(usize, texture.pitch) else texelPtr - @intCast(usize, -texture.pitch);
+
+    const result = bilinear_sample{
+        .a = @ptrCast(*align(@alignOf(u8)) u32, texelPtr).*,
+        .b = @ptrCast(*align(@alignOf(u8)) u32, texelPtr + @sizeOf(u32)).*,
+        .c = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset).*,
+        .d = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset + @sizeOf(u32)).*,
+    };
+
+    return result;
+}
+
+// zig fmt: off
+pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, 
+                           notPremultipliedColour: hm.v4, texture: *const loaded_bitmap, normalMapOptional: ?*loaded_bitmap, 
+                           top: ?*environment_map, _: ?*environment_map, bottom: ?*environment_map) void
+// zig fmt: on
+{
+    const colour = notPremultipliedColour * hm.v4{
+        hm.A(notPremultipliedColour),
+        hm.A(notPremultipliedColour),
+        hm.A(notPremultipliedColour),
+        1,
+    };
 
     const invXAxisLengthSq = 1 / hm.LengthSq(xAxis);
     const invYAxisLengthSq = 1 / hm.LengthSq(yAxis);
@@ -186,10 +299,11 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
                           (Round(u32, hm.B(colour) * 255) << 0);
     // zig fmt: on
 
-    _ = texture;
-
     const widthMax = buffer.width - 1;
     const heightMax = buffer.height - 1;
+
+    const invWidthMax = 1.0 / @intToFloat(f32, widthMax);
+    const invHeightMax = 1.0 / @intToFloat(f32, heightMax);
 
     var xMin = widthMax;
     var xMax = @as(i32, 0);
@@ -233,6 +347,8 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
                 const edge3 = hm.Inner(d - yAxis, hm.Perp(yAxis));
 
                 if (edge0 < 0 and edge1 < 0 and edge2 < 0 and edge3 < 0) {
+                    const screenSpaceUV = hm.v2{ @intToFloat(f32, x) * invWidthMax, @intToFloat(f32, x) * invHeightMax };
+
                     const u = invXAxisLengthSq * hm.Inner(d, xAxis);
                     const v = invYAxisLengthSq * hm.Inner(d, yAxis);
 
@@ -251,59 +367,52 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
                     assert((X >= 0) and (X < texture.width));
                     assert((Y >= 0) and (Y < texture.height));
 
-                    const texelPtrOffset = Y * texture.pitch + X * @sizeOf(u32);
-                    const texelPtr = if (texelPtrOffset > 0) texture.memory + @intCast(usize, texelPtrOffset) else texture.memory - @intCast(usize, -texelPtrOffset);
+                    const texelSample: bilinear_sample = BilinearSample(texture, X, Y);
+                    var texel = SRGBBilinearBlend(texelSample, fX, fY);
 
-                    const pitchOffset = if (texture.pitch > 0) texelPtr + @intCast(usize, texture.pitch) else texelPtr - @intCast(usize, -texture.pitch);
+                    if (normalMapOptional) |normalMap| {
+                        const normalSample: bilinear_sample = BilinearSample(normalMap, X, Y);
 
-                    const texelPtrA = @ptrCast(*align(@alignOf(u8)) u32, texelPtr).*;
-                    const texelPtrB = @ptrCast(*align(@alignOf(u8)) u32, texelPtr + @sizeOf(u32)).*;
-                    const texelPtrC = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset).*;
-                    const texelPtrD = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset + @sizeOf(u32)).*;
+                        var normalA: hm.v4 = Unpack4x8(normalSample.a);
+                        var normalB: hm.v4 = Unpack4x8(normalSample.b);
+                        var normalC: hm.v4 = Unpack4x8(normalSample.c);
+                        var normalD: hm.v4 = Unpack4x8(normalSample.d);
 
-                    var texelA: hm.v4 = .{
-                        @intToFloat(f32, ((texelPtrA >> 16) & 0xff)),
-                        @intToFloat(f32, ((texelPtrA >> 8) & 0xff)),
-                        @intToFloat(f32, ((texelPtrA >> 0) & 0xff)),
-                        @intToFloat(f32, ((texelPtrA >> 24) & 0xff)),
-                    };
-
-                    var texelB: hm.v4 = .{
-                        @intToFloat(f32, ((texelPtrB >> 16) & 0xff)),
-                        @intToFloat(f32, ((texelPtrB >> 8) & 0xff)),
-                        @intToFloat(f32, ((texelPtrB >> 0) & 0xff)),
-                        @intToFloat(f32, ((texelPtrB >> 24) & 0xff)),
-                    };
-
-                    var texelC: hm.v4 = .{
-                        @intToFloat(f32, ((texelPtrC >> 16) & 0xff)),
-                        @intToFloat(f32, ((texelPtrC >> 8) & 0xff)),
-                        @intToFloat(f32, ((texelPtrC >> 0) & 0xff)),
-                        @intToFloat(f32, ((texelPtrC >> 24) & 0xff)),
-                    };
-
-                    var texelD: hm.v4 = .{
-                        @intToFloat(f32, ((texelPtrD >> 16) & 0xff)),
-                        @intToFloat(f32, ((texelPtrD >> 8) & 0xff)),
-                        @intToFloat(f32, ((texelPtrD >> 0) & 0xff)),
-                        @intToFloat(f32, ((texelPtrD >> 24) & 0xff)),
-                    };
-
-                    texelA = SRGB255ToLinear1(texelA);
-                    texelB = SRGB255ToLinear1(texelB);
-                    texelC = SRGB255ToLinear1(texelC);
-                    texelD = SRGB255ToLinear1(texelD);
-
-                    var texel = if (NOT_IGNORE)
-                        hm.LerpV(
-                            hm.LerpV(texelA, fX, texelB),
+                        var normal: hm.v4 = hm.LerpV(
+                            hm.LerpV(normalA, fX, normalB),
                             fY,
-                            hm.LerpV(texelC, fX, texelD),
-                        )
-                    else
-                        texelA;
+                            hm.LerpV(normalC, fX, normalD),
+                        );
+
+                        normal = UnScaleAndBiasNormal(normal);
+
+                        const temp = hm.Normalize(hm.XYZ(normal));
+                        normal = .{ temp[0], temp[1], temp[2], normal[3] };
+
+                        var farMap: ?*environment_map = null;
+                        var tFarMap = @as(f32, 0.0);
+                        const tEnvMap = hm.Y(normal);
+                        if (tEnvMap < -0.5) {
+                            farMap = bottom;
+                            tFarMap = -1 - 2 * tEnvMap;
+                        } else if (tEnvMap > 0.5) {
+                            farMap = top;
+                            tFarMap = 2 * (tEnvMap - 0.5);
+                        }
+
+                        var lightColour: hm.v3 = .{ 0, 0, 0 };
+                        if (farMap) |envMap| {
+                            const farMapColour = SampleEnvironmentMap(screenSpaceUV, hm.XYZ(normal), hm.W(normal), envMap);
+                            lightColour = hm.LerpV(lightColour, tFarMap, farMapColour);
+                        }
+
+                        texel += hm.v4{ hm.A(texel), hm.A(texel), hm.A(texel), 0 } * hm.v4{ hm.R(lightColour), hm.G(lightColour), hm.B(lightColour), 0 };
+                    }
 
                     texel *= colour;
+                    texel[0] = hm.Clampf01(texel[0]);
+                    texel[1] = hm.Clampf01(texel[1]);
+                    texel[2] = hm.Clampf01(texel[2]);
 
                     var dest: hm.v4 = .{
                         @intToFloat(f32, ((pixel[0] >> 16) & 0xff)),
@@ -332,7 +441,45 @@ pub fn DrawRectangleSlowly(buffer: *hi.loaded_bitmap, origin: hm.v2, xAxis: hm.v
     }
 }
 
-pub fn DrawBitmap(buffer: *hi.loaded_bitmap, bitmap: *const hi.loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
+pub fn ChangeSaturation(buffer: *loaded_bitmap, level: f32) void {
+    var destRow = buffer.memory;
+
+    var y = @as(i32, 0);
+    while (y < buffer.height) : (y += 1) {
+        const dest = @ptrCast([*]u32, @alignCast(@alignOf(u32), destRow));
+
+        var x = @as(i32, 0);
+        while (x < buffer.width) : (x += 1) {
+            const index = @intCast(u32, x);
+
+            var d: hm.v4 = .{
+                @intToFloat(f32, ((dest[index] >> 16) & 0xff)),
+                @intToFloat(f32, ((dest[index] >> 8) & 0xff)),
+                @intToFloat(f32, ((dest[index] >> 0) & 0xff)),
+                @intToFloat(f32, ((dest[index] >> 24) & 0xff)),
+            };
+
+            d = SRGB255ToLinear1(d);
+
+            const avg = (hm.R(d) + hm.G(d) + hm.B(d)) * (1.0 / 3.0);
+            const delta = hm.v3{ hm.R(d) - avg, hm.G(d) - avg, hm.B(d) - avg };
+
+            var result = hm.ToV4(hm.v3{ avg, avg, avg } + hm.Scale(delta, level), hm.A(d));
+
+            result = Linear1ToSRGB255(result);
+
+            dest[index] =
+                (@floatToInt(u32, hm.A(result) + 0.5) << 24) |
+                (@floatToInt(u32, hm.R(result) + 0.5) << 16) |
+                (@floatToInt(u32, hm.G(result) + 0.5) << 8) |
+                (@floatToInt(u32, hm.B(result) + 0.5) << 0);
+        }
+
+        destRow += @intCast(usize, buffer.pitch);
+    }
+}
+
+pub fn DrawBitmap(buffer: *loaded_bitmap, bitmap: *const loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
     var minX = Round(i32, realX);
     var minY = Round(i32, realY);
     var maxX = minX + bitmap.width;
@@ -406,7 +553,7 @@ pub fn DrawBitmap(buffer: *hi.loaded_bitmap, bitmap: *const hi.loaded_bitmap, re
     }
 }
 
-pub fn DrawMatte(buffer: *hi.loaded_bitmap, bitmap: *const hi.loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
+pub fn DrawMatte(buffer: *loaded_bitmap, bitmap: *const loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
     var minX = Round(i32, realX);
     var minY = Round(i32, realY);
     var maxX = minX + bitmap.width;
@@ -512,7 +659,7 @@ pub fn PushRenderElements(group: *render_group, comptime t: render_group_entry_t
 }
 
 // zig fmt: off
-pub fn PushPiece(group: *render_group, bitmap: *hi.loaded_bitmap, offset: hm.v2, offsetZ: f32, alignment: hm.v2, 
+pub fn PushPiece(group: *render_group, bitmap: *loaded_bitmap, offset: hm.v2, offsetZ: f32, alignment: hm.v2, 
                         _: hm.v2, colour: hm.v4, entityZC: f32) void 
 // zig fmt: on
 {
@@ -522,15 +669,12 @@ pub fn PushPiece(group: *render_group, bitmap: *hi.loaded_bitmap, offset: hm.v2,
         piece.entityBasis.offset = (hm.V2(group.metersToPixels, group.metersToPixels) * hm.v2{ offset[0], -offset[1] }) - alignment;
         piece.entityBasis.offsetZ = offsetZ;
         piece.entityBasis.entityZC = entityZC;
-        piece.r = hm.R(colour);
-        piece.g = hm.G(colour);
-        piece.b = hm.B(colour);
-        piece.a = hm.A(colour);
+        piece.colour = colour;
     }
 }
 
 // zig fmt: off
-pub fn PushBitmap(group: *render_group, bitmap: *hi.loaded_bitmap, offset: hm.v2, offsetZ: f32, alignment: hm.v2,
+pub fn PushBitmap(group: *render_group, bitmap: *loaded_bitmap, offset: hm.v2, offsetZ: f32, alignment: hm.v2,
                          alpha: f32, entityZC: f32) void 
 // zig fmt: on
 {
@@ -547,10 +691,7 @@ pub inline fn PushRect(group: *render_group, offset: hm.v2, offsetZ: f32, dim: h
         piece.entityBasis.offset = (hm.V2(group.metersToPixels, group.metersToPixels) * hm.v2{ offset[0], -offset[1] }) - halfDim;
         piece.entityBasis.offsetZ = offsetZ;
         piece.entityBasis.entityZC = entityZC;
-        piece.r = hm.R(colour);
-        piece.g = hm.G(colour);
-        piece.b = hm.B(colour);
-        piece.a = hm.A(colour);
+        piece.colour = colour;
         piece.dim = hm.Scale(dim, group.metersToPixels);
     }
 }
@@ -571,7 +712,18 @@ pub fn Clear(group: *render_group, colour: hm.v4) void {
     }
 }
 
-pub fn CoordinateSystem(group: *render_group, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, colour: hm.v4, texture: *hi.loaded_bitmap) *align(1) render_entry_coordinate_system {
+pub fn Saturation(group: *render_group, level: f32) void {
+    if (PushRenderElements(group, .Saturation)) |entry| {
+        entry.level = level;
+    }
+}
+
+// zig fmt: off
+pub fn CoordinateSystem(group: *render_group, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, colour: hm.v4,
+                        texture: *const loaded_bitmap, normalMap: ?*loaded_bitmap, 
+                        top: ?*environment_map, middle: ?*environment_map, bottom: ?*environment_map) *align(1) render_entry_coordinate_system 
+// zig fmt: on
+{
     const entryElement = PushRenderElements(group, .CoordinateSystem);
     if (entryElement) |entry| {
         entry.origin = origin;
@@ -579,6 +731,10 @@ pub fn CoordinateSystem(group: *render_group, origin: hm.v2, xAxis: hm.v2, yAxis
         entry.yAxis = yAxis;
         entry.colour = colour;
         entry.texture = texture;
+        entry.normalMap = normalMap;
+        entry.top = top;
+        entry.middle = middle;
+        entry.bottom = bottom;
     }
 
     return entryElement.?;
@@ -597,7 +753,7 @@ pub fn AllocateRenderGroup(arena: *hi.memory_arena, maxPushBufferSize: u32, mete
     return result;
 }
 
-pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_bitmap) void {
+pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *loaded_bitmap) void {
     const screenCenter = hm.v2{
         0.5 * @intToFloat(f32, outputTarget.width),
         0.5 * @intToFloat(f32, outputTarget.height),
@@ -615,18 +771,18 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
             .Clear => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_clear, data);
                 const colour: hm.v4 = entry.colour;
-                DrawRectangle(
-                    outputTarget,
-                    .{ 0, 0 },
-                    .{ @intToFloat(f32, outputTarget.width), @intToFloat(f32, outputTarget.height) },
-                    hm.R(colour),
-                    hm.G(colour),
-                    hm.B(colour),
-                    hm.A(colour),
-                );
+                DrawRectangle(outputTarget, .{ 0, 0 }, .{ @intToFloat(f32, outputTarget.width), @intToFloat(f32, outputTarget.height) }, colour);
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },
+
+            .Saturation => {
+                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_saturation, data);
+                ChangeSaturation(outputTarget, entry.level);
+
+                baseAddress += @sizeOf(@TypeOf(entry.*));
+            },
+
             .Bitmap => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_bitmap, data);
                 if (!NOT_IGNORE) {
@@ -636,37 +792,39 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *hi.loaded_
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },
+
             .Rectangle => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_rectangle, data);
                 const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
                 const dim: hm.v2 = entry.dim;
-                DrawRectangle(outputTarget, p, p + dim, entry.r, entry.g, entry.b, 1);
+                const colour: hm.v4 = entry.colour;
+                DrawRectangle(outputTarget, p, p + dim, colour);
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },
 
             .CoordinateSystem => {
-                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_coordinate_system, data); // zig fmt: off
+                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_coordinate_system, data);
                 const origin: hm.v2 = entry.origin;
                 const xAxis: hm.v2 = entry.xAxis;
                 const yAxis: hm.v2 = entry.yAxis;
                 var colour: hm.v4 = entry.colour;
 
                 const vMax: hm.v2 = (origin + xAxis + yAxis);
-                DrawRectangleSlowly(outputTarget, origin, xAxis, yAxis, colour, entry.texture);
+                DrawRectangleSlowly(outputTarget, origin, xAxis, yAxis, colour, entry.texture, entry.normalMap, entry.top, entry.middle, entry.bottom);
 
                 colour = .{ 1, 1, 0, 1 };
                 var p = origin;
                 const dim = hm.v2{ 2, 2 };
-                DrawRectangle(outputTarget, p - dim, p + dim, colour[0], colour[1], colour[2], colour[3]);
+                DrawRectangle(outputTarget, p - dim, p + dim, colour);
 
                 p = origin + xAxis;
-                DrawRectangle(outputTarget, p - dim, p + dim, colour[0], colour[1], colour[2], colour[3]);
+                DrawRectangle(outputTarget, p - dim, p + dim, colour);
 
                 p = origin + yAxis;
-                DrawRectangle(outputTarget, p - dim, p + dim, colour[0], colour[1], colour[2], colour[3]);
+                DrawRectangle(outputTarget, p - dim, p + dim, colour);
 
-                DrawRectangle(outputTarget, vMax - dim, vMax + dim, colour[0], colour[1], colour[2], colour[3]);
+                DrawRectangle(outputTarget, vMax - dim, vMax + dim, colour);
 
                 // for (entry.points) |point| {
                 //     p = point;

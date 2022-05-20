@@ -4,6 +4,9 @@ Collection of references, not all are realted to Handmade Hero.
 ## A
 - [Arcsynthesis OpenGL Tutorials, archieved](https://www.roiatalla.com/public/arcsynthesis/html/index.html)
 
+## B
+- [Blend Equations With Destination Alpha](https://nothings.org/gamedev/blend_equations_with_destination_alpha.txt), [Sean Barrel Gamedev](https://nothings.org/gamedev/)
+
 ## F
 - [Fabian Giesen blog](https://fgiesen.wordpress.com/)
 
@@ -16,7 +19,7 @@ Collection of references, not all are realted to Handmade Hero.
 - [Integer Hash Function, Thomas Wang](http://web.archive.org/web/20071223173210/http://www.concentric.net/~Ttwang/tech/inthash.htm)
 
 ## M
-- [MegaTextures](https://silverspaceship.com/src/svt/), [Sean Barrel Gamedev](https://nothings.org/gamedev/)
+- [MegaTextures](https://silverspaceship.com/src/svt/)
 
 ## P
 - [Physically Based Rendering, (Matt Pharr, Wenzel Jakob, and Greg Humphreys)](https://www.pbr-book.org/)

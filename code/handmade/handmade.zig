@@ -317,54 +317,58 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
     const width = @intToFloat(f32, buffer.width);
     const height = @intToFloat(f32, buffer.height);
 
-    var chunkOffsetY = @as(i32, -1);
-    while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
-        var chunkOffsetX = @as(i32, -1);
-        while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
-            const chunkX = chunkP.chunkX + chunkOffsetX;
-            const chunkY = chunkP.chunkY + chunkOffsetY;
-            const chunkZ = chunkP.chunkZ;
+    {
+        var chunkOffsetY = @as(i32, -1);
+        while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
+            var chunkOffsetX = @as(i32, -1);
+            while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
+                const chunkX = chunkP.chunkX + chunkOffsetX;
+                const chunkY = chunkP.chunkY + chunkOffsetY;
+                const chunkZ = chunkP.chunkZ;
 
-            var series = game.RandomSeed(@bitCast(u32, 139 * chunkX + 593 * chunkY + 329 * chunkZ));
-            // TODO (Manav): inspect why 0.5 is needed as offset
-            const center = game.v2{ (0.5 + @intToFloat(f32, chunkOffsetX)) * width, (0.5 - @intToFloat(f32, chunkOffsetY)) * height };
+                var series = game.RandomSeed(@bitCast(u32, 139 * chunkX + 593 * chunkY + 329 * chunkZ));
+                // TODO (Manav): inspect why 0.5 is needed as offset
+                const center = game.v2{ (0.5 + @intToFloat(f32, chunkOffsetX)) * width, (0.5 - @intToFloat(f32, chunkOffsetY)) * height };
 
-            var grassIndex = @as(u32, 0);
-            while (grassIndex < 100) : (grassIndex += 1) {
-                const stamp = if (series.RandomChoice(2) == 1)
-                    &gameState.grass[series.RandomChoice(gameState.grass.len)]
-                else
-                    &gameState.stones[series.RandomChoice(gameState.stones.len)];
+                var grassIndex = @as(u32, 0);
+                while (grassIndex < 100) : (grassIndex += 1) {
+                    const stamp = if (series.RandomChoice(2) == 1)
+                        &gameState.grass[series.RandomChoice(gameState.grass.len)]
+                    else
+                        &gameState.stones[series.RandomChoice(gameState.stones.len)];
 
-                const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
-                const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
-                const p = center + offset - bitmapCenter;
-                game.PushBitmap(renderGroup, stamp, p, 0, .{ 0, 0 }, 1.0, 1.0);
+                    const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
+                    const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
+                    const p = center + offset - bitmapCenter;
+                    game.PushBitmap(renderGroup, stamp, p, 0, .{ 0, 0 }, 1.0, 1.0);
+                }
             }
         }
     }
 
-    chunkOffsetY = -1;
-    while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
-        var chunkOffsetX = @as(i32, -1);
-        while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
-            const chunkX = chunkP.chunkX + chunkOffsetX;
-            const chunkY = chunkP.chunkY + chunkOffsetY;
-            const chunkZ = chunkP.chunkZ;
+    {
+        var chunkOffsetY = @as(i32, -1);
+        while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
+            var chunkOffsetX = @as(i32, -1);
+            while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
+                const chunkX = chunkP.chunkX + chunkOffsetX;
+                const chunkY = chunkP.chunkY + chunkOffsetY;
+                const chunkZ = chunkP.chunkZ;
 
-            var series = game.RandomSeed(@bitCast(u32, 139 * chunkX + 593 * chunkY + 329 * chunkZ));
-            // TODO (Manav): inspect why 0.5 is needed as offset
-            const center = game.v2{ (0.5 + @intToFloat(f32, chunkOffsetX)) * width, (0.5 - @intToFloat(f32, chunkOffsetY)) * height };
+                var series = game.RandomSeed(@bitCast(u32, 139 * chunkX + 593 * chunkY + 329 * chunkZ));
+                // TODO (Manav): inspect why 0.5 is needed as offset
+                const center = game.v2{ (0.5 + @intToFloat(f32, chunkOffsetX)) * width, (0.5 - @intToFloat(f32, chunkOffsetY)) * height };
 
-            var grassIndex = @as(u32, 0);
-            while (grassIndex < 100) : (grassIndex += 1) {
-                const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
+                var grassIndex = @as(u32, 0);
+                while (grassIndex < 100) : (grassIndex += 1) {
+                    const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
 
-                const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
-                const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
-                const p = center + offset - bitmapCenter;
+                    const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
+                    const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
+                    const p = center + offset - bitmapCenter;
 
-                game.PushBitmap(renderGroup, stamp, p, 0, .{ 0, 0 }, 1.0, 1.0);
+                    game.PushBitmap(renderGroup, stamp, p, 0, .{ 0, 0 }, 1.0, 1.0);
+                }
             }
         }
     }
@@ -390,6 +394,43 @@ fn MakeEmptyBitmap(arena: *game.memory_arena, width: i32, height: i32, clearToZe
     }
 
     return result;
+}
+
+fn MakeSphereNormalMap(bitmap: *game.loaded_bitmap, roughness: f32) void {
+    const invWidth = 1.0 / (@intToFloat(f32, bitmap.width) - 1);
+    const invHeight = 1.0 / (@intToFloat(f32, bitmap.height) - 1);
+
+    var row = bitmap.memory;
+
+    var y = @as(u32, 0);
+    while (y < bitmap.height) : (y += 1) {
+        var x = @as(u32, 0);
+        var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
+        while (x < bitmap.width) : (x += 1) {
+            const bitmapUV = game.v2{ invWidth * @intToFloat(f32, x), invHeight * @intToFloat(f32, y) };
+
+            const nX = 2 * game.X(bitmapUV) - 1;
+            const nY = 2 * game.Y(bitmapUV) - 1;
+            const nZ_sq = 1 - nX * nX - nY * nY;
+
+            var normal: game.v3 = if (nZ_sq >= 0) .{ nX, nY, game.SquareRoot(nZ_sq) } else .{ 0, 0, 1 };
+
+            const colour = game.v4{
+                255 * (0.5 * (game.X(normal) + 1)),
+                255 * (0.5 * (game.Y(normal) + 1)),
+                255 * (0.5 * (game.Z(normal) + 1)),
+                255 * roughness,
+            };
+
+            pixel.* = (@floatToInt(u32, game.A(colour) + 0.5) << 24) |
+                (@floatToInt(u32, game.R(colour) + 0.5) << 16) |
+                (@floatToInt(u32, game.G(colour) + 0.5) << 8) |
+                (@floatToInt(u32, game.B(colour) + 0.5) << 0);
+
+            pixel += 1;
+        }
+        row += @intCast(usize, bitmap.pitch);
+    }
 }
 
 // fn RequestGroundBuffers(centerP: game.world_position, bounds: game.rect3) void {
@@ -661,6 +702,24 @@ pub export fn UpdateAndRender(
             groundBuffer.p = game.NullPosition();
         }
 
+        gameState.testDiffuse = MakeEmptyBitmap(&tranState.tranArena, 256, 256, false);
+        game.DrawRectangle(&gameState.testDiffuse, .{ 0, 0 }, game.V2(gameState.testDiffuse.width, gameState.testDiffuse.height), .{ 0.5, 0.5, 0.5, 1 });
+        gameState.testNormal = MakeEmptyBitmap(&tranState.tranArena, gameState.testDiffuse.width, gameState.testDiffuse.height, false);
+        MakeSphereNormalMap(&gameState.testNormal, 0);
+
+        tranState.envMapWidth = 512;
+        tranState.envMapHeight = 256;
+        for (tranState.envMaps) |*map| {
+            var width = tranState.envMapWidth;
+            var height = tranState.envMapHeight;
+            var lodIndex = @as(u32, 0);
+            while (lodIndex < map.lod.len) : (lodIndex += 1) {
+                map.lod[lodIndex] = MakeEmptyBitmap(&tranState.tranArena, @intCast(i32, width), @intCast(i32, height), true);
+                width >>= 1;
+                height >>= 1;
+            }
+        }
+
         tranState.initialized = true;
     }
 
@@ -737,7 +796,7 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
-    game.Clear(renderGroup, game.v4{ 0.5, 0.5, 0.5, 0 });
+    game.Clear(renderGroup, game.v4{ 0.25, 0.25, 0.25, 0 });
 
     const screenCenter = game.v2{
         0.5 * @intToFloat(f32, drawBuffer.width),
@@ -965,7 +1024,38 @@ pub export fn UpdateAndRender(
 
     gameState.time += gameInput.dtForFrame;
     var angle = 0.1 * gameState.time;
-    const disp = 0 * game.Cos(5 * angle);
+    // const disp = 0 * game.Cos(5 * angle);
+
+    const mapColour = [3]game.v3{
+        .{ 1, 0, 0 },
+        .{ 0, 1, 0 },
+        .{ 0, 0, 1 },
+    };
+
+    {
+        var mapIndex = @as(u32, 0);
+        while (mapIndex < tranState.envMaps.len) : (mapIndex += 1) {
+            const map = &tranState.envMaps[mapIndex];
+            const lod = &map.lod[0];
+            var rowCheckerOn = false;
+            var checkerWidth = @as(i32, 16);
+            var checkerHeight = @as(i32, 16);
+
+            var y = @as(i32, 0);
+            while (y < lod.height) : (y += checkerHeight) {
+                var checkerOn = rowCheckerOn;
+                var x = @as(i32, 0);
+                while (x < lod.width) : (x += checkerWidth) {
+                    const colour: game.v4 = if (checkerOn) game.ToV4(mapColour[mapIndex], 1) else game.v4{ 0, 0, 0, 1 };
+                    const minP = game.V2(x, y);
+                    const maxP: game.v2 = minP + game.V2(checkerWidth, checkerHeight);
+                    game.DrawRectangle(lod, minP, maxP, colour);
+                    checkerOn = !checkerOn;
+                }
+                rowCheckerOn = !rowCheckerOn;
+            }
+        }
+    }
 
     angle = 0;
 
@@ -995,17 +1085,26 @@ pub export fn UpdateAndRender(
         colour = .{ 1, 1, 1, 1 };
     }
 
-    const c = game.CoordinateSystem(renderGroup, game.V2(disp, 0) + origin - game.Scale(xAxis + yAxis, 0.5), xAxis, yAxis, colour, &gameState.tree);
+    // zig fmt: off
+    _ = game.CoordinateSystem(renderGroup, origin - game.Scale(xAxis + yAxis, 0.5), xAxis, yAxis, colour, 
+                              &gameState.testDiffuse, &gameState.testNormal, &tranState.envMaps[2], &tranState.envMaps[1], &tranState.envMaps[0]);
+    // zig fmt: on
 
-    var pointIndex = @as(u32, 0);
-    var y = @as(f32, 0);
-    while (y < 1) : (y += 0.25) {
-        var x = @as(f32, 0);
-        while (x < 1) : (x += 0.25) {
-            c.points[pointIndex] = .{ x, y };
-            pointIndex += 1;
+    var mapP: game.v2 = .{ 0, 0 };
+    {
+        var index = @as(u32, 0);
+        while (index < tranState.envMaps.len) : (index += 1) {
+            const lod = &tranState.envMaps[index].lod[0];
+
+            xAxis = game.v2{ 0.5 * @intToFloat(f32, lod.width), 0 };
+            yAxis = game.v2{ 0, 0.5 * @intToFloat(f32, lod.height) };
+
+            _ = game.CoordinateSystem(renderGroup, mapP, xAxis, yAxis, .{ 1, 1, 1, 1 }, lod, null, null, null, null);
+            mapP += yAxis + game.v2{ 0, 6 };
         }
     }
+
+    game.Saturation(renderGroup, 0.5 + 0.5 * game.Sin(10 * gameState.time));
 
     game.RenderGroupToOutput(renderGroup, drawBuffer);
 

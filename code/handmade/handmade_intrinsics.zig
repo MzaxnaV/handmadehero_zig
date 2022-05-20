@@ -1,4 +1,5 @@
-const math = @import("std").math;
+const std = @import("std");
+const math = std.math;
 
 // intrinsics -----------------------------------------------------------------------------------------------------------------------------
 
@@ -8,7 +9,9 @@ pub inline fn SignOf(value: i32) i32 {
 }
 
 pub inline fn SquareRoot(float32: f32) f32 {
-    const result = @sqrt(float32);
+    const result = if (float32 > 0) @sqrt(float32) else blk: {
+        break :blk 0;
+    };
     return result;
 }
 
@@ -26,10 +29,10 @@ pub inline fn RotateLeft(value: u32, amount: i8) u32 {
     const result = math.rotl(u32, value, amount);
 
     // NOTE (Manav): Inline asm below is buggy, doesn't work with inlining calls
-    // const result = asm ("rol %[amt], %[val]"
+    // const result = asm ("rol %%cl, %[val]"
     //     : [ret] "=r" (-> u32),
     //     : [val] "r" (value),
-    //       [amt] "{cl}" (amount),
+    //       [amount] "{cl}" (amount),
     // );
 
     return result;
