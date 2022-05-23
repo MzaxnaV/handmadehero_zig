@@ -234,15 +234,23 @@ inline fn SRGBBilinearBlend(texelSample: bilinear_sample, fX: f32, fY: f32) hm.v
     return result;
 }
 
-// inline fn SampleEnvironmentMap(screenSpaceUV: hm.v2, normal: hm.v3, roughness: f32, map: *environment_map) hm.v3 {
-inline fn SampleEnvironmentMap(_: hm.v2, normal: hm.v3, roughness: f32, map: *environment_map) hm.v3 {
+fn SampleEnvironmentMap(screenSpaceUV: hm.v2, sampleDirection: hm.v3, roughness: f32, map: *environment_map) hm.v3 {
     const lodIndex = @floatToInt(u32, roughness * @intToFloat(f32, map.lod.len - 1) + 0.5);
     assert(lodIndex < map.lod.len);
 
     const lod: *loaded_bitmap = &map.lod[lodIndex];
 
-    const tX = (hm.X(normal) + 1) * @intToFloat(f32, @divFloor(lod.width, 2));
-    const tY = (hm.Y(normal) + 1) * @intToFloat(f32, @divFloor(lod.height, 2));
+    assert(hm.Y(sampleDirection) > 0);
+    const distanceFromMapInZ = 1.0;
+    const uvPerMeter = 0.01;
+    const c = (uvPerMeter * distanceFromMapInZ) / hm.Y(sampleDirection);
+
+    const offset: hm.v2 = hm.Scale(hm.v2{ hm.X(sampleDirection), hm.Z(sampleDirection) }, c);
+    var uv: hm.v2 = offset + screenSpaceUV;
+    uv = hm.ClampV201(uv);
+
+    const tX = (hm.X(uv) * @intToFloat(f32, lod.width - 2));
+    const tY = (hm.Y(uv) * @intToFloat(f32, lod.height - 2));
 
     const x: i32 = @floatToInt(i32, tX);
     const y: i32 = @floatToInt(i32, tY);
@@ -296,7 +304,7 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
     const colour32: u32 = (Round(u32, hm.A(colour) * 255.0) << 24) | 
                           (Round(u32, hm.R(colour) * 255.0) << 16) | 
                           (Round(u32, hm.G(colour) * 255.0) << 8) | 
-                          (Round(u32, hm.B(colour) * 255) << 0);
+                          (Round(u32, hm.B(colour) * 255.0) << 0);
     // zig fmt: on
 
     const widthMax = buffer.width - 1;
@@ -311,13 +319,13 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
     var yMin = heightMax;
     var yMax = @as(i32, 0);
 
-    const points: [4]hm.v2 = .{ origin, origin + xAxis, origin + xAxis + yAxis, origin + yAxis };
+    const p: [4]hm.v2 = .{ origin, origin + xAxis, origin + xAxis + yAxis, origin + yAxis };
 
-    for (points) |p| {
-        const floorX = Floor(hm.X(p));
-        const ceilX = Ceil(hm.X(p));
-        const floorY = Floor(hm.Y(p));
-        const ceilY = Ceil(hm.Y(p));
+    for (p) |testP| {
+        const floorX = Floor(hm.X(testP));
+        const ceilX = Ceil(hm.X(testP));
+        const floorY = Floor(hm.Y(testP));
+        const ceilY = Ceil(hm.Y(testP));
 
         if (xMin > floorX) xMin = floorX;
         if (yMin > floorY) yMin = floorY;
@@ -347,7 +355,7 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
                 const edge3 = hm.Inner(d - yAxis, hm.Perp(yAxis));
 
                 if (edge0 < 0 and edge1 < 0 and edge2 < 0 and edge3 < 0) {
-                    const screenSpaceUV = hm.v2{ @intToFloat(f32, x) * invWidthMax, @intToFloat(f32, x) * invHeightMax };
+                    const screenSpaceUV = hm.v2{ @intToFloat(f32, x) * invWidthMax, @intToFloat(f32, y) * invHeightMax };
 
                     const u = invXAxisLengthSq * hm.Inner(d, xAxis);
                     const v = invYAxisLengthSq * hm.Inner(d, yAxis);
@@ -385,16 +393,18 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
                         );
 
                         normal = UnScaleAndBiasNormal(normal);
+                        normal = hm.ToV4(hm.Normalize(hm.XYZ(normal)), hm.W(normal));
 
-                        const temp = hm.Normalize(hm.XYZ(normal));
-                        normal = .{ temp[0], temp[1], temp[2], normal[3] };
+                        var bounceDirection = hm.Scale(hm.XYZ(normal), 2 * hm.Z(normal));
+                        bounceDirection[2] -= 1;
 
                         var farMap: ?*environment_map = null;
+                        const tEnvMap = hm.Y(bounceDirection);
                         var tFarMap = @as(f32, 0.0);
-                        const tEnvMap = hm.Y(normal);
                         if (tEnvMap < -0.5) {
                             farMap = bottom;
                             tFarMap = -1 - 2 * tEnvMap;
+                            bounceDirection[1] = -hm.Y(bounceDirection);
                         } else if (tEnvMap > 0.5) {
                             farMap = top;
                             tFarMap = 2 * (tEnvMap - 0.5);
@@ -402,11 +412,11 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
 
                         var lightColour: hm.v3 = .{ 0, 0, 0 };
                         if (farMap) |envMap| {
-                            const farMapColour = SampleEnvironmentMap(screenSpaceUV, hm.XYZ(normal), hm.W(normal), envMap);
+                            const farMapColour = SampleEnvironmentMap(screenSpaceUV, bounceDirection, hm.W(normal), envMap);
                             lightColour = hm.LerpV(lightColour, tFarMap, farMapColour);
                         }
 
-                        texel += hm.v4{ hm.A(texel), hm.A(texel), hm.A(texel), 0 } * hm.v4{ hm.R(lightColour), hm.G(lightColour), hm.B(lightColour), 0 };
+                        texel += hm.Scale(hm.ToV4(lightColour, 0), hm.A(texel));
                     }
 
                     texel *= colour;

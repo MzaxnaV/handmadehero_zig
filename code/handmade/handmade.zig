@@ -396,7 +396,8 @@ fn MakeEmptyBitmap(arena: *game.memory_arena, width: i32, height: i32, clearToZe
     return result;
 }
 
-fn MakeSphereNormalMap(bitmap: *game.loaded_bitmap, roughness: f32) void {
+/// Defaults: ```cX = 1.0, cY = 1.0```
+fn MakeSphereNormalMap(bitmap: *const game.loaded_bitmap, roughness: f32, cX: f32, cY: f32) void {
     const invWidth = 1.0 / (@intToFloat(f32, bitmap.width) - 1);
     const invHeight = 1.0 / (@intToFloat(f32, bitmap.height) - 1);
 
@@ -409,11 +410,59 @@ fn MakeSphereNormalMap(bitmap: *game.loaded_bitmap, roughness: f32) void {
         while (x < bitmap.width) : (x += 1) {
             const bitmapUV = game.v2{ invWidth * @intToFloat(f32, x), invHeight * @intToFloat(f32, y) };
 
-            const nX = 2 * game.X(bitmapUV) - 1;
-            const nY = 2 * game.Y(bitmapUV) - 1;
+            const nX = cX * (2 * game.X(bitmapUV) - 1);
+            const nY = cY * (2 * game.Y(bitmapUV) - 1);
             const nZ_sq = 1 - nX * nX - nY * nY;
 
-            var normal: game.v3 = if (nZ_sq >= 0) .{ nX, nY, game.SquareRoot(nZ_sq) } else .{ 0, 0, 1 };
+            var normal: game.v3 = if (nZ_sq >= 0) .{ nX, nY, game.SquareRoot(nZ_sq) } else .{ 0, 0.70710678118, 0.70710678118 };
+
+            const colour = game.v4{
+                255 * (0.5 * (game.X(normal) + 1)),
+                255 * (0.5 * (game.Y(normal) + 1)),
+                255 * (0.5 * (game.Z(normal) + 1)),
+                255 * roughness,
+            };
+
+            pixel.* = (@floatToInt(u32, game.A(colour) + 0.5) << 24) |
+                (@floatToInt(u32, game.R(colour) + 0.5) << 16) |
+                (@floatToInt(u32, game.G(colour) + 0.5) << 8) |
+                (@floatToInt(u32, game.B(colour) + 0.5) << 0);
+
+            pixel += 1;
+        }
+        row += @intCast(usize, bitmap.pitch);
+    }
+}
+
+fn MakePyramidNormalMap(bitmap: *const game.loaded_bitmap, roughness: f32) void {
+    // const invWidth = 1.0 / (@intToFloat(f32, bitmap.width) - 1);
+    // const invHeight = 1.0 / (@intToFloat(f32, bitmap.height) - 1);
+
+    var row = bitmap.memory;
+
+    var y = @as(i32, 0);
+    while (y < bitmap.height) : (y += 1) {
+        var x = @as(i32, 0);
+        var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
+        while (x < bitmap.width) : (x += 1) {
+            // const bitmapUV = game.v2{ invWidth * @intToFloat(f32, x), invHeight * @intToFloat(f32, y) };
+
+            const invX = (bitmap.width - 1) - x;
+            const seven = 0.70710678118;
+            var normal: game.v3 = .{ 0, 0, seven };
+            if (x < y) {
+                if (invX < y) {
+                    normal[0] = -seven;
+                } else {
+                    normal[1] = seven;
+                }
+            } else {
+                if (invX < y) {
+                    normal[1] = -seven;
+                } else {
+                    normal[0] = seven;
+                }
+            }
 
             const colour = game.v4{
                 255 * (0.5 * (game.X(normal) + 1)),
@@ -705,7 +754,9 @@ pub export fn UpdateAndRender(
         gameState.testDiffuse = MakeEmptyBitmap(&tranState.tranArena, 256, 256, false);
         game.DrawRectangle(&gameState.testDiffuse, .{ 0, 0 }, game.V2(gameState.testDiffuse.width, gameState.testDiffuse.height), .{ 0.5, 0.5, 0.5, 1 });
         gameState.testNormal = MakeEmptyBitmap(&tranState.tranArena, gameState.testDiffuse.width, gameState.testDiffuse.height, false);
-        MakeSphereNormalMap(&gameState.testNormal, 0);
+
+        MakeSphereNormalMap(&gameState.testNormal, 0, 1, 1);
+        // MakePyramidNormalMap(&gameState.testNormal, 0);
 
         tranState.envMapWidth = 512;
         tranState.envMapHeight = 256;
@@ -714,7 +765,7 @@ pub export fn UpdateAndRender(
             var height = tranState.envMapHeight;
             var lodIndex = @as(u32, 0);
             while (lodIndex < map.lod.len) : (lodIndex += 1) {
-                map.lod[lodIndex] = MakeEmptyBitmap(&tranState.tranArena, @intCast(i32, width), @intCast(i32, height), true);
+                map.lod[lodIndex] = MakeEmptyBitmap(&tranState.tranArena, @intCast(i32, width), @intCast(i32, height), false);
                 width >>= 1;
                 height >>= 1;
             }
@@ -1024,9 +1075,9 @@ pub export fn UpdateAndRender(
 
     gameState.time += gameInput.dtForFrame;
     var angle = 0.1 * gameState.time;
-    // const disp = 0 * game.Cos(5 * angle);
+    const disp = 100 * game.Cos(5 * angle);
 
-    const mapColour = [3]game.v3{
+    const mapColour = [_]game.v3{
         .{ 1, 0, 0 },
         .{ 0, 1, 0 },
         .{ 0, 0, 1 },
@@ -1057,17 +1108,17 @@ pub export fn UpdateAndRender(
         }
     }
 
-    angle = 0;
+    // angle = 0;
 
     var origin = screenCenter;
     var xAxis: game.v2 = undefined;
     var yAxis: game.v2 = undefined;
     if (NOT_IGNORE) {
-        xAxis = game.Scale(game.v2{ game.Cos(angle), game.Sin(angle) }, 150);
+        xAxis = game.Scale(game.v2{ game.Cos(angle), game.Sin(angle) }, 100);
         yAxis = game.Perp(xAxis);
     } else {
-        xAxis = game.v2{ 150, 0 };
-        yAxis = game.v2{ 0, 150 };
+        xAxis = game.v2{ 100, 0 };
+        yAxis = game.v2{ 0, 100 };
     }
 
     const cAngle = 5 * angle;
@@ -1086,7 +1137,7 @@ pub export fn UpdateAndRender(
     }
 
     // zig fmt: off
-    _ = game.CoordinateSystem(renderGroup, origin - game.Scale(xAxis + yAxis, 0.5), xAxis, yAxis, colour, 
+    _ = game.CoordinateSystem(renderGroup, game.V2(disp, 0) + origin - game.Scale(xAxis + yAxis, 0.5), xAxis, yAxis, colour, 
                               &gameState.testDiffuse, &gameState.testNormal, &tranState.envMaps[2], &tranState.envMaps[1], &tranState.envMaps[0]);
     // zig fmt: on
 
@@ -1104,7 +1155,7 @@ pub export fn UpdateAndRender(
         }
     }
 
-    game.Saturation(renderGroup, 0.5 + 0.5 * game.Sin(10 * gameState.time));
+    // game.Saturation(renderGroup, 0.5 + 0.5 * game.Sin(10 * gameState.time));
 
     game.RenderGroupToOutput(renderGroup, drawBuffer);
 
