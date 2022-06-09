@@ -38,11 +38,11 @@ test "math" {
     const vec2 = hm.v2{ 5, 1 };
 
     try testing.expectEqual(hm.V2(5.0, 1.0), vec2);
-    try testing.expectEqual(hm.V2(@as(u32, 1), @as(u32, 2)), vec1);
+    try testing.expectEqual(hm.V2(1, 2), vec1);
 
-    try testing.expectEqual(vec1 + vec2, hm.v2{ 6, 3 });
-    try testing.expectEqual(vec1 - vec2, hm.v2{ -4, 1 });
-    try testing.expectEqual(-vec1, hm.v2{ -1, -2 });
+    try testing.expectEqual(hm.Add(vec1, vec2), hm.v2{ 6, 3 });
+    try testing.expectEqual(hm.Sub(vec1, vec2), hm.v2{ -4, 1 });
+    try testing.expectEqual(hm.Scale(vec1, -1), hm.v2{ -1, -2 });
 
     try testing.expectEqual(hm.Inner(vec1, vec2), 7);
     try testing.expectEqual(hm.LengthSq(vec1), 5);

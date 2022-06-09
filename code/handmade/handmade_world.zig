@@ -138,15 +138,11 @@ inline fn RecanonicalizeCoord(chunkDim: f32, tile: *i32, tileRel: *f32) void {
 pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset: hm.v3) world_position {
     var result = basePos;
 
-    result.offset_ += offset; // NOTE (Manav): result.offset_ += offset
+    hm.AddTo(&result.offset_, offset); // NOTE (Manav): result.offset_ += offset
 
-    var tileRel: [3]f32 = result.offset_;
-
-    RecanonicalizeCoord(w.chunkDimInMeters[0], &result.chunkX, &tileRel[0]);
-    RecanonicalizeCoord(w.chunkDimInMeters[1], &result.chunkY, &tileRel[1]);
-    RecanonicalizeCoord(w.chunkDimInMeters[2], &result.chunkZ, &tileRel[2]);
-
-    result.offset_ = tileRel;
+    RecanonicalizeCoord(w.chunkDimInMeters[0], &result.chunkX, &result.offset_[0]);
+    RecanonicalizeCoord(w.chunkDimInMeters[1], &result.chunkY, &result.offset_[1]);
+    RecanonicalizeCoord(w.chunkDimInMeters[2], &result.chunkZ, &result.offset_[2]);
 
     return result;
 }
@@ -158,7 +154,7 @@ pub inline fn Substract(w: *const world, a: *const world_position, b: *const wor
         @intToFloat(f32, a.chunkZ) - @intToFloat(f32, b.chunkZ),
     };
 
-    const result = w.chunkDimInMeters * dTile + (a.offset_ - b.offset_);
+    const result = hm.Add(hm.Hammard(w.chunkDimInMeters, dTile), hm.Sub(a.offset_, b.offset_));
 
     return result;
 }

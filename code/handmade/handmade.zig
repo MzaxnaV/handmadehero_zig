@@ -112,7 +112,8 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
             texel = game.SRGB255ToLinear1(texel);
 
             if (NOT_IGNORE) {
-                texel *= game.v4{ game.A(texel), game.A(texel), game.A(texel), 1 };
+                // texel.rgb *= texel.a;
+                texel = game.ToV4(game.Scale(game.XYZ(texel), game.A(texel)), game.A(texel));
             }
 
             texel = game.Linear1ToSRGB255(texel);
@@ -274,7 +275,7 @@ fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.render_group) void 
             }
 
             game.PushRect(pieceGroup, hitP, 0, healthDim, colour, 0);
-            hitP += dHitP;
+            game.AddTo(&hitP, dHitP);
         }
     }
 }
@@ -337,9 +338,10 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                     else
                         &gameState.stones[series.RandomChoice(gameState.stones.len)];
 
-                    const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
+                    const bitmapCenter = game.Scale(game.V2(stamp.width, stamp.height), 0.5);
                     const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
-                    const p = center + offset - bitmapCenter;
+                    const p = game.Sub(game.Add(center, offset), bitmapCenter);
+
                     game.PushBitmap(renderGroup, stamp, p, 0, .{ 0, 0 }, 1.0, 1.0);
                 }
             }
@@ -363,9 +365,9 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                 while (grassIndex < 100) : (grassIndex += 1) {
                     const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
 
-                    const bitmapCenter = game.V2(0.5, 0.5) * game.V2(stamp.width, stamp.height);
+                    const bitmapCenter = game.Scale(game.V2(stamp.width, stamp.height), 0.5);
                     const offset = game.v2{ width * series.RandomBilateral(), height * series.RandomBilateral() };
-                    const p = center + offset - bitmapCenter;
+                    const p = game.Sub(game.Add(center, offset), bitmapCenter);
 
                     game.PushBitmap(renderGroup, stamp, p, 0, .{ 0, 0 }, 1.0, 1.0);
                 }
@@ -498,9 +500,9 @@ pub inline fn ChunkPosFromTilePos(w: *game.world, absTileX: i32, absTileY: i32, 
     const tileDepthInMeters = 3.0;
 
     const tileDim = game.v3{ tileSideInMeters, tileSideInMeters, tileDepthInMeters };
-    const offset = tileDim * game.v3{ @intToFloat(f32, absTileX), @intToFloat(f32, absTileY), @intToFloat(f32, absTileZ) };
+    const offset = game.Hammard(tileDim, game.V3(absTileX, absTileY, absTileZ));
 
-    const result: game.world_position = game.MapIntoChunkSpace(w, basePos, offset + additionalOffset);
+    const result: game.world_position = game.MapIntoChunkSpace(w, basePos, game.Add(offset, additionalOffset));
 
     std.debug.assert(game.IsCanonical(w, result.offset_));
 
@@ -956,7 +958,7 @@ pub export fn UpdateAndRender(
                                         if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
                                             const dSwordV3 = game.v3{ game.X(conHero.dSword), game.Y(conHero.dSword), 0 };
-                                            game.MakeEntitySpatial(sword, entity.p, entity.dP + (game.Scale(dSwordV3, 5)));
+                                            game.MakeEntitySpatial(sword, entity.p, game.Add(entity.dP, (game.Scale(dSwordV3, 5))));
                                             game.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
                                         }
                                     },
@@ -1024,7 +1026,7 @@ pub export fn UpdateAndRender(
                         if (closestHeroDSq > game.Square(3)) {
                             const accelaration = 0.5;
                             const oneOverLength = accelaration / game.SquareRoot(closestHeroDSq);
-                            ddP = game.Scale(hero.p - entity.p, oneOverLength);
+                            ddP = game.Scale(game.Sub(hero.p, entity.p), oneOverLength);
                         }
                     }
 
@@ -1099,7 +1101,7 @@ pub export fn UpdateAndRender(
                 while (x < lod.width) : (x += checkerWidth) {
                     const colour: game.v4 = if (checkerOn) game.ToV4(mapColour[mapIndex], 1) else game.v4{ 0, 0, 0, 1 };
                     const minP = game.V2(x, y);
-                    const maxP: game.v2 = minP + game.V2(checkerWidth, checkerHeight);
+                    const maxP: game.v2 = game.Add(minP, game.V2(checkerWidth, checkerHeight));
                     game.DrawRectangle(lod, minP, maxP, colour);
                     checkerOn = !checkerOn;
                 }
@@ -1137,7 +1139,7 @@ pub export fn UpdateAndRender(
     }
 
     // zig fmt: off
-    _ = game.CoordinateSystem(renderGroup, game.V2(disp, 0) + origin - game.Scale(xAxis + yAxis, 0.5), xAxis, yAxis, colour, 
+    _ = game.CoordinateSystem(renderGroup, game.Sub(game.Add(game.V2(disp, 0) , origin) , game.Scale(game.Add(xAxis, yAxis), 0.5)), xAxis, yAxis, colour, 
                               &gameState.testDiffuse, &gameState.testNormal, &tranState.envMaps[2], &tranState.envMaps[1], &tranState.envMaps[0]);
     // zig fmt: on
 
@@ -1151,7 +1153,7 @@ pub export fn UpdateAndRender(
             yAxis = game.v2{ 0, 0.5 * @intToFloat(f32, lod.height) };
 
             _ = game.CoordinateSystem(renderGroup, mapP, xAxis, yAxis, .{ 1, 1, 1, 1 }, lod, null, null, null, null);
-            mapP += yAxis + game.v2{ 0, 6 };
+            game.AddTo(&mapP, game.Add(yAxis, game.v2{ 0, 6 }));
         }
     }
 

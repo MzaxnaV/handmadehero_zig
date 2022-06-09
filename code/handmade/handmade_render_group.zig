@@ -246,7 +246,7 @@ fn SampleEnvironmentMap(screenSpaceUV: hm.v2, sampleDirection: hm.v3, roughness:
     const c = (uvPerMeter * distanceFromMapInZ) / hm.Y(sampleDirection);
 
     const offset: hm.v2 = hm.Scale(hm.v2{ hm.X(sampleDirection), hm.Z(sampleDirection) }, c);
-    var uv: hm.v2 = offset + screenSpaceUV;
+    var uv: hm.v2 = hm.Add(offset, screenSpaceUV);
     uv = hm.ClampV201(uv);
 
     const tX = (hm.X(uv) * @intToFloat(f32, lod.width - 2));
@@ -290,12 +290,7 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
                            top: ?*environment_map, _: ?*environment_map, bottom: ?*environment_map) void
 // zig fmt: on
 {
-    const colour = notPremultipliedColour * hm.v4{
-        hm.A(notPremultipliedColour),
-        hm.A(notPremultipliedColour),
-        hm.A(notPremultipliedColour),
-        1,
-    };
+    const colour = hm.ToV4(hm.Scale(hm.XYZ(notPremultipliedColour), hm.A(notPremultipliedColour)), hm.A(notPremultipliedColour));
 
     const invXAxisLengthSq = 1 / hm.LengthSq(xAxis);
     const invYAxisLengthSq = 1 / hm.LengthSq(yAxis);
@@ -319,7 +314,7 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
     var yMin = heightMax;
     var yMax = @as(i32, 0);
 
-    const p: [4]hm.v2 = .{ origin, origin + xAxis, origin + xAxis + yAxis, origin + yAxis };
+    const p: [4]hm.v2 = .{ origin, hm.Add(origin, xAxis), hm.Add(origin, hm.Add(xAxis, yAxis)), hm.Add(origin, yAxis) };
 
     for (p) |testP| {
         const floorX = Floor(hm.X(testP));
@@ -347,12 +342,12 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
         while (x <= xMax) : (x += 1) {
             if (NOT_IGNORE) {
                 const pixelP = hm.V2(x, y);
-                const d = pixelP - origin;
+                const d = hm.Sub(pixelP, origin);
 
-                const edge0 = hm.Inner(d, -hm.Perp(xAxis));
-                const edge1 = hm.Inner(d - xAxis, -hm.Perp(yAxis));
-                const edge2 = hm.Inner(d - xAxis - yAxis, hm.Perp(xAxis));
-                const edge3 = hm.Inner(d - yAxis, hm.Perp(yAxis));
+                const edge0 = hm.Inner(d, hm.Scale(hm.Perp(xAxis), -1));
+                const edge1 = hm.Inner(hm.Sub(d, xAxis), hm.Scale(hm.Perp(yAxis), -1));
+                const edge2 = hm.Inner(hm.Sub(d, hm.Add(xAxis, yAxis)), hm.Perp(xAxis));
+                const edge3 = hm.Inner(hm.Sub(d, yAxis), hm.Perp(yAxis));
 
                 if (edge0 < 0 and edge1 < 0 and edge2 < 0 and edge3 < 0) {
                     const screenSpaceUV = hm.v2{ @intToFloat(f32, x) * invWidthMax, @intToFloat(f32, y) * invHeightMax };
@@ -416,10 +411,10 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
                             lightColour = hm.LerpV(lightColour, tFarMap, farMapColour);
                         }
 
-                        texel += hm.Scale(hm.ToV4(lightColour, 0), hm.A(texel));
+                        hm.AddTo(&texel, hm.Scale(hm.ToV4(lightColour, 0), hm.A(texel)));
                     }
 
-                    texel *= colour;
+                    texel = hm.Hammard(texel, colour);
                     texel[0] = hm.Clampf01(texel[0]);
                     texel[1] = hm.Clampf01(texel[1]);
                     texel[2] = hm.Clampf01(texel[2]);
@@ -433,7 +428,7 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
 
                     dest = SRGB255ToLinear1(dest);
 
-                    const blended: hm.v4 = hm.Scale(dest, 1 - hm.A(texel)) + texel;
+                    const blended: hm.v4 = hm.Add(hm.Scale(dest, 1 - hm.A(texel)), texel);
 
                     var blended255 = Linear1ToSRGB255(blended);
 
@@ -474,7 +469,7 @@ pub fn ChangeSaturation(buffer: *loaded_bitmap, level: f32) void {
             const avg = (hm.R(d) + hm.G(d) + hm.B(d)) * (1.0 / 3.0);
             const delta = hm.v3{ hm.R(d) - avg, hm.G(d) - avg, hm.B(d) - avg };
 
-            var result = hm.ToV4(hm.v3{ avg, avg, avg } + hm.Scale(delta, level), hm.A(d));
+            var result = hm.ToV4(hm.Add(hm.v3{ avg, avg, avg }, hm.Scale(delta, level)), hm.A(d));
 
             result = Linear1ToSRGB255(result);
 
@@ -676,7 +671,7 @@ pub fn PushPiece(group: *render_group, bitmap: *loaded_bitmap, offset: hm.v2, of
     if (PushRenderElements(group, .Bitmap)) |piece| {
         piece.entityBasis.basis = group.defaultBasis;
         piece.bitmap = bitmap;
-        piece.entityBasis.offset = (hm.V2(group.metersToPixels, group.metersToPixels) * hm.v2{ offset[0], -offset[1] }) - alignment;
+        piece.entityBasis.offset = hm.Sub(hm.Scale(hm.v2{ offset[0], -offset[1] }, group.metersToPixels), alignment);
         piece.entityBasis.offsetZ = offsetZ;
         piece.entityBasis.entityZC = entityZC;
         piece.colour = colour;
@@ -698,7 +693,7 @@ pub inline fn PushRect(group: *render_group, offset: hm.v2, offsetZ: f32, dim: h
 
     if (PushRenderElements(group, .Rectangle)) |piece| {
         piece.entityBasis.basis = group.defaultBasis;
-        piece.entityBasis.offset = (hm.V2(group.metersToPixels, group.metersToPixels) * hm.v2{ offset[0], -offset[1] }) - halfDim;
+        piece.entityBasis.offset = hm.Sub(hm.Scale(hm.v2{ offset[0], -offset[1] }, group.metersToPixels), halfDim);
         piece.entityBasis.offsetZ = offsetZ;
         piece.entityBasis.entityZC = entityZC;
         piece.colour = colour;
@@ -709,11 +704,11 @@ pub inline fn PushRect(group: *render_group, offset: hm.v2, offsetZ: f32, dim: h
 pub inline fn PushRectOutline(group: *render_group, offset: hm.v2, offsetZ: f32, dim: hm.v2, colour: hm.v4, entityZC: f32) void {
     const thickness = 0.1;
 
-    PushRect(group, offset - hm.v2{ 0, 0.5 * hm.Y(dim) }, offsetZ, .{ hm.X(dim), thickness }, colour, entityZC);
-    PushRect(group, offset + hm.v2{ 0, 0.5 * hm.Y(dim) }, offsetZ, .{ hm.X(dim), thickness }, colour, entityZC);
+    PushRect(group, hm.Sub(offset, hm.v2{ 0, 0.5 * hm.Y(dim) }), offsetZ, .{ hm.X(dim), thickness }, colour, entityZC);
+    PushRect(group, hm.Add(offset, hm.v2{ 0, 0.5 * hm.Y(dim) }), offsetZ, .{ hm.X(dim), thickness }, colour, entityZC);
 
-    PushRect(group, offset - hm.v2{ 0.5 * hm.X(dim), 0 }, offsetZ, .{ thickness, hm.Y(dim) }, colour, entityZC);
-    PushRect(group, offset + hm.v2{ 0.5 * hm.X(dim), 0 }, offsetZ, .{ thickness, hm.Y(dim) }, colour, entityZC);
+    PushRect(group, hm.Sub(offset, hm.v2{ 0.5 * hm.X(dim), 0 }), offsetZ, .{ thickness, hm.Y(dim) }, colour, entityZC);
+    PushRect(group, hm.Add(offset, hm.v2{ 0.5 * hm.X(dim), 0 }), offsetZ, .{ thickness, hm.Y(dim) }, colour, entityZC);
 }
 
 pub fn Clear(group: *render_group, colour: hm.v4) void {
@@ -808,7 +803,7 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *loaded_bit
                 const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
                 const dim: hm.v2 = entry.dim;
                 const colour: hm.v4 = entry.colour;
-                DrawRectangle(outputTarget, p, p + dim, colour);
+                DrawRectangle(outputTarget, p, hm.Add(p, dim), colour);
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },
@@ -820,21 +815,21 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *loaded_bit
                 const yAxis: hm.v2 = entry.yAxis;
                 var colour: hm.v4 = entry.colour;
 
-                const vMax: hm.v2 = (origin + xAxis + yAxis);
+                const vMax: hm.v2 = hm.Add(origin, hm.Add(xAxis, yAxis));
                 DrawRectangleSlowly(outputTarget, origin, xAxis, yAxis, colour, entry.texture, entry.normalMap, entry.top, entry.middle, entry.bottom);
 
                 colour = .{ 1, 1, 0, 1 };
                 var p = origin;
                 const dim = hm.v2{ 2, 2 };
-                DrawRectangle(outputTarget, p - dim, p + dim, colour);
+                DrawRectangle(outputTarget, hm.Sub(p, dim), hm.Add(p, dim), colour);
 
-                p = origin + xAxis;
-                DrawRectangle(outputTarget, p - dim, p + dim, colour);
+                p = hm.Add(origin, xAxis);
+                DrawRectangle(outputTarget, hm.Sub(p, dim), hm.Add(p, dim), colour);
 
-                p = origin + yAxis;
-                DrawRectangle(outputTarget, p - dim, p + dim, colour);
+                p = hm.Add(origin, yAxis);
+                DrawRectangle(outputTarget, hm.Sub(p, dim), hm.Add(p, dim), colour);
 
-                DrawRectangle(outputTarget, vMax - dim, vMax + dim, colour);
+                DrawRectangle(outputTarget, hm.Sub(vMax, dim), hm.Add(vMax, dim), colour);
 
                 // for (entry.points) |point| {
                 //     p = point;

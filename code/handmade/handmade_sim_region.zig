@@ -215,7 +215,7 @@ fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32,
 
 pub inline fn EntityOverlapsRectangle(p: hm.v3, volume: sim_entity_collision_volume, rect: hm.rect3) bool {
     const grown = hm.AddRadiusToRect3(rect, hm.Scale(volume.dim, 0.5));
-    const result = hm.IsInRect3(grown, p + volume.offsetP);
+    const result = hm.IsInRect3(grown, hm.Add(p, volume.offsetP));
     return result;
 }
 
@@ -475,8 +475,8 @@ pub fn EntitiesOverlap(entity: *sim_entity, testEntity: *sim_entity, epsilon: hm
         while (!result and testVolumeIndex < (testEntity.collision.volumeCount)) : (testVolumeIndex += 1) {
             var testVolume = testEntity.collision.volumes[testVolumeIndex];
 
-            const entityRect = hm.rect3.InitCenterDim(entity.p + volume.offsetP, volume.dim + epsilon);
-            const testEntityRect = hm.rect3.InitCenterDim(testEntity.p + testVolume.offsetP, testVolume.dim);
+            const entityRect = hm.rect3.InitCenterDim(hm.Add(entity.p, volume.offsetP), hm.Add(volume.dim, epsilon));
+            const testEntityRect = hm.rect3.InitCenterDim(hm.Add(testEntity.p, testVolume.offsetP), testVolume.dim);
             result = hm.RectanglesIntersect(entityRect, testEntityRect);
         }
     }
@@ -497,15 +497,15 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
         }
     }
 
-    ddP *= hm.v3{ moveSpec.speed, moveSpec.speed, moveSpec.speed };
-    ddP += entity.dP * hm.v3{ -moveSpec.drag, -moveSpec.drag, 0 };
+    ddP = hm.Scale(ddP, moveSpec.speed);
+    hm.AddTo(&ddP, hm.Scale(entity.dP, -moveSpec.drag));
     if (!he.IsSet(entity, @enumToInt(sim_entity_flags.ZSupported))) {
-        ddP += hm.v3{ 0, 0, -9.8 };
+        hm.AddTo(&ddP, hm.v3{ 0, 0, -9.8 });
     }
 
     // NOTE (Manav): playerDelta = (0.5 * ddP * square(dt)) + entity.dP * dt;
-    var playerDelta = (hm.Scale(ddP, 0.5 * hm.Square(dt))) + hm.Scale(entity.dP, dt);
-    entity.dP += hm.Scale(ddP, dt);
+    var playerDelta = hm.Add((hm.Scale(ddP, 0.5 * hm.Square(dt))), hm.Scale(entity.dP, dt));
+    hm.AddTo(&entity.dP, hm.Scale(ddP, dt));
     assert(hm.LengthSq(entity.dP) <= hm.Square(simRegion.maxEntityVelocity));
 
     var distanceRemaining = entity.distanceLimit;
@@ -528,7 +528,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
             var hitEntityMin: ?*sim_entity = null;
             var hitEntityMax: ?*sim_entity = null;
 
-            const desiredPosition = entity.p + playerDelta;
+            const desiredPosition = hm.Add(entity.p, playerDelta);
 
             if (!he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial))) {
                 var testHighEntityIndex = @as(u32, 0);
@@ -552,10 +552,10 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                                     hm.Z(testVolume.dim) + hm.Z(volume.dim),
                                 };
 
-                                const minCorner = hm.v3{ -0.5, -0.5, -0.5 } * minkowskiDiameter;
-                                const maxCorner = hm.v3{ 0.5, 0.5, 0.5 } * minkowskiDiameter;
+                                const minCorner = hm.Scale(minkowskiDiameter, -0.5);
+                                const maxCorner = hm.Scale(minkowskiDiameter, 0.5);
 
-                                const rel = (entity.p + volume.offsetP) - (testEntity.p + testVolume.offsetP);
+                                const rel = hm.Sub(hm.Add(entity.p, volume.offsetP), hm.Add(testEntity.p, testVolume.offsetP));
 
                                 if ((hm.Z(rel) >= hm.Z(minCorner)) and (hm.Z(rel) < hm.Z(maxCorner))) {
                                     const walls: [4]test_wall = .{
@@ -618,7 +618,7 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                                         }
 
                                         if (hitThis) {
-                                            var testP = entity.p + hm.v3{ tMinTest, tMinTest, tMinTest } * playerDelta;
+                                            var testP = hm.Add(entity.p, hm.Scale(playerDelta, tMinTest));
                                             if (SpeculativeCollide(entity, testEntity, testP)) {
                                                 tMin = tMinTest;
                                                 wallNormalMin = testWallNormal;
@@ -637,17 +637,17 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
             var hitEntity: ?*sim_entity = if (tMin < tMax) hitEntityMin else hitEntityMax;
             var tStop = if (tMin < tMax) tMin else tMax;
 
-            entity.p += hm.v3{ tStop, tStop, tStop } * playerDelta;
+            hm.AddTo(&entity.p, hm.Scale(playerDelta, tStop));
             distanceRemaining -= tStop * playerDeltaLength;
             if (hitEntity) |_| {
-                playerDelta = desiredPosition - entity.p;
+                playerDelta = hm.Sub(desiredPosition, entity.p);
 
                 const stopsOnCollision = HandleCollision(gameState, entity, hitEntity.?);
                 if (stopsOnCollision) {
                     // NOTE (Manav): playerDelta -= (1 * Inner(playerDelta, wallNormal))*wallNormal;
-                    playerDelta -= hm.Scale(wallNormal, 1 * hm.Inner(playerDelta, wallNormal));
+                    hm.SubTo(&playerDelta, hm.Scale(wallNormal, 1 * hm.Inner(playerDelta, wallNormal)));
                     // NOTE (Manav): entity.dP -= (1 * Inner(entity.dP, wallNormal))*wallNormal;
-                    entity.dP -= hm.Scale(wallNormal, 1 * hm.Inner(entity.dP, wallNormal));
+                    hm.SubTo(&entity.dP, hm.Scale(wallNormal, 1 * hm.Inner(entity.dP, wallNormal)));
                 }
             } else {
                 break;
