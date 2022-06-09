@@ -2,15 +2,6 @@ const SquareRoot = @import("handmade_intrinsics.zig").SquareRoot;
 
 // private functions ----------------------------------------------------------------------------------------------------------------------
 
-inline fn Len(comptime t: type) comptime_int {
-    comptime {
-        return switch (@typeInfo(t)) {
-            .Array => |value| value.len,
-            else => -1,
-        };
-    }
-}
-
 inline fn ToF32(a: anytype) f32 {
     return switch (@TypeOf(a)) {
         f32, comptime_float, comptime_int => @as(f32, a),
@@ -150,7 +141,7 @@ pub inline fn Sub(a: anytype, b: [a.len]f32) [a.len]f32 {
     return result;
 }
 
-pub inline fn SubTo(vec: anytype, other: [vec.len]f32) void {
+pub inline fn SubFrom(vec: anytype, other: [vec.len]f32) void {
     comptime {
         if (@TypeOf(vec) != *[vec.len]f32) {
             @compileError("vec should be of the type *[N]f32");

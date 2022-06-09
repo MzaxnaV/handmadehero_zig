@@ -64,8 +64,7 @@ pub const render_group_entry_header = struct {
 };
 
 pub const render_entry_clear = struct {
-    // NOTE (Manav): Vectors in zig have 16 byte alignment so use arrays here for safety
-    colour: [4]f32,
+    colour: hm.v4,
 };
 
 pub const render_entry_saturation = struct {
@@ -73,11 +72,10 @@ pub const render_entry_saturation = struct {
 };
 
 pub const render_entry_coordinate_system = struct {
-    // NOTE (Manav): Vectors in zig have 16 byte alignment so use arrays here for safety
-    origin: [2]f32,
-    xAxis: [2]f32,
-    yAxis: [2]f32,
-    colour: [4]f32,
+    origin: hm.v2,
+    xAxis: hm.v2,
+    yAxis: hm.v2,
+    colour: hm.v4,
     texture: *const loaded_bitmap,
     normalMap: ?*loaded_bitmap,
 
@@ -89,15 +87,14 @@ pub const render_entry_coordinate_system = struct {
 pub const render_entry_bitmap = struct {
     entityBasis: render_entity_basis,
     bitmap: *const loaded_bitmap,
-    colour: [4]f32,
+    colour: hm.v4,
 };
 
 pub const render_entry_rectangle = struct {
     entityBasis: render_entity_basis,
-    colour: [4]f32,
+    colour: hm.v4,
 
-    // NOTE (Manav): Vectors in zig have 16 byte alignment so use arrays here for safety
-    dim: [2]f32,
+    dim: hm.v2,
 };
 
 pub const render_group = struct {
@@ -801,32 +798,26 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *loaded_bit
             .Rectangle => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_rectangle, data);
                 const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
-                const dim: hm.v2 = entry.dim;
-                const colour: hm.v4 = entry.colour;
-                DrawRectangle(outputTarget, p, hm.Add(p, dim), colour);
+                DrawRectangle(outputTarget, p, hm.Add(p, entry.dim), entry.colour);
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },
 
             .CoordinateSystem => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_coordinate_system, data);
-                const origin: hm.v2 = entry.origin;
-                const xAxis: hm.v2 = entry.xAxis;
-                const yAxis: hm.v2 = entry.yAxis;
-                var colour: hm.v4 = entry.colour;
 
-                const vMax: hm.v2 = hm.Add(origin, hm.Add(xAxis, yAxis));
-                DrawRectangleSlowly(outputTarget, origin, xAxis, yAxis, colour, entry.texture, entry.normalMap, entry.top, entry.middle, entry.bottom);
+                const vMax: hm.v2 = hm.Add(entry.origin, hm.Add(entry.xAxis, entry.yAxis));
+                DrawRectangleSlowly(outputTarget, entry.origin, entry.xAxis, entry.yAxis, entry.colour, entry.texture, entry.normalMap, entry.top, entry.middle, entry.bottom);
 
-                colour = .{ 1, 1, 0, 1 };
-                var p = origin;
+                const colour = .{ 1, 1, 0, 1 };
                 const dim = hm.v2{ 2, 2 };
+                var p = entry.origin;
                 DrawRectangle(outputTarget, hm.Sub(p, dim), hm.Add(p, dim), colour);
 
-                p = hm.Add(origin, xAxis);
+                p = hm.Add(entry.origin, entry.xAxis);
                 DrawRectangle(outputTarget, hm.Sub(p, dim), hm.Add(p, dim), colour);
 
-                p = hm.Add(origin, yAxis);
+                p = hm.Add(entry.origin, entry.yAxis);
                 DrawRectangle(outputTarget, hm.Sub(p, dim), hm.Add(p, dim), colour);
 
                 DrawRectangle(outputTarget, hm.Sub(vMax, dim), hm.Add(vMax, dim), colour);

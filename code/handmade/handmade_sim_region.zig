@@ -645,9 +645,9 @@ pub fn MoveEntity(gameState: *hi.state, simRegion: *sim_region, entity: *sim_ent
                 const stopsOnCollision = HandleCollision(gameState, entity, hitEntity.?);
                 if (stopsOnCollision) {
                     // NOTE (Manav): playerDelta -= (1 * Inner(playerDelta, wallNormal))*wallNormal;
-                    hm.SubTo(&playerDelta, hm.Scale(wallNormal, 1 * hm.Inner(playerDelta, wallNormal)));
+                    hm.SubFrom(&playerDelta, hm.Scale(wallNormal, 1 * hm.Inner(playerDelta, wallNormal)));
                     // NOTE (Manav): entity.dP -= (1 * Inner(entity.dP, wallNormal))*wallNormal;
-                    hm.SubTo(&entity.dP, hm.Scale(wallNormal, 1 * hm.Inner(entity.dP, wallNormal)));
+                    hm.SubFrom(&entity.dP, hm.Scale(wallNormal, 1 * hm.Inner(entity.dP, wallNormal)));
                 }
             } else {
                 break;
