@@ -676,6 +676,7 @@ pub fn PushPiece(group: *render_group, bitmap: *loaded_bitmap, offset: hm.v2, of
 }
 
 // zig fmt: off
+/// Defaults: ```alpha = 1.0, entityZC = 1.0```
 pub fn PushBitmap(group: *render_group, bitmap: *loaded_bitmap, offset: hm.v2, offsetZ: f32, alignment: hm.v2,
                          alpha: f32, entityZC: f32) void 
 // zig fmt: on
