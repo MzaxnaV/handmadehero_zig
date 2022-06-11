@@ -230,33 +230,40 @@ inline fn SRGBBilinearBlend(texelSample: bilinear_sample, fX: f32, fY: f32) hm.v
 
     return result;
 }
-
-fn SampleEnvironmentMap(screenSpaceUV: hm.v2, sampleDirection: hm.v3, roughness: f32, map: *environment_map) hm.v3 {
-    const lodIndex = @floatToInt(u32, roughness * @intToFloat(f32, map.lod.len - 1) + 0.5);
+/// `screenSpaceUV`: where the ray is being cast _from_ in normalized screen coordinates.
+/// `sampleDirection`: what direction the cast is going - it does not have to be normalized.
+/// `roughness`: which LODs of `map` we sample from. 
+/// `distanceFromMapInZ`: how far the `map` is from the sample point in z, given in meters.
+fn SampleEnvironmentMap(screenSpaceUV: hm.v2, sampleDirection: hm.v3, roughness: f32, map: *environment_map, distanceFromMapInZ: f32) hm.v3 {
+    const lodIndex: u32 = @floatToInt(u32, roughness * @intToFloat(f32, map.lod.len - 1) + 0.5);
     assert(lodIndex < map.lod.len);
 
     const lod: *loaded_bitmap = &map.lod[lodIndex];
 
-    assert(hm.Y(sampleDirection) > 0);
-    const distanceFromMapInZ = 1.0;
     const uvPerMeter = 0.01;
-    const c = (uvPerMeter * distanceFromMapInZ) / hm.Y(sampleDirection);
-
+    const c: f32 = (uvPerMeter * distanceFromMapInZ) / hm.Y(sampleDirection);
     const offset: hm.v2 = hm.Scale(hm.v2{ hm.X(sampleDirection), hm.Z(sampleDirection) }, c);
+
     var uv: hm.v2 = hm.Add(offset, screenSpaceUV);
+
     uv = hm.ClampV201(uv);
 
-    const tX = (hm.X(uv) * @intToFloat(f32, lod.width - 2));
-    const tY = (hm.Y(uv) * @intToFloat(f32, lod.height - 2));
+    const tX: f32 = (hm.X(uv) * @intToFloat(f32, lod.width - 2));
+    const tY: f32 = (hm.Y(uv) * @intToFloat(f32, lod.height - 2));
 
     const x: i32 = @floatToInt(i32, tX);
     const y: i32 = @floatToInt(i32, tY);
 
-    const fX = tX - @intToFloat(f32, x);
-    const fY = tY - @intToFloat(f32, y);
+    const fX: f32 = tX - @intToFloat(f32, x);
+    const fY: f32 = tY - @intToFloat(f32, y);
 
     assert((x >= 0) and (x < lod.width));
     assert((y >= 0) and (y < lod.height));
+
+    const ptrOffset = y * lod.pitch + x * @sizeOf(u32);
+    const texelPtr = if (ptrOffset > 0) lod.memory + @intCast(usize, ptrOffset) else lod.memory - @intCast(usize, -ptrOffset);
+    const ptr = @ptrCast(*align(@alignOf(u8)) u32, texelPtr);
+    ptr.* = 0xffffffff;
 
     const sample: bilinear_sample = BilinearSample(lod, x, y);
     const result: hm.v3 = hm.XYZ(SRGBBilinearBlend(sample, fX, fY));
@@ -287,7 +294,15 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
                            top: ?*environment_map, _: ?*environment_map, bottom: ?*environment_map) void
 // zig fmt: on
 {
+    _ = top;
     const colour = hm.ToV4(hm.Scale(hm.XYZ(notPremultipliedColour), hm.A(notPremultipliedColour)), hm.A(notPremultipliedColour));
+
+    const xAxisLength = hm.Length(xAxis);
+    const yAxisLength = hm.Length(yAxis);
+
+    const nXAxis = hm.Scale(xAxis, yAxisLength / xAxisLength);
+    const nYAxis = hm.Scale(yAxis, xAxisLength / yAxisLength);
+    const nZScale = 0.5 * (xAxisLength + yAxisLength);
 
     const invXAxisLengthSq = 1 / hm.LengthSq(xAxis);
     const invYAxisLengthSq = 1 / hm.LengthSq(yAxis);
@@ -385,30 +400,54 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
                         );
 
                         normal = UnScaleAndBiasNormal(normal);
+
+                        const normalXY = hm.Add(hm.Scale(nXAxis, hm.X(normal)), hm.Scale(nYAxis, hm.Y(normal)));
+
+                        normal[0] = normalXY[0];
+                        normal[1] = normalXY[1];
+                        normal[2] *= nZScale;
+
                         normal = hm.ToV4(hm.Normalize(hm.XYZ(normal)), hm.W(normal));
 
                         var bounceDirection = hm.Scale(hm.XYZ(normal), 2 * hm.Z(normal));
                         bounceDirection[2] -= 1;
 
-                        var farMap: ?*environment_map = null;
-                        const tEnvMap = hm.Y(bounceDirection);
-                        var tFarMap = @as(f32, 0.0);
-                        if (tEnvMap < -0.5) {
-                            farMap = bottom;
-                            tFarMap = -1 - 2 * tEnvMap;
-                            bounceDirection[1] = -hm.Y(bounceDirection);
-                        } else if (tEnvMap > 0.5) {
-                            farMap = top;
-                            tFarMap = 2 * (tEnvMap - 0.5);
-                        }
+                        bounceDirection[2] = -bounceDirection[2];
 
-                        var lightColour: hm.v3 = .{ 0, 0, 0 };
-                        if (farMap) |envMap| {
-                            const farMapColour = SampleEnvironmentMap(screenSpaceUV, bounceDirection, hm.W(normal), envMap);
-                            lightColour = hm.LerpV(lightColour, tFarMap, farMapColour);
-                        }
+                        if (NOT_IGNORE) {
+                            var farMap: ?*environment_map = null;
+                            var distanceFromMapInZ = @as(f32, 2.0);
+                            const tEnvMap = hm.Y(bounceDirection);
+                            var tFarMap = @as(f32, 0.0);
+                            if (tEnvMap < -0.5) {
+                                farMap = bottom;
+                                tFarMap = -1 - 2 * tEnvMap;
+                                distanceFromMapInZ = -distanceFromMapInZ;
+                            } else if (tEnvMap > 0.5) {
+                                farMap = top;
+                                tFarMap = 2 * (tEnvMap - 0.5);
+                            }
 
-                        hm.AddTo(&texel, hm.Scale(hm.ToV4(lightColour, 0), hm.A(texel)));
+                            var lightColour: hm.v3 = .{ 0, 0, 0 };
+                            if (farMap) |envMap| {
+                                const farMapColour = SampleEnvironmentMap(screenSpaceUV, bounceDirection, hm.W(normal), envMap, distanceFromMapInZ);
+                                lightColour = hm.LerpV(lightColour, tFarMap, farMapColour);
+                            }
+
+                            hm.AddTo(&texel, hm.Scale(hm.ToV4(lightColour, 0), hm.A(texel)));
+                        } else {
+                            // texel = hm.ToV4(hm.Add(hm.Scale(bounceDirection, 0.5), hm.v3{ 0.5, 0.5, 0.5 }), hm.A(texel));
+                            // texel[0] = 0;
+                            // texel[2] = 0;
+
+                            const isoLine = -0.9;
+
+                            if (hm.Y(bounceDirection) >= (isoLine - 0.05) and hm.Y(bounceDirection) <= (isoLine + 0.05)) {
+                                texel = hm.v4{ 1, 1, 1, 1 };
+                            } else {
+                                texel = hm.v4{ 0, 0, 0, 1 };
+                            }
+                        }
                     }
 
                     texel = hm.Hammard(texel, colour);

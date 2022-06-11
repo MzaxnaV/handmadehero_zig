@@ -113,7 +113,7 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
 
             if (NOT_IGNORE) {
                 // texel.rgb *= texel.a;
-                texel = game.ToV4(game.Scale(game.XYZ(texel), game.A(texel)), game.A(texel));
+                texel = game.ToV4(game.Scale(game.RGB(texel), game.A(texel)), game.A(texel));
             }
 
             texel = game.Linear1ToSRGB255(texel);
@@ -1077,7 +1077,7 @@ pub export fn UpdateAndRender(
 
     gameState.time += gameInput.dtForFrame;
     var angle = 0.1 * gameState.time;
-    const disp = 100 * game.Cos(5 * angle);
+    const disp = game.v2{ 100 * game.Cos(5 * angle), 100 * game.Sin(3 * angle) };
 
     const mapColour = [_]game.v3{
         .{ 1, 0, 0 },
@@ -1139,7 +1139,7 @@ pub export fn UpdateAndRender(
     }
 
     // zig fmt: off
-    _ = game.CoordinateSystem(renderGroup, game.Sub(game.Add(game.V2(disp, 0) , origin) , game.Scale(game.Add(xAxis, yAxis), 0.5)), xAxis, yAxis, colour, 
+    _ = game.CoordinateSystem(renderGroup, game.Sub(game.Add(disp , origin) , game.Scale(game.Add(xAxis, yAxis), 0.5)), xAxis, yAxis, colour, 
                               &gameState.testDiffuse, &gameState.testNormal, &tranState.envMaps[2], &tranState.envMaps[1], &tranState.envMaps[0]);
     // zig fmt: on
 

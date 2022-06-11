@@ -48,6 +48,11 @@ test "math" {
     try testing.expectEqual(hm.LengthSq(vec1), 5);
     try testing.expectEqual(hm.Length(hm.v2{ 4, 3 }), 5);
 
+    hm.AddTo(&vec1, vec2);
+    try testing.expectEqual(vec1, hm.v2{ 6, 3 });
+    hm.SubFrom(&vec1, vec2);
+    try testing.expectEqual(vec1, hm.v2{ 1, 2 });
+
     const c3 = hm.v3{ 3, 2, 1 };
     try testing.expectEqual(hm.X(c3), c3[0]);
     try testing.expectEqual(hm.Y(c3), c3[1]);
@@ -65,6 +70,9 @@ test "math" {
     try testing.expectEqual(hm.G(c4), hm.Y(c4));
     try testing.expectEqual(hm.B(c4), hm.Z(c4));
     try testing.expectEqual(hm.A(c4), hm.W(c4));
+    try testing.expectEqual(hm.XY(c4), hm.v2{ c4[0], c4[1] });
+    try testing.expectEqual(hm.XYZ(c4), hm.RGB(c4));
+    try testing.expectEqual(hm.Sub(hm.RGB(c4), hm.v3{ 1, 1, 1 }), c3);
 
     try testing.expectEqual(hm.Length(hm.Normalize(c4)), 1.0); // float precision problems
 
@@ -74,10 +82,10 @@ test "math" {
     try testing.expectEqual(hm.AddI32ToU32(32, -30), 2);
     try testing.expectEqual(hm.AddI32ToU32(std.math.maxInt(u32), -2147483647), 2147483648);
 
-    // NOTE (Manav): avoid emoty array initialization of @Vector, it's the same as using undefined
-    const r = hm.rect2.InitMinDim(.{ 0, 0 }, .{ 3, 3 });
-    const r1 = hm.rect2.InitCenterDim(.{ 1.5, 1.5 }, .{ 3, 3 });
-    const r2 = hm.rect2.InitCenterHalfDim(.{ 1.5, 1.5 }, .{ 1.5, 1.5 });
+    // NOTE (Manav): avoid empty array initialization of @Vector, it's the same as using undefined
+    const r = hm.rect2.InitMinDim(hm.v2{ 0, 0 }, hm.v2{ 3, 3 });
+    const r1 = hm.rect2.InitCenterDim(hm.v2{ 1.5, 1.5 }, hm.v2{ 3, 3 });
+    const r2 = hm.rect2.InitCenterHalfDim(hm.v2{ 1.5, 1.5 }, hm.v2{ 1.5, 1.5 });
 
     try testing.expectEqual(r, r1);
     try testing.expectEqual(r, r2);
@@ -86,16 +94,16 @@ test "math" {
     try testing.expectEqual(r2.GetMaxCorner(), hm.v2{ 3, 3 });
     try testing.expectEqual(r.GetCenter(), hm.v2{ 1.5, 1.5 });
 
-    try testing.expectEqual(hm.IsInRect2(r, .{ 3, 3 }), false);
-    try testing.expectEqual(hm.IsInRect2(r, .{ 1, 3 }), false);
-    try testing.expectEqual(hm.IsInRect2(r, .{ 0, 0 }), true);
-    try testing.expectEqual(hm.IsInRect2(r, .{ 2, 2 }), true);
+    try testing.expectEqual(hm.IsInRect2(r, hm.v2{ 3, 3 }), false);
+    try testing.expectEqual(hm.IsInRect2(r, hm.v2{ 1, 3 }), false);
+    try testing.expectEqual(hm.IsInRect2(r, hm.v2{ 0, 0 }), true);
+    try testing.expectEqual(hm.IsInRect2(r, hm.v2{ 2, 2 }), true);
 
-    try testing.expectEqual(hm.AddRadiusToRect2(r, .{ 1, 2 }), hm.rect2{ .min = .{ -1, -2 }, .max = .{ 4, 5 } });
+    try testing.expectEqual(hm.AddRadiusToRect2(r, hm.v2{ 1, 2 }), hm.rect2{ .min = hm.v2{ -1, -2 }, .max = hm.v2{ 4, 5 } });
 
-    const r3 = hm.rect3.InitMinDim(.{ 0, 0, 0 }, .{ 3, 3, 3 });
-    const r31 = hm.rect3.InitCenterDim(.{ 1.5, 1.5, 1.5 }, .{ 3, 3, 3 });
-    const r32 = hm.rect3.InitCenterHalfDim(.{ 1.5, 1.5, 1.5 }, .{ 1.5, 1.5, 1.5 });
+    const r3 = hm.rect3.InitMinDim(hm.v3{ 0, 0, 0 }, hm.v3{ 3, 3, 3 });
+    const r31 = hm.rect3.InitCenterDim(hm.v3{ 1.5, 1.5, 1.5 }, hm.v3{ 3, 3, 3 });
+    const r32 = hm.rect3.InitCenterHalfDim(hm.v3{ 1.5, 1.5, 1.5 }, hm.v3{ 1.5, 1.5, 1.5 });
 
     try testing.expectEqual(r3, r31);
     try testing.expectEqual(r3, r32);
@@ -104,12 +112,12 @@ test "math" {
     try testing.expectEqual(r32.GetMaxCorner(), hm.v3{ 3, 3, 3 });
     try testing.expectEqual(r3.GetCenter(), hm.v3{ 1.5, 1.5, 1.5 });
 
-    try testing.expectEqual(hm.IsInRect3(r3, .{ 3, 3, 3 }), false);
-    try testing.expectEqual(hm.IsInRect3(r3, .{ 1, 3, 3 }), false);
-    try testing.expectEqual(hm.IsInRect3(r3, .{ 0, 0, 0 }), true);
-    try testing.expectEqual(hm.IsInRect3(r3, .{ 2, 2, 2 }), true);
+    try testing.expectEqual(hm.IsInRect3(r3, hm.v3{ 3, 3, 3 }), false);
+    try testing.expectEqual(hm.IsInRect3(r3, hm.v3{ 1, 3, 3 }), false);
+    try testing.expectEqual(hm.IsInRect3(r3, hm.v3{ 0, 0, 0 }), true);
+    try testing.expectEqual(hm.IsInRect3(r3, hm.v3{ 2, 2, 2 }), true);
 
-    try testing.expectEqual(hm.AddRadiusToRect3(r3, .{ 1, 2, 3 }), hm.rect3{ .min = .{ -1, -2, -3 }, .max = .{ 4, 5, 6 } });
+    try testing.expectEqual(hm.AddRadiusToRect3(r3, .{ 1, 2, 3 }), hm.rect3{ .min = hm.v3{ -1, -2, -3 }, .max = hm.v3{ 4, 5, 6 } });
 
     try testing.expectEqual(hm.GetBarycentricV3(r3, r3.GetCenter()), hm.v3{ 0.5, 0.5, 0.5 });
     try testing.expectEqual(hm.GetBarycentricV3(r3, r3.GetMinCorner()), hm.v3{ 0, 0, 0 });
@@ -126,7 +134,7 @@ test "rand" {
     try testing.expectEqual(series.index, 125);
 }
 
-test "misc_language" {
+test "handmade_misc" {
     var memRegion = [1]u8{0} ** 1024;
 
     var mem: hi.memory_arena = undefined;
