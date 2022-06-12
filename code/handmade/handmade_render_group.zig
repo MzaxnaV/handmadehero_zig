@@ -27,6 +27,7 @@ pub const loaded_bitmap = struct {
 
 pub const environment_map = struct {
     lod: [4]loaded_bitmap,
+    pZ: f32,
 };
 
 pub const render_basis = struct {
@@ -240,7 +241,7 @@ fn SampleEnvironmentMap(screenSpaceUV: hm.v2, sampleDirection: hm.v3, roughness:
 
     const lod: *loaded_bitmap = &map.lod[lodIndex];
 
-    const uvPerMeter = 0.01;
+    const uvPerMeter = 0.1;
     const c: f32 = (uvPerMeter * distanceFromMapInZ) / hm.Y(sampleDirection);
     const offset: hm.v2 = hm.Scale(hm.v2{ hm.X(sampleDirection), hm.Z(sampleDirection) }, c);
 
@@ -260,10 +261,12 @@ fn SampleEnvironmentMap(screenSpaceUV: hm.v2, sampleDirection: hm.v3, roughness:
     assert((x >= 0) and (x < lod.width));
     assert((y >= 0) and (y < lod.height));
 
-    const ptrOffset = y * lod.pitch + x * @sizeOf(u32);
-    const texelPtr = if (ptrOffset > 0) lod.memory + @intCast(usize, ptrOffset) else lod.memory - @intCast(usize, -ptrOffset);
-    const ptr = @ptrCast(*align(@alignOf(u8)) u32, texelPtr);
-    ptr.* = 0xffffffff;
+    if (!NOT_IGNORE) {
+        const ptrOffset = y * lod.pitch + x * @sizeOf(u32);
+        const texelPtr = if (ptrOffset > 0) lod.memory + @intCast(usize, ptrOffset) else lod.memory - @intCast(usize, -ptrOffset);
+        const ptr = @ptrCast(*align(@alignOf(u8)) u32, texelPtr);
+        ptr.* = 0xffffffff;
+    }
 
     const sample: bilinear_sample = BilinearSample(lod, x, y);
     const result: hm.v3 = hm.XYZ(SRGBBilinearBlend(sample, fX, fY));
@@ -291,10 +294,11 @@ inline fn BilinearSample(texture: *const loaded_bitmap, x: i32, y: i32) bilinear
 // zig fmt: off
 pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, 
                            notPremultipliedColour: hm.v4, texture: *const loaded_bitmap, normalMapOptional: ?*loaded_bitmap, 
-                           top: ?*environment_map, _: ?*environment_map, bottom: ?*environment_map) void
+                           top: ?*environment_map, _: ?*environment_map, bottom: ?*environment_map,
+                           pixelsToMeters: f32) void
 // zig fmt: on
 {
-    _ = top;
+    _ = pixelsToMeters;
     const colour = hm.ToV4(hm.Scale(hm.XYZ(notPremultipliedColour), hm.A(notPremultipliedColour)), hm.A(notPremultipliedColour));
 
     const xAxisLength = hm.Length(xAxis);
@@ -318,7 +322,13 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
     const heightMax = buffer.height - 1;
 
     const invWidthMax = 1.0 / @intToFloat(f32, widthMax);
+    _ = invWidthMax;
     const invHeightMax = 1.0 / @intToFloat(f32, heightMax);
+
+    const originZ = 0;
+    const originY = hm.Y(hm.Add(origin, hm.Scale(hm.Add(xAxis, yAxis), 0.5)));
+    const fixedCastY = invHeightMax * originY;
+    _ = fixedCastY;
 
     var xMin = widthMax;
     var xMax = @as(i32, 0);
@@ -362,7 +372,9 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
                 const edge3 = hm.Inner(hm.Sub(d, yAxis), hm.Perp(yAxis));
 
                 if (edge0 < 0 and edge1 < 0 and edge2 < 0 and edge3 < 0) {
-                    const screenSpaceUV = hm.v2{ @intToFloat(f32, x) * invWidthMax, @intToFloat(f32, y) * invHeightMax };
+                    const screenSpaceUV = hm.v2{ @intToFloat(f32, x) * invWidthMax, fixedCastY };
+
+                    const zDiff = pixelsToMeters * (@intToFloat(f32, y) - originY);
 
                     const u = invXAxisLengthSq * hm.Inner(d, xAxis);
                     const v = invYAxisLengthSq * hm.Inner(d, yAxis);
@@ -414,39 +426,41 @@ pub fn DrawRectangleSlowly(buffer: *loaded_bitmap, origin: hm.v2, xAxis: hm.v2, 
 
                         bounceDirection[2] = -bounceDirection[2];
 
-                        if (NOT_IGNORE) {
-                            var farMap: ?*environment_map = null;
-                            var distanceFromMapInZ = @as(f32, 2.0);
-                            const tEnvMap = hm.Y(bounceDirection);
-                            var tFarMap = @as(f32, 0.0);
-                            if (tEnvMap < -0.5) {
-                                farMap = bottom;
-                                tFarMap = -1 - 2 * tEnvMap;
-                                distanceFromMapInZ = -distanceFromMapInZ;
-                            } else if (tEnvMap > 0.5) {
-                                farMap = top;
-                                tFarMap = 2 * (tEnvMap - 0.5);
-                            }
+                        var farMap: ?*environment_map = null;
+                        const pZ = originZ + zDiff;
+                        // var mapZ = @as(f32, 2.0);
+                        const tEnvMap = hm.Y(bounceDirection);
+                        var tFarMap = @as(f32, 0.0);
+                        if (tEnvMap < -0.5) {
+                            farMap = bottom;
+                            tFarMap = -1 - 2 * tEnvMap;
+                        } else if (tEnvMap > 0.5) {
+                            farMap = top;
+                            tFarMap = 2 * (tEnvMap - 0.5);
+                        }
 
-                            var lightColour: hm.v3 = .{ 0, 0, 0 };
-                            if (farMap) |envMap| {
-                                const farMapColour = SampleEnvironmentMap(screenSpaceUV, bounceDirection, hm.W(normal), envMap, distanceFromMapInZ);
-                                lightColour = hm.LerpV(lightColour, tFarMap, farMapColour);
-                            }
+                        tFarMap *= tFarMap;
+                        tFarMap *= tFarMap;
 
-                            hm.AddTo(&texel, hm.Scale(hm.ToV4(lightColour, 0), hm.A(texel)));
-                        } else {
-                            // texel = hm.ToV4(hm.Add(hm.Scale(bounceDirection, 0.5), hm.v3{ 0.5, 0.5, 0.5 }), hm.A(texel));
-                            // texel[0] = 0;
-                            // texel[2] = 0;
+                        var lightColour: hm.v3 = .{ 0, 0, 0 };
+                        if (farMap) |envMap| {
+                            const distanceFromMapInZ = envMap.pZ - pZ;
+                            const farMapColour = SampleEnvironmentMap(screenSpaceUV, bounceDirection, hm.W(normal), envMap, distanceFromMapInZ);
+                            lightColour = hm.LerpV(lightColour, tFarMap, farMapColour);
+                        }
 
-                            const isoLine = -0.9;
+                        hm.AddTo(&texel, hm.Scale(hm.ToV4(lightColour, 0), hm.A(texel)));
+                        if (!NOT_IGNORE) {
+                            texel = hm.ToV4(hm.Add(hm.Scale(bounceDirection, 0.5), hm.v3{ 0.5, 0.5, 0.5 }), hm.A(texel));
+                            texel = hm.Hammard(texel, .{ hm.A(texel), hm.A(texel), hm.A(texel), 1 });
 
-                            if (hm.Y(bounceDirection) >= (isoLine - 0.05) and hm.Y(bounceDirection) <= (isoLine + 0.05)) {
-                                texel = hm.v4{ 1, 1, 1, 1 };
-                            } else {
-                                texel = hm.v4{ 0, 0, 0, 1 };
-                            }
+                            // const isoLine = 0;
+
+                            // if (hm.Y(bounceDirection) >= (isoLine - 0.05) and hm.Y(bounceDirection) <= (isoLine + 0.05)) {
+                            //     texel = hm.v4{ 1, 1, 1, 1 };
+                            // } else {
+                            //     texel = hm.v4{ 0, 0, 0, 1 };
+                            // }
                         }
                     }
 
@@ -847,7 +861,19 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *loaded_bit
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_coordinate_system, data);
 
                 const vMax: hm.v2 = hm.Add(entry.origin, hm.Add(entry.xAxis, entry.yAxis));
-                DrawRectangleSlowly(outputTarget, entry.origin, entry.xAxis, entry.yAxis, entry.colour, entry.texture, entry.normalMap, entry.top, entry.middle, entry.bottom);
+                DrawRectangleSlowly(
+                    outputTarget,
+                    entry.origin,
+                    entry.xAxis,
+                    entry.yAxis,
+                    entry.colour,
+                    entry.texture,
+                    entry.normalMap,
+                    entry.top,
+                    entry.middle,
+                    entry.bottom,
+                    1.0 / renderGroup.metersToPixels,
+                );
 
                 const colour = .{ 1, 1, 0, 1 };
                 const dim = hm.v2{ 2, 2 };
