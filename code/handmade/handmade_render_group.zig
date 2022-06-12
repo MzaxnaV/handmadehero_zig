@@ -12,8 +12,22 @@ const Floor = hintrinsics.FloorF32ToI32;
 const Ceil = hintrinsics.CeilF32ToI32;
 const SquareRoot = hintrinsics.SquareRoot;
 
+// doc ------------------------------------------------------------------------------------------------------------------------------------
+
+// 1) Everything outside the renderer, Y _always_ goes upward, X to the right.
+//
+// 2) All bitmaps including the render target are assumed to be bottom-up (meaning that the first row pointer points to the
+//    bottom-most row when viewed on screen)
+//
+// 3) Unless otherwise specified, all inputs to the renderer are in world coordinates ("meters"), NOT pixels. Anything that is in
+//    pixel will be explicitly marked as such.
+//
+// 4) Z is a special coordinate because it is broken up into discrete slices, and the renderer actually understands these
+//    slices (potentially).
+
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
+/// build constant to dynamically remove code sections
 const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
@@ -72,19 +86,6 @@ pub const render_entry_saturation = struct {
     level: f32,
 };
 
-pub const render_entry_coordinate_system = struct {
-    origin: hm.v2,
-    xAxis: hm.v2,
-    yAxis: hm.v2,
-    colour: hm.v4,
-    texture: *const loaded_bitmap,
-    normalMap: ?*loaded_bitmap,
-
-    top: ?*environment_map,
-    middle: ?*environment_map,
-    bottom: ?*environment_map,
-};
-
 pub const render_entry_bitmap = struct {
     entityBasis: render_entity_basis,
     bitmap: *const loaded_bitmap,
@@ -96,6 +97,19 @@ pub const render_entry_rectangle = struct {
     colour: hm.v4,
 
     dim: hm.v2,
+};
+
+pub const render_entry_coordinate_system = struct {
+    origin: hm.v2,
+    xAxis: hm.v2,
+    yAxis: hm.v2,
+    colour: hm.v4,
+    texture: *const loaded_bitmap,
+    normalMap: ?*loaded_bitmap,
+
+    top: ?*environment_map,
+    middle: ?*environment_map,
+    bottom: ?*environment_map,
 };
 
 pub const render_group = struct {
@@ -231,6 +245,7 @@ inline fn SRGBBilinearBlend(texelSample: bilinear_sample, fX: f32, fY: f32) hm.v
 
     return result;
 }
+
 /// `screenSpaceUV`: where the ray is being cast _from_ in normalized screen coordinates.
 /// `sampleDirection`: what direction the cast is going - it does not have to be normalized.
 /// `roughness`: which LODs of `map` we sample from. 
@@ -592,7 +607,7 @@ pub fn DrawBitmap(buffer: *loaded_bitmap, bitmap: *const loaded_bitmap, realX: f
 
             d = SRGB255ToLinear1(d);
 
-            var result: hm.v4 = hm.Scale(d, 1 - hm.A(texel)) + texel;
+            var result: hm.v4 = hm.Add(hm.Scale(d, 1 - hm.A(texel)), texel);
 
             result = Linear1ToSRGB255(result);
 
@@ -680,14 +695,10 @@ inline fn GetRenderEntityBasisP(group: *render_group, entityBasis: *render_entit
     const entityBaseP = entityBasis.basis.p;
     const zFudge = 1 + 0.1 * (hm.Z(entityBaseP) + entityBasis.offsetZ);
 
-    const entityGroundPointX = hm.X(screenCenter) + group.metersToPixels * zFudge * hm.X(entityBaseP);
-    const entityGroundPointY = hm.Y(screenCenter) - group.metersToPixels * zFudge * hm.Y(entityBaseP);
-    const entityz = -group.metersToPixels * hm.Z(entityBaseP);
+    const entityGroundPoint: hm.v2 = hm.Add(screenCenter, hm.Scale(hm.XY(entityBaseP), group.metersToPixels * zFudge));
+    const entityz = group.metersToPixels * hm.Z(entityBaseP);
 
-    const center = hm.v2{
-        entityGroundPointX + entityBasis.offset[0],
-        entityGroundPointY + entityBasis.offset[1] + entityBasis.entityZC * entityz,
-    };
+    const center: hm.v2 = hm.Add(hm.Add(entityGroundPoint, entityBasis.offset), .{ 0, entityBasis.entityZC * entityz });
 
     return center;
 }
@@ -721,7 +732,7 @@ pub fn PushPiece(group: *render_group, bitmap: *loaded_bitmap, offset: hm.v2, of
     if (PushRenderElements(group, .Bitmap)) |piece| {
         piece.entityBasis.basis = group.defaultBasis;
         piece.bitmap = bitmap;
-        piece.entityBasis.offset = hm.Sub(hm.Scale(hm.v2{ offset[0], -offset[1] }, group.metersToPixels), alignment);
+        piece.entityBasis.offset = hm.Sub(hm.Scale(offset, group.metersToPixels), alignment);
         piece.entityBasis.offsetZ = offsetZ;
         piece.entityBasis.entityZC = entityZC;
         piece.colour = colour;
@@ -744,7 +755,7 @@ pub inline fn PushRect(group: *render_group, offset: hm.v2, offsetZ: f32, dim: h
 
     if (PushRenderElements(group, .Rectangle)) |piece| {
         piece.entityBasis.basis = group.defaultBasis;
-        piece.entityBasis.offset = hm.Sub(hm.Scale(hm.v2{ offset[0], -offset[1] }, group.metersToPixels), halfDim);
+        piece.entityBasis.offset = hm.Sub(hm.Scale(offset, group.metersToPixels), halfDim);
         piece.entityBasis.offsetZ = offsetZ;
         piece.entityBasis.entityZC = entityZC;
         piece.colour = colour;
@@ -827,7 +838,12 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *loaded_bit
             .Clear => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_clear, data);
                 const colour: hm.v4 = entry.colour;
-                DrawRectangle(outputTarget, .{ 0, 0 }, .{ @intToFloat(f32, outputTarget.width), @intToFloat(f32, outputTarget.height) }, colour);
+                DrawRectangle(
+                    outputTarget,
+                    .{ 0, 0 },
+                    .{ @intToFloat(f32, outputTarget.width), @intToFloat(f32, outputTarget.height) },
+                    colour,
+                );
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },
@@ -841,10 +857,9 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *loaded_bit
 
             .Bitmap => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_bitmap, data);
-                if (!NOT_IGNORE) {
-                    const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
-                    DrawBitmap(outputTarget, entry.bitmap, hm.X(p), hm.Y(p), entry.a);
-                }
+
+                const p = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
+                DrawBitmap(outputTarget, entry.bitmap, hm.X(p), hm.Y(p), hm.A(entry.colour));
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },

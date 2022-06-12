@@ -1,4 +1,4 @@
-const std = @import("std");
+const assert = @import("std").debug.assert;
 const platform = @import("handmade_platform");
 const game = struct {
     usingnamespace @import("handmade_entity.zig");
@@ -79,7 +79,8 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
         result.height = header.height;
         result.memory = pixels;
 
-        std.debug.assert(header.compression == 3);
+        assert(header.height >= 0);
+        assert(header.compression == 3);
 
         const redMask = header.redMask;
         const greenMask = header.greenMask;
@@ -126,8 +127,12 @@ fn DEBUGLoadBMP(thread: *platform.thread_context, ReadEntireFile: platform.debug
         }
     }
 
-    result.pitch = -result.width * platform.BITMAP_BYTES_PER_PIXEL;
-    result.memory += @intCast(usize, -result.pitch * (result.height - 1));
+    result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
+
+    if (!NOT_IGNORE) {
+        result.memory += @intCast(usize, result.pitch * (result.height - 1));
+        result.pitch = -result.width;
+    }
 
     return result;
 }
@@ -138,7 +143,7 @@ const add_low_entity_result = struct {
 };
 
 fn AddLowEntity(gameState: *game.state, entityType: game.entity_type, pos: game.world_position) add_low_entity_result {
-    std.debug.assert(gameState.lowEntityCount < gameState.lowEntities.len);
+    assert(gameState.lowEntityCount < gameState.lowEntities.len);
     const entityIndex = gameState.lowEntityCount;
     gameState.lowEntityCount += 1;
 
@@ -198,7 +203,7 @@ fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32
 }
 
 fn InitHitPoints(entityLow: *game.low_entity, hitPointCount: u32) void {
-    std.debug.assert(hitPointCount <= entityLow.sim.hitPoint.len);
+    assert(hitPointCount <= entityLow.sim.hitPoint.len);
     entityLow.sim.hitPointMax = hitPointCount;
 
     var hitPointIndex = @as(u32, 0);
@@ -328,8 +333,8 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                 const chunkZ = chunkP.chunkZ;
 
                 var series = game.RandomSeed(@bitCast(u32, 139 * chunkX + 593 * chunkY + 329 * chunkZ));
-                // TODO (Manav): inspect why 0.5 is needed as offset
-                const center = game.v2{ (0.5 + @intToFloat(f32, chunkOffsetX)) * width, (0.5 - @intToFloat(f32, chunkOffsetY)) * height };
+
+                const center = game.v2{ @intToFloat(f32, chunkOffsetX) * width, @intToFloat(f32, chunkOffsetY) * height };
 
                 var grassIndex = @as(u32, 0);
                 while (grassIndex < 100) : (grassIndex += 1) {
@@ -358,8 +363,8 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                 const chunkZ = chunkP.chunkZ;
 
                 var series = game.RandomSeed(@bitCast(u32, 139 * chunkX + 593 * chunkY + 329 * chunkZ));
-                // TODO (Manav): inspect why 0.5 is needed as offset
-                const center = game.v2{ (0.5 + @intToFloat(f32, chunkOffsetX)) * width, (0.5 - @intToFloat(f32, chunkOffsetY)) * height };
+
+                const center = game.v2{ @intToFloat(f32, chunkOffsetX) * width, @intToFloat(f32, chunkOffsetY) * height };
 
                 var grassIndex = @as(u32, 0);
                 while (grassIndex < 100) : (grassIndex += 1) {
@@ -548,9 +553,18 @@ pub inline fn ChunkPosFromTilePos(w: *game.world, absTileX: i32, absTileY: i32, 
 
     const result: game.world_position = game.MapIntoChunkSpace(w, basePos, game.Add(offset, additionalOffset));
 
-    std.debug.assert(game.IsCanonical(w, result.offset_));
+    assert(game.IsCanonical(w, result.offset_));
 
     return result;
+}
+
+inline fn TopDownAlign(bitmap: *const game.loaded_bitmap, alignment: game.v2) game.v2 {
+    const fixedAlignment: game.v2 = .{ alignment[0], @intToFloat(f32, bitmap.height - 1) - alignment[1] };
+    return fixedAlignment;
+}
+
+fn SetTopDownAlignment(bitmaps: *game.hero_bitmaps, alignment: game.v2) void {
+    bitmaps.alignment = TopDownAlign(&bitmaps.head, alignment);
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
@@ -574,7 +588,7 @@ pub export fn UpdateAndRender(
         }
     }
 
-    std.debug.assert(@sizeOf(game.state) <= gameMemory.permanentStorageSize);
+    assert(@sizeOf(game.state) <= gameMemory.permanentStorageSize);
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
     const groundBufferWidth = 256;
@@ -636,22 +650,22 @@ pub export fn UpdateAndRender(
         gameState.heroBitmaps[0].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
         gameState.heroBitmaps[0].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");
         gameState.heroBitmaps[0].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_torso.bmp");
-        gameState.heroBitmaps[0].alignment = .{ 72, 182 };
+        SetTopDownAlignment(&gameState.heroBitmaps[0], .{ 72, 182 });
 
         gameState.heroBitmaps[1].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_head.bmp");
         gameState.heroBitmaps[1].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_cape.bmp");
         gameState.heroBitmaps[1].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_torso.bmp");
-        gameState.heroBitmaps[1].alignment = .{ 72, 182 };
+        SetTopDownAlignment(&gameState.heroBitmaps[1], .{ 72, 182 });
 
         gameState.heroBitmaps[2].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_head.bmp");
         gameState.heroBitmaps[2].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_cape.bmp");
         gameState.heroBitmaps[2].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_torso.bmp");
-        gameState.heroBitmaps[2].alignment = .{ 72, 182 };
+        SetTopDownAlignment(&gameState.heroBitmaps[2], .{ 72, 182 });
 
         gameState.heroBitmaps[3].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp");
         gameState.heroBitmaps[3].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
         gameState.heroBitmaps[3].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
-        gameState.heroBitmaps[3].alignment = .{ 72, 182 };
+        SetTopDownAlignment(&gameState.heroBitmaps[3], .{ 72, 182 });
 
         var series = game.RandomSeed(1234);
 
@@ -780,7 +794,7 @@ pub export fn UpdateAndRender(
         gameMemory.isInitialized = true;
     }
 
-    std.debug.assert(@sizeOf(game.transient_state) <= gameMemory.transientStorageSize);
+    assert(@sizeOf(game.transient_state) <= gameMemory.transientStorageSize);
     const tranState = @ptrCast(*game.transient_state, @alignCast(@alignOf(game.transient_state), gameMemory.transientStorage));
     if (!tranState.initialized) {
         tranState.tranArena.Initialize(
@@ -929,6 +943,7 @@ pub export fn UpdateAndRender(
                     {
                         const chunkCenterP = game.CenteredChunkPoint(chunkX, chunkY, chunkZ);
                         const relP = game.Substract(world, &chunkCenterP, &gameState.cameraP);
+                        _ = relP;
 
                         var furthestBufferLengthSq = @as(f32, 0);
                         var furthestBuffer: ?*game.ground_buffer = null;
@@ -955,7 +970,7 @@ pub export fn UpdateAndRender(
                             FillGroundChunk(tranState, gameState, furthestBuffer.?, &chunkCenterP);
                         }
 
-                        game.PushRectOutline(renderGroup, game.XY(relP), 0, game.XY(world.chunkDimInMeters), .{ 1, 1, 0, 1 }, 1);
+                        // game.PushRectOutline(renderGroup, game.XY(relP), 0, game.XY(world.chunkDimInMeters), .{ 1, 1, 0, 1 }, 1);
                     }
                 }
             }
@@ -1025,7 +1040,8 @@ pub export fn UpdateAndRender(
                 },
 
                 .Wall => {
-                    game.PushBitmap(renderGroup, &gameState.tree, .{ 0, 0 }, 0, .{ 40, 80 }, 1.0, 1.0);
+                    const alignment = TopDownAlign(&gameState.tree, .{ 40, 80 });
+                    game.PushBitmap(renderGroup, &gameState.tree, .{ 0, 0 }, 0, alignment, 1.0, 1.0);
                 },
 
                 .Stairwell => {
@@ -1042,10 +1058,11 @@ pub export fn UpdateAndRender(
                         game.ClearCollisionRulesFor(gameState, entity.storageIndex);
                         game.MakeEntityNonSpatial(entity);
                     } else {
+                        const alignment = TopDownAlign(&gameState.sword, .{ 29, 10 });
                         // NOTE (Manav): invalid z position causes float overflow down the line when drawing bitmap because of zFudge,
                         // so not pushing bitmap when entity becomes non spatial
                         game.PushBitmap(renderGroup, &gameState.shadow, .{ 0, 0 }, 0, heroBitmaps.alignment, shadowAlpha, 0.0);
-                        game.PushBitmap(renderGroup, &gameState.sword, .{ 0, 0 }, 0, .{ 29, 10 }, 1.0, 1.0);
+                        game.PushBitmap(renderGroup, &gameState.sword, .{ 0, 0 }, 0, alignment, 1.0, 1.0);
                     }
                 },
 
@@ -1120,94 +1137,96 @@ pub export fn UpdateAndRender(
         }
     }
 
-    gameState.time += gameInput.dtForFrame;
+    if (NOT_IGNORE) {
+        gameState.time += gameInput.dtForFrame;
 
-    const mapColour = [_]game.v3{
-        .{ 1, 0, 0 },
-        .{ 0, 1, 0 },
-        .{ 0, 0, 1 },
-    };
+        const mapColour = [_]game.v3{
+            .{ 1, 0, 0 },
+            .{ 0, 1, 0 },
+            .{ 0, 0, 1 },
+        };
 
-    {
-        var mapIndex = @as(u32, 0);
-        while (mapIndex < tranState.envMaps.len) : (mapIndex += 1) {
-            const map = &tranState.envMaps[mapIndex];
-            const lod = &map.lod[0];
-            var rowCheckerOn = false;
-            var checkerWidth = @as(i32, 16);
-            var checkerHeight = @as(i32, 16);
+        {
+            var mapIndex = @as(u32, 0);
+            while (mapIndex < tranState.envMaps.len) : (mapIndex += 1) {
+                const map = &tranState.envMaps[mapIndex];
+                const lod = &map.lod[0];
+                var rowCheckerOn = false;
+                var checkerWidth = @as(i32, 16);
+                var checkerHeight = @as(i32, 16);
 
-            var y = @as(i32, 0);
-            while (y < lod.height) : (y += checkerHeight) {
-                var checkerOn = rowCheckerOn;
-                var x = @as(i32, 0);
-                while (x < lod.width) : (x += checkerWidth) {
-                    const colour: game.v4 = if (checkerOn) game.ToV4(mapColour[mapIndex], 1) else game.v4{ 0, 0, 0, 1 };
-                    const minP = game.V2(x, y);
-                    const maxP: game.v2 = game.Add(minP, game.V2(checkerWidth, checkerHeight));
-                    game.DrawRectangle(lod, minP, maxP, colour);
-                    checkerOn = !checkerOn;
+                var y = @as(i32, 0);
+                while (y < lod.height) : (y += checkerHeight) {
+                    var checkerOn = rowCheckerOn;
+                    var x = @as(i32, 0);
+                    while (x < lod.width) : (x += checkerWidth) {
+                        const colour: game.v4 = if (checkerOn) game.ToV4(mapColour[mapIndex], 1) else game.v4{ 0, 0, 0, 1 };
+                        const minP = game.V2(x, y);
+                        const maxP: game.v2 = game.Add(minP, game.V2(checkerWidth, checkerHeight));
+                        game.DrawRectangle(lod, minP, maxP, colour);
+                        checkerOn = !checkerOn;
+                    }
+                    rowCheckerOn = !rowCheckerOn;
                 }
-                rowCheckerOn = !rowCheckerOn;
             }
         }
-    }
-    tranState.envMaps[0].pZ = -1.5;
-    tranState.envMaps[1].pZ = 0;
-    tranState.envMaps[2].pZ = 1.5;
+        tranState.envMaps[0].pZ = -1.5;
+        tranState.envMaps[1].pZ = 0;
+        tranState.envMaps[2].pZ = 1.5;
 
-    // angle = 0;
+        // angle = 0;
 
-    var origin = screenCenter;
+        var origin = screenCenter;
 
-    var angle = 0.1 * gameState.time;
-    const disp: game.v2 = if (NOT_IGNORE) .{ 100 * game.Cos(5 * angle), 100 * game.Sin(3 * angle) } else .{ 0, 0 };
+        var angle = 0.1 * gameState.time;
+        const disp: game.v2 = if (NOT_IGNORE) .{ 100 * game.Cos(5 * angle), 100 * game.Sin(3 * angle) } else .{ 0, 0 };
 
-    var xAxis: game.v2 = undefined;
-    var yAxis: game.v2 = undefined;
-    if (NOT_IGNORE) {
-        xAxis = game.Scale(game.v2{ game.Cos(10 * angle), game.Sin(10 * angle) }, 100);
-        yAxis = game.Perp(xAxis);
-    } else {
-        xAxis = game.v2{ 100, 0 };
-        yAxis = game.v2{ 0, 100 };
-    }
-
-    const cAngle = 5 * angle;
-
-    var colour: game.v4 = undefined;
-
-    if (!NOT_IGNORE) {
-        colour = .{
-            0.5 + 0.5 * game.Sin(cAngle),
-            0.5 + 0.5 * game.Sin(2.9 * cAngle),
-            0.5 + 0.5 * game.Cos(9.9 * cAngle),
-            0.5 + 0.5 * game.Sin(10 * cAngle),
-        };
-    } else {
-        colour = .{ 1, 1, 1, 1 };
-    }
-
-    // zig fmt: off
-    _ = game.CoordinateSystem(renderGroup, game.Sub(game.Add(disp , origin) , game.Scale(game.Add(xAxis, yAxis), 0.5)), xAxis, yAxis, colour, 
-                              &gameState.testDiffuse, &gameState.testNormal, &tranState.envMaps[2], &tranState.envMaps[1], &tranState.envMaps[0]);
-    // zig fmt: on
-
-    var mapP: game.v2 = .{ 0, 0 };
-    {
-        var index = @as(u32, 0);
-        while (index < tranState.envMaps.len) : (index += 1) {
-            const lod = &tranState.envMaps[index].lod[0];
-
-            xAxis = game.v2{ 0.5 * @intToFloat(f32, lod.width), 0 };
-            yAxis = game.v2{ 0, 0.5 * @intToFloat(f32, lod.height) };
-
-            _ = game.CoordinateSystem(renderGroup, mapP, xAxis, yAxis, .{ 1, 1, 1, 1 }, lod, null, null, null, null);
-            game.AddTo(&mapP, game.Add(yAxis, game.v2{ 0, 6 }));
+        var xAxis: game.v2 = undefined;
+        var yAxis: game.v2 = undefined;
+        if (NOT_IGNORE) {
+            xAxis = game.Scale(game.v2{ game.Cos(10 * angle), game.Sin(10 * angle) }, 100);
+            yAxis = game.Perp(xAxis);
+        } else {
+            xAxis = game.v2{ 100, 0 };
+            yAxis = game.v2{ 0, 100 };
         }
-    }
 
-    // game.Saturation(renderGroup, 0.5 + 0.5 * game.Sin(10 * gameState.time));
+        const cAngle = 5 * angle;
+
+        var colour: game.v4 = undefined;
+
+        if (!NOT_IGNORE) {
+            colour = .{
+                0.5 + 0.5 * game.Sin(cAngle),
+                0.5 + 0.5 * game.Sin(2.9 * cAngle),
+                0.5 + 0.5 * game.Cos(9.9 * cAngle),
+                0.5 + 0.5 * game.Sin(10 * cAngle),
+            };
+        } else {
+            colour = .{ 1, 1, 1, 1 };
+        }
+
+        // zig fmt: off
+        _ = game.CoordinateSystem(renderGroup, game.Sub(game.Add(disp , origin) , game.Scale(game.Add(xAxis, yAxis), 0.5)), xAxis, yAxis, colour, 
+                                &gameState.testDiffuse, &gameState.testNormal, &tranState.envMaps[2], &tranState.envMaps[1], &tranState.envMaps[0]);
+        // zig fmt: on
+
+        var mapP: game.v2 = .{ 0, 0 };
+        {
+            var index = @as(u32, 0);
+            while (index < tranState.envMaps.len) : (index += 1) {
+                const lod = &tranState.envMaps[index].lod[0];
+
+                xAxis = game.v2{ 0.5 * @intToFloat(f32, lod.width), 0 };
+                yAxis = game.v2{ 0, 0.5 * @intToFloat(f32, lod.height) };
+
+                _ = game.CoordinateSystem(renderGroup, mapP, xAxis, yAxis, .{ 1, 1, 1, 1 }, lod, null, null, null, null);
+                game.AddTo(&mapP, game.Add(yAxis, game.v2{ 0, 6 }));
+            }
+        }
+
+        // game.Saturation(renderGroup, 0.5 + 0.5 * game.Sin(10 * gameState.time));
+    }
 
     game.RenderGroupToOutput(renderGroup, drawBuffer);
 
