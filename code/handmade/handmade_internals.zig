@@ -55,7 +55,6 @@ pub const temporary_memory = struct {
 };
 
 pub const hero_bitmaps = struct {
-    alignment: hm.v2,
     head: hrg.loaded_bitmap,
     cape: hrg.loaded_bitmap,
     torso: hrg.loaded_bitmap,

@@ -24,6 +24,8 @@ const SquareRoot = hintrinsics.SquareRoot;
 //
 // 4) Z is a special coordinate because it is broken up into discrete slices, and the renderer actually understands these
 //    slices (potentially).
+//
+// 5) All colour values specified to the renderer as v4's are in NON-premultiplied alpha.
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -33,6 +35,8 @@ const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const loaded_bitmap = struct {
+    alignment: hm.v2 = .{0, 0},
+
     width: i32 = 0,
     height: i32 = 0,
     pitch: i32 = 0,
@@ -50,10 +54,7 @@ pub const render_basis = struct {
 
 pub const render_entity_basis = struct {
     basis: *render_basis,
-    offset: hm.v2 = hm.v2{ 0, 0 },
-
-    offsetZ: f32 = 0,
-    entityZC: f32 = 0,
+    offset: hm.v3 = hm.v3{ 0, 0, 0 },
 };
 
 pub const render_group_entry_type = enum {
@@ -61,7 +62,6 @@ pub const render_group_entry_type = enum {
     Bitmap,
     Rectangle,
     CoordinateSystem,
-    Saturation,
 
     pub fn Type(self: render_group_entry_type) type {
         return switch (self) {
@@ -69,7 +69,6 @@ pub const render_group_entry_type = enum {
             .Bitmap => render_entry_bitmap,
             .Rectangle => render_entry_rectangle,
             .CoordinateSystem => render_entry_coordinate_system,
-            .Saturation => render_entry_saturation,
         };
     }
 };
@@ -80,10 +79,6 @@ pub const render_group_entry_header = struct {
 
 pub const render_entry_clear = struct {
     colour: hm.v4,
-};
-
-pub const render_entry_saturation = struct {
-    level: f32,
 };
 
 pub const render_entry_bitmap = struct {
@@ -120,6 +115,48 @@ pub const render_group = struct {
     maxPushBufferSize: u32,
     pushBufferBase: [*]u8,
 };
+
+// Renderer API ---------------------------------------------------------------------------------------------------------------------------
+
+/// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
+pub inline fn PushBitmap(group: *render_group, bitmap: *loaded_bitmap, offset: hm.v3, colour: hm.v4) void 
+{
+    if (PushRenderElements(group, .Bitmap)) |piece| {
+        piece.entityBasis.basis = group.defaultBasis;
+        piece.bitmap = bitmap;
+        // piece.entityBasis.offset = group.metersToPixels * offset - V3(bitmap.alignment, 0);
+        piece.entityBasis.offset = hm.Sub(hm.Scale(offset, group.metersToPixels), hm.ToV3(bitmap.alignment, 0));
+        piece.colour = colour;
+    }
+}
+
+/// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
+pub inline fn PushRect(group: *render_group, offset: hm.v3, dim: hm.v2, colour: hm.v4) void {
+    if (PushRenderElements(group, .Rectangle)) |piece| {
+        piece.entityBasis.basis = group.defaultBasis;
+        // piece.entityBasis.offset = group.metersToPixels * (offset - V3(0.5 * dim, 0));
+        piece.entityBasis.offset = hm.Scale(hm.Sub(offset, hm.ToV3(hm.Scale(dim, 0.5), 0)), group.metersToPixels);
+        piece.colour = colour;
+        piece.dim = hm.Scale(dim, group.metersToPixels);
+    }
+}
+
+/// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
+pub inline fn PushRectOutline(group: *render_group, offset: hm.v3, dim: hm.v2, colour: hm.v4) void {
+    const thickness = 0.1;
+
+    PushRect(group, hm.Sub(offset, hm.v3{ 0, 0.5 * hm.Y(dim), 0 }), .{ hm.X(dim), thickness }, colour);
+    PushRect(group, hm.Add(offset, hm.v3{ 0, 0.5 * hm.Y(dim), 0 }), .{ hm.X(dim), thickness }, colour);
+
+    PushRect(group, hm.Sub(offset, hm.v3{ 0.5 * hm.X(dim), 0, 0 }), .{ thickness, hm.Y(dim) }, colour);
+    PushRect(group, hm.Add(offset, hm.v3{ 0.5 * hm.X(dim), 0, 0 }), .{ thickness, hm.Y(dim) }, colour);
+}
+
+pub inline fn Clear(group: *render_group, colour: hm.v4) void {
+    if (PushRenderElements(group, .Clear)) |entry| {
+        entry.colour = colour;
+    }
+}
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
 
@@ -173,10 +210,10 @@ pub fn DrawRectangle(buffer: *const loaded_bitmap, vMin: hm.v2, vMax: hm.v2, col
     const b = hm.B(colour);
     const a = hm.A(colour);
 
-    var minX = Round(i32, vMin[0]);
-    var minY = Round(i32, vMin[1]);
-    var maxX = Round(i32, vMax[0]);
-    var maxY = Round(i32, vMax[1]);
+    var minX = Round(i32, hm.X(vMin));
+    var minY = Round(i32, hm.Y(vMin));
+    var maxX = Round(i32, hm.X(vMax));
+    var maxY = Round(i32, hm.Y(vMax));
 
     if (minX < 0) {
         minX = 0;
@@ -692,13 +729,11 @@ pub fn DrawMatte(buffer: *loaded_bitmap, bitmap: *const loaded_bitmap, realX: f3
 }
 
 inline fn GetRenderEntityBasisP(group: *render_group, entityBasis: *render_entity_basis, screenCenter: hm.v2) hm.v2 {
-    const entityBaseP = entityBasis.basis.p;
-    const zFudge = 1 + 0.1 * (hm.Z(entityBaseP) + entityBasis.offsetZ);
+    const entityBaseP = hm.Scale(entityBasis.basis.p, group.metersToPixels);
+    const zFudge = 1 + 0.1 * hm.Z(entityBaseP);
+    const entityGroundPoint: hm.v2 = hm.Add(hm.Add(screenCenter, hm.Scale(hm.XY(entityBaseP), zFudge)), hm.XY(entityBasis.offset));
 
-    const entityGroundPoint: hm.v2 = hm.Add(screenCenter, hm.Scale(hm.XY(entityBaseP), group.metersToPixels * zFudge));
-    const entityz = group.metersToPixels * hm.Z(entityBaseP);
-
-    const center: hm.v2 = hm.Add(hm.Add(entityGroundPoint, entityBasis.offset), .{ 0, entityBasis.entityZC * entityz });
+    const center: hm.v2 = hm.Add(entityGroundPoint, .{ 0, hm.Z(entityBasis.offset) + hm.Z(entityBaseP) });
 
     return center;
 }
@@ -722,67 +757,6 @@ pub fn PushRenderElements(group: *render_group, comptime t: render_group_entry_t
     }
 
     return result;
-}
-
-// zig fmt: off
-pub fn PushPiece(group: *render_group, bitmap: *loaded_bitmap, offset: hm.v2, offsetZ: f32, alignment: hm.v2, 
-                        _: hm.v2, colour: hm.v4, entityZC: f32) void 
-// zig fmt: on
-{
-    if (PushRenderElements(group, .Bitmap)) |piece| {
-        piece.entityBasis.basis = group.defaultBasis;
-        piece.bitmap = bitmap;
-        piece.entityBasis.offset = hm.Sub(hm.Scale(offset, group.metersToPixels), alignment);
-        piece.entityBasis.offsetZ = offsetZ;
-        piece.entityBasis.entityZC = entityZC;
-        piece.colour = colour;
-    }
-}
-
-// zig fmt: off
-/// Defaults: ```alpha = 1.0, entityZC = 1.0```
-pub fn PushBitmap(group: *render_group, bitmap: *loaded_bitmap, offset: hm.v2, offsetZ: f32, alignment: hm.v2,
-                         alpha: f32, entityZC: f32) void 
-// zig fmt: on
-{
-    // NOTE (Manav): alpha > 1 mess up our rendering, as cAlpha will make rSA > 1 and invRSA negative
-    assert(alpha <= 1);
-    PushPiece(group, bitmap, offset, offsetZ, alignment, .{ 0, 0 }, .{ 1, 1, 1, alpha }, entityZC);
-}
-
-pub inline fn PushRect(group: *render_group, offset: hm.v2, offsetZ: f32, dim: hm.v2, colour: hm.v4, entityZC: f32) void {
-    const halfDim = hm.Scale(dim, 0.5 * group.metersToPixels);
-
-    if (PushRenderElements(group, .Rectangle)) |piece| {
-        piece.entityBasis.basis = group.defaultBasis;
-        piece.entityBasis.offset = hm.Sub(hm.Scale(offset, group.metersToPixels), halfDim);
-        piece.entityBasis.offsetZ = offsetZ;
-        piece.entityBasis.entityZC = entityZC;
-        piece.colour = colour;
-        piece.dim = hm.Scale(dim, group.metersToPixels);
-    }
-}
-
-pub inline fn PushRectOutline(group: *render_group, offset: hm.v2, offsetZ: f32, dim: hm.v2, colour: hm.v4, entityZC: f32) void {
-    const thickness = 0.1;
-
-    PushRect(group, hm.Sub(offset, hm.v2{ 0, 0.5 * hm.Y(dim) }), offsetZ, .{ hm.X(dim), thickness }, colour, entityZC);
-    PushRect(group, hm.Add(offset, hm.v2{ 0, 0.5 * hm.Y(dim) }), offsetZ, .{ hm.X(dim), thickness }, colour, entityZC);
-
-    PushRect(group, hm.Sub(offset, hm.v2{ 0.5 * hm.X(dim), 0 }), offsetZ, .{ thickness, hm.Y(dim) }, colour, entityZC);
-    PushRect(group, hm.Add(offset, hm.v2{ 0.5 * hm.X(dim), 0 }), offsetZ, .{ thickness, hm.Y(dim) }, colour, entityZC);
-}
-
-pub fn Clear(group: *render_group, colour: hm.v4) void {
-    if (PushRenderElements(group, .Clear)) |entry| {
-        entry.colour = colour;
-    }
-}
-
-pub fn Saturation(group: *render_group, level: f32) void {
-    if (PushRenderElements(group, .Saturation)) |entry| {
-        entry.level = level;
-    }
 }
 
 // zig fmt: off
@@ -844,13 +818,6 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *loaded_bit
                     .{ @intToFloat(f32, outputTarget.width), @intToFloat(f32, outputTarget.height) },
                     colour,
                 );
-
-                baseAddress += @sizeOf(@TypeOf(entry.*));
-            },
-
-            .Saturation => {
-                const entry = @ptrCast(*align(@alignOf(u8)) render_entry_saturation, data);
-                ChangeSaturation(outputTarget, entry.level);
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },
