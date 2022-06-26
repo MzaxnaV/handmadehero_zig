@@ -130,6 +130,8 @@ pub const state = struct {
 
     testDiffuse: hrg.loaded_bitmap,
     testNormal: hrg.loaded_bitmap,
+
+    zOffset: f32,
 };
 
 pub const transient_state = struct {

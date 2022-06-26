@@ -697,8 +697,12 @@ pub export fn UpdateAndRender(
 
         var screenIndex: u32 = 0;
         while (screenIndex < 2000) : (screenIndex += 1) {
-            // var doorDirection = series.RandomChoice(if (doorUp or doorDown) 2 else 3);
-            var doorDirection = series.RandomChoice(2);
+            var doorDirection = @as(u32, 0);
+            if (NOT_IGNORE) {
+                doorDirection = series.RandomChoice(if (doorUp or doorDown) 2 else 3);
+            } else {
+                doorDirection = series.RandomChoice(2);
+            }
 
             var createdZDoor = false;
             if (doorDirection == 2) {
@@ -894,23 +898,36 @@ pub export fn UpdateAndRender(
             }
 
             conHero.dSword = .{ 0, 0 };
-            if (controller.buttons.mapped.actionUp.endedDown != 0) {
-                conHero.dSword[1] = 1.0;
-            }
-            if (controller.buttons.mapped.actionDown.endedDown != 0) {
-                conHero.dSword[1] = -1.0;
-            }
-            if (controller.buttons.mapped.actionLeft.endedDown != 0) {
-                conHero.dSword[0] = -1.0;
-            }
-            if (controller.buttons.mapped.actionRight.endedDown != 0) {
-                conHero.dSword[0] = 1.0;
+            if (!NOT_IGNORE) {
+                if (controller.buttons.mapped.actionUp.endedDown != 0) {
+                    conHero.dSword[1] = 1.0;
+                }
+                if (controller.buttons.mapped.actionDown.endedDown != 0) {
+                    conHero.dSword[1] = -1.0;
+                }
+                if (controller.buttons.mapped.actionLeft.endedDown != 0) {
+                    conHero.dSword[0] = -1.0;
+                }
+                if (controller.buttons.mapped.actionRight.endedDown != 0) {
+                    conHero.dSword[0] = 1.0;
+                }
+            } else {
+                var zoomRate = @as(f32, 0);
+                if (controller.buttons.mapped.actionUp.endedDown != 0) {
+                    zoomRate = 1.0;
+                }
+                if (controller.buttons.mapped.actionDown.endedDown != 0) {
+                    zoomRate = -1.0;
+                }
+                gameState.zOffset -= zoomRate * gameInput.dtForFrame;
             }
         }
     }
 
     const renderMemory = game.BeginTemporaryMemory(&tranState.tranArena);
     const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), gameState.metersToPixels);
+
+    renderGroup.globalAlpha = 1.0; // game.Clampf01(1 - gameState.zOffset);
 
     var drawBuffer_ = game.loaded_bitmap{
         .width = @intCast(i32, buffer.width),
@@ -931,59 +948,65 @@ pub export fn UpdateAndRender(
     const screenHeightInMeters = @intToFloat(f32, drawBuffer.height) * pixelsToMeters;
     const cameraBoundsInMeters = game.rect3.InitCenterDim(.{ 0, 0, 0 }, game.v3{ screenWidthInMeters, screenHeightInMeters, 0 });
 
-    var groundBufferIndex = @as(u32, 0);
-    while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
-        var groundBuffer: *game.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
-        if (game.IsValid(groundBuffer.p)) {
-            const bitmap = &groundBuffer.bitmap;
-            const delta = game.Substract(world, &groundBuffer.p, &gameState.cameraP);
-            bitmap.alignment = game.Scale(game.V2(bitmap.width, bitmap.height), 0.5);
-            game.PushBitmap(renderGroup, bitmap, delta, .{ 1, 1, 1, 1 });
+    if (!NOT_IGNORE) {
+        var groundBufferIndex = @as(u32, 0);
+        while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
+            var groundBuffer: *game.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
+            if (game.IsValid(groundBuffer.p)) {
+                const bitmap = &groundBuffer.bitmap;
+                const delta = game.Substract(world, &groundBuffer.p, &gameState.cameraP);
+                bitmap.alignment = game.Scale(game.V2(bitmap.width, bitmap.height), 0.5);
+
+                const basis = tranState.tranArena.PushStruct(game.render_basis);
+                renderGroup.defaultBasis = basis;
+                basis.p = game.Add(delta, .{ 0, 0, gameState.zOffset });
+                game.PushBitmap(renderGroup, bitmap, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+            }
         }
-    }
 
-    {
-        const minChunkP = game.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMinCorner());
-        const maxChunkP = game.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMaxCorner());
+        {
+            const minChunkP = game.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMinCorner());
+            const maxChunkP = game.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMaxCorner());
 
-        var chunkZ = minChunkP.chunkZ;
-        while (chunkZ <= maxChunkP.chunkZ) : (chunkZ += 1) {
-            var chunkY = minChunkP.chunkY;
-            while (chunkY <= maxChunkP.chunkY) : (chunkY += 1) {
-                var chunkX = minChunkP.chunkX;
-                while (chunkX <= maxChunkP.chunkX) : (chunkX += 1) {
-                    // if (game.GetWorldChunk(null, world, )) |chunk|
-                    {
-                        const chunkCenterP = game.CenteredChunkPoint(chunkX, chunkY, chunkZ);
-                        const relP = game.Substract(world, &chunkCenterP, &gameState.cameraP);
-                        _ = relP;
+            var chunkZ = minChunkP.chunkZ;
+            while (chunkZ <= maxChunkP.chunkZ) : (chunkZ += 1) {
+                var chunkY = minChunkP.chunkY;
+                while (chunkY <= maxChunkP.chunkY) : (chunkY += 1) {
+                    var chunkX = minChunkP.chunkX;
+                    while (chunkX <= maxChunkP.chunkX) : (chunkX += 1) {
+                        // if (game.GetWorldChunk(null, world, )) |chunk|
+                        {
+                            const chunkCenterP = game.CenteredChunkPoint(chunkX, chunkY, chunkZ);
+                            const relP = game.Substract(world, &chunkCenterP, &gameState.cameraP);
+                            _ = relP;
 
-                        var furthestBufferLengthSq = @as(f32, 0);
-                        var furthestBuffer: ?*game.ground_buffer = null;
-                        var index = @as(u32, 0);
-                        while (index < tranState.groundBufferCount) : (index += 1) {
-                            const groundBuffer = &tranState.groundBuffers[index];
-                            if (game.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
-                                furthestBuffer = null;
-                                break;
-                            } else if (game.IsValid(groundBuffer.p)) {
-                                const distance = game.Substract(world, &groundBuffer.p, &gameState.cameraP);
-                                const bufferLengthSq = game.LengthSq(game.XY(distance));
-                                if (furthestBufferLengthSq < bufferLengthSq) {
-                                    furthestBufferLengthSq = bufferLengthSq;
+                            var furthestBufferLengthSq = @as(f32, 0);
+                            var furthestBuffer: ?*game.ground_buffer = null;
+                            var index = @as(u32, 0);
+                            while (index < tranState.groundBufferCount) : (index += 1) {
+                                const groundBuffer = &tranState.groundBuffers[index];
+                                if (game.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
+                                    furthestBuffer = null;
+                                    break;
+                                } else if (game.IsValid(groundBuffer.p)) {
+                                    const distance = game.Substract(world, &groundBuffer.p, &gameState.cameraP);
+                                    const bufferLengthSq = game.LengthSq(game.XY(distance));
+                                    if (furthestBufferLengthSq < bufferLengthSq) {
+                                        furthestBufferLengthSq = bufferLengthSq;
+                                        furthestBuffer = groundBuffer;
+                                    }
+                                } else {
+                                    furthestBufferLengthSq = platform.F32MAXIMUM;
                                     furthestBuffer = groundBuffer;
                                 }
-                            } else {
-                                furthestBufferLengthSq = platform.F32MAXIMUM;
-                                furthestBuffer = groundBuffer;
                             }
-                        }
 
-                        if (furthestBuffer != null) {
-                            FillGroundChunk(tranState, gameState, furthestBuffer.?, &chunkCenterP);
-                        }
+                            if (furthestBuffer != null) {
+                                FillGroundChunk(tranState, gameState, furthestBuffer.?, &chunkCenterP);
+                            }
 
-                        // game.PushRectOutline(renderGroup, game.XY(relP), 0, game.XY(world.chunkDimInMeters), .{ 1, 1, 0, 1 }, 1);
+                            // game.PushRectOutline(renderGroup, game.XY(relP), 0, game.XY(world.chunkDimInMeters), .{ 1, 1, 0, 1 }, 1);
+                        }
                     }
                 }
             }
@@ -1144,11 +1167,11 @@ pub export fn UpdateAndRender(
                 game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
 
-            basis.p = game.GetEntityGroundPoint(entity);
+            basis.p = game.Add(game.GetEntityGroundPoint(entity), game.V3(0, 0, gameState.zOffset));
         }
     }
 
-    if (NOT_IGNORE) {
+    if (!NOT_IGNORE) {
         gameState.time += gameInput.dtForFrame;
 
         const mapColour = [_]game.v3{
@@ -1219,10 +1242,18 @@ pub export fn UpdateAndRender(
             colour = .{ 1, 1, 1, 1 };
         }
 
-        // zig fmt: off
-        _ = game.CoordinateSystem(renderGroup, game.Sub(game.Add(disp , origin) , game.Scale(game.Add(xAxis, yAxis), 0.5)), xAxis, yAxis, colour, 
-                                &gameState.testDiffuse, &gameState.testNormal, &tranState.envMaps[2], &tranState.envMaps[1], &tranState.envMaps[0]);
-        // zig fmt: on
+        _ = game.CoordinateSystem(
+            renderGroup,
+            game.Sub(game.Add(disp, origin), game.Scale(game.Add(xAxis, yAxis), 0.5)),
+            xAxis,
+            yAxis,
+            colour,
+            &gameState.testDiffuse,
+            &gameState.testNormal,
+            &tranState.envMaps[2],
+            &tranState.envMaps[1],
+            &tranState.envMaps[0],
+        );
 
         var mapP: game.v2 = .{ 0, 0 };
         {
