@@ -408,8 +408,24 @@ pub inline fn Clamp(min: f32, value: f32, max: f32) f32 {
     return result;
 }
 
+pub inline fn ClampMapToRange(min: f32, t: f32, max: f32) f32 {
+    const range = max - min;
+    const result = if (range != 0) Clampf01((t - min) / range) else 0;
+
+    return result;
+}
+
 pub inline fn Clampf01(value: f32) f32 {
     const result = Clamp(0, value, 1);
+    return result;
+}
+
+pub inline fn ClampV201(value: v2) v2 {
+    const result = v2{
+        Clampf01(value[0]),
+        Clampf01(value[1]),
+    };
+
     return result;
 }
 
@@ -418,15 +434,6 @@ pub inline fn ClampV301(value: v3) v3 {
         Clampf01(value[0]),
         Clampf01(value[1]),
         Clampf01(value[2]),
-    };
-
-    return result;
-}
-
-pub inline fn ClampV201(value: v2) v2 {
-    const result = v2{
-        Clampf01(value[0]),
-        Clampf01(value[1]),
     };
 
     return result;

@@ -1,4 +1,5 @@
-const assert = @import("std").debug.assert;
+const std = @import("std");
+const assert = std.debug.assert;
 
 const hw = @import("handmade_world.zig");
 const hi = @import("handmade_internals.zig");
@@ -253,7 +254,7 @@ pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.wor
 
     simRegion.world = world;
     simRegion.origin = origin;
-    simRegion.updatableBounds = hm.AddRadiusToRect3(bounds, .{ simRegion.maxEntityRadius, simRegion.maxEntityRadius, simRegion.maxEntityRadius });
+    simRegion.updatableBounds = hm.AddRadiusToRect3(bounds, .{ simRegion.maxEntityRadius, simRegion.maxEntityRadius, 0 });
     simRegion.bounds = hm.AddRadiusToRect3(simRegion.updatableBounds, .{ updateSafetyMargin, updateSafetyMargin, updateSafetyMarginZ });
 
     simRegion.maxEntityCount = 4096;
@@ -328,9 +329,9 @@ pub fn EndSim(region: *sim_region, gameState: *hi.state) void {
                 //     newCameraP.absTileY -%= 9;
                 // }
             } else {
-                const camZOffset = hm.Z(newCameraP.offset_);
+                // const camZOffset = hm.Z(newCameraP.offset_);
                 newCameraP = stored.p;
-                newCameraP.offset_[2] = camZOffset;
+                // newCameraP.offset_[2] = camZOffset;
             }
 
             gameState.cameraP = newCameraP;

@@ -1,4 +1,5 @@
-const assert = @import("std").debug.assert;
+const std = @import("std");
+const assert = std.debug.assert;
 const platform = @import("handmade_platform");
 const game = struct {
     usingnamespace @import("handmade_entity.zig");
@@ -699,19 +700,20 @@ pub export fn UpdateAndRender(
         while (screenIndex < 2000) : (screenIndex += 1) {
             var doorDirection = @as(u32, 0);
             if (NOT_IGNORE) {
-                doorDirection = series.RandomChoice(if (doorUp or doorDown) 2 else 3);
+                doorDirection = series.RandomChoice(if (doorUp or doorDown) 2 else 4);
             } else {
                 doorDirection = series.RandomChoice(2);
             }
 
+            doorDirection = 3;
+
             var createdZDoor = false;
-            if (doorDirection == 2) {
+            if (doorDirection == 3) {
                 createdZDoor = true;
-                if (absTileZ == screenBaseZ) {
-                    doorUp = true;
-                } else {
-                    doorDown = true;
-                }
+                doorDown = true;
+            } else if (doorDirection == 2) {
+                createdZDoor = true;
+                doorUp = true;
             } else if (doorDirection == 1) {
                 doorRight = true;
             } else {
@@ -745,9 +747,12 @@ pub export fn UpdateAndRender(
                     }
 
                     if (shouldBeDoor) {
-                        _ = AddWall(gameState, absTileX, absTileY, absTileZ);
+                        if ((tileY % 2 == 0) and (tileX % 2 == 0)) {
+                            _ = AddWall(gameState, absTileX, absTileY, absTileZ);
+                        }
                     } else if (createdZDoor) {
-                        if ((tileX == 10) and (tileY == 5)) {
+                        if (((absTileZ % 2 == 0) and (tileX == 10) and (tileY == 5)) or ((absTileZ % 2 != 0) and (tileX == 4) and (tileY == 5))) {
+                            // TODO (Manav): absTileZ has integer overflow, tolerate it for now.
                             _ = AddStairs(gameState, absTileX, absTileY, if (doorDown) absTileZ - 1 else absTileZ);
                         }
                     }
@@ -768,12 +773,10 @@ pub export fn UpdateAndRender(
             doorRight = false;
             doorTop = false;
 
-            if (doorDirection == 2) {
-                if (absTileZ == screenBaseZ) {
-                    absTileZ = screenBaseZ + 1;
-                } else {
-                    absTileZ = screenBaseZ;
-                }
+            if (doorDirection == 3) {
+                absTileZ -= 1;
+            } else if (doorDirection == 2) {
+                absTileZ += 1;
             } else if (doorDirection == 1) {
                 screenX += 1;
             } else {
@@ -898,36 +901,24 @@ pub export fn UpdateAndRender(
             }
 
             conHero.dSword = .{ 0, 0 };
-            if (!NOT_IGNORE) {
-                if (controller.buttons.mapped.actionUp.endedDown != 0) {
-                    conHero.dSword[1] = 1.0;
-                }
-                if (controller.buttons.mapped.actionDown.endedDown != 0) {
-                    conHero.dSword[1] = -1.0;
-                }
-                if (controller.buttons.mapped.actionLeft.endedDown != 0) {
-                    conHero.dSword[0] = -1.0;
-                }
-                if (controller.buttons.mapped.actionRight.endedDown != 0) {
-                    conHero.dSword[0] = 1.0;
-                }
-            } else {
-                var zoomRate = @as(f32, 0);
-                if (controller.buttons.mapped.actionUp.endedDown != 0) {
-                    zoomRate = 1.0;
-                }
-                if (controller.buttons.mapped.actionDown.endedDown != 0) {
-                    zoomRate = -1.0;
-                }
-                gameState.zOffset -= zoomRate * gameInput.dtForFrame;
+
+            if (controller.buttons.mapped.actionUp.endedDown != 0) {
+                conHero.dSword[1] = 1.0;
+            }
+            if (controller.buttons.mapped.actionDown.endedDown != 0) {
+                conHero.dSword[1] = -1.0;
+            }
+            if (controller.buttons.mapped.actionLeft.endedDown != 0) {
+                conHero.dSword[0] = -1.0;
+            }
+            if (controller.buttons.mapped.actionRight.endedDown != 0) {
+                conHero.dSword[0] = 1.0;
             }
         }
     }
 
     const renderMemory = game.BeginTemporaryMemory(&tranState.tranArena);
     const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), gameState.metersToPixels);
-
-    renderGroup.globalAlpha = 1.0; // game.Clampf01(1 - gameState.zOffset);
 
     var drawBuffer_ = game.loaded_bitmap{
         .width = @intCast(i32, buffer.width),
@@ -946,7 +937,9 @@ pub export fn UpdateAndRender(
 
     const screenWidthInMeters = @intToFloat(f32, drawBuffer.width) * pixelsToMeters;
     const screenHeightInMeters = @intToFloat(f32, drawBuffer.height) * pixelsToMeters;
-    const cameraBoundsInMeters = game.rect3.InitCenterDim(.{ 0, 0, 0 }, game.v3{ screenWidthInMeters, screenHeightInMeters, 0 });
+    var cameraBoundsInMeters = game.rect3.InitCenterDim(.{ 0, 0, 0 }, game.v3{ screenWidthInMeters, screenHeightInMeters, 0 });
+    cameraBoundsInMeters.min[2] = -3 * gameState.typicalFloorHeight;
+    cameraBoundsInMeters.max[2] = 1 * gameState.typicalFloorHeight;
 
     if (!NOT_IGNORE) {
         var groundBufferIndex = @as(u32, 0);
@@ -1013,10 +1006,13 @@ pub export fn UpdateAndRender(
         }
     }
 
-    const simBoundsExpansion = game.v3{ 15, 15, 15 };
+    const simBoundsExpansion = game.v3{ 15, 15, 0 };
     const simBounds = game.AddRadiusToRect3(cameraBoundsInMeters, simBoundsExpansion);
     const simMemory = game.BeginTemporaryMemory(&tranState.tranArena);
-    const simRegion = game.BeginSim(&tranState.tranArena, gameState, gameState.world, gameState.cameraP, simBounds, gameInput.dtForFrame);
+    const simCenterP = gameState.cameraP;
+    const simRegion = game.BeginSim(&tranState.tranArena, gameState, gameState.world, simCenterP, simBounds, gameInput.dtForFrame);
+
+    const cameraP: game.v3 = game.Substract(world, &gameState.cameraP, &simCenterP);
 
     var entityIndex = @as(u32, 0);
     while (entityIndex < simRegion.entityCount) : (entityIndex += 1) {
@@ -1033,6 +1029,18 @@ pub export fn UpdateAndRender(
 
             const basis = tranState.tranArena.PushStruct(game.render_basis);
             renderGroup.defaultBasis = basis;
+
+            const cameraRelativeGroundP: game.v3 = game.Sub(game.GetEntityGroundPoint(entity), cameraP);
+            const fadeTopEndZ = 0.75 * gameState.typicalFloorHeight;
+            const fadeTopStartZ = 0.5 * gameState.typicalFloorHeight;
+            const fadeBottomStartZ = -2 * gameState.typicalFloorHeight;
+            const fadeBottomEndZ = -2.5 * gameState.typicalFloorHeight;
+            renderGroup.globalAlpha = 1.0;
+            if (game.Z(cameraRelativeGroundP) > fadeTopStartZ) {
+                renderGroup.globalAlpha = game.ClampMapToRange(fadeTopEndZ, game.Z(cameraRelativeGroundP), fadeTopStartZ);
+            } else if (game.Z(cameraRelativeGroundP) < fadeBottomStartZ) {
+                renderGroup.globalAlpha = game.ClampMapToRange(fadeBottomEndZ, game.Z(cameraRelativeGroundP), fadeBottomStartZ);
+            }
 
             const heroBitmaps = &gameState.heroBitmaps[entity.facingDirection];
             switch (entity.entityType) {
@@ -1167,9 +1175,11 @@ pub export fn UpdateAndRender(
                 game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
 
-            basis.p = game.Add(game.GetEntityGroundPoint(entity), game.V3(0, 0, gameState.zOffset));
+            basis.p = game.GetEntityGroundPoint(entity);
         }
     }
+
+    renderGroup.globalAlpha = 1.0;
 
     if (!NOT_IGNORE) {
         gameState.time += gameInput.dtForFrame;

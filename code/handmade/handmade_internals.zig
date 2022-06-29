@@ -130,8 +130,6 @@ pub const state = struct {
 
     testDiffuse: hrg.loaded_bitmap,
     testNormal: hrg.loaded_bitmap,
-
-    zOffset: f32,
 };
 
 pub const transient_state = struct {
@@ -148,12 +146,15 @@ pub const transient_state = struct {
 // inline pub functions -------------------------------------------------------------------------------------------------------------------
 
 pub inline fn ZeroSize(size: platform.memory_index, ptr: [*]u8) void {
-    var byte = ptr;
-    var s = size;
-    while (s > 0) : (s -= 1) {
-        byte.* = 0;
-        byte += 1;
-    }
+    @memset(ptr, 0, size);
+
+    // NOTE (Manav): this is slow :/, use memset
+    // var byte = ptr;
+    // var s = size;
+    // while (s > 0) : (s -= 1) {
+    //     byte.* = 0;
+    //     byte += 1;
+    // }
 }
 
 pub inline fn BeginTemporaryMemory(arena: *memory_arena) temporary_memory {

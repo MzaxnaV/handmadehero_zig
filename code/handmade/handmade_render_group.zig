@@ -864,8 +864,8 @@ pub fn RenderGroupToOutput(renderGroup: *render_group, outputTarget: *loaded_bit
 
             .Rectangle => {
                 const entry = @ptrCast(*align(@alignOf(u8)) render_entry_rectangle, data);
-                // const basis: entity_basis_p_result = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
-                // DrawRectangle(outputTarget, basis.p, hm.Add(basis.p, hm.Scale(entry.dim, basis.scale)), entry.colour);
+                const basis: entity_basis_p_result = GetRenderEntityBasisP(renderGroup, &entry.entityBasis, screenCenter);
+                DrawRectangle(outputTarget, basis.p, hm.Add(basis.p, hm.Scale(entry.dim, basis.scale)), entry.colour);
 
                 baseAddress += @sizeOf(@TypeOf(entry.*));
             },
