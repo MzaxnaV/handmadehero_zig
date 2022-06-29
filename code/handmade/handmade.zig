@@ -751,7 +751,7 @@ pub export fn UpdateAndRender(
                             _ = AddWall(gameState, absTileX, absTileY, absTileZ);
                         }
                     } else if (createdZDoor) {
-                        if (((absTileZ % 2 == 0) and (tileX == 10) and (tileY == 5)) or ((absTileZ % 2 != 0) and (tileX == 4) and (tileY == 5))) {
+                        if (((absTileZ % 2 != 0) and (tileX == 10) and (tileY == 5)) or ((absTileZ % 2 == 0) and (tileX == 4) and (tileY == 5))) {
                             // TODO (Manav): absTileZ has integer overflow, tolerate it for now.
                             _ = AddStairs(gameState, absTileX, absTileY, if (doorDown) absTileZ - 1 else absTileZ);
                         }

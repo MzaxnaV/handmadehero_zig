@@ -730,21 +730,29 @@ pub fn DrawMatte(buffer: *loaded_bitmap, bitmap: *const loaded_bitmap, realX: f3
 }
 
 const entity_basis_p_result = struct {
-    p: hm.v2,
-    scale: f32,
+    p: hm.v2 = hm.v2{ 0, 0 },
+    scale: f32 = 0,
+    valid: bool = false,
 };
 
 inline fn GetRenderEntityBasisP(group: *render_group, entityBasis: *render_entity_basis, screenCenter: hm.v2) entity_basis_p_result {
-    const entityBaseP = hm.Scale(entityBasis.basis.p, group.metersToPixels);
-    const zFudge = 1 + 0.002 * hm.Z(entityBaseP);
-    const entityGroundPoint: hm.v2 = hm.Add(screenCenter, hm.Scale(hm.Add(hm.XY(entityBaseP), hm.XY(entityBasis.offset)), zFudge));
+    var result: entity_basis_p_result = .{};
 
-    const center: hm.v2 = entityGroundPoint; // hm.Add(entityGroundPoint, .{ 0, hm.Z(entityBasis.offset) + hm.Z(entityBaseP) });
+    const entityBaseP: hm.v3 = hm.Scale(entityBasis.basis.p, group.metersToPixels);
 
-    const result = entity_basis_p_result{
-        .p = center,
-        .scale = zFudge,
-    };
+    const focalLength = group.metersToPixels * 10.0;
+    const cameraDistanceAboveTarget = group.metersToPixels * 10.0;
+    const distanceToPZ = cameraDistanceAboveTarget - hm.Z(entityBaseP);
+    const nearClipPlane = group.metersToPixels * 0.2;
+
+    const rawXY: hm.v3 = hm.ToV3(hm.Add(hm.XY(entityBaseP), hm.XY(entityBasis.offset)), 1);
+
+    if (distanceToPZ > nearClipPlane) {
+        const projectedXY: hm.v3 = hm.Scale(rawXY, focalLength / distanceToPZ);
+        result.p = hm.Add(screenCenter, hm.XY(projectedXY));
+        result.scale = hm.Z(projectedXY);
+        result.valid = true;
+    }
 
     return result;
 }
