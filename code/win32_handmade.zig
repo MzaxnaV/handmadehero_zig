@@ -966,6 +966,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     Win32LoadXinput();
 
     Win32ResizeDIBSection(&globalBackBuffer, 960, 540);
+    // Win32ResizeDIBSection(&globalBackBuffer, 1920, 1080)
 
     debugGlobalShowCursor = HANDMADE_INTERNAL;
 

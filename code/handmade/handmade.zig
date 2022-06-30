@@ -86,7 +86,8 @@ fn DEBUGLoadBMP(
         result.width = header.width;
         result.height = header.height;
         result.memory = pixels;
-        result.alignment = TopDownAlign(&result, game.V2(alignX, topDownAlignY));
+        result.alignPercentage = TopDownAlign(&result, game.V2(alignX, topDownAlignY));
+        result.widthOverHeight = game.SafeRatiof0(@intToFloat(f32, result.width), @intToFloat(f32, result.height));
 
         assert(header.height >= 0);
         assert(header.compression == 3);
@@ -321,7 +322,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
     const groundMemory = game.BeginTemporaryMemory(&tranState.tranArena);
     defer game.EndTemporaryMemory(groundMemory);
 
-    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), 1);
+    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4));
 
     game.Clear(renderGroup, .{ 1, 1, 0, 1 });
 
@@ -356,7 +357,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                     const offset = game.v2{ width * series.RandomUnilateral(), height * series.RandomUnilateral() };
                     const p = game.Sub(game.Add(center, offset), bitmapCenter);
 
-                    game.PushBitmap(renderGroup, stamp, game.ToV3(p, 0), .{ 1, 1, 1, 1 });
+                    game.PushBitmap(renderGroup, stamp, game.ToV3(p, 0), 1, .{ 1, 1, 1, 1 });
                 }
             }
         }
@@ -383,7 +384,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                     const offset = game.v2{ width * series.RandomUnilateral(), height * series.RandomUnilateral() };
                     const p = game.Sub(game.Add(center, offset), bitmapCenter);
 
-                    game.PushBitmap(renderGroup, stamp, game.ToV3(p, 0), .{ 1, 1, 1, 1 });
+                    game.PushBitmap(renderGroup, stamp, game.ToV3(p, 0), 1, .{ 1, 1, 1, 1 });
                 }
             }
         }
@@ -568,16 +569,19 @@ pub inline fn ChunkPosFromTilePos(w: *game.world, absTileX: i32, absTileY: i32, 
 }
 
 inline fn TopDownAlign(bitmap: *const game.loaded_bitmap, alignment: game.v2) game.v2 {
-    const fixedAlignment: game.v2 = .{ alignment[0], @intToFloat(f32, bitmap.height - 1) - alignment[1] };
+    const fixedAlignment = game.v2{
+        game.SafeRatiof0(game.X(alignment), @intToFloat(f32, bitmap.width)),
+        game.SafeRatiof0(@intToFloat(f32, bitmap.height - 1) - game.Y(alignment), @intToFloat(f32, bitmap.height)),
+    };
     return fixedAlignment;
 }
 
 fn SetTopDownAlignment(bitmaps: *game.hero_bitmaps, alignment: game.v2) void {
     const fixedAlignment = TopDownAlign(&bitmaps.head, alignment);
 
-    bitmaps.head.alignment = fixedAlignment;
-    bitmaps.torso.alignment = fixedAlignment;
-    bitmaps.cape.alignment = fixedAlignment;
+    bitmaps.head.alignPercentage = fixedAlignment;
+    bitmaps.torso.alignPercentage = fixedAlignment;
+    bitmaps.cape.alignPercentage = fixedAlignment;
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
@@ -604,20 +608,19 @@ pub export fn UpdateAndRender(
     assert(@sizeOf(game.state) <= gameMemory.permanentStorageSize);
     const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
 
-    const groundBufferWidth = 256;
-    const groundBufferHeight = 256;
+    const groundBufferWidth = 256.0;
+    const groundBufferHeight = 256.0;
+    const pixelsToMeters = 1.0 / 42.0;
 
     if (!gameMemory.isInitialized) {
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
 
         gameState.typicalFloorHeight = 3.0;
-        gameState.metersToPixels = 42;
-        gameState.pixelsToMeters = 1.0 / gameState.metersToPixels;
 
         const worldChunkDimInMeters = game.v3{
-            gameState.pixelsToMeters * groundBufferWidth,
-            gameState.pixelsToMeters * groundBufferHeight,
+            pixelsToMeters * groundBufferWidth,
+            pixelsToMeters * groundBufferHeight,
             gameState.typicalFloorHeight,
         };
 
@@ -864,9 +867,6 @@ pub export fn UpdateAndRender(
 
     const world = gameState.world;
 
-    // const metersToPixels = gameState.metersToPixels;
-    const pixelsToMeters = 1.0 / gameState.metersToPixels;
-
     for (gameInput.controllers) |controller, controllerIndex| {
         const conHero = &gameState.controlledHeroes[controllerIndex];
         if (conHero.entityIndex == 0) {
@@ -918,7 +918,7 @@ pub export fn UpdateAndRender(
     }
 
     const renderMemory = game.BeginTemporaryMemory(&tranState.tranArena);
-    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), gameState.metersToPixels);
+    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4));
 
     var drawBuffer_ = game.loaded_bitmap{
         .width = @intCast(i32, buffer.width),
@@ -1075,16 +1075,18 @@ pub export fn UpdateAndRender(
                         }
                     }
 
-                    game.PushBitmap(renderGroup, &gameState.shadow, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    game.PushBitmap(renderGroup, &heroBitmaps.torso, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                    game.PushBitmap(renderGroup, &heroBitmaps.cape, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                    game.PushBitmap(renderGroup, &heroBitmaps.head, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    const heroSizeC = 2.5;
+
+                    game.PushBitmap(renderGroup, &gameState.shadow, heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    game.PushBitmap(renderGroup, &heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    game.PushBitmap(renderGroup, &heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    game.PushBitmap(renderGroup, &heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     DrawHitpoints(entity, renderGroup);
                 },
 
                 .Wall => {
-                    game.PushBitmap(renderGroup, &gameState.tree, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    game.PushBitmap(renderGroup, &gameState.tree, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Stairwell => {
@@ -1104,8 +1106,8 @@ pub export fn UpdateAndRender(
                         // NOTE (Manav): invalid z position causes float overflow down the line when drawing bitmap because of zFudge,
                         // so not pushing bitmap when entity becomes non spatial
                     }
-                    game.PushBitmap(renderGroup, &gameState.shadow, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    game.PushBitmap(renderGroup, &gameState.sword, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    game.PushBitmap(renderGroup, &gameState.shadow, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    game.PushBitmap(renderGroup, &gameState.sword, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Familiar => {
@@ -1143,13 +1145,13 @@ pub export fn UpdateAndRender(
                         entity.tBob -= 2 * platform.PI32;
                     }
                     const bobSin = game.Sin(2 * entity.tBob);
-                    game.PushBitmap(renderGroup, &gameState.shadow, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
-                    game.PushBitmap(renderGroup, &heroBitmaps.head, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
+                    game.PushBitmap(renderGroup, &gameState.shadow, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
+                    game.PushBitmap(renderGroup, &heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
                 },
 
                 .Monstar => {
-                    game.PushBitmap(renderGroup, &gameState.shadow, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    game.PushBitmap(renderGroup, &heroBitmaps.torso, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    game.PushBitmap(renderGroup, &gameState.shadow, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    game.PushBitmap(renderGroup, &heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     DrawHitpoints(entity, renderGroup);
                 },

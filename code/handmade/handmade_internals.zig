@@ -111,8 +111,6 @@ pub const state = struct {
     tree: hrg.loaded_bitmap,
     sword: hrg.loaded_bitmap,
     stairwell: hrg.loaded_bitmap,
-    metersToPixels: f32,
-    pixelsToMeters: f32,
 
     collisionRuleHash: [256]?*pairwise_collision_rule,
     firstFreeCollisionRule: ?*pairwise_collision_rule,

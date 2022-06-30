@@ -4,6 +4,15 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Build and Test Project, optimized",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "zig build -Drelease-fast=true --verbose"
+        },
+        {
             "label": "Build and Test Project",
             "type": "shell",
             "group": {
@@ -11,6 +20,15 @@
                 "isDefault": true
             },
             "command": "zig build --verbose & zig build test"
+        },
+        {
+            "label": "Build Project",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "zig build --verbose"
         },
         {
             "label": "Build Lib optimized",
@@ -31,22 +49,13 @@
             "command": "zig build --verbose lib"
         },
         {
-            "label": "Build Project",
-            "type": "shell",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "command": "zig build"
-        },
-        {
             "label": "Test Project",
             "type": "shell",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build test"
+            "command": "zig build --verbose test"
         }
     ]
 }
