@@ -91,6 +91,28 @@ inline fn Rectangle(comptime n: comptime_int) type {
             };
             return result;
         }
+
+        pub inline fn IsInRect(self: *const Self, testP: v) bool {
+            var result = true;
+
+            comptime var i = 0;
+            inline while (i < n) : (i += 1) {
+                result = result and ((testP[i] >= self.min[i]) and (testP[i] < self.max[i]));
+            }
+
+            return result;
+        }
+
+        pub inline fn GetBarycentric(self: *const Self, p: v) v {
+            var result: v = [1]f32{0} ** n;
+
+            comptime var i = 0;
+            inline while (i < n) : (i += 1) {
+                result[i] = SafeRatiof0(p[i] - self.min[i], self.max[i] - self.min[i]);
+            }
+
+            return result;
+        }
     };
 }
 
@@ -217,7 +239,6 @@ pub const A = W;
 
 pub const U = X;
 pub const V = Y;
-pub const W = Z;
 
 pub inline fn XY(vec: anytype) v2 {
     comptime {
@@ -297,43 +318,6 @@ pub inline fn LerpV(a: anytype, t: f32, b: [a.len]f32) [a.len]f32 {
 }
 
 // functions (rect operations)------------------------------------------------------------------------------------------------------------
-
-pub inline fn IsInRect2(rectangle: rect2, testP: v2) bool {
-    const result = ((testP[0] >= rectangle.min[0]) and
-        (testP[1] >= rectangle.min[1]) and
-        (testP[0] < rectangle.max[0]) and
-        (testP[1] < rectangle.max[1]));
-    return result;
-}
-
-pub inline fn GetBarycentricV2(a: rect2, p: v2) v2 {
-    var result: v2 = .{
-        SafeRatiof0(p[0] - a.min[0], a.max[0] - a.min[0]),
-        SafeRatiof0(p[1] - a.min[1], a.max[1] - a.min[1]),
-    };
-
-    return result;
-}
-
-pub inline fn IsInRect3(rectangle: rect3, testP: v3) bool {
-    const result = ((testP[0] >= rectangle.min[0]) and
-        (testP[1] >= rectangle.min[1]) and
-        (testP[2] >= rectangle.min[2]) and
-        (testP[0] < rectangle.max[0]) and
-        (testP[1] < rectangle.max[1]) and
-        (testP[2] < rectangle.max[2]));
-    return result;
-}
-
-pub inline fn GetBarycentricV3(a: rect3, p: v3) v3 {
-    var result: v3 = .{
-        SafeRatiof0(p[0] - a.min[0], a.max[0] - a.min[0]),
-        SafeRatiof0(p[1] - a.min[1], a.max[1] - a.min[1]),
-        SafeRatiof0(p[2] - a.min[2], a.max[2] - a.min[2]),
-    };
-
-    return result;
-}
 
 pub inline fn Offset(a: rect3, offset: v3) rect3 {
     const result = rect3{

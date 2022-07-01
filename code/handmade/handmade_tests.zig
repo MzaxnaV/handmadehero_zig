@@ -94,10 +94,10 @@ test "math" {
     try testing.expectEqual(r2.GetMaxCorner(), hm.v2{ 3, 3 });
     try testing.expectEqual(r.GetCenter(), hm.v2{ 1.5, 1.5 });
 
-    try testing.expectEqual(hm.IsInRect2(r, hm.v2{ 3, 3 }), false);
-    try testing.expectEqual(hm.IsInRect2(r, hm.v2{ 1, 3 }), false);
-    try testing.expectEqual(hm.IsInRect2(r, hm.v2{ 0, 0 }), true);
-    try testing.expectEqual(hm.IsInRect2(r, hm.v2{ 2, 2 }), true);
+    try testing.expectEqual(r.IsInRect(hm.v2{ 3, 3 }), false);
+    try testing.expectEqual(r.IsInRect(hm.v2{ 1, 3 }), false);
+    try testing.expectEqual(r.IsInRect(hm.v2{ 0, 0 }), true);
+    try testing.expectEqual(r.IsInRect(hm.v2{ 2, 2 }), true);
 
     try testing.expectEqual(r.AddRadius(hm.v2{ 1, 2 }), hm.rect2{ .min = hm.v2{ -1, -2 }, .max = hm.v2{ 4, 5 } });
 
@@ -112,17 +112,17 @@ test "math" {
     try testing.expectEqual(r32.GetMaxCorner(), hm.v3{ 3, 3, 3 });
     try testing.expectEqual(r3.GetCenter(), hm.v3{ 1.5, 1.5, 1.5 });
 
-    try testing.expectEqual(hm.IsInRect3(r3, hm.v3{ 3, 3, 3 }), false);
-    try testing.expectEqual(hm.IsInRect3(r3, hm.v3{ 1, 3, 3 }), false);
-    try testing.expectEqual(hm.IsInRect3(r3, hm.v3{ 0, 0, 0 }), true);
-    try testing.expectEqual(hm.IsInRect3(r3, hm.v3{ 2, 2, 2 }), true);
+    try testing.expectEqual(r3.IsInRect(hm.v3{ 3, 3, 3 }), false);
+    try testing.expectEqual(r3.IsInRect(hm.v3{ 1, 3, 3 }), false);
+    try testing.expectEqual(r3.IsInRect(hm.v3{ 0, 0, 0 }), true);
+    try testing.expectEqual(r3.IsInRect(hm.v3{ 2, 2, 2 }), true);
 
     try testing.expectEqual(r3.AddRadius(.{ 1, 2, 3 }), hm.rect3{ .min = hm.v3{ -1, -2, -3 }, .max = hm.v3{ 4, 5, 6 } });
 
-    try testing.expectEqual(hm.GetBarycentricV3(r3, r3.GetCenter()), hm.v3{ 0.5, 0.5, 0.5 });
-    try testing.expectEqual(hm.GetBarycentricV3(r3, r3.GetMinCorner()), hm.v3{ 0, 0, 0 });
-    try testing.expectEqual(hm.GetBarycentricV3(r3, r3.GetMaxCorner()), hm.v3{ 1, 1, 1 });
-    try testing.expectEqual(hm.GetBarycentricV3(r3, .{ 2, 2, 2 }), @splat(3, @as(f32, 2.0 / 3.0)));
+    try testing.expectEqual(r3.GetBarycentric(r3.GetCenter()), hm.v3{ 0.5, 0.5, 0.5 });
+    try testing.expectEqual(r3.GetBarycentric(r3.GetMinCorner()), hm.v3{ 0, 0, 0 });
+    try testing.expectEqual(r3.GetBarycentric(r3.GetMaxCorner()), hm.v3{ 1, 1, 1 });
+    try testing.expectEqual(r3.GetBarycentric(.{ 2, 2, 2 }), @splat(3, @as(f32, 2.0 / 3.0)));
 
     try testing.expectEqual(hm.ClampV301(.{ 0.2, -0.4, 1.2 }), hm.v3{ 0.2, 0, 1 });
 }

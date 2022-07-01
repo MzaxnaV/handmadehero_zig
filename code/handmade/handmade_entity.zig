@@ -46,7 +46,7 @@ pub inline fn GetEntityGroundPoint(entity: *hs.sim_entity) hm.v3 {
 pub inline fn GetStairGround(entity: *hs.sim_entity, atGroundPoint: hm.v3) f32 {
     assert(entity.entityType == .Stairwell);
     const regionRect = hm.rect2.InitCenterDim(hm.XY(entity.p), entity.walkableDim);
-    const bary = hm.ClampV201(hm.GetBarycentricV2(regionRect, hm.XY(atGroundPoint)));
+    const bary = hm.ClampV201(regionRect.GetBarycentric(hm.XY(atGroundPoint)));
     const result = hm.Z(entity.p) + hm.Y(bary) * entity.walkableHeight;
 
     return result;
