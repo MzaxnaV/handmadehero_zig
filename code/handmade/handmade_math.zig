@@ -223,6 +223,7 @@ pub inline fn Z(vec: anytype) f32 {
     return vec[2];
 }
 
+/// w in xyzw
 pub inline fn W(vec: anytype) f32 {
     comptime {
         if (vec.len < 3) {

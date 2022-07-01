@@ -846,7 +846,7 @@ pub fn AllocateRenderGroup(arena: *hi.memory_arena, maxPushBufferSize: u32, reso
     result.gameCamera.focalLength = 0.6;
     result.gameCamera.distanceAboveTarget = 9.0;
     result.renderCamera = result.gameCamera;
-    result.renderCamera.distanceAboveTarget = 30.0;
+    // result.renderCamera.distanceAboveTarget = 50.0;
 
     result.globalAlpha = 1.0;
 

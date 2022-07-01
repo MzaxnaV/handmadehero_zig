@@ -46,7 +46,18 @@ fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneH
     }
 }
 
-/// Defaults: ```alignX = 0 , topDownAlignY = 0```
+/// Defaults: ```alignX =  , topDownAlignY = ```
+fn DEBUGLoadBMPDefaultAligned(
+    thread: *platform.thread_context,
+    ReadEntireFile: platform.debug_platform_read_entire_file,
+    fileName: [*:0]const u8,
+) game.loaded_bitmap {
+    var result = DEBUGLoadBMP(thread, ReadEntireFile, fileName, 0, 0);
+    result.alignPercentage = .{ 0.5, 0.5 };
+
+    return result;
+}
+
 fn DEBUGLoadBMP(
     thread: *platform.thread_context,
     ReadEntireFile: platform.debug_platform_read_entire_file,
@@ -322,16 +333,19 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
     const groundMemory = game.BeginTemporaryMemory(&tranState.tranArena);
     defer game.EndTemporaryMemory(groundMemory);
 
-    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), 1920, 1080);
+    var buffer = &groundBuffer.bitmap;
+    buffer.alignPercentage = game.v2{ 0.5, 0.5 };
+    buffer.widthOverHeight = 1.0;
+
+    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), @intCast(u32, buffer.width), @intCast(u32, buffer.height));
 
     game.Clear(renderGroup, .{ 1, 1, 0, 1 });
 
-    var buffer = &groundBuffer.bitmap;
-
     groundBuffer.p = chunkP.*;
 
-    const width = @intToFloat(f32, buffer.width);
-    const height = @intToFloat(f32, buffer.height);
+    const width = game.X(gameState.world.chunkDimInMeters);
+    const height = game.Y(gameState.world.chunkDimInMeters);
+    const haldDim = game.Scale(game.v2{ 0.5 * width, 0.5 * height }, 2);
 
     {
         var chunkOffsetY = @as(i32, -1);
@@ -347,17 +361,14 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                 const center = game.v2{ @intToFloat(f32, chunkOffsetX) * width, @intToFloat(f32, chunkOffsetY) * height };
 
                 var grassIndex = @as(u32, 0);
-                while (grassIndex < 100) : (grassIndex += 1) {
+                while (grassIndex < 50) : (grassIndex += 1) {
                     const stamp = if (series.RandomChoice(2) == 1)
                         &gameState.grass[series.RandomChoice(gameState.grass.len)]
                     else
                         &gameState.stones[series.RandomChoice(gameState.stones.len)];
 
-                    const bitmapCenter = game.Scale(game.V2(stamp.width, stamp.height), 0.5);
-                    const offset = game.v2{ width * series.RandomUnilateral(), height * series.RandomUnilateral() };
-                    const p = game.Sub(game.Add(center, offset), bitmapCenter);
-
-                    game.PushBitmap(renderGroup, stamp, game.ToV3(p, 0), 1, .{ 1, 1, 1, 1 });
+                    const p = game.Add(center, game.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
+                    game.PushBitmap(renderGroup, stamp, 4, game.ToV3(p, 0), .{ 1, 1, 1, 1 });
                 }
             }
         }
@@ -377,14 +388,11 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                 const center = game.v2{ @intToFloat(f32, chunkOffsetX) * width, @intToFloat(f32, chunkOffsetY) * height };
 
                 var grassIndex = @as(u32, 0);
-                while (grassIndex < 100) : (grassIndex += 1) {
+                while (grassIndex < 50) : (grassIndex += 1) {
                     const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
 
-                    const bitmapCenter = game.Scale(game.V2(stamp.width, stamp.height), 0.5);
-                    const offset = game.v2{ width * series.RandomUnilateral(), height * series.RandomUnilateral() };
-                    const p = game.Sub(game.Add(center, offset), bitmapCenter);
-
-                    game.PushBitmap(renderGroup, stamp, game.ToV3(p, 0), 1, .{ 1, 1, 1, 1 });
+                    const p = game.Add(center, game.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
+                    game.PushBitmap(renderGroup, stamp, 0.4, game.ToV3(p, 0), .{ 1, 1, 1, 1 });
                 }
             }
         }
@@ -543,15 +551,6 @@ fn MakePyramidNormalMap(bitmap: *const game.loaded_bitmap, roughness: f32) void 
     }
 }
 
-// fn RequestGroundBuffers(centerP: game.world_position, bounds: game.rect3) void {
-//     bounds = game.Offset(bounds, centerP.offset_);
-//     centerP.offset_ = .{0, 0, 0};
-
-//     var
-
-//     FillGroundChunk(tranState, gameState, &tranState.groundBuffers[0], &gameState.cameraP);
-// }
-
 pub inline fn ChunkPosFromTilePos(w: *game.world, absTileX: i32, absTileY: i32, absTileZ: i32, additionalOffset: game.v3) game.world_position {
     const basePos: game.world_position = .{};
 
@@ -645,42 +644,42 @@ pub export fn UpdateAndRender(
 
         gameState.standardRoomCollision = MakeSimpleGroundedCollision(gameState, tilesPerWidth * tileSideInMeters, tilesPerHeight * tileSideInMeters, 0.9 * tileDepthInMeters);
 
-        gameState.grass[0] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass00.bmp", 0, 0);
-        gameState.grass[1] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass01.bmp", 0, 0);
+        gameState.grass[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass00.bmp");
+        gameState.grass[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass01.bmp");
 
-        gameState.tufts[0] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp", 0, 0);
-        gameState.tufts[1] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft01.bmp", 0, 0);
-        gameState.tufts[2] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp", 0, 0);
+        gameState.tufts[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp");
+        gameState.tufts[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft01.bmp");
+        gameState.tufts[2] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp");
 
-        gameState.stones[0] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground00.bmp", 0, 0);
-        gameState.stones[1] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground01.bmp", 0, 0);
-        gameState.stones[2] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground02.bmp", 0, 0);
-        gameState.stones[3] = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground03.bmp", 0, 0);
+        gameState.stones[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground00.bmp");
+        gameState.stones[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground01.bmp");
+        gameState.stones[2] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground02.bmp");
+        gameState.stones[3] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground03.bmp");
 
-        gameState.backdrop = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp", 0, 0);
+        gameState.backdrop = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
         gameState.shadow = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp", 72, 182);
         gameState.tree = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tree00.bmp", 40, 80);
-        gameState.stairwell = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock02.bmp", 0, 0);
+        gameState.stairwell = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock02.bmp");
         gameState.sword = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock03.bmp", 29, 10);
 
-        gameState.heroBitmaps[0].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp", 0, 0);
-        gameState.heroBitmaps[0].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp", 0, 0);
-        gameState.heroBitmaps[0].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_torso.bmp", 0, 0);
+        gameState.heroBitmaps[0].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
+        gameState.heroBitmaps[0].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");
+        gameState.heroBitmaps[0].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_torso.bmp");
         SetTopDownAlignment(&gameState.heroBitmaps[0], .{ 72, 182 });
 
-        gameState.heroBitmaps[1].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_head.bmp", 0, 0);
-        gameState.heroBitmaps[1].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_cape.bmp", 0, 0);
-        gameState.heroBitmaps[1].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_torso.bmp", 0, 0);
+        gameState.heroBitmaps[1].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_head.bmp");
+        gameState.heroBitmaps[1].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_cape.bmp");
+        gameState.heroBitmaps[1].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_torso.bmp");
         SetTopDownAlignment(&gameState.heroBitmaps[1], .{ 72, 182 });
 
-        gameState.heroBitmaps[2].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_head.bmp", 0, 0);
-        gameState.heroBitmaps[2].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_cape.bmp", 0, 0);
-        gameState.heroBitmaps[2].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_torso.bmp", 0, 0);
+        gameState.heroBitmaps[2].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_head.bmp");
+        gameState.heroBitmaps[2].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_cape.bmp");
+        gameState.heroBitmaps[2].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_torso.bmp");
         SetTopDownAlignment(&gameState.heroBitmaps[2], .{ 72, 182 });
 
-        gameState.heroBitmaps[3].head = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp", 0, 0);
-        gameState.heroBitmaps[3].cape = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp", 0, 0);
-        gameState.heroBitmaps[3].torso = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp", 0, 0);
+        gameState.heroBitmaps[3].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp");
+        gameState.heroBitmaps[3].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
+        gameState.heroBitmaps[3].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
         SetTopDownAlignment(&gameState.heroBitmaps[3], .{ 72, 182 });
 
         var series = game.RandomSeed(1234);
@@ -750,9 +749,7 @@ pub export fn UpdateAndRender(
                     }
 
                     if (shouldBeDoor) {
-                        if ((tileY % 2 == 0) and (tileX % 2 == 0)) {
-                            _ = AddWall(gameState, absTileX, absTileY, absTileZ);
-                        }
+                        _ = AddWall(gameState, absTileX, absTileY, absTileZ);
                     } else if (createdZDoor) {
                         if (((absTileZ % 2 != 0) and (tileX == 10) and (tileY == 5)) or ((absTileZ % 2 == 0) and (tileX == 4) and (tileY == 5))) {
                             // TODO (Manav): absTileZ has integer overflow, tolerate it for now.
@@ -940,19 +937,25 @@ pub export fn UpdateAndRender(
     cameraBoundsInMeters.min[2] = -3 * gameState.typicalFloorHeight;
     cameraBoundsInMeters.max[2] = 1 * gameState.typicalFloorHeight;
 
-    if (!NOT_IGNORE) {
+    if (NOT_IGNORE) {
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
             var groundBuffer: *game.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
             if (game.IsValid(groundBuffer.p)) {
                 const bitmap = &groundBuffer.bitmap;
                 const delta = game.Substract(world, &groundBuffer.p, &gameState.cameraP);
-                bitmap.alignment = game.Scale(game.V2(bitmap.width, bitmap.height), 0.5);
 
-                const basis = tranState.tranArena.PushStruct(game.render_basis);
-                renderGroup.defaultBasis = basis;
-                basis.p = game.Add(delta, .{ 0, 0, gameState.zOffset });
-                game.PushBitmap(renderGroup, bitmap, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                if ((game.Z(delta) >= -1.0) and (game.Z(delta) < 1.0)) {
+                    const basis = tranState.tranArena.PushStruct(game.render_basis);
+                    renderGroup.defaultBasis = basis;
+                    basis.p = delta;
+
+                    const groundSideInMeters = game.X(world.chunkDimInMeters);
+                    game.PushBitmap(renderGroup, bitmap, groundSideInMeters, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    if (NOT_IGNORE) {
+                        game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
+                    }
+                }
             }
         }
 
@@ -996,8 +999,6 @@ pub export fn UpdateAndRender(
                             if (furthestBuffer != null) {
                                 FillGroundChunk(tranState, gameState, furthestBuffer.?, &chunkCenterP);
                             }
-
-                            // game.PushRectOutline(renderGroup, game.XY(relP), 0, game.XY(world.chunkDimInMeters), .{ 1, 1, 0, 1 }, 1);
                         }
                     }
                 }
@@ -1012,6 +1013,10 @@ pub export fn UpdateAndRender(
     const simRegion = game.BeginSim(&tranState.tranArena, gameState, gameState.world, simCenterP, simBounds, gameInput.dtForFrame);
 
     const cameraP: game.v3 = game.Substract(world, &gameState.cameraP, &simCenterP);
+
+    const b = tranState.tranArena.PushStruct(game.render_basis);
+    b.p = .{ 0, 0, 0 };
+    renderGroup.defaultBasis = b;
 
     game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, screenBounds.GetDim(), .{ 1, 1, 0, 1 });
     // game.PushRectOutline(renderGroup, .{0, 0, 0}, game.XY(cameraBoundsInMeters.GetDim()), .{1, 1, 1, 1});
