@@ -322,7 +322,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
     const groundMemory = game.BeginTemporaryMemory(&tranState.tranArena);
     defer game.EndTemporaryMemory(groundMemory);
 
-    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4));
+    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), 1920, 1080);
 
     game.Clear(renderGroup, .{ 1, 1, 0, 1 });
 
@@ -708,7 +708,7 @@ pub export fn UpdateAndRender(
                 doorDirection = series.RandomChoice(2);
             }
 
-            doorDirection = 3;
+            // doorDirection = 3;
 
             var createdZDoor = false;
             if (doorDirection == 3) {
@@ -917,9 +917,6 @@ pub export fn UpdateAndRender(
         }
     }
 
-    const renderMemory = game.BeginTemporaryMemory(&tranState.tranArena);
-    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4));
-
     var drawBuffer_ = game.loaded_bitmap{
         .width = @intCast(i32, buffer.width),
         .height = @intCast(i32, buffer.height),
@@ -928,6 +925,9 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
+    const renderMemory = game.BeginTemporaryMemory(&tranState.tranArena);
+    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), @intCast(u32, drawBuffer.width), @intCast(u32, drawBuffer.height));
+
     game.Clear(renderGroup, game.v4{ 0.25, 0.25, 0.25, 0 });
 
     const screenCenter = game.v2{
@@ -935,9 +935,8 @@ pub export fn UpdateAndRender(
         0.5 * @intToFloat(f32, drawBuffer.height),
     };
 
-    const screenWidthInMeters = @intToFloat(f32, drawBuffer.width) * pixelsToMeters;
-    const screenHeightInMeters = @intToFloat(f32, drawBuffer.height) * pixelsToMeters;
-    var cameraBoundsInMeters = game.rect3.InitCenterDim(.{ 0, 0, 0 }, game.v3{ screenWidthInMeters, screenHeightInMeters, 0 });
+    const screenBounds = game.GetCameraRectangleAtTarget(renderGroup);
+    var cameraBoundsInMeters = game.rect3{ .min = game.ToV3(screenBounds.min, 0), .max = game.ToV3(screenBounds.max, 0) };
     cameraBoundsInMeters.min[2] = -3 * gameState.typicalFloorHeight;
     cameraBoundsInMeters.max[2] = 1 * gameState.typicalFloorHeight;
 
@@ -1007,12 +1006,18 @@ pub export fn UpdateAndRender(
     }
 
     const simBoundsExpansion = game.v3{ 15, 15, 0 };
-    const simBounds = game.AddRadiusToRect3(cameraBoundsInMeters, simBoundsExpansion);
+    const simBounds = cameraBoundsInMeters.AddRadius(simBoundsExpansion);
     const simMemory = game.BeginTemporaryMemory(&tranState.tranArena);
     const simCenterP = gameState.cameraP;
     const simRegion = game.BeginSim(&tranState.tranArena, gameState, gameState.world, simCenterP, simBounds, gameInput.dtForFrame);
 
     const cameraP: game.v3 = game.Substract(world, &gameState.cameraP, &simCenterP);
+
+    game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, screenBounds.GetDim(), .{ 1, 1, 0, 1 });
+    // game.PushRectOutline(renderGroup, .{0, 0, 0}, game.XY(cameraBoundsInMeters.GetDim()), .{1, 1, 1, 1});
+    game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, game.XY(simBounds.GetDim()), .{ 0, 1, 1, 1 });
+    game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, game.XY(simRegion.bounds.GetDim()), .{ 1, 0, 1, 1 });
+    // game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, game.XY(simRegion.updatableBounds.GetDim()), .{ 1, 1, 1, 1 });
 
     var entityIndex = @as(u32, 0);
     while (entityIndex < simRegion.entityCount) : (entityIndex += 1) {
@@ -1157,7 +1162,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Space => {
-                    if (NOT_IGNORE) {
+                    if (!NOT_IGNORE) {
                         var volumeIndex = @as(u32, 0);
                         while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
                             const volume = entity.collision.volumes[volumeIndex];

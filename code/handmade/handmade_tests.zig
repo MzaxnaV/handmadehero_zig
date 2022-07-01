@@ -99,7 +99,7 @@ test "math" {
     try testing.expectEqual(hm.IsInRect2(r, hm.v2{ 0, 0 }), true);
     try testing.expectEqual(hm.IsInRect2(r, hm.v2{ 2, 2 }), true);
 
-    try testing.expectEqual(hm.AddRadiusToRect2(r, hm.v2{ 1, 2 }), hm.rect2{ .min = hm.v2{ -1, -2 }, .max = hm.v2{ 4, 5 } });
+    try testing.expectEqual(r.AddRadius(hm.v2{ 1, 2 }), hm.rect2{ .min = hm.v2{ -1, -2 }, .max = hm.v2{ 4, 5 } });
 
     const r3 = hm.rect3.InitMinDim(hm.v3{ 0, 0, 0 }, hm.v3{ 3, 3, 3 });
     const r31 = hm.rect3.InitCenterDim(hm.v3{ 1.5, 1.5, 1.5 }, hm.v3{ 3, 3, 3 });
@@ -117,7 +117,7 @@ test "math" {
     try testing.expectEqual(hm.IsInRect3(r3, hm.v3{ 0, 0, 0 }), true);
     try testing.expectEqual(hm.IsInRect3(r3, hm.v3{ 2, 2, 2 }), true);
 
-    try testing.expectEqual(hm.AddRadiusToRect3(r3, .{ 1, 2, 3 }), hm.rect3{ .min = hm.v3{ -1, -2, -3 }, .max = hm.v3{ 4, 5, 6 } });
+    try testing.expectEqual(r3.AddRadius(.{ 1, 2, 3 }), hm.rect3{ .min = hm.v3{ -1, -2, -3 }, .max = hm.v3{ 4, 5, 6 } });
 
     try testing.expectEqual(hm.GetBarycentricV3(r3, r3.GetCenter()), hm.v3{ 0.5, 0.5, 0.5 });
     try testing.expectEqual(hm.GetBarycentricV3(r3, r3.GetMinCorner()), hm.v3{ 0, 0, 0 });

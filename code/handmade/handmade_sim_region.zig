@@ -215,7 +215,7 @@ fn AddEntityRaw(gameState: *hi.state, simRegion: *sim_region, storageIndex: u32,
 }
 
 pub inline fn EntityOverlapsRectangle(p: hm.v3, volume: sim_entity_collision_volume, rect: hm.rect3) bool {
-    const grown = hm.AddRadiusToRect3(rect, hm.Scale(volume.dim, 0.5));
+    const grown = rect.AddRadius(hm.Scale(volume.dim, 0.5));
     const result = hm.IsInRect3(grown, hm.Add(p, volume.offsetP));
     return result;
 }
@@ -254,8 +254,8 @@ pub fn BeginSim(simArena: *hi.memory_arena, gameState: *hi.state, world: *hw.wor
 
     simRegion.world = world;
     simRegion.origin = origin;
-    simRegion.updatableBounds = hm.AddRadiusToRect3(bounds, .{ simRegion.maxEntityRadius, simRegion.maxEntityRadius, 0 });
-    simRegion.bounds = hm.AddRadiusToRect3(simRegion.updatableBounds, .{ updateSafetyMargin, updateSafetyMargin, updateSafetyMarginZ });
+    simRegion.updatableBounds = bounds.AddRadius(.{ simRegion.maxEntityRadius, simRegion.maxEntityRadius, 0 });
+    simRegion.bounds = simRegion.updatableBounds.AddRadius(.{ updateSafetyMargin, updateSafetyMargin, updateSafetyMarginZ });
 
     simRegion.maxEntityCount = 4096;
     simRegion.entityCount = 0;

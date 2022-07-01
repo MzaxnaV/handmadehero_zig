@@ -10,7 +10,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -Drelease-fast=true --verbose"
+            "command": "zig build -Drelease-fast=true --verbose & zig build test"
         },
         {
             "label": "Build and Test Project",

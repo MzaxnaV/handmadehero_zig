@@ -1,6 +1,15 @@
 const SquareRoot = @import("handmade_intrinsics.zig").SquareRoot;
 
-// private functions ----------------------------------------------------------------------------------------------------------------------
+// data types -----------------------------------------------------------------------------------------------------------------------------------
+
+pub const v2 = Vector(2);
+pub const v3 = Vector(3);
+pub const v4 = Vector(4);
+
+pub const rect2 = Rectangle(2);
+pub const rect3 = Rectangle(3);
+
+// generator functions ----------------------------------------------------------------------------------------------------------------------
 
 inline fn ToF32(a: anytype) f32 {
     return switch (@TypeOf(a)) {
@@ -10,99 +19,80 @@ inline fn ToF32(a: anytype) f32 {
     };
 }
 
-// defs -----------------------------------------------------------------------------------------------------------------------------------
-
-pub const v2 = [2]f32;
-pub const v3 = [3]f32;
-pub const v4 = [4]f32;
-
-// data types -----------------------------------------------------------------------------------------------------------------------------
-
-pub const rect2 = struct {
-    const Self = @This();
-
-    min: v2 = v2{ 0, 0 },
-    max: v2 = v2{ 0, 0 },
-
-    pub inline fn InitMinDim(min: v2, dim: v2) Self {
-        const result = Self{
-            .min = min,
-            .max = Add(min, dim),
-        };
-        return result;
+inline fn Vector(comptime n: comptime_int) type {
+    comptime {
+        if (n < 2) {
+            @compileError("Invalid vector dimension, should be >= 2");
+        }
     }
+    return [n]f32;
+}
 
-    pub inline fn InitCenterHalfDim(center: v2, halfDim: v2) Self {
-        const result = Self{
-            .min = Sub(center, halfDim),
-            .max = Add(center, halfDim),
-        };
-        return result;
+inline fn Rectangle(comptime n: comptime_int) type {
+    comptime {
+        if (n > 3 or n < 2) {
+            @compileError("Invalid rectangle dimension, should be 2 or 3");
+        }
     }
+    return struct {
+        const Self = @This();
 
-    pub inline fn InitCenterDim(center: v2, dim: v2) Self {
-        const result = InitCenterHalfDim(center, Scale(dim, 0.5));
-        return result;
-    }
+        const v = Vector(n);
 
-    pub inline fn GetMinCorner(self: *const Self) v2 {
-        const result = self.min;
-        return result;
-    }
+        min: v = [1]f32{0} ** n,
+        max: v = [1]f32{0} ** n,
 
-    pub inline fn GetMaxCorner(self: *const Self) v2 {
-        const result = self.max;
-        return result;
-    }
+        pub inline fn InitMinDim(min: v, dim: v) Self {
+            const result = Self{
+                .min = min,
+                .max = Add(min, dim),
+            };
+            return result;
+        }
 
-    pub inline fn GetCenter(self: *const Self) v2 {
-        const result = Scale(Add(self.max, self.min), 0.5);
-        return result;
-    }
-};
+        pub inline fn InitCenterHalfDim(center: v, halfDim: v) Self {
+            const result = Self{
+                .min = Sub(center, halfDim),
+                .max = Add(center, halfDim),
+            };
+            return result;
+        }
 
-pub const rect3 = struct {
-    const Self = @This();
+        pub inline fn InitCenterDim(center: v, dim: v) Self {
+            const result = InitCenterHalfDim(center, Scale(dim, 0.5));
+            return result;
+        }
 
-    min: v3 = v3{ 0, 0, 0 },
-    max: v3 = v3{ 0, 0, 0 },
+        pub inline fn GetMinCorner(self: *const Self) v {
+            const result = self.min;
+            return result;
+        }
 
-    pub inline fn InitMinDim(min: v3, dim: v3) Self {
-        const result = Self{
-            .min = min,
-            .max = Add(min, dim),
-        };
-        return result;
-    }
+        pub inline fn GetMaxCorner(self: *const Self) v {
+            const result = self.max;
+            return result;
+        }
 
-    pub inline fn InitCenterHalfDim(center: v3, halfDim: v3) Self {
-        const result = Self{
-            .min = Sub(center, halfDim),
-            .max = Add(center, halfDim),
-        };
-        return result;
-    }
+        pub inline fn GetCenter(self: *const Self) v {
+            const result = Scale(Add(self.max, self.min), 0.5);
+            return result;
+        }
 
-    pub inline fn InitCenterDim(center: v3, dim: v3) Self {
-        const result = InitCenterHalfDim(center, Scale(dim, 0.5));
-        return result;
-    }
+        pub inline fn GetDim(self: *const Self) v {
+            const result = Sub(self.max, self.min);
+            return result;
+        }
 
-    pub inline fn GetMinCorner(self: *const Self) v3 {
-        const result = self.min;
-        return result;
-    }
-
-    pub inline fn GetMaxCorner(self: *const Self) v3 {
-        const result = self.max;
-        return result;
-    }
-
-    pub inline fn GetCenter(self: *const Self) v3 {
-        const result = Scale(Add(self.max, self.min), 0.5);
-        return result;
-    }
-};
+        /// return a new rectangle expanded by the given radius
+        pub inline fn AddRadius(self: *const Self, radius: v) Self {
+            const result = Self{
+                .min = Sub(self.min, radius),
+                .max = Add(self.max, radius),
+            };
+            return result;
+        }
+    };
+}
 
 // functions (vector operations)-----------------------------------------------------------------------------------------------------------
 
@@ -225,6 +215,10 @@ pub const G = Y;
 pub const B = Z;
 pub const A = W;
 
+pub const U = X;
+pub const V = Y;
+pub const W = Z;
+
 pub inline fn XY(vec: anytype) v2 {
     comptime {
         if (vec.len < 2) {
@@ -245,6 +239,7 @@ pub inline fn XYZ(vec: anytype) v3 {
     return vec[0..3].*;
 }
 
+pub const UV = XY;
 pub const RGB = XYZ;
 
 pub inline fn ToV3(xy: v2, z: anytype) v3 {
@@ -301,21 +296,13 @@ pub inline fn LerpV(a: anytype, t: f32, b: [a.len]f32) [a.len]f32 {
     return result;
 }
 
-// functions (rects operations)------------------------------------------------------------------------------------------------------------
+// functions (rect operations)------------------------------------------------------------------------------------------------------------
 
 pub inline fn IsInRect2(rectangle: rect2, testP: v2) bool {
     const result = ((testP[0] >= rectangle.min[0]) and
         (testP[1] >= rectangle.min[1]) and
         (testP[0] < rectangle.max[0]) and
         (testP[1] < rectangle.max[1]));
-    return result;
-}
-
-pub inline fn AddRadiusToRect2(rectangle: rect2, radius: v2) rect2 {
-    const result = rect2{
-        .min = Sub(rectangle.min, radius),
-        .max = Add(rectangle.max, radius),
-    };
     return result;
 }
 
@@ -335,14 +322,6 @@ pub inline fn IsInRect3(rectangle: rect3, testP: v3) bool {
         (testP[0] < rectangle.max[0]) and
         (testP[1] < rectangle.max[1]) and
         (testP[2] < rectangle.max[2]));
-    return result;
-}
-
-pub inline fn AddRadiusToRect3(rectangle: rect3, radius: v3) rect3 {
-    const result = rect3{
-        .min = Sub(rectangle.min, radius),
-        .max = Add(rectangle.max, radius),
-    };
     return result;
 }
 
