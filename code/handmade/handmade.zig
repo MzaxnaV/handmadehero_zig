@@ -300,7 +300,7 @@ fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.render_group) void 
                 colour = .{ 0.2, 0.2, 0.2, 1 };
             }
 
-            game.PushRect(pieceGroup, game.ToV3(hitP, 0), healthDim, colour);
+            pieceGroup.PushRect(game.ToV3(hitP, 0), healthDim, colour);
             game.AddTo(&hitP, dHitP);
         }
     }
@@ -337,9 +337,9 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
     buffer.alignPercentage = game.v2{ 0.5, 0.5 };
     buffer.widthOverHeight = 1.0;
 
-    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), @intCast(u32, buffer.width), @intCast(u32, buffer.height));
+    const renderGroup = game.render_group.Allocate(&tranState.tranArena, platform.MegaBytes(4), @intCast(u32, buffer.width), @intCast(u32, buffer.height));
 
-    game.Clear(renderGroup, .{ 1, 1, 0, 1 });
+    renderGroup.Clear(.{ 1, 1, 0, 1 });
 
     groundBuffer.p = chunkP.*;
 
@@ -368,7 +368,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                         &gameState.stones[series.RandomChoice(gameState.stones.len)];
 
                     const p = game.Add(center, game.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
-                    game.PushBitmap(renderGroup, stamp, 4, game.ToV3(p, 0), .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(stamp, 4, game.ToV3(p, 0), .{ 1, 1, 1, 1 });
                 }
             }
         }
@@ -392,13 +392,13 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                     const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
 
                     const p = game.Add(center, game.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
-                    game.PushBitmap(renderGroup, stamp, 0.4, game.ToV3(p, 0), .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(stamp, 0.4, game.ToV3(p, 0), .{ 1, 1, 1, 1 });
                 }
             }
         }
     }
 
-    game.RenderGroupToOutput(renderGroup, buffer);
+    renderGroup.RenderGroupToOutput(buffer);
 }
 
 fn ClearBitmap(bitmap: *game.loaded_bitmap) void {
@@ -831,7 +831,7 @@ pub export fn UpdateAndRender(
         }
 
         gameState.testDiffuse = MakeEmptyBitmap(&tranState.tranArena, 256, 256, false);
-        game.DrawRectangle(&gameState.testDiffuse, .{ 0, 0 }, game.V2(gameState.testDiffuse.width, gameState.testDiffuse.height), .{ 0.5, 0.5, 0.5, 1 });
+        gameState.testDiffuse.DrawRectangle(.{ 0, 0 }, game.V2(gameState.testDiffuse.width, gameState.testDiffuse.height), .{ 0.5, 0.5, 0.5, 1 });
         gameState.testNormal = MakeEmptyBitmap(&tranState.tranArena, gameState.testDiffuse.width, gameState.testDiffuse.height, false);
 
         MakeSphereNormalMap(&gameState.testNormal, 0, 1, 1);
@@ -923,9 +923,9 @@ pub export fn UpdateAndRender(
     const drawBuffer = &drawBuffer_;
 
     const renderMemory = game.BeginTemporaryMemory(&tranState.tranArena);
-    const renderGroup = game.AllocateRenderGroup(&tranState.tranArena, platform.MegaBytes(4), @intCast(u32, drawBuffer.width), @intCast(u32, drawBuffer.height));
+    const renderGroup = game.render_group.Allocate(&tranState.tranArena, platform.MegaBytes(4), @intCast(u32, drawBuffer.width), @intCast(u32, drawBuffer.height));
 
-    game.Clear(renderGroup, game.v4{ 0.25, 0.25, 0.25, 0 });
+    renderGroup.Clear(game.v4{ 0.25, 0.25, 0.25, 0 });
 
     const screenCenter = game.v2{
         0.5 * @intToFloat(f32, drawBuffer.width),
@@ -951,9 +951,9 @@ pub export fn UpdateAndRender(
                     basis.p = delta;
 
                     const groundSideInMeters = game.X(world.chunkDimInMeters);
-                    game.PushBitmap(renderGroup, bitmap, groundSideInMeters, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(bitmap, groundSideInMeters, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     if (NOT_IGNORE) {
-                        game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
+                        renderGroup.PushRectOutline(.{ 0, 0, 0 }, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
                     }
                 }
             }
@@ -1018,11 +1018,11 @@ pub export fn UpdateAndRender(
     b.p = .{ 0, 0, 0 };
     renderGroup.defaultBasis = b;
 
-    game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, screenBounds.GetDim(), .{ 1, 1, 0, 1 });
-    // game.PushRectOutline(renderGroup, .{0, 0, 0}, game.XY(cameraBoundsInMeters.GetDim()), .{1, 1, 1, 1});
-    game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, game.XY(simBounds.GetDim()), .{ 0, 1, 1, 1 });
-    game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, game.XY(simRegion.bounds.GetDim()), .{ 1, 0, 1, 1 });
-    // game.PushRectOutline(renderGroup, .{ 0, 0, 0 }, game.XY(simRegion.updatableBounds.GetDim()), .{ 1, 1, 1, 1 });
+    renderGroup.PushRectOutline(.{ 0, 0, 0 }, screenBounds.GetDim(), .{ 1, 1, 0, 1 });
+    // renderGroup.PushRectOutline( .{0, 0, 0}, game.XY(cameraBoundsInMeters.GetDim()), .{1, 1, 1, 1});
+    renderGroup.PushRectOutline(.{ 0, 0, 0 }, game.XY(simBounds.GetDim()), .{ 0, 1, 1, 1 });
+    renderGroup.PushRectOutline(.{ 0, 0, 0 }, game.XY(simRegion.bounds.GetDim()), .{ 1, 0, 1, 1 });
+    // renderGroup.PushRectOutline( .{ 0, 0, 0 }, game.XY(simRegion.updatableBounds.GetDim()), .{ 1, 1, 1, 1 });
 
     var entityIndex = @as(u32, 0);
     while (entityIndex < simRegion.entityCount) : (entityIndex += 1) {
@@ -1087,21 +1087,21 @@ pub export fn UpdateAndRender(
 
                     const heroSizeC = 2.5;
 
-                    game.PushBitmap(renderGroup, &gameState.shadow, heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    game.PushBitmap(renderGroup, &heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                    game.PushBitmap(renderGroup, &heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                    game.PushBitmap(renderGroup, &heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(&gameState.shadow, heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap(&heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(&heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(&heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     DrawHitpoints(entity, renderGroup);
                 },
 
                 .Wall => {
-                    game.PushBitmap(renderGroup, &gameState.tree, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(&gameState.tree, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Stairwell => {
-                    game.PushRect(renderGroup, .{ 0, 0, 0 }, entity.walkableDim, .{ 1, 0.5, 0, 1 });
-                    game.PushRect(renderGroup, .{ 0, 0, entity.walkableHeight }, entity.walkableDim, .{ 1, 1, 0, 1 });
+                    renderGroup.PushRect(.{ 0, 0, 0 }, entity.walkableDim, .{ 1, 0.5, 0, 1 });
+                    renderGroup.PushRect(.{ 0, 0, entity.walkableHeight }, entity.walkableDim, .{ 1, 1, 0, 1 });
                 },
 
                 .Sword => {
@@ -1116,8 +1116,8 @@ pub export fn UpdateAndRender(
                         // NOTE (Manav): invalid z position causes float overflow down the line when drawing bitmap because of zFudge,
                         // so not pushing bitmap when entity becomes non spatial
                     }
-                    game.PushBitmap(renderGroup, &gameState.shadow, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    game.PushBitmap(renderGroup, &gameState.sword, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(&gameState.shadow, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap(&gameState.sword, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Familiar => {
@@ -1155,13 +1155,13 @@ pub export fn UpdateAndRender(
                         entity.tBob -= 2 * platform.PI32;
                     }
                     const bobSin = game.Sin(2 * entity.tBob);
-                    game.PushBitmap(renderGroup, &gameState.shadow, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
-                    game.PushBitmap(renderGroup, &heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(&gameState.shadow, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
+                    renderGroup.PushBitmap(&heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
                 },
 
                 .Monstar => {
-                    game.PushBitmap(renderGroup, &gameState.shadow, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    game.PushBitmap(renderGroup, &heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(&gameState.shadow, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap(&heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     DrawHitpoints(entity, renderGroup);
                 },
@@ -1171,7 +1171,7 @@ pub export fn UpdateAndRender(
                         var volumeIndex = @as(u32, 0);
                         while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
                             const volume = entity.collision.volumes[volumeIndex];
-                            game.PushRectOutline(renderGroup, game.Sub(volume.offsetP, .{ 0, 0, 0.5 * game.Z(volume.dim) }), game.XY(volume.dim), .{ 0, 0.5, 1, 1 });
+                            renderGroup.PushRectOutline(game.Sub(volume.offsetP, .{ 0, 0, 0.5 * game.Z(volume.dim) }), game.XY(volume.dim), .{ 0, 0.5, 1, 1 });
                         }
                     }
                 },
@@ -1294,7 +1294,7 @@ pub export fn UpdateAndRender(
         // game.Saturation(renderGroup, 0.5 + 0.5 * game.Sin(10 * gameState.time));
     }
 
-    game.RenderGroupToOutput(renderGroup, drawBuffer);
+    renderGroup.RenderGroupToOutput(drawBuffer);
 
     game.EndSim(simRegion, gameState); // TODO (Manav): use defer
     game.EndTemporaryMemory(simMemory);
