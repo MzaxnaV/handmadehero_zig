@@ -43,8 +43,9 @@ pub const loaded_bitmap = struct {
     pitch: i32 = 0,
     memory: [*]u8 = undefined,
 
-    // Draw routines ----------------------------------------------------------------------------------------------------------------------
-
+    // Draw routines -----------------------------------------------------------------------------------------------------------------------
+    // TODO: (Manav) should these really exist here? 
+    
     pub fn DrawRectangleOutline(buffer: *const loaded_bitmap, vMin: hm.v2, vMax: hm.v2, colour: hm.v3, r: f32) void {
         DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMin) + r }, hm.ToV4(colour, 1));
         DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMax) - r }, .{ hm.X(vMax) + r, hm.Y(vMax) + r }, hm.ToV4(colour, 1));

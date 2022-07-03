@@ -194,8 +194,8 @@ fn AddGroundedEntity(gameState: *game.state, entityType: game.entity_type, p: ga
     return entity;
 }
 
-fn AddStandardRoom(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+fn AddStandardRoom(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
+    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Space, p, gameState.standardRoomCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Traversable));
@@ -203,8 +203,8 @@ fn AddStandardRoom(gameState: *game.state, absTileX: u32, absTileY: u32, absTile
     return entity;
 }
 
-fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
+    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Wall, p, gameState.wallCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
@@ -212,8 +212,8 @@ fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) 
     return entity;
 }
 
-fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
+    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Stairwell, p, gameState.stairCollision);
 
     game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
@@ -689,7 +689,7 @@ pub export fn UpdateAndRender(
         const screenBaseZ = @as(u32, 0);
         var screenX = screenBaseX;
         var screenY = screenBaseY;
-        var absTileZ = screenBaseZ;
+        var absTileZ = @as(i32, screenBaseZ);
 
         var doorLeft = false;
         var doorRight = false;
@@ -751,7 +751,7 @@ pub export fn UpdateAndRender(
                     if (shouldBeDoor) {
                         _ = AddWall(gameState, absTileX, absTileY, absTileZ);
                     } else if (createdZDoor) {
-                        if (((absTileZ % 2 != 0) and (tileX == 10) and (tileY == 5)) or ((absTileZ % 2 == 0) and (tileX == 4) and (tileY == 5))) {
+                        if (((@rem(absTileZ, 2) != 0) and (tileX == 10) and (tileY == 5)) or ((@rem(absTileZ, 2) == 0) and (tileX == 4) and (tileY == 5))) {
                             // TODO (Manav): absTileZ has integer overflow, tolerate it for now.
                             _ = AddStairs(gameState, absTileX, absTileY, if (doorDown) absTileZ - 1 else absTileZ);
                         }
