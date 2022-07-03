@@ -2,7 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 
 const intrinsics = @import("handmade_intrinsics.zig");
-const hi = @import("handmade_internals.zig");
+const hd = @import("handmade_data.zig");
 const hm = @import("handmade_math.zig");
 const hr = @import("handmade_random.zig");
 
@@ -137,7 +137,7 @@ test "rand" {
 test "handmade_misc" {
     var memRegion = [1]u8{0} ** 1024;
 
-    var mem: hi.memory_arena = undefined;
+    var mem: hd.memory_arena = undefined;
     mem.Initialize(1024, &memRegion);
     try testing.expectEqual(mem.used, 0);
 

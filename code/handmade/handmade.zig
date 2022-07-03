@@ -4,7 +4,7 @@ const platform = @import("handmade_platform");
 const game = struct {
     usingnamespace @import("handmade_entity.zig");
     usingnamespace @import("handmade_intrinsics.zig");
-    usingnamespace @import("handmade_internals.zig");
+    usingnamespace @import("handmade_data.zig");
     usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_random.zig");
     usingnamespace @import("handmade_sim_region.zig");
@@ -12,10 +12,11 @@ const game = struct {
     usingnamespace @import("handmade_world.zig");
 };
 
-// constants ------------------------------------------------------------------------------------------------------------------------------
+const handmade_internal = platform.handmade_internal;
+
+// build constants ------------------------------------------------------------------------------------------------------------------------
 
 const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
-const HANDMADE_INTERNAL = @import("build_consts").HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
 
@@ -49,7 +50,7 @@ fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneH
 /// Defaults: ```alignX =  , topDownAlignY = ```
 fn DEBUGLoadBMPDefaultAligned(
     thread: *platform.thread_context,
-    ReadEntireFile: platform.debug_platform_read_entire_file,
+    ReadEntireFile: handmade_internal.debug_platform_read_entire_file,
     fileName: [*:0]const u8,
 ) game.loaded_bitmap {
     var result = DEBUGLoadBMP(thread, ReadEntireFile, fileName, 0, 0);
@@ -60,7 +61,7 @@ fn DEBUGLoadBMPDefaultAligned(
 
 fn DEBUGLoadBMP(
     thread: *platform.thread_context,
-    ReadEntireFile: platform.debug_platform_read_entire_file,
+    ReadEntireFile: handmade_internal.debug_platform_read_entire_file,
     fileName: [*:0]const u8,
     alignX: i32,
     topDownAlignY: i32,

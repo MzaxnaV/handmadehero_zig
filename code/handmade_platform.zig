@@ -1,5 +1,10 @@
 const f32_max = @import("std").math.f32_max;
 
+/// `False` - slow code not allowed, `True` - slow code welcome.
+const HANDMADE_SLOW = @import("build_consts").HANDMADE_SLOW;
+/// `False` - Build for public release, `True` - Build for developer only
+const HANDMADE_INTERNAL = @import("build_consts").HANDMADE_INTERNAL;
+
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
 pub const PI32 = 3.14159265359;
@@ -8,7 +13,26 @@ pub const BITMAP_BYTES_PER_PIXEL = 4;
 
 pub const F32MAXIMUM = f32_max;
 
-// platform data types -----------------------------------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------------------------------------------
+
+pub const handmade_slow = if (HANDMADE_SLOW) struct {
+    pub fn Assert(expression: bool) void {
+        if (!expression) unreachable;
+    }
+} else {};
+
+pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
+    pub const debug_read_file_result = struct {
+        contentSize: u32 = 0,
+        contents: [*]u8 = undefined,
+    };
+
+    pub const debug_platform_free_file_memory = fn (*thread_context, *anyopaque) void;
+    pub const debug_platform_read_entire_file = fn (*thread_context, [*:0]const u8) debug_read_file_result;
+    pub const debug_platform_write_entire_file = fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool;
+} else {};
+
+// platform data types --------------------------------------------------------------------------------------------------------------------
 
 pub const memory_index = usize;
 
@@ -78,8 +102,6 @@ pub const input = struct {
     controllers: [CONTROLLERS]controller_input = [1]controller_input{controller_input{}} ** CONTROLLERS,
 };
 
-pub const debug_platform_read_entire_file = fn (*thread_context, [*:0]const u8) debug_read_file_result;
-
 pub const memory = struct {
     isInitialized: bool = false,
     permanentStorageSize: u64,
@@ -87,14 +109,9 @@ pub const memory = struct {
     transientStorageSize: u64,
     transientStorage: [*]u8,
 
-    DEBUGPlatformFreeFileMemory: fn (*thread_context, *anyopaque) void = undefined,
-    DEBUGPlatformReadEntireFile: debug_platform_read_entire_file = undefined,
-    DEBUGPlatformWriteEntireFile: fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool = undefined,
-};
-
-pub const debug_read_file_result = struct {
-    contentSize: u32 = 0,
-    contents: [*]u8 = undefined,
+    DEBUGPlatformFreeFileMemory: handmade_internal.debug_platform_free_file_memory = undefined,
+    DEBUGPlatformReadEntireFile: handmade_internal.debug_platform_read_entire_file = undefined,
+    DEBUGPlatformWriteEntireFile: handmade_internal.debug_platform_write_entire_file = undefined,
 };
 
 // functions ------------------------------------------------------------------------------------------------------------------------------

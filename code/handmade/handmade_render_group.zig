@@ -3,7 +3,7 @@ const assert = std.debug.assert;
 
 const platform = @import("handmade_platform");
 
-const hi = @import("handmade_internals.zig");
+const hd = @import("handmade_data.zig");
 const hm = @import("handmade_math.zig");
 const hintrinsics = @import("handmade_intrinsics.zig");
 
@@ -44,8 +44,8 @@ pub const loaded_bitmap = struct {
     memory: [*]u8 = undefined,
 
     // Draw routines -----------------------------------------------------------------------------------------------------------------------
-    // TODO: (Manav) should these really exist here? 
-    
+    // TODO: (Manav) should these really exist here?
+
     pub fn DrawRectangleOutline(buffer: *const loaded_bitmap, vMin: hm.v2, vMax: hm.v2, colour: hm.v3, r: f32) void {
         DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMin) - r }, .{ hm.X(vMax) + r, hm.Y(vMin) + r }, hm.ToV4(colour, 1));
         DrawRectangle(buffer, .{ hm.X(vMin) - r, hm.Y(vMax) - r }, .{ hm.X(vMax) + r, hm.Y(vMax) + r }, hm.ToV4(colour, 1));
@@ -575,7 +575,7 @@ pub const render_group = struct {
     pushBufferBase: [*]u8,
 
     /// Create render group using the memory `arena`, initialize it and return a pointer to it.
-    pub fn Allocate(arena: *hi.memory_arena, maxPushBufferSize: u32, resolutionPixelsX: u32, resolutionPixelsY: u32) *Self {
+    pub fn Allocate(arena: *hd.memory_arena, maxPushBufferSize: u32, resolutionPixelsX: u32, resolutionPixelsY: u32) *Self {
         _ = resolutionPixelsY;
         var result: *render_group = arena.PushStruct(render_group);
         result.pushBufferBase = arena.PushSize(@alignOf(u8), maxPushBufferSize);

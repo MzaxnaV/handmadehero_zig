@@ -1,7 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const hi = @import("handmade_internals.zig");
+const hd = @import("handmade_data.zig");
 const hm = @import("handmade_math.zig");
 const he = @import("handmade_entity.zig");
 const hsr = @import("handmade_sim_region.zig");
@@ -85,7 +85,7 @@ pub inline fn AreInSameChunk(w: *const world, a: *const world_position, b: *cons
     return result;
 }
 
-pub fn GetWorldChunk(memoryArena: ?*hi.memory_arena, w: *world, chunkX: i32, chunkY: i32, chunkZ: i32) ?*world_chunk {
+pub fn GetWorldChunk(memoryArena: ?*hd.memory_arena, w: *world, chunkX: i32, chunkY: i32, chunkZ: i32) ?*world_chunk {
     assert(chunkX > -TILE_CHUNK_SAFE_MARGIN);
     assert(chunkY > -TILE_CHUNK_SAFE_MARGIN);
     assert(chunkZ > -TILE_CHUNK_SAFE_MARGIN);
@@ -179,7 +179,7 @@ pub inline fn CenteredChunkPoint(chunkX: i32, chunkY: i32, chunkZ: i32) world_po
 //     return result;
 // }
 
-pub fn ChangeEntityLocationRaw(arena: *hi.memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*const world_position, newP: ?*const world_position) void {
+pub fn ChangeEntityLocationRaw(arena: *hd.memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*const world_position, newP: ?*const world_position) void {
     assert((oldP == null) or IsValid(oldP.?.*));
     assert((newP == null) or IsValid(newP.?.*));
 
@@ -246,7 +246,7 @@ pub fn ChangeEntityLocationRaw(arena: *hi.memory_arena, w: *world, lowEntityInde
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
-pub fn ChangeEntityLocation(arena: *hi.memory_arena, w: *world, lowEntityIndex: u32, lowEntity: *hi.low_entity, newPInit: world_position) void {
+pub fn ChangeEntityLocation(arena: *hd.memory_arena, w: *world, lowEntityIndex: u32, lowEntity: *hd.low_entity, newPInit: world_position) void {
     var oldP: ?*const world_position = null;
     var newP: ?*const world_position = null;
 
