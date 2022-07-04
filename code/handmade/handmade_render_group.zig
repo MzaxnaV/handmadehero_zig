@@ -5,12 +5,7 @@ const platform = @import("handmade_platform");
 
 const hd = @import("handmade_data.zig");
 const hm = @import("handmade_math.zig");
-const hintrinsics = @import("handmade_intrinsics.zig");
-
-const Round = hintrinsics.RoundF32ToInt;
-const Floor = hintrinsics.FloorF32ToI32;
-const Ceil = hintrinsics.CeilF32ToI32;
-const SquareRoot = hintrinsics.SquareRoot;
+const hi = @import("handmade_intrinsics.zig");
 
 // doc ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -60,10 +55,10 @@ pub const loaded_bitmap = struct {
         const b = hm.B(colour);
         const a = hm.A(colour);
 
-        var minX = Round(i32, hm.X(vMin));
-        var minY = Round(i32, hm.Y(vMin));
-        var maxX = Round(i32, hm.X(vMax));
-        var maxY = Round(i32, hm.Y(vMax));
+        var minX = hi.RoundF32ToInt(i32, hm.X(vMin));
+        var minY = hi.RoundF32ToInt(i32, hm.Y(vMin));
+        var maxX = hi.RoundF32ToInt(i32, hm.X(vMax));
+        var maxY = hi.RoundF32ToInt(i32, hm.Y(vMax));
 
         if (minX < 0) {
             minX = 0;
@@ -82,10 +77,10 @@ pub const loaded_bitmap = struct {
         }
 
         // zig fmt: off
-        const colour32: u32 = (Round(u32, a * 255.0) << 24) | 
-                            (Round(u32, r * 255.0) << 16) | 
-                            (Round(u32, g * 255.0) << 8) | 
-                            (Round(u32, b * 255) << 0);
+        const colour32: u32 = (hi.RoundF32ToInt(u32, a * 255.0) << 24) | 
+                            (hi.RoundF32ToInt(u32, r * 255.0) << 16) | 
+                            (hi.RoundF32ToInt(u32, g * 255.0) << 8) | 
+                            (hi.RoundF32ToInt(u32, b * 255) << 0);
         // zig fmt: on
 
         var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, minX) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, minY * buffer.pitch);
@@ -109,6 +104,9 @@ pub const loaded_bitmap = struct {
                             pixelsToMeters: f32) void
     // zig fmt: on
     {
+        platform.BEGIN_TIMED_BLOCK(.DrawRectangleSlowly);
+        defer platform.END_TIMED_BLOCK(.DrawRectangleSlowly);
+
         const colour = hm.ToV4(hm.Scale(hm.XYZ(notPremultipliedColour), hm.A(notPremultipliedColour)), hm.A(notPremultipliedColour));
 
         const xAxisLength = hm.Length(xAxis);
@@ -122,10 +120,10 @@ pub const loaded_bitmap = struct {
         const invYAxisLengthSq = 1 / hm.LengthSq(yAxis);
 
         // zig fmt: off
-        const colour32: u32 = (Round(u32, hm.A(colour) * 255.0) << 24) | 
-                            (Round(u32, hm.R(colour) * 255.0) << 16) | 
-                            (Round(u32, hm.G(colour) * 255.0) << 8) | 
-                            (Round(u32, hm.B(colour) * 255.0) << 0);
+        const colour32: u32 = (hi.RoundF32ToInt(u32, hm.A(colour) * 255.0) << 24) | 
+                            (hi.RoundF32ToInt(u32, hm.R(colour) * 255.0) << 16) | 
+                            (hi.RoundF32ToInt(u32, hm.G(colour) * 255.0) << 8) | 
+                            (hi.RoundF32ToInt(u32, hm.B(colour) * 255.0) << 0);
         // zig fmt: on
 
         const widthMax = buffer.width - 1;
@@ -149,10 +147,10 @@ pub const loaded_bitmap = struct {
         const p: [4]hm.v2 = .{ origin, hm.Add(origin, xAxis), hm.Add(origin, hm.Add(xAxis, yAxis)), hm.Add(origin, yAxis) };
 
         for (p) |testP| {
-            const floorX = Floor(hm.X(testP));
-            const ceilX = Ceil(hm.X(testP));
-            const floorY = Floor(hm.Y(testP));
-            const ceilY = Ceil(hm.Y(testP));
+            const floorX = hi.FloorF32ToI32(hm.X(testP));
+            const ceilX = hi.CeilF32ToI32(hm.X(testP));
+            const floorY = hi.FloorF32ToI32(hm.Y(testP));
+            const ceilY = hi.CeilF32ToI32(hm.Y(testP));
 
             if (xMin > floorX) xMin = floorX;
             if (yMin > floorY) yMin = floorY;
@@ -172,6 +170,9 @@ pub const loaded_bitmap = struct {
             var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
             var x = xMin;
             while (x <= xMax) : (x += 1) {
+                platform.BEGIN_TIMED_BLOCK(.TestPixel);
+                defer platform.END_TIMED_BLOCK(.TestPixel);
+
                 if (NOT_IGNORE) {
                     const pixelP = hm.V2(x, y);
                     const d = hm.Sub(pixelP, origin);
@@ -182,6 +183,9 @@ pub const loaded_bitmap = struct {
                     const edge3 = hm.Inner(hm.Sub(d, yAxis), hm.Perp(yAxis));
 
                     if (edge0 < 0 and edge1 < 0 and edge2 < 0 and edge3 < 0) {
+                        platform.BEGIN_TIMED_BLOCK(.FillPixel);
+                        defer platform.END_TIMED_BLOCK(.FillPixel);
+
                         const screenSpaceUV = hm.v2{ @intToFloat(f32, x) * invWidthMax, fixedCastY };
 
                         const zDiff = pixelsToMeters * (@intToFloat(f32, y) - originY);
@@ -345,8 +349,8 @@ pub const loaded_bitmap = struct {
     }
 
     pub fn DrawBitmap(buffer: *const loaded_bitmap, bitmap: *const loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
-        var minX = Round(i32, realX);
-        var minY = Round(i32, realY);
+        var minX = hi.RoundF32ToInt(i32, realX);
+        var minY = hi.RoundF32ToInt(i32, realY);
         var maxX = minX + bitmap.width;
         var maxY = minY + bitmap.height;
 
@@ -419,8 +423,8 @@ pub const loaded_bitmap = struct {
     }
 
     pub fn DrawMatte(buffer: *const loaded_bitmap, bitmap: *const loaded_bitmap, realX: f32, realY: f32, cAlpha: f32) void {
-        var minX = Round(i32, realX);
-        var minY = Round(i32, realY);
+        var minX = hi.RoundF32ToInt(i32, realX);
+        var minY = hi.RoundF32ToInt(i32, realY);
         var maxX = minX + bitmap.width;
         var maxY = minY + bitmap.height;
 
@@ -694,6 +698,13 @@ pub const render_group = struct {
     }
 
     pub fn RenderGroupToOutput(self: *Self, outputTarget: *loaded_bitmap) void {
+        platform.BEGIN_TIMED_BLOCK(
+            .RenderGroupToOutput,
+        );
+        defer platform.END_TIMED_BLOCK(
+            .RenderGroupToOutput,
+        );
+
         const screenDim = hm.v2{
             @intToFloat(f32, outputTarget.width),
             @intToFloat(f32, outputTarget.height),
@@ -810,9 +821,9 @@ pub inline fn SRGB255ToLinear1(c: hm.v4) hm.v4 {
 pub inline fn Linear1ToSRGB255(c: hm.v4) hm.v4 {
     const one255 = 255;
     const result = hm.v4{
-        one255 * SquareRoot(hm.R(c)),
-        one255 * SquareRoot(hm.G(c)),
-        one255 * SquareRoot(hm.B(c)),
+        one255 * hi.SquareRoot(hm.R(c)),
+        one255 * hi.SquareRoot(hm.G(c)),
+        one255 * hi.SquareRoot(hm.B(c)),
         one255 * hm.A(c),
     };
 

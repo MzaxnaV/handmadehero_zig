@@ -30,6 +30,51 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     pub const debug_platform_free_file_memory = fn (*thread_context, *anyopaque) void;
     pub const debug_platform_read_entire_file = fn (*thread_context, [*:0]const u8) debug_read_file_result;
     pub const debug_platform_write_entire_file = fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool;
+
+    // move this to someplace proper
+    inline fn __rdtsc() u64 {
+        var low: u64 = undefined;
+        var high: u64 = undefined;
+
+        asm volatile ("rdtsc"
+            : [low] "={eax}" (low),
+              [high] "={edx}" (high),
+        );
+
+        return (high << 32) | low;
+    }
+
+    pub const debug_cycle_counter_type = enum(u32) {
+        UpdateAndRender = 0,
+        RenderGroupToOutput,
+        DrawRectangleSlowly,
+        TestPixel,
+        FillPixel,
+    };
+
+    pub const debug_cycle_counter = struct {
+        t: debug_cycle_counter_type = undefined,
+        startCyleCount: u64 = 0,
+
+        cycleCount: u64 = 0,
+        hitCount: u32 = 0,
+    };
+
+    pub var debugGlobalMemory: ?*memory = null;
+
+    inline fn BeginTimedBlock(comptime id: debug_cycle_counter_type) void {
+        if (debugGlobalMemory) |m| {
+            m.counters[@enumToInt(id)].t = id;
+            m.counters[@enumToInt(id)].startCyleCount = __rdtsc();
+        }
+    }
+
+    inline fn EndTimedBlock(comptime id: debug_cycle_counter_type) void {
+        if (debugGlobalMemory) |m| {
+            m.counters[@enumToInt(id)].cycleCount += __rdtsc() - m.counters[@enumToInt(id)].startCyleCount;
+            m.counters[@enumToInt(id)].hitCount += 1;
+        }
+    }
 } else {};
 
 // platform data types --------------------------------------------------------------------------------------------------------------------
@@ -102,6 +147,8 @@ pub const input = struct {
     controllers: [CONTROLLERS]controller_input = [1]controller_input{controller_input{}} ** CONTROLLERS,
 };
 
+const len = if (HANDMADE_INTERNAL) @typeInfo(handmade_internal.debug_cycle_counter_type).Enum.fields.len else 0;
+
 pub const memory = struct {
     isInitialized: bool = false,
     permanentStorageSize: u64,
@@ -112,6 +159,9 @@ pub const memory = struct {
     DEBUGPlatformFreeFileMemory: handmade_internal.debug_platform_free_file_memory = undefined,
     DEBUGPlatformReadEntireFile: handmade_internal.debug_platform_read_entire_file = undefined,
     DEBUGPlatformWriteEntireFile: handmade_internal.debug_platform_write_entire_file = undefined,
+
+    // TODO (Manav): make declaration dependent on HANDMADE_INTERNAL
+    counters: [len]handmade_internal.debug_cycle_counter = [1]handmade_internal.debug_cycle_counter{.{}} ** len,
 };
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
@@ -128,6 +178,9 @@ pub inline fn GigaBytes(comptime value: comptime_int) comptime_int {
 pub inline fn TeraBytes(comptime value: comptime_int) comptime_int {
     return 1024 * GigaBytes(value);
 }
+
+pub const BEGIN_TIMED_BLOCK = handmade_internal.BeginTimedBlock; // TODO (Manav): make it portable
+pub const END_TIMED_BLOCK = handmade_internal.EndTimedBlock; // TODO (Manav): make it portable
 
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 

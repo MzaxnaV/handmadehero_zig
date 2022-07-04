@@ -822,6 +822,29 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platfor
     }
 }
 
+fn HandleDebugCycleCounters(gameMemory: *platform.memory) void {
+    if (HANDMADE_INTERNAL) {
+        _ = win32.OutputDebugStringW(win32.L("DEBUG CYCLE COUNTS:\n"));
+        for (gameMemory.counters) |*counter| {
+            if (counter.hitCount > 0) {
+                var textbuffer = [1]u16{0} ** 256;
+                _ = win32.extra.wsprintfW(
+                    &textbuffer,
+                    win32.L("%S - %I64ucy %dh %I64ucy/h\n"),
+                    @tagName(counter.t).ptr,
+                    counter.cycleCount,
+                    counter.hitCount,
+                    counter.cycleCount / counter.hitCount,
+                );
+                _ = win32.OutputDebugStringW(&textbuffer);
+
+                counter.hitCount = 0;
+                counter.cycleCount = 0;
+            }
+        }
+    }
+}
+
 // inline defs ----------------------------------------------------------------------------------------------------------------------------
 
 inline fn Win32GetWallClock() win32.LARGE_INTEGER {
@@ -845,12 +868,12 @@ inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) vo
     // }
 }
 
-// NOTE (Manav): Read this: https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=rdtsc&expand=375&ig_expand=465,463,5629,5629
+// TODO (Manav): Do something about this, rdtsc already exists in handmade_internal
 inline fn rdtsc() u64 {
     var low: u64 = undefined;
     var high: u64 = undefined;
 
-    asm ("rdtsc"
+    asm volatile ("rdtsc"
         : [low] "={eax}" (low),
           [high] "={edx}" (high),
     );
@@ -1289,6 +1312,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                             if (gameCode.UpdateAndRender) |UpdateAndRender| {
                                 UpdateAndRender(&thread, &gameMemory, newInput, &buffer);
+                                HandleDebugCycleCounters(&gameMemory);
                             }
 
                             const audioWallClock = Win32GetWallClock();
