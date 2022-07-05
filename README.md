@@ -1,6 +1,6 @@
 # Handmade Hero zig
 
-Handmade Hero personal repo written in zig (0.9.1)
+Handmade Hero personal repo written in zig (0.9.1). I am try to be close to what Casey does, with small changes where it makes sense and it better organizes the code overall.
 
 # Debugging zig in vscode (cppvsdbg)
 Set `debug.allowBreakpointsEverywhere` to `true` in vscode settings so you can add breakpoints by clicking on the [editor margin](https://code.visualstudio.com/docs/editor/debugging#_breakpoints). 

@@ -310,6 +310,221 @@ pub const loaded_bitmap = struct {
         }
     }
 
+    // zig fmt: off
+    pub fn DrawRectangleHopefullyQuickly(buffer: *const loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, 
+                                        notPremultipliedColour: hm.v4, texture: *const loaded_bitmap, pixelsToMeters: f32) void
+    // zig fmt: on
+    {
+        platform.BEGIN_TIMED_BLOCK(.DrawRectangleHopefullyQuickly);
+        defer platform.END_TIMED_BLOCK(.DrawRectangleHopefullyQuickly);
+
+        _ = pixelsToMeters;
+        const colour = hm.ToV4(hm.Scale(hm.XYZ(notPremultipliedColour), hm.A(notPremultipliedColour)), hm.A(notPremultipliedColour));
+
+        const xAxisLength = hm.Length(xAxis);
+        const yAxisLength = hm.Length(yAxis);
+        _ = xAxisLength;
+        _ = yAxisLength;
+
+        // const nXAxis = hm.Scale(xAxis, yAxisLength / xAxisLength);
+        // _ = nXAxis;
+        // const nYAxis = hm.Scale(yAxis, xAxisLength / yAxisLength);
+        // _ = nYAxis;
+        // const nZScale = 0.5 * (xAxisLength + yAxisLength);
+        // _ = nZScale;
+
+        const invXAxisLengthSq = 1 / hm.LengthSq(xAxis);
+        const invYAxisLengthSq = 1 / hm.LengthSq(yAxis);
+
+        // zig fmt: off
+        const colour32: u32 = (hi.RoundF32ToInt(u32, hm.A(colour) * 255.0) << 24) | 
+                            (hi.RoundF32ToInt(u32, hm.R(colour) * 255.0) << 16) | 
+                            (hi.RoundF32ToInt(u32, hm.G(colour) * 255.0) << 8) | 
+                            (hi.RoundF32ToInt(u32, hm.B(colour) * 255.0) << 0);
+        // zig fmt: on
+        _ = colour32;
+
+        const widthMax = buffer.width - 1;
+        const heightMax = buffer.height - 1;
+
+        const invWidthMax = 1.0 / @intToFloat(f32, widthMax);
+        _ = invWidthMax;
+        const invHeightMax = 1.0 / @intToFloat(f32, heightMax);
+        _ = invHeightMax;
+
+        const originZ = 0;
+        _ = originZ;
+        const originY = hm.Y(hm.Add(origin, hm.Scale(hm.Add(xAxis, yAxis), 0.5)));
+        const fixedCastY = invHeightMax * originY;
+        _ = fixedCastY;
+
+        var xMin = widthMax;
+        var xMax = @as(i32, 0);
+
+        var yMin = heightMax;
+        var yMax = @as(i32, 0);
+
+        const p: [4]hm.v2 = .{ origin, hm.Add(origin, xAxis), hm.Add(origin, hm.Add(xAxis, yAxis)), hm.Add(origin, yAxis) };
+
+        for (p) |testP| {
+            const floorX = hi.FloorF32ToI32(hm.X(testP));
+            const ceilX = hi.CeilF32ToI32(hm.X(testP));
+            const floorY = hi.FloorF32ToI32(hm.Y(testP));
+            const ceilY = hi.CeilF32ToI32(hm.Y(testP));
+
+            if (xMin > floorX) xMin = floorX;
+            if (yMin > floorY) yMin = floorY;
+            if (xMax < ceilX) xMax = ceilX;
+            if (yMax < ceilY) yMax = ceilY;
+        }
+
+        if (xMin < 0) xMin = 0;
+        if (yMin < 0) yMin = 0;
+        if (xMax > widthMax) xMax = widthMax;
+        if (yMax > heightMax) yMax = heightMax;
+
+        const nXAxis = hm.Scale(xAxis, invXAxisLengthSq);
+        const nYAxis = hm.Scale(yAxis, invYAxisLengthSq);
+
+        const inv255 = 1.0 / 255.0;
+        const one255 = 255;
+
+        var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, xMin) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, yMin * buffer.pitch);
+
+        var y = yMin;
+        while (y <= yMax) : (y += 1) {
+            var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
+            var x = xMin;
+            while (x <= xMax) : (x += 1) {
+                platform.BEGIN_TIMED_BLOCK(.TestPixel);
+                defer platform.END_TIMED_BLOCK(.TestPixel);
+
+                const pixelP = hm.V2(x, y);
+                const d = hm.Sub(pixelP, origin);
+
+                const u = hm.Inner(d, nXAxis);
+                const v = hm.Inner(d, nYAxis);
+
+                if (u >= 0 and u <= 1 and v >= 0 and v <= 1) {
+                    platform.BEGIN_TIMED_BLOCK(.FillPixel);
+                    defer platform.END_TIMED_BLOCK(.FillPixel);
+
+                    const tX = (u * @intToFloat(f32, texture.width - 2));
+                    const tY = (v * @intToFloat(f32, texture.height - 2));
+
+                    const X: i32 = @floatToInt(i32, tX);
+                    const Y: i32 = @floatToInt(i32, tY);
+
+                    const fX = tX - @intToFloat(f32, X);
+                    const fY = tY - @intToFloat(f32, Y);
+
+                    assert((X >= 0) and (X < texture.width));
+                    assert((Y >= 0) and (Y < texture.height));
+
+                    const ptrOffset = Y * texture.pitch + X * @sizeOf(u32);
+                    const texelPtr = if (ptrOffset > 0) texture.memory + @intCast(usize, ptrOffset) else texture.memory - @intCast(usize, -ptrOffset);
+                    const pitchOffset = if (texture.pitch > 0) texelPtr + @intCast(usize, texture.pitch) else texelPtr - @intCast(usize, -texture.pitch);
+
+                    var samplea = @ptrCast(*align(@alignOf(u8)) u32, texelPtr).*;
+                    var sampleb = @ptrCast(*align(@alignOf(u8)) u32, texelPtr + @sizeOf(u32)).*;
+                    var samplec = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset).*;
+                    var sampled = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset + @sizeOf(u32)).*;
+
+                    var texelAr = @intToFloat(f32, ((samplea >> 16) & 0xff));
+                    var texelAg = @intToFloat(f32, ((samplea >> 8) & 0xff));
+                    var texelAb = @intToFloat(f32, ((samplea >> 0) & 0xff));
+                    var texelAa = @intToFloat(f32, ((samplea >> 24) & 0xff));
+
+                    var texelBr = @intToFloat(f32, ((sampleb >> 16) & 0xff));
+                    var texelBg = @intToFloat(f32, ((sampleb >> 8) & 0xff));
+                    var texelBb = @intToFloat(f32, ((sampleb >> 0) & 0xff));
+                    var texelBa = @intToFloat(f32, ((sampleb >> 24) & 0xff));
+
+                    var texelCr = @intToFloat(f32, ((samplec >> 16) & 0xff));
+                    var texelCg = @intToFloat(f32, ((samplec >> 8) & 0xff));
+                    var texelCb = @intToFloat(f32, ((samplec >> 0) & 0xff));
+                    var texelCa = @intToFloat(f32, ((samplec >> 24) & 0xff));
+
+                    var texelDr = @intToFloat(f32, ((sampled >> 16) & 0xff));
+                    var texelDg = @intToFloat(f32, ((sampled >> 8) & 0xff));
+                    var texelDb = @intToFloat(f32, ((sampled >> 0) & 0xff));
+                    var texelDa = @intToFloat(f32, ((sampled >> 24) & 0xff));
+
+                    texelAr = hm.Square(inv255 * texelAr);
+                    texelAg = hm.Square(inv255 * texelAg);
+                    texelAb = hm.Square(inv255 * texelAb);
+                    texelAa = inv255 * texelAa;
+
+                    texelBr = hm.Square(inv255 * texelBr);
+                    texelBg = hm.Square(inv255 * texelBg);
+                    texelBb = hm.Square(inv255 * texelBb);
+                    texelBa = inv255 * texelBa;
+
+                    texelCr = hm.Square(inv255 * texelCr);
+                    texelCg = hm.Square(inv255 * texelCg);
+                    texelCb = hm.Square(inv255 * texelCb);
+                    texelCa = inv255 * texelCa;
+
+                    texelDr = hm.Square(inv255 * texelDr);
+                    texelDg = hm.Square(inv255 * texelDg);
+                    texelDb = hm.Square(inv255 * texelDb);
+                    texelDa = inv255 * texelDa;
+
+                    const ifX = 1 - fX;
+                    const ifY = 1 - fY;
+
+                    const l0 = ifY * ifX;
+                    const l1 = ifY * fX;
+                    const l2 = fY * ifX;
+                    const l3 = fY * fX;
+
+                    var texelr = l0 * texelAr + l1 * texelBr + l2 * texelCr + l3 * texelDr;
+                    var texelg = l0 * texelAg + l1 * texelBg + l2 * texelCg + l3 * texelDg;
+                    var texelb = l0 * texelAb + l1 * texelBb + l2 * texelCb + l3 * texelDb;
+                    var texela = l0 * texelAa + l1 * texelBa + l2 * texelCa + l3 * texelDa;
+
+                    texelr = texelr * hm.R(colour);
+                    texelg = texelg * hm.G(colour);
+                    texelb = texelb * hm.B(colour);
+                    texela = texela * hm.A(colour);
+
+                    texelr = hm.Clampf01(texelr);
+                    texelg = hm.Clampf01(texelg);
+                    texelb = hm.Clampf01(texelb);
+
+                    var destr = @intToFloat(f32, ((pixel[0] >> 16) & 0xff));
+                    var destg = @intToFloat(f32, ((pixel[0] >> 8) & 0xff));
+                    var destb = @intToFloat(f32, ((pixel[0] >> 0) & 0xff));
+                    var desta = @intToFloat(f32, ((pixel[0] >> 24) & 0xff));
+
+                    destr = hm.Square(inv255 * destr);
+                    destg = hm.Square(inv255 * destg);
+                    destb = hm.Square(inv255 * destb);
+                    desta = inv255 * desta;
+
+                    const invTexelA = 1 - texela;
+                    var blendedr = invTexelA * destr + texelr;
+                    var blendedg = invTexelA * destg + texelg;
+                    var blendedb = invTexelA * destb + texelb;
+                    var blendeda = invTexelA * desta + texela;
+
+                    blendedr = one255 * hi.SquareRoot(blendedr);
+                    blendedg = one255 * hi.SquareRoot(blendedg);
+                    blendedb = one255 * hi.SquareRoot(blendedb);
+                    blendeda = one255 * blendeda;
+
+                    pixel.* = (@floatToInt(u32, blendeda + 0.5) << 24) |
+                        (@floatToInt(u32, blendedr + 0.5) << 16) |
+                        (@floatToInt(u32, blendedg + 0.5) << 8) |
+                        (@floatToInt(u32, blendedb + 0.5) << 0);
+                }
+
+                pixel += 1;
+            }
+            row += @intCast(u32, buffer.pitch);
+        }
+    }
+
     pub fn ChangeSaturation(buffer: *const loaded_bitmap, level: f32) void {
         var destRow = buffer.memory;
 
@@ -736,16 +951,12 @@ pub const render_group = struct {
                     if (!NOT_IGNORE) {
                         outputTarget.DrawBitmap(entry.bitmap, hm.X(basis.p), hm.Y(basis.p), hm.A(entry.colour));
                     } else {
-                        outputTarget.DrawRectangleSlowly(
+                        outputTarget.DrawRectangleHopefullyQuickly(
                             basis.p,
                             hm.Scale(hm.V2(hm.X(entry.size), 0), basis.scale),
                             hm.Scale(hm.V2(0, hm.Y(entry.size)), basis.scale),
                             entry.colour,
                             entry.bitmap,
-                            null,
-                            null,
-                            null,
-                            null,
                             pixelsToMeters,
                         );
                     }

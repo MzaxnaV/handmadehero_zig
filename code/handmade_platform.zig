@@ -47,6 +47,7 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     pub const debug_cycle_counter_type = enum(u32) {
         UpdateAndRender = 0,
         RenderGroupToOutput,
+        DrawRectangleHopefullyQuickly,
         DrawRectangleSlowly,
         TestPixel,
         FillPixel,
