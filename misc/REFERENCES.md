@@ -10,17 +10,22 @@ Collection of references, not all are realted to Handmade Hero.
 
 ## F
 - [Fabian Giesen blog](https://fgiesen.wordpress.com/)
+- [Floating-Point Arithmetic, What Every Computer Scientist Should Know About Floating-Point Arithmetic](https://docs.oracle.com/cd/E19957-01/800-7895/800-7895.pdf)
 
 ## H
+- [Hardware Surveys, Steam](https://store.steampowered.com/hwsurvey/)
 - [HDR Lighting (John Hable, video)](https://www.gdcvault.com/play/1012351/Uncharted-2-HDR), [pdf](https://www.slideshare.net/naughty_dog/lighting-shading-by-john-hable)
 
 ## I 
-- [Intrinsics Guide, Intel](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
-- [Integer Hash Function, Thomas Wang](http://web.archive.org/web/20071223173210/http://www.concentric.net/~Ttwang/tech/inthash.htm)
 - [Inline Assembly, Brennan's Guide to Inline Assembly](http://www.delorie.com/djgpp/doc/brennan/brennan_att_inline_djgpp.html)
+- [Integer Hash Function, Thomas Wang](http://web.archive.org/web/20071223173210/http://www.concentric.net/~Ttwang/tech/inthash.htm)
+- [Intrinsics Guide, Intel](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
 
 ## M
 - [MegaTextures](https://silverspaceship.com/src/svt/)
+
+## N
+- [Numerical Methods, Forman S. Acton books](https://www.amazon.com/Forman-S-Acton/e/B001IYTXGY/)
 
 ## O
 - [OpenGL Tutorial, Arcsynthesis archieved](https://www.roiatalla.com/public/arcsynthesis/html/index.html)

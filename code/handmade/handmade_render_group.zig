@@ -344,8 +344,8 @@ pub const loaded_bitmap = struct {
         // zig fmt: on
         _ = colour32;
 
-        const widthMax = buffer.width - 1;
-        const heightMax = buffer.height - 1;
+        const widthMax = (buffer.width - 1) - 3;
+        const heightMax = (buffer.height - 1) - 3;
 
         const invWidthMax = 1.0 / @intToFloat(f32, widthMax);
         _ = invWidthMax;
@@ -394,132 +394,181 @@ pub const loaded_bitmap = struct {
         var y = yMin;
         while (y <= yMax) : (y += 1) {
             var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
-            var x = xMin;
-            while (x <= xMax) : (x += 1) {
+            var xi = xMin;
+            while (xi <= xMax) : (xi += 4) {
                 platform.BEGIN_TIMED_BLOCK(.TestPixel);
                 defer platform.END_TIMED_BLOCK(.TestPixel);
 
-                const pixelP = hm.V2(x, y);
-                const d = hm.Sub(pixelP, origin);
+                const f32x4 = [4]f32; // @Vector(4, f32);
 
-                const u = hm.Inner(d, nXAxis);
-                const v = hm.Inner(d, nYAxis);
+                var texelAr: f32x4 = .{ 0, 0, 0, 0 };
+                var texelAg: f32x4 = .{ 0, 0, 0, 0 };
+                var texelAb: f32x4 = .{ 0, 0, 0, 0 };
+                var texelAa: f32x4 = .{ 0, 0, 0, 0 };
 
-                if (u >= 0 and u <= 1 and v >= 0 and v <= 1) {
-                    platform.BEGIN_TIMED_BLOCK(.FillPixel);
-                    defer platform.END_TIMED_BLOCK(.FillPixel);
+                var texelBr: f32x4 = .{ 0, 0, 0, 0 };
+                var texelBg: f32x4 = .{ 0, 0, 0, 0 };
+                var texelBb: f32x4 = .{ 0, 0, 0, 0 };
+                var texelBa: f32x4 = .{ 0, 0, 0, 0 };
 
-                    const tX = (u * @intToFloat(f32, texture.width - 2));
-                    const tY = (v * @intToFloat(f32, texture.height - 2));
+                var texelCr: f32x4 = .{ 0, 0, 0, 0 };
+                var texelCg: f32x4 = .{ 0, 0, 0, 0 };
+                var texelCb: f32x4 = .{ 0, 0, 0, 0 };
+                var texelCa: f32x4 = .{ 0, 0, 0, 0 };
 
-                    const X: i32 = @floatToInt(i32, tX);
-                    const Y: i32 = @floatToInt(i32, tY);
+                var texelDr: f32x4 = .{ 0, 0, 0, 0 };
+                var texelDg: f32x4 = .{ 0, 0, 0, 0 };
+                var texelDb: f32x4 = .{ 0, 0, 0, 0 };
+                var texelDa: f32x4 = .{ 0, 0, 0, 0 };
 
-                    const fX = tX - @intToFloat(f32, X);
-                    const fY = tY - @intToFloat(f32, Y);
+                var destr: f32x4 = .{ 0, 0, 0, 0 };
+                var destg: f32x4 = .{ 0, 0, 0, 0 };
+                var destb: f32x4 = .{ 0, 0, 0, 0 };
+                var desta: f32x4 = .{ 0, 0, 0, 0 };
 
-                    assert((X >= 0) and (X < texture.width));
-                    assert((Y >= 0) and (Y < texture.height));
+                var blendedr: f32x4 = .{ 0, 0, 0, 0 };
+                var blendedg: f32x4 = .{ 0, 0, 0, 0 };
+                var blendedb: f32x4 = .{ 0, 0, 0, 0 };
+                var blendeda: f32x4 = .{ 0, 0, 0, 0 };
 
-                    const ptrOffset = Y * texture.pitch + X * @sizeOf(u32);
-                    const texelPtr = if (ptrOffset > 0) texture.memory + @intCast(usize, ptrOffset) else texture.memory - @intCast(usize, -ptrOffset);
-                    const pitchOffset = if (texture.pitch > 0) texelPtr + @intCast(usize, texture.pitch) else texelPtr - @intCast(usize, -texture.pitch);
+                var fX: f32x4 = .{ 0, 0, 0, 0 };
+                var fY: f32x4 = .{ 0, 0, 0, 0 };
 
-                    var samplea = @ptrCast(*align(@alignOf(u8)) u32, texelPtr).*;
-                    var sampleb = @ptrCast(*align(@alignOf(u8)) u32, texelPtr + @sizeOf(u32)).*;
-                    var samplec = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset).*;
-                    var sampled = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset + @sizeOf(u32)).*;
+                var shouldFill: [4]bool = .{ false, false, false, false };
 
-                    var texelAr = @intToFloat(f32, ((samplea >> 16) & 0xff));
-                    var texelAg = @intToFloat(f32, ((samplea >> 8) & 0xff));
-                    var texelAb = @intToFloat(f32, ((samplea >> 0) & 0xff));
-                    var texelAa = @intToFloat(f32, ((samplea >> 24) & 0xff));
+                var I = @as(u32, 0);
+                while (I < 4) : (I += 1) {
+                    const pixelP = hm.V2(@intCast(i32, I) + xi, y);
+                    const d = hm.Sub(pixelP, origin);
 
-                    var texelBr = @intToFloat(f32, ((sampleb >> 16) & 0xff));
-                    var texelBg = @intToFloat(f32, ((sampleb >> 8) & 0xff));
-                    var texelBb = @intToFloat(f32, ((sampleb >> 0) & 0xff));
-                    var texelBa = @intToFloat(f32, ((sampleb >> 24) & 0xff));
+                    const u = hm.Inner(d, nXAxis);
+                    const v = hm.Inner(d, nYAxis);
 
-                    var texelCr = @intToFloat(f32, ((samplec >> 16) & 0xff));
-                    var texelCg = @intToFloat(f32, ((samplec >> 8) & 0xff));
-                    var texelCb = @intToFloat(f32, ((samplec >> 0) & 0xff));
-                    var texelCa = @intToFloat(f32, ((samplec >> 24) & 0xff));
+                    shouldFill[I] = u >= 0 and u <= 1 and v >= 0 and v <= 1;
 
-                    var texelDr = @intToFloat(f32, ((sampled >> 16) & 0xff));
-                    var texelDg = @intToFloat(f32, ((sampled >> 8) & 0xff));
-                    var texelDb = @intToFloat(f32, ((sampled >> 0) & 0xff));
-                    var texelDa = @intToFloat(f32, ((sampled >> 24) & 0xff));
+                    if (shouldFill[I]) {
+                        const tX = (u * @intToFloat(f32, texture.width - 2));
+                        const tY = (v * @intToFloat(f32, texture.height - 2));
 
-                    texelAr = hm.Square(inv255 * texelAr);
-                    texelAg = hm.Square(inv255 * texelAg);
-                    texelAb = hm.Square(inv255 * texelAb);
-                    texelAa = inv255 * texelAa;
+                        const X: i32 = @floatToInt(i32, tX);
+                        const Y: i32 = @floatToInt(i32, tY);
 
-                    texelBr = hm.Square(inv255 * texelBr);
-                    texelBg = hm.Square(inv255 * texelBg);
-                    texelBb = hm.Square(inv255 * texelBb);
-                    texelBa = inv255 * texelBa;
+                        fX[I] = tX - @intToFloat(f32, X);
+                        fY[I] = tY - @intToFloat(f32, Y);
 
-                    texelCr = hm.Square(inv255 * texelCr);
-                    texelCg = hm.Square(inv255 * texelCg);
-                    texelCb = hm.Square(inv255 * texelCb);
-                    texelCa = inv255 * texelCa;
+                        assert((X >= 0) and (X < texture.width));
+                        assert((Y >= 0) and (Y < texture.height));
 
-                    texelDr = hm.Square(inv255 * texelDr);
-                    texelDg = hm.Square(inv255 * texelDg);
-                    texelDb = hm.Square(inv255 * texelDb);
-                    texelDa = inv255 * texelDa;
+                        const ptrOffset = Y * texture.pitch + X * @sizeOf(u32);
+                        const texelPtr = if (ptrOffset > 0) texture.memory + @intCast(usize, ptrOffset) else texture.memory - @intCast(usize, -ptrOffset);
+                        const pitchOffset = if (texture.pitch > 0) texelPtr + @intCast(usize, texture.pitch) else texelPtr - @intCast(usize, -texture.pitch);
 
-                    const ifX = 1 - fX;
-                    const ifY = 1 - fY;
+                        var samplea = @ptrCast(*align(@alignOf(u8)) u32, texelPtr).*;
+                        var sampleb = @ptrCast(*align(@alignOf(u8)) u32, texelPtr + @sizeOf(u32)).*;
+                        var samplec = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset).*;
+                        var sampled = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset + @sizeOf(u32)).*;
 
-                    const l0 = ifY * ifX;
-                    const l1 = ifY * fX;
-                    const l2 = fY * ifX;
-                    const l3 = fY * fX;
+                        texelAr[I] = @intToFloat(f32, ((samplea >> 16) & 0xff));
+                        texelAg[I] = @intToFloat(f32, ((samplea >> 8) & 0xff));
+                        texelAb[I] = @intToFloat(f32, ((samplea >> 0) & 0xff));
+                        texelAa[I] = @intToFloat(f32, ((samplea >> 24) & 0xff));
 
-                    var texelr = l0 * texelAr + l1 * texelBr + l2 * texelCr + l3 * texelDr;
-                    var texelg = l0 * texelAg + l1 * texelBg + l2 * texelCg + l3 * texelDg;
-                    var texelb = l0 * texelAb + l1 * texelBb + l2 * texelCb + l3 * texelDb;
-                    var texela = l0 * texelAa + l1 * texelBa + l2 * texelCa + l3 * texelDa;
+                        texelBr[I] = @intToFloat(f32, ((sampleb >> 16) & 0xff));
+                        texelBg[I] = @intToFloat(f32, ((sampleb >> 8) & 0xff));
+                        texelBb[I] = @intToFloat(f32, ((sampleb >> 0) & 0xff));
+                        texelBa[I] = @intToFloat(f32, ((sampleb >> 24) & 0xff));
 
-                    texelr = texelr * hm.R(colour);
-                    texelg = texelg * hm.G(colour);
-                    texelb = texelb * hm.B(colour);
-                    texela = texela * hm.A(colour);
+                        texelCr[I] = @intToFloat(f32, ((samplec >> 16) & 0xff));
+                        texelCg[I] = @intToFloat(f32, ((samplec >> 8) & 0xff));
+                        texelCb[I] = @intToFloat(f32, ((samplec >> 0) & 0xff));
+                        texelCa[I] = @intToFloat(f32, ((samplec >> 24) & 0xff));
 
-                    texelr = hm.Clampf01(texelr);
-                    texelg = hm.Clampf01(texelg);
-                    texelb = hm.Clampf01(texelb);
+                        texelDr[I] = @intToFloat(f32, ((sampled >> 16) & 0xff));
+                        texelDg[I] = @intToFloat(f32, ((sampled >> 8) & 0xff));
+                        texelDb[I] = @intToFloat(f32, ((sampled >> 0) & 0xff));
+                        texelDa[I] = @intToFloat(f32, ((sampled >> 24) & 0xff));
 
-                    var destr = @intToFloat(f32, ((pixel[0] >> 16) & 0xff));
-                    var destg = @intToFloat(f32, ((pixel[0] >> 8) & 0xff));
-                    var destb = @intToFloat(f32, ((pixel[0] >> 0) & 0xff));
-                    var desta = @intToFloat(f32, ((pixel[0] >> 24) & 0xff));
-
-                    destr = hm.Square(inv255 * destr);
-                    destg = hm.Square(inv255 * destg);
-                    destb = hm.Square(inv255 * destb);
-                    desta = inv255 * desta;
-
-                    const invTexelA = 1 - texela;
-                    var blendedr = invTexelA * destr + texelr;
-                    var blendedg = invTexelA * destg + texelg;
-                    var blendedb = invTexelA * destb + texelb;
-                    var blendeda = invTexelA * desta + texela;
-
-                    blendedr = one255 * hi.SquareRoot(blendedr);
-                    blendedg = one255 * hi.SquareRoot(blendedg);
-                    blendedb = one255 * hi.SquareRoot(blendedb);
-                    blendeda = one255 * blendeda;
-
-                    pixel.* = (@floatToInt(u32, blendeda + 0.5) << 24) |
-                        (@floatToInt(u32, blendedr + 0.5) << 16) |
-                        (@floatToInt(u32, blendedg + 0.5) << 8) |
-                        (@floatToInt(u32, blendedb + 0.5) << 0);
+                        destr[I] = @intToFloat(f32, ((pixel[I] >> 16) & 0xff));
+                        destg[I] = @intToFloat(f32, ((pixel[I] >> 8) & 0xff));
+                        destb[I] = @intToFloat(f32, ((pixel[I] >> 0) & 0xff));
+                        desta[I] = @intToFloat(f32, ((pixel[I] >> 24) & 0xff));
+                    }
                 }
+                I = @as(u32, 0);
+                while (I < 4) : (I += 1) {
+                    if (shouldFill[I]) {
+                        texelAr[I] = (inv255 * texelAr[I]);
+                        texelAr[I] *= texelAr[I];
+                        texelAg[I] = (inv255 * texelAg[I]);
+                        texelAg[I] *= texelAg[I];
+                        texelAb[I] = (inv255 * texelAb[I]);
+                        texelAb[I] *= texelAb[I];
+                        texelAa[I] = inv255 * texelAa[I];
 
-                pixel += 1;
+                        texelBr[I] = hm.Square(inv255 * texelBr[I]);
+                        texelBg[I] = hm.Square(inv255 * texelBg[I]);
+                        texelBb[I] = hm.Square(inv255 * texelBb[I]);
+                        texelBa[I] = inv255 * texelBa[I];
+
+                        texelCr[I] = hm.Square(inv255 * texelCr[I]);
+                        texelCg[I] = hm.Square(inv255 * texelCg[I]);
+                        texelCb[I] = hm.Square(inv255 * texelCb[I]);
+                        texelCa[I] = inv255 * texelCa[I];
+
+                        texelDr[I] = hm.Square(inv255 * texelDr[I]);
+                        texelDg[I] = hm.Square(inv255 * texelDg[I]);
+                        texelDb[I] = hm.Square(inv255 * texelDb[I]);
+                        texelDa[I] = inv255 * texelDa[I];
+
+                        const ifX = 1 - fX[I];
+                        const ifY = 1 - fY[I];
+
+                        const l0 = ifY * ifX;
+                        const l1 = ifY * fX[I];
+                        const l2 = fY[I] * ifX;
+                        const l3 = fY[I] * fX[I];
+
+                        var texelr = l0 * texelAr[I] + l1 * texelBr[I] + l2 * texelCr[I] + l3 * texelDr[I];
+                        var texelg = l0 * texelAg[I] + l1 * texelBg[I] + l2 * texelCg[I] + l3 * texelDg[I];
+                        var texelb = l0 * texelAb[I] + l1 * texelBb[I] + l2 * texelCb[I] + l3 * texelDb[I];
+                        var texela = l0 * texelAa[I] + l1 * texelBa[I] + l2 * texelCa[I] + l3 * texelDa[I];
+
+                        texelr = texelr * hm.R(colour);
+                        texelg = texelg * hm.G(colour);
+                        texelb = texelb * hm.B(colour);
+                        texela = texela * hm.A(colour);
+
+                        texelr = hm.Clampf01(texelr);
+                        texelg = hm.Clampf01(texelg);
+                        texelb = hm.Clampf01(texelb);
+
+                        destr[I] = hm.Square(inv255 * destr[I]);
+                        destg[I] = hm.Square(inv255 * destg[I]);
+                        destb[I] = hm.Square(inv255 * destb[I]);
+                        desta[I] = inv255 * desta[I];
+
+                        const invTexelA = 1 - texela;
+                        blendedr[I] = invTexelA * destr[I] + texelr;
+                        blendedg[I] = invTexelA * destg[I] + texelg;
+                        blendedb[I] = invTexelA * destb[I] + texelb;
+                        blendeda[I] = invTexelA * desta[I] + texela;
+
+                        blendedr[I] = one255 * hi.SquareRoot(blendedr[I]);
+                        blendedg[I] = one255 * hi.SquareRoot(blendedg[I]);
+                        blendedb[I] = one255 * hi.SquareRoot(blendedb[I]);
+                        blendeda[I] = one255 * blendeda[I];
+                    }
+                }
+                I = @as(u32, 0);
+                while (I < 4) : (I += 1) {
+                    if (shouldFill[I]) {
+                        pixel[I] = (@floatToInt(u32, blendeda[I] + 0.5) << 24) |
+                            (@floatToInt(u32, blendedr[I] + 0.5) << 16) |
+                            (@floatToInt(u32, blendedg[I] + 0.5) << 8) |
+                            (@floatToInt(u32, blendedb[I] + 0.5) << 0);
+                    }
+                }
+                pixel += 4;
             }
             row += @intCast(u32, buffer.pitch);
         }
