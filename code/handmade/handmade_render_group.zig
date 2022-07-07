@@ -170,9 +170,6 @@ pub const loaded_bitmap = struct {
             var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
             var x = xMin;
             while (x <= xMax) : (x += 1) {
-                platform.BEGIN_TIMED_BLOCK(.TestPixel);
-                defer platform.END_TIMED_BLOCK(.TestPixel);
-
                 if (NOT_IGNORE) {
                     const pixelP = hm.V2(x, y);
                     const d = hm.Sub(pixelP, origin);
@@ -183,9 +180,6 @@ pub const loaded_bitmap = struct {
                     const edge3 = hm.Inner(hm.Sub(d, yAxis), hm.Perp(yAxis));
 
                     if (edge0 < 0 and edge1 < 0 and edge2 < 0 and edge3 < 0) {
-                        platform.BEGIN_TIMED_BLOCK(.FillPixel);
-                        defer platform.END_TIMED_BLOCK(.FillPixel);
-
                         const screenSpaceUV = hm.v2{ @intToFloat(f32, x) * invWidthMax, fixedCastY };
 
                         const zDiff = pixelsToMeters * (@intToFloat(f32, y) - originY);
@@ -336,14 +330,6 @@ pub const loaded_bitmap = struct {
         const invXAxisLengthSq = 1 / hm.LengthSq(xAxis);
         const invYAxisLengthSq = 1 / hm.LengthSq(yAxis);
 
-        // zig fmt: off
-        const colour32: u32 = (hi.RoundF32ToInt(u32, hm.A(colour) * 255.0) << 24) | 
-                            (hi.RoundF32ToInt(u32, hm.R(colour) * 255.0) << 16) | 
-                            (hi.RoundF32ToInt(u32, hm.G(colour) * 255.0) << 8) | 
-                            (hi.RoundF32ToInt(u32, hm.B(colour) * 255.0) << 0);
-        // zig fmt: on
-        _ = colour32;
-
         const widthMax = (buffer.width - 1) - 3;
         const heightMax = (buffer.height - 1) - 3;
 
@@ -387,19 +373,38 @@ pub const loaded_bitmap = struct {
         const nYAxis = hm.Scale(yAxis, invYAxisLengthSq);
 
         const inv255 = 1.0 / 255.0;
+        const inv255_4x = @splat(4, @as(f32, inv255));
         const one255 = 255;
+        const one255_4x = @splat(4, @as(f32, one255));
+
+        const one = @splat(4, @as(f32, 1));
+        const zero = @splat(4, @as(f32, 0));
+
+        const colourr_4x = @splat(4, hm.R(colour));
+        const colourg_4x = @splat(4, hm.G(colour));
+        const colourb_4x = @splat(4, hm.B(colour));
+        const coloura_4x = @splat(4, hm.A(colour));
+
+        const nXAxisx_4x = @splat(4, hm.X(nXAxis));
+        const nXAxisy_4x = @splat(4, hm.Y(nXAxis));
+
+        const nYAxisx_4x = @splat(4, hm.X(nYAxis));
+        const nYAxisy_4x = @splat(4, hm.Y(nYAxis));
+
+        const originx_4x = @splat(4, hm.X(origin));
+        const originy_4x = @splat(4, hm.Y(origin));
 
         var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, xMin) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, yMin * buffer.pitch);
+
+        platform.BEGIN_TIMED_BLOCK(.ProcessPixel);
+        defer platform.END_TIMED_BLOCK_COUNTED(.ProcessPixel, @intCast(u32, (xMax - xMin + 1) * (yMax - yMin + 1)));
 
         var y = yMin;
         while (y <= yMax) : (y += 1) {
             var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
             var xi = xMin;
             while (xi <= xMax) : (xi += 4) {
-                platform.BEGIN_TIMED_BLOCK(.TestPixel);
-                defer platform.END_TIMED_BLOCK(.TestPixel);
-
-                const f32x4 = [4]f32; // @Vector(4, f32);
+                const f32x4 = @Vector(4, f32); // TODO (Manav): take this def out somewhere
 
                 var texelAr: f32x4 = .{ 0, 0, 0, 0 };
                 var texelAg: f32x4 = .{ 0, 0, 0, 0 };
@@ -436,19 +441,27 @@ pub const loaded_bitmap = struct {
 
                 var shouldFill: [4]bool = .{ false, false, false, false };
 
+                const pixelPX: f32x4 = .{
+                    @intToFloat(f32, @intCast(i32, 0) + xi),
+                    @intToFloat(f32, @intCast(i32, 1) + xi),
+                    @intToFloat(f32, @intCast(i32, 2) + xi),
+                    @intToFloat(f32, @intCast(i32, 3) + xi),
+                };
+                const pixelPY: f32x4 = @splat(4, @intToFloat(f32, y));
+
+                const dx: f32x4 = pixelPX - originx_4x;
+                const dy: f32x4 = pixelPY - originy_4x;
+
+                const u: f32x4 = dx * nXAxisx_4x + dy * nXAxisy_4x;
+                const v: f32x4 = dx * nYAxisx_4x + dy * nYAxisy_4x;
+
                 var I = @as(u32, 0);
                 while (I < 4) : (I += 1) {
-                    const pixelP = hm.V2(@intCast(i32, I) + xi, y);
-                    const d = hm.Sub(pixelP, origin);
-
-                    const u = hm.Inner(d, nXAxis);
-                    const v = hm.Inner(d, nYAxis);
-
-                    shouldFill[I] = u >= 0 and u <= 1 and v >= 0 and v <= 1;
+                    shouldFill[I] = u[I] >= 0 and u[I] <= 1 and v[I] >= 0 and v[I] <= 1;
 
                     if (shouldFill[I]) {
-                        const tX = (u * @intToFloat(f32, texture.width - 2));
-                        const tY = (v * @intToFloat(f32, texture.height - 2));
+                        const tX = (u[I] * @intToFloat(f32, texture.width - 2));
+                        const tY = (v[I] * @intToFloat(f32, texture.height - 2));
 
                         const X: i32 = @floatToInt(i32, tX);
                         const Y: i32 = @floatToInt(i32, tY);
@@ -494,71 +507,78 @@ pub const loaded_bitmap = struct {
                         desta[I] = @intToFloat(f32, ((pixel[I] >> 24) & 0xff));
                     }
                 }
-                I = @as(u32, 0);
-                while (I < 4) : (I += 1) {
-                    if (shouldFill[I]) {
-                        texelAr[I] = (inv255 * texelAr[I]);
-                        texelAr[I] *= texelAr[I];
-                        texelAg[I] = (inv255 * texelAg[I]);
-                        texelAg[I] *= texelAg[I];
-                        texelAb[I] = (inv255 * texelAb[I]);
-                        texelAb[I] *= texelAb[I];
-                        texelAa[I] = inv255 * texelAa[I];
 
-                        texelBr[I] = hm.Square(inv255 * texelBr[I]);
-                        texelBg[I] = hm.Square(inv255 * texelBg[I]);
-                        texelBb[I] = hm.Square(inv255 * texelBb[I]);
-                        texelBa[I] = inv255 * texelBa[I];
+                // const b = texelAr[0] != 0;
 
-                        texelCr[I] = hm.Square(inv255 * texelCr[I]);
-                        texelCg[I] = hm.Square(inv255 * texelCg[I]);
-                        texelCb[I] = hm.Square(inv255 * texelCb[I]);
-                        texelCa[I] = inv255 * texelCa[I];
+                // if (b) {
+                //     @breakpoint();
+                // }
 
-                        texelDr[I] = hm.Square(inv255 * texelDr[I]);
-                        texelDg[I] = hm.Square(inv255 * texelDg[I]);
-                        texelDb[I] = hm.Square(inv255 * texelDb[I]);
-                        texelDa[I] = inv255 * texelDa[I];
+                texelAr = (inv255_4x * texelAr) * (inv255_4x * texelAr);
+                texelAg = (inv255_4x * texelAg) * (inv255_4x * texelAg);
+                texelAb = (inv255_4x * texelAb) * (inv255_4x * texelAb);
+                texelAa = inv255_4x * texelAa;
 
-                        const ifX = 1 - fX[I];
-                        const ifY = 1 - fY[I];
+                texelBr = (inv255_4x * texelBr) * (inv255_4x * texelBr);
+                texelBg = (inv255_4x * texelBg) * (inv255_4x * texelBg);
+                texelBb = (inv255_4x * texelBb) * (inv255_4x * texelBb);
+                texelBa = inv255_4x * texelBa;
 
-                        const l0 = ifY * ifX;
-                        const l1 = ifY * fX[I];
-                        const l2 = fY[I] * ifX;
-                        const l3 = fY[I] * fX[I];
+                texelCr = (inv255_4x * texelCr) * (inv255_4x * texelCr);
+                texelCg = (inv255_4x * texelCg) * (inv255_4x * texelCg);
+                texelCb = (inv255_4x * texelCb) * (inv255_4x * texelCb);
+                texelCa = inv255_4x * texelCa;
 
-                        var texelr = l0 * texelAr[I] + l1 * texelBr[I] + l2 * texelCr[I] + l3 * texelDr[I];
-                        var texelg = l0 * texelAg[I] + l1 * texelBg[I] + l2 * texelCg[I] + l3 * texelDg[I];
-                        var texelb = l0 * texelAb[I] + l1 * texelBb[I] + l2 * texelCb[I] + l3 * texelDb[I];
-                        var texela = l0 * texelAa[I] + l1 * texelBa[I] + l2 * texelCa[I] + l3 * texelDa[I];
+                texelDr = (inv255_4x * texelDr) * (inv255_4x * texelDr);
+                texelDg = (inv255_4x * texelDg) * (inv255_4x * texelDg);
+                texelDb = (inv255_4x * texelDb) * (inv255_4x * texelDb);
+                texelDa = inv255_4x * texelDa;
 
-                        texelr = texelr * hm.R(colour);
-                        texelg = texelg * hm.G(colour);
-                        texelb = texelb * hm.B(colour);
-                        texela = texela * hm.A(colour);
+                const ifX: f32x4 = one - fX;
+                const ifY: f32x4 = one - fY;
 
-                        texelr = hm.Clampf01(texelr);
-                        texelg = hm.Clampf01(texelg);
-                        texelb = hm.Clampf01(texelb);
+                const l0: f32x4 = ifY * ifX;
+                const l1: f32x4 = ifY * fX;
+                const l2: f32x4 = fY * ifX;
+                const l3: f32x4 = fY * fX;
 
-                        destr[I] = hm.Square(inv255 * destr[I]);
-                        destg[I] = hm.Square(inv255 * destg[I]);
-                        destb[I] = hm.Square(inv255 * destb[I]);
-                        desta[I] = inv255 * desta[I];
+                var texelr: f32x4 = l0 * texelAr + l1 * texelBr + l2 * texelCr + l3 * texelDr;
+                var texelg: f32x4 = l0 * texelAg + l1 * texelBg + l2 * texelCg + l3 * texelDg;
+                var texelb: f32x4 = l0 * texelAb + l1 * texelBb + l2 * texelCb + l3 * texelDb;
+                var texela: f32x4 = l0 * texelAa + l1 * texelBa + l2 * texelCa + l3 * texelDa;
 
-                        const invTexelA = 1 - texela;
-                        blendedr[I] = invTexelA * destr[I] + texelr;
-                        blendedg[I] = invTexelA * destg[I] + texelg;
-                        blendedb[I] = invTexelA * destb[I] + texelb;
-                        blendeda[I] = invTexelA * desta[I] + texela;
+                texelr = texelr * colourr_4x;
+                texelg = texelg * colourg_4x;
+                texelb = texelb * colourb_4x;
+                texela = texela * coloura_4x;
 
-                        blendedr[I] = one255 * hi.SquareRoot(blendedr[I]);
-                        blendedg[I] = one255 * hi.SquareRoot(blendedg[I]);
-                        blendedb[I] = one255 * hi.SquareRoot(blendedb[I]);
-                        blendeda[I] = one255 * blendeda[I];
-                    }
-                }
+                // TODO (Manav): use _mm_min_ps and _mm_max_ps (minps maxps instruction) ?
+                texelr = @minimum(@maximum(texelr, zero), one);
+                texelg = @minimum(@maximum(texelg, zero), one);
+                texelb = @minimum(@maximum(texelb, zero), one);
+                texela = @minimum(@maximum(texela, zero), one); // NOTE (Manav): clamp alpha, we have a bug somewhere which makes alpha > 1
+
+                destr = (inv255_4x * destr) * (inv255_4x * destr);
+                destg = (inv255_4x * destg) * (inv255_4x * destg);
+                destb = (inv255_4x * destb) * (inv255_4x * destb);
+                desta = inv255_4x * desta;
+
+                const invTexelA: f32x4 = one - texela;
+                blendedr = invTexelA * destr + texelr;
+                blendedg = invTexelA * destg + texelg;
+                blendedb = invTexelA * destb + texelb;
+                blendeda = invTexelA * desta + texela;
+
+                // TODO (Manav): use _mm_sqrt_ps (sqrtps instruction) ?
+                blendedr = one255_4x * @sqrt(blendedr);
+                blendedg = one255_4x * @sqrt(blendedg);
+                blendedb = one255_4x * @sqrt(blendedb);
+                blendeda = one255_4x * blendeda;
+
+                // if (b) {
+                //     @breakpoint();
+                // }
+
                 I = @as(u32, 0);
                 while (I < 4) : (I += 1) {
                     if (shouldFill[I]) {

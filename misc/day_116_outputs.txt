@@ -1,0 +1,111 @@
+No vectorization ------------------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 236720393cy 1h 236720393cy/h
+RenderGroupToOutput - 236128822cy 13h 18163755cy/h
+DrawRectangleHopefullyQuickly - 233458231cy 68h 3433209cy/h
+ProcessPixel - 233378575cy 875588h 266cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 43130134cy 1h 43130134cy/h
+RenderGroupToOutput - 42898274cy 13h 3299867cy/h
+DrawRectangleHopefullyQuickly - 41306696cy 64h 645417cy/h
+ProcessPixel - 41288475cy 844855h 48cy/h
+
+After 37:15 (upto Clamp()) --------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 150628987cy 1h 150628987cy/h
+RenderGroupToOutput - 150052728cy 13h 11542517cy/h
+DrawRectangleHopefullyQuickly - 146393573cy 68h 2152846cy/h
+ProcessPixel - 146328421cy 821623h 178cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 39014339cy 1h 39014339cy/h
+RenderGroupToOutput - 38662314cy 13h 2974024cy/h
+DrawRectangleHopefullyQuickly - 37094815cy 64h 579606cy/h
+ProcessPixel - 37089844cy 844855h 43cy/h
+
+After vectorizing the middle part (except clamp()) --------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 150493815cy 1h 150493815cy/h
+RenderGroupToOutput - 149491166cy 13h 11499320cy/h
+DrawRectangleHopefullyQuickly - 144942963cy 69h 2100622cy/h
+ProcessPixel - 144783538cy 864367h 167cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 32254304cy 1h 32254304cy/h
+RenderGroupToOutput - 32062707cy 38h 843755cy/h
+DrawRectangleHopefullyQuickly - 30908472cy 69h 447948cy/h
+ProcessPixel - 30894695cy 705970h 43cy/h
+
+Completely vectorizing the middle part with Clamp() -------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 118113755cy 1h 118113755cy/h
+RenderGroupToOutput - 117562685cy 14h 8397334cy/h
+DrawRectangleHopefullyQuickly - 114312607cy 69h 1656704cy/h
+ProcessPixel - 114146812cy 863001h 132cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 35735887cy 1h 35735887cy/h
+RenderGroupToOutput - 35600039cy 1h 35600039cy/h
+DrawRectangleHopefullyQuickly - 35107254cy 69h 508800cy/h
+ProcessPixel - 35072736cy 805375h 43cy/h
+
+Removing inner product, 54:39 -----------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 88263012cy 1h 88263012cy/h
+RenderGroupToOutput - 87255606cy 13h 6711969cy/h
+DrawRectangleHopefullyQuickly - 82960453cy 68h 1220006cy/h
+ProcessPixel - 82883121cy 803727h 103cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 33951885cy 1h 33951885cy/h
+RenderGroupToOutput - 33741452cy 21h 1606735cy/h
+DrawRectangleHopefullyQuickly - 32760170cy 69h 474785cy/h
+ProcessPixel - 32752723cy 785024h 41cy/h
+
+Flattened:
+lea             eax, ptr [r8+rbp*1]
+vxorps          xmm13, xmm13, xmm13
+vcvtsi2ss       xmm1, xmm13, eax
+vsubss          xmm4, xmm1, dword ptr [rsp+0xd0]
+vmulss          xmm1, xmm4, dword ptr [rsp+0xb8]
+vaddss          xmm1, xmm1, dword ptr [rsp+0x44]
+vmulss          xmm4, xmm4, dword ptr [rsp+0x80]
+vaddss          xmm4, xmm4, dword ptr [rsp+0x64]
+
+NotFlattened:
+lea             eax, ptr [r8+rbp*1]
+vxorps          xmm13, xmm13, xmm13
+vcvtsi2ss       xmm1, xmm13, eax
+vsubss          xmm4, xmm1, dword ptr [rsp+0xd0]
+vmulss          xmm1, xmm4, dword ptr [rsp+0xb8]
+vaddss          xmm1, xmm12, xmm1
+vaddss          xmm1, xmm1, dword ptr [rsp+0x44]
+vmulss          xmm4, xmm4, dword ptr [rsp+0x80]
+vaddss          xmm4, xmm12, xmm4
+vaddss          xmm4, xmm4, dword ptr [rsp+0x64]
+
+After vectorizing the inner product, u/v, 1:07:15----------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 73554940cy 1h 73554940cy/h
+RenderGroupToOutput - 72864591cy 13h 5604968cy/h
+DrawRectangleHopefullyQuickly - 69514556cy 68h 1022272cy/h
+ProcessPixel - 69405278cy 815472h 85cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 34480707cy 1h 34480707cy/h
+RenderGroupToOutput - 34106741cy 13h 2623595cy/h
+DrawRectangleHopefullyQuickly - 32091862cy 69h 465099cy/h
+ProcessPixel - 32083177cy 866921h 37cy/h
+
+DEBUG CYCLE COUNTS (Final, after removing some functions I created to in place of @sqrt(), etc):
+UpdateAndRender - 66274887cy 1h 66274887cy/h
+RenderGroupToOutput - 65747012cy 13h 5057462cy/h
+DrawRectangleHopefullyQuickly - 63008713cy 68h 926598cy/h
+ProcessPixel - 62921567cy 832633h 75cy/h

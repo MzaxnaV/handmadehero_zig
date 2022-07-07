@@ -49,8 +49,7 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
         RenderGroupToOutput,
         DrawRectangleHopefullyQuickly,
         DrawRectangleSlowly,
-        TestPixel,
-        FillPixel,
+        ProcessPixel,
     };
 
     pub const debug_cycle_counter = struct {
@@ -74,6 +73,13 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
         if (debugGlobalMemory) |m| {
             m.counters[@enumToInt(id)].cycleCount += __rdtsc() - m.counters[@enumToInt(id)].startCyleCount;
             m.counters[@enumToInt(id)].hitCount += 1;
+        }
+    }
+
+    inline fn EndTimedBlockCounted(comptime id: debug_cycle_counter_type, count: u32) void {
+        if (debugGlobalMemory) |m| {
+            m.counters[@enumToInt(id)].cycleCount += __rdtsc() - m.counters[@enumToInt(id)].startCyleCount;
+            m.counters[@enumToInt(id)].hitCount += count;
         }
     }
 } else {};
@@ -182,6 +188,7 @@ pub inline fn TeraBytes(comptime value: comptime_int) comptime_int {
 
 pub const BEGIN_TIMED_BLOCK = handmade_internal.BeginTimedBlock; // TODO (Manav): make it portable
 pub const END_TIMED_BLOCK = handmade_internal.EndTimedBlock; // TODO (Manav): make it portable
+pub const END_TIMED_BLOCK_COUNTED = handmade_internal.EndTimedBlockCounted;
 
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 
