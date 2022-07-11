@@ -109,3 +109,54 @@ UpdateAndRender - 66274887cy 1h 66274887cy/h
 RenderGroupToOutput - 65747012cy 13h 5057462cy/h
 DrawRectangleHopefullyQuickly - 63008713cy 68h 926598cy/h
 ProcessPixel - 62921567cy 832633h 75cy/h
+
+
+Day 117: --------------------------------------------------------------------------------------------------------------
+After converting pixel assignment (1:00:48)----------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 71292559cy 1h 71292559cy/h
+RenderGroupToOutput - 70614350cy 13h 5431873cy/h
+DrawRectangleHopefullyQuickly - 65755772cy 68h 966996cy/h
+ProcessPixel - 65600416cy 824571h 79cy/h <-- when using simd.z
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 67377740cy 1h 67377740cy/h
+RenderGroupToOutput - 66520405cy 13h 5116954cy/h
+DrawRectangleHopefullyQuickly - 62148223cy 68h 913944cy/h
+ProcessPixel - 61946583cy 882838h 70cy/h <-- when using simd.i
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 29920713cy 1h 29920713cy/h
+RenderGroupToOutput - 29806511cy 13h 2292808cy/h
+DrawRectangleHopefullyQuickly - 28568883cy 68h 420130cy/h
+ProcessPixel - 28540685cy 866567h 32cy/h
+
+Final after using cvttps ----------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 69507055cy 1h 69507055cy/h
+RenderGroupToOutput - 68718665cy 13h 5286051cy/h
+DrawRectangleHopefullyQuickly - 64631788cy 68h 950467cy/h
+ProcessPixel - 64544866cy 882838h 73cy/h <-- when using simd.i
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 30074397cy 1h 30074397cy/h
+RenderGroupToOutput - 29926787cy 13h 2302060cy/h
+DrawRectangleHopefullyQuickly - 29287232cy 68h 430694cy/h
+ProcessPixel - 29280589cy 882838h 33cy/h <-- when using simd.i
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 74317705cy 1h 74317705cy/h
+RenderGroupToOutput - 73334193cy 13h 5641091cy/h
+DrawRectangleHopefullyQuickly - 67324929cy 64h 1051952cy/h
+ProcessPixel - 67154509cy 844855h 79cy/h <-- when using simd.z
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 28768521cy 1h 28768521cy/h
+RenderGroupToOutput - 28648717cy 13h 2203747cy/h
+DrawRectangleHopefullyQuickly - 27962426cy 68h 411212cy/h
+ProcessPixel - 27954614cy 882838h 31cy/h <-- when using simd.z
+
+
+

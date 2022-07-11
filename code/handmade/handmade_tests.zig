@@ -1,36 +1,38 @@
 const std = @import("std");
 const testing = std.testing;
 
-const intrinsics = @import("handmade_intrinsics.zig");
+const hi = @import("handmade_intrinsics.zig");
 const hd = @import("handmade_data.zig");
 const hm = @import("handmade_math.zig");
 const hr = @import("handmade_random.zig");
 
+const simd = @import("simd");
+
 test "intrinsics" {
-    try testing.expectEqual(intrinsics.AbsoluteValue(-0.2), 0.2);
-    try testing.expectEqual(intrinsics.AbsoluteValue(0.2), 0.2);
+    try testing.expectEqual(hi.AbsoluteValue(-0.2), 0.2);
+    try testing.expectEqual(hi.AbsoluteValue(0.2), 0.2);
 
-    try testing.expectEqual(intrinsics.RoundF32ToInt(u32, -0.2), 0);
-    try testing.expectEqual(intrinsics.RoundF32ToInt(u32, 0.2), 0);
+    try testing.expectEqual(hi.RoundF32ToInt(u32, -0.2), 0);
+    try testing.expectEqual(hi.RoundF32ToInt(u32, 0.2), 0);
 
-    try testing.expectEqual(intrinsics.CeilF32ToI32(2.34), 3);
-    try testing.expectEqual(intrinsics.CeilF32ToI32(-2.34), -2);
+    try testing.expectEqual(hi.CeilF32ToI32(2.34), 3);
+    try testing.expectEqual(hi.CeilF32ToI32(-2.34), -2);
 
-    try testing.expectEqual(intrinsics.TruncateF32ToI32(1.2), 1);
-    try testing.expectEqual(intrinsics.TruncateF32ToI32(-0.2), 0);
-    try testing.expectEqual(intrinsics.TruncateF32ToI32(-1.2), -1);
+    try testing.expectEqual(hi.TruncateF32ToI32(1.2), 1);
+    try testing.expectEqual(hi.TruncateF32ToI32(-0.2), 0);
+    try testing.expectEqual(hi.TruncateF32ToI32(-1.2), -1);
 
-    try testing.expectEqual(intrinsics.FloorF32ToI32(1.2), 1);
-    try testing.expectEqual(intrinsics.FloorF32ToI32(0.2), 0);
-    try testing.expectEqual(intrinsics.FloorF32ToI32(-0.2), -1);
+    try testing.expectEqual(hi.FloorF32ToI32(1.2), 1);
+    try testing.expectEqual(hi.FloorF32ToI32(0.2), 0);
+    try testing.expectEqual(hi.FloorF32ToI32(-0.2), -1);
 
-    try testing.expectEqual(intrinsics.FindLeastSignificantSetBit(0b00000010), 1);
-    try testing.expectEqual(intrinsics.FindLeastSignificantSetBit(0b01000000), 6);
+    try testing.expectEqual(hi.FindLeastSignificantSetBit(0b00000010), 1);
+    try testing.expectEqual(hi.FindLeastSignificantSetBit(0b01000000), 6);
 
     // TODO (Manav): add RotateLeft tests when the issue is fixed
 
-    try testing.expectEqual(intrinsics.SquareRoot(0.04), 0.2);
-    try testing.expectEqual(intrinsics.SquareRoot(25.0), 5.0);
+    try testing.expectEqual(hi.SquareRoot(0.04), 0.2);
+    try testing.expectEqual(hi.SquareRoot(25.0), 5.0);
 }
 
 test "math" {
@@ -145,4 +147,34 @@ test "handmade_misc" {
     x.* = 24;
     try testing.expectEqual(x.*, @intToPtr([*]u8, mem.base_addr)[0]);
     try testing.expectEqual(@as(usize, 1), mem.used);
+}
+
+test "simd" {
+    const v1: simd.f32x4 = .{ 1.1, 2.2, 3.3, 4.4 };
+    const v2: simd.f32x4 = .{ -4.4, -5.5, -6.6, -7.7 };
+
+    const zc1 = simd.z._mm_cvtps_epi32(v1);
+    const zc2 = simd.z._mm_cvtps_epi32(v2);
+    const zc3 = simd.z._mm_cvttps_epi32(v2);
+
+    const ic1 = simd.i.cvtps(v1);
+    const ic2 = simd.i.cvtps(v2);
+    const ic3 = simd.i.cvttps(v2);
+
+    {
+        comptime var i = 0;
+        inline while (i < 4) : (i += 1) {
+            try testing.expectEqual(ic1[i], zc1[i]);
+            try testing.expectEqual(ic2[i], zc2[i]);
+            try testing.expectEqual(ic3[i], zc3[i]);
+
+            try testing.expectEqual(zc1[i], i + 1);
+            try testing.expectEqual(ic3[i], -(4 + i));
+        }
+
+        try testing.expectEqual(zc2[0], -4);
+        try testing.expectEqual(zc2[1], -6);
+        try testing.expectEqual(ic2[2], -7);
+        try testing.expectEqual(ic2[3], -8);
+    }
 }

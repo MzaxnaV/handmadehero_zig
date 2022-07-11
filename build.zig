@@ -11,11 +11,6 @@ pub fn build(b: *std.build.Builder) void {
     options.addOption(bool, "HANDMADE_INTERNAL", true);
     options.addOption(bool, "HANDMADE_SLOW", true); // TODO: let build mode decide it's value
 
-    const win32 = std.build.Pkg{
-        .name = "win32",
-        .path = .{ .path = "./code/zigwin32/win32.zig" },
-    };
-
     const platform = std.build.Pkg{
         .name = "handmade_platform",
         .path = .{ .path = "./code/handmade_platform.zig" },
@@ -25,10 +20,21 @@ pub fn build(b: *std.build.Builder) void {
         }},
     };
 
+    const simd = std.build.Pkg{
+        .name = "simd",
+        .path = .{ .path = "./code/simd.zig" },
+    };
+
+    const win32 = std.build.Pkg{
+        .name = "win32",
+        .path = .{ .path = "./code/zigwin32/win32.zig" },
+    };
+
     const lib = b.addSharedLibrary(lib_name, "code/handmade/handmade.zig", b.version(1, 0, 0));
     lib.setTarget(target);
     lib.setBuildMode(mode);
     lib.addPackage(platform);
+    lib.addPackage(simd);
     lib.setOutputDir("build");
     lib.addOptions("build_consts", options);
 
@@ -43,6 +49,7 @@ pub fn build(b: *std.build.Builder) void {
     var lib_tests = b.addTest("code/handmade/handmade_tests.zig");
     lib_tests.setBuildMode(mode);
     lib_tests.addPackage(platform);
+    lib_tests.addPackage(simd);
 
     const test_step = b.step("test", "Run handmade tests");
     test_step.dependOn(&lib_tests.step);
