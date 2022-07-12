@@ -1,3 +1,88 @@
+Day 114:---------------------------------------------------------------------------------------------------------------
+Debug outputs during the process of flattening out the function -------------------------------------------------------
+
+Decreasing cycles as function flattens out:
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 493369293cy 1h 493369293cy/h
+RenderGroupToOutput - 492809456cy 13h 37908419cy/h
+DrawRectangleHopefullyQuickly - 489857037cy 64h 7654016cy/h
+TestPixel - 459572753cy 854662h 537cy/h
+FillPixel - 360027320cy 833006h 432cy/h
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 378667403cy 1h 378667403cy/h
+RenderGroupToOutput - 378021192cy 13h 29078553cy/h
+DrawRectangleHopefullyQuickly - 375050551cy 68h 5515449cy/h
+TestPixel - 353541768cy 847362h 417cy/h
+FillPixel - 282286392cy 824026h 342cy/h
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 369763810cy 1h 369763810cy/h
+RenderGroupToOutput - 369240226cy 13h 28403094cy/h
+DrawRectangleHopefullyQuickly - 365269065cy 64h 5707329cy/h
+TestPixel - 343211390cy 854662h 401cy/h
+FillPixel - 272631372cy 833006h 327cy/h
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 382021873cy 1h 382021873cy/h
+RenderGroupToOutput - 381535676cy 13h 29348898cy/h
+DrawRectangleHopefullyQuickly - 378399966cy 64h 5912499cy/h
+TestPixel - 355620874cy 854662h 416cy/h
+FillPixel - 279895060cy 833006h 336cy/h
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 348804133cy 1h 348804133cy/h
+RenderGroupToOutput - 348109133cy 13h 26777625cy/h
+DrawRectangleHopefullyQuickly - 344372609cy 68h 5064303cy/h
+TestPixel - 324080997cy 896871h 361cy/h
+FillPixel - 254871985cy 873534h 291cy/h
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 370289254cy 1h 370289254cy/h
+RenderGroupToOutput - 369749086cy 13h 28442237cy/h
+DrawRectangleHopefullyQuickly - 366653513cy 68h 5391963cy/h
+TestPixel - 343247373cy 901482h 380cy/h
+FillPixel - 266511999cy 878082h 303cy/h
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 330586775cy 1h 330586775cy/h
+RenderGroupToOutput - 330046640cy 13h 25388203cy/h
+DrawRectangleHopefullyQuickly - 327527416cy 68h 4816579cy/h
+TestPixel - 306752705cy 892066h 343cy/h
+FillPixel - 235877251cy 867710h 271cy/h
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 289103090cy 1h 289103090cy/h
+RenderGroupToOutput - 288568461cy 13h 22197573cy/h
+DrawRectangleHopefullyQuickly - 285689767cy 68h 4201320cy/h
+TestPixel - 261172196cy 876208h 298cy/h
+FillPixel - 183128566cy 853206h 214cy/h
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 213693182cy 1h 213693182cy/h
+RenderGroupToOutput - 213153865cy 13h 16396451cy/h
+DrawRectangleHopefullyQuickly - 209998183cy 68h 3088208cy/h
+TestPixel - 188075918cy 913301h 205cy/h
+FillPixel - 115308340cy 889952h 129cy/h
+
+OReleaseFast builds----------------------------------------------------------------------------------------------------
+
+DrawRectangleSlowly:
+    UpdateAndRender - 80012450cy 1h 80012450cy/h
+    RenderGroupToOutput - 79913439cy 13h 6147187cy/h
+    DrawRectangleSlowly - 79151329cy 68h 1163990cy/h
+    TestPixel - 69702612cy 901950h 77cy/h
+    FillPixel - 33498180cy 879166h 38cy/h
+
+DrawRectangleHopefullyQuickly
+    UpdateAndRender - 75382558cy 1h 75382558cy/h
+    RenderGroupToOutput - 75269870cy 13h 5789990cy/h
+    DrawRectangleHopefullyQuickly - 74417617cy 68h 1094376cy/h
+    TestPixel - 65287015cy 911432h 71cy/h
+    FillPixel - 31251460cy 888149h 35cy/h
+
+Day 116: --------------------------------------------------------------------------------------------------------------
 No vectorization ------------------------------------------------------------------------------------------------------
 
 DEBUG CYCLE COUNTS:
@@ -298,3 +383,18 @@ UpdateAndRender - 12645725cy 1h 12645725cy/h
 RenderGroupToOutput - 12523772cy 13h 963367cy/h
 DrawRectangleHopefullyQuickly - 11902942cy 68h 175043cy/h
 ProcessPixel - 11899747cy 882838h 13cy/h
+
+Day 119: --------------------------------------------------------------------------------------------------------------
+Changing to DrawRectangleSlowly ---------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 453593524cy 1h 453593524cy/h
+RenderGroupToOutput - 451657947cy 1h 451657947cy/h
+DrawRectangleSlowly - 448853595cy 67h 6699307cy/h
+ProcessPixel - 448766206cy 892198h 502cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 44077149cy 1h 44077149cy/h
+RenderGroupToOutput - 43965614cy 1h 43965614cy/h
+DrawRectangleSlowly - 43325773cy 71h 610222cy/h
+ProcessPixel - 43309285cy 930181h 46cy/h

@@ -167,6 +167,8 @@ pub const loaded_bitmap = struct {
 
         var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, xMin) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, yMin * buffer.pitch);
 
+        platform.BEGIN_TIMED_BLOCK(.ProcessPixel);
+        defer platform.END_TIMED_BLOCK_COUNTED(.ProcessPixel, @intCast(u32, (xMax - xMin + 1) * (yMax - yMin + 1)));
         var y = yMin;
         while (y <= yMax) : (y += 1) {
             var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
@@ -307,12 +309,12 @@ pub const loaded_bitmap = struct {
     }
 
     // zig fmt: off
-    pub fn DrawRectangleHopefullyQuickly(buffer: *const loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, 
+    pub fn DrawRectangleQuickly(buffer: *const loaded_bitmap, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, 
                                         notPremultipliedColour: hm.v4, texture: *const loaded_bitmap, pixelsToMeters: f32) void
     // zig fmt: on
     {
-        platform.BEGIN_TIMED_BLOCK(.DrawRectangleHopefullyQuickly);
-        defer platform.END_TIMED_BLOCK(.DrawRectangleHopefullyQuickly);
+        platform.BEGIN_TIMED_BLOCK(.DrawRectangleQuickly);
+        defer platform.END_TIMED_BLOCK(.DrawRectangleQuickly);
 
         _ = pixelsToMeters;
         const colour = hm.ToV4(hm.Scale(hm.XYZ(notPremultipliedColour), hm.A(notPremultipliedColour)), hm.A(notPremultipliedColour));
@@ -380,6 +382,7 @@ pub const loaded_bitmap = struct {
         const one255_4x = @splat(4, @as(f32, one255));
 
         const one = @splat(4, @as(f32, 1));
+        const four_4x = @splat(4, @as(f32, 4));
         const zero = @splat(4, @as(f32, 0));
         const maskff = @splat(4, @as(i32, 0xff));
 
@@ -408,24 +411,19 @@ pub const loaded_bitmap = struct {
         var y = yMin;
         while (y <= yMax) : (y += 1) {
             var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
+            var pixelPX = simd.f32x4{
+                @intToFloat(f32, 0 + xMin),
+                @intToFloat(f32, 1 + xMin),
+                @intToFloat(f32, 2 + xMin),
+                @intToFloat(f32, 3 + xMin),
+            } - originx_4x;
+
+            const pixelPY = @splat(4, @intToFloat(f32, y)) - originy_4x;
+
             var xi = xMin;
             while (xi <= xMax) : (xi += 4) {
-
-                // var shouldFill: [4]bool = .{ false, false, false, false };
-
-                const pixelPX: simd.f32x4 = .{
-                    @intToFloat(f32, @intCast(i32, 0) + xi),
-                    @intToFloat(f32, @intCast(i32, 1) + xi),
-                    @intToFloat(f32, @intCast(i32, 2) + xi),
-                    @intToFloat(f32, @intCast(i32, 3) + xi),
-                };
-                const pixelPY: simd.f32x4 = @splat(4, @intToFloat(f32, y));
-
-                const dx: simd.f32x4 = pixelPX - originx_4x;
-                const dy: simd.f32x4 = pixelPY - originy_4x;
-
-                var u: simd.f32x4 = dx * nXAxisx_4x + dy * nXAxisy_4x;
-                var v: simd.f32x4 = dx * nYAxisx_4x + dy * nYAxisy_4x;
+                var u: simd.f32x4 = pixelPX * nXAxisx_4x + pixelPY * nXAxisy_4x;
+                var v: simd.f32x4 = pixelPX * nYAxisx_4x + pixelPY * nYAxisy_4x;
 
                 var writeMask: simd.u1x4 = @bitCast(simd.u1x4, (u >= zero)) & @bitCast(simd.u1x4, (u <= one)) &
                     @bitCast(simd.u1x4, (v >= zero)) & @bitCast(simd.u1x4, (v <= one));
@@ -569,7 +567,6 @@ pub const loaded_bitmap = struct {
 
                     const maskedOut: simd.u32x4 = @select(u32, @bitCast(simd.bx4, writeMask), @bitCast(simd.u32x4, out), originalDest);
 
-                    // TODO (Manav): look into implementing _mm_maskmove_si128()
                     {
                         // const pixel_ptr = @ptrCast(*align(@alignOf(i32)) simd.i32x4, pixel); // unaligned access
                         // pixel_ptr.* = maskedOut;
@@ -580,6 +577,7 @@ pub const loaded_bitmap = struct {
                         }
                     }
                 }
+                pixelPX += four_4x;
                 pixel += 4;
             }
             row += @intCast(u32, buffer.pitch);
@@ -1010,9 +1008,21 @@ pub const render_group = struct {
                     const basis: entity_basis_p_result = GetRenderEntityBasisP(self, &entry.entityBasis, screenDim);
 
                     if (!NOT_IGNORE) {
-                        outputTarget.DrawBitmap(entry.bitmap, hm.X(basis.p), hm.Y(basis.p), hm.A(entry.colour));
+                        // outputTarget.DrawBitmap(entry.bitmap, hm.X(basis.p), hm.Y(basis.p), hm.A(entry.colour));
+                        outputTarget.DrawRectangleSlowly(
+                            basis.p,
+                            hm.Scale(hm.V2(hm.X(entry.size), 0), basis.scale),
+                            hm.Scale(hm.V2(0, hm.Y(entry.size)), basis.scale),
+                            entry.colour,
+                            entry.bitmap,
+                            null,
+                            null,
+                            null,
+                            null,
+                            pixelsToMeters,
+                        );
                     } else {
-                        outputTarget.DrawRectangleHopefullyQuickly(
+                        outputTarget.DrawRectangleQuickly(
                             basis.p,
                             hm.Scale(hm.V2(hm.X(entry.size), 0), basis.scale),
                             hm.Scale(hm.V2(0, hm.Y(entry.size)), basis.scale),
