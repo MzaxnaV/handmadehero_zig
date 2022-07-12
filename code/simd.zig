@@ -13,6 +13,9 @@ pub const u16x8 = @Vector(8, u16);
 pub const i8x16 = @Vector(16, i8);
 pub const u8x16 = @Vector(16, u8);
 
+pub const u1x4 = @Vector(4, u1);
+pub const bx4 = @Vector(4, bool);
+
 /// simd intrinsics implemented using language features
 pub const z = struct {
     pub inline fn _mm_cvtps_epi32(v: f32x4) i32x4 {
@@ -32,6 +35,17 @@ pub const z = struct {
 
         inline while (index < 4) : (index += 1) {
             result[index] = @floatToInt(i32, v[index]);
+        }
+
+        return result;
+    }
+
+    pub inline fn _mm_cvtepi32_ps(v: i32x4) f32x4 {
+        var result = f32x4{};
+        comptime var index = 0;
+
+        inline while (index < 4) : (index += 1) {
+            result[index] = @intToFloat(f32, v[index]);
         }
 
         return result;
@@ -72,6 +86,15 @@ pub const i = struct {
     pub inline fn cvttps(v: f32x4) i32x4 {
         const result = asm ("cvttps2dq  %[v], %[v]"
             : [ret] "=&{xmm0}" (-> i32x4),
+            : [v] "{xmm0}" (v),
+        );
+
+        return result;
+    }
+
+    pub inline fn cvtepi32(v: i32x4) f32x4 {
+        const result = asm ("cvtdq2ps %[v], %[v]"
+            : [ret] "=&{xmm0}" (-> f32x4),
             : [v] "{xmm0}" (v),
         );
 

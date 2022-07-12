@@ -832,7 +832,7 @@ pub export fn UpdateAndRender(
             gameMemory.transientStorage + @sizeOf(game.transient_state),
         );
 
-        tranState.groundBufferCount = 64; // 128
+        tranState.groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushArray(game.ground_buffer, tranState.groundBufferCount);
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {

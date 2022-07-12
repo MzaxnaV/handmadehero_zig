@@ -158,5 +158,143 @@ RenderGroupToOutput - 28648717cy 13h 2203747cy/h
 DrawRectangleHopefullyQuickly - 27962426cy 68h 411212cy/h
 ProcessPixel - 27954614cy 882838h 31cy/h <-- when using simd.z
 
+Day 118: --------------------------------------------------------------------------------------------------------------
+After write mask ------------------------------------------------------------------------------------------------------
 
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 69753253cy 1h 69753253cy/h
+RenderGroupToOutput - 69128066cy 13h 5317543cy/h
+DrawRectangleHopefullyQuickly - 63766322cy 68h 937740cy/h
+ProcessPixel - 63625668cy 882838h 72cy/h
 
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 29851385cy 1h 29851385cy/h
+RenderGroupToOutput - 29747137cy 13h 2288241cy/h
+DrawRectangleHopefullyQuickly - 28804432cy 68h 423594cy/h
+ProcessPixel - 28778621cy 882838h 32cy/h simd.i
+
+After pulling about all texel stores out of loop ----------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 63876761cy 1h 63876761cy/h
+RenderGroupToOutput - 63387778cy 13h 4875982cy/h
+DrawRectangleHopefullyQuickly - 60239190cy 68h 885870cy/h
+ProcessPixel - 60138507cy 882838h 68cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 18002648cy 1h 18002648cy/h
+RenderGroupToOutput - 17886211cy 13h 1375862cy/h
+DrawRectangleHopefullyQuickly - 17243375cy 68h 253579cy/h
+ProcessPixel - 17229430cy 882838h 19cy/h
+
+After pulling about dest stores out of loop ---------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 71210751cy 1h 71210751cy/h
+RenderGroupToOutput - 70175449cy 13h 5398111cy/h
+DrawRectangleHopefullyQuickly - 65052392cy 68h 956652cy/h
+ProcessPixel - 64884049cy 882838h 73cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 16501793cy 1h 16501793cy/h
+RenderGroupToOutput - 16371512cy 13h 1259347cy/h
+DrawRectangleHopefullyQuickly - 15492480cy 68h 227830cy/h
+ProcessPixel - 15476728cy 882838h 17cy/h
+
+After clamping uv -----------------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 65450369cy 1h 65450369cy/h
+RenderGroupToOutput - 64438847cy 13h 4956834cy/h
+DrawRectangleHopefullyQuickly - 60062082cy 68h 883265cy/h
+ProcessPixel - 59845498cy 882838h 67cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 17672094cy 1h 17672094cy/h
+RenderGroupToOutput - 17513115cy 13h 1347162cy/h
+DrawRectangleHopefullyQuickly - 16853363cy 68h 247843cy/h
+ProcessPixel - 16849656cy 882838h 19cy/h
+
+After pulling out fx and fy -------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 60984170cy 1h 60984170cy/h
+RenderGroupToOutput - 59748143cy 13h 4596011cy/h
+DrawRectangleHopefullyQuickly - 53852184cy 68h 791943cy/h
+ProcessPixel - 53747963cy 868052h 61cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 15484050cy 1h 15484050cy/h
+RenderGroupToOutput - 15307271cy 13h 1177482cy/h
+DrawRectangleHopefullyQuickly - 14632482cy 68h 215183cy/h
+ProcessPixel - 14627612cy 882838h 16cy/h
+
+After moving texel, dest and blended declarations ---------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 59116298cy 1h 59116298cy/h
+RenderGroupToOutput - 58378907cy 18h 3243272cy/h
+DrawRectangleHopefullyQuickly - 53364018cy 69h 773391cy/h
+ProcessPixel - 53260377cy 901509h 59cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 15745152cy 1h 15745152cy/h
+RenderGroupToOutput - 15634859cy 13h 1202681cy/h
+DrawRectangleHopefullyQuickly - 14939412cy 69h 216513cy/h
+ProcessPixel - 14917765cy 865839h 17cy/h
+
+After converting dest -------------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 53478123cy 1h 53478123cy/h
+RenderGroupToOutput - 52793624cy 13h 4061048cy/h
+DrawRectangleHopefullyQuickly - 49482262cy 68h 727680cy/h
+ProcessPixel - 49353442cy 878938h 56cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 12336144cy 1h 12336144cy/h
+RenderGroupToOutput - 12207506cy 13h 939038cy/h
+DrawRectangleHopefullyQuickly - 11691297cy 69h 169439cy/h
+ProcessPixel - 11687788cy 868787h 13cy/h
+
+After converting samples to vectors -----------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 74597642cy 1h 74597642cy/h
+RenderGroupToOutput - 73335532cy 13h 5641194cy/h
+DrawRectangleHopefullyQuickly - 66233997cy 68h 974029cy/h
+ProcessPixel - 66123899cy 882838h 74cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 12512817cy 1h 12512817cy/h
+RenderGroupToOutput - 12415468cy 13h 955036cy/h
+DrawRectangleHopefullyQuickly - 11732034cy 68h 172529cy/h
+ProcessPixel - 11726425cy 882838h 13cy/h
+
+After vectorizing unpacking of texel samples 57:09 --------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 46261881cy 1h 46261881cy/h
+RenderGroupToOutput - 45642988cy 13h 3510999cy/h
+DrawRectangleHopefullyQuickly - 42646564cy 68h 627155cy/h
+ProcessPixel - 42553077cy 882838h 48cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 14363379cy 1h 14363379cy/h
+RenderGroupToOutput - 14268512cy 13h 1097577cy/h
+DrawRectangleHopefullyQuickly - 13613809cy 68h 200203cy/h
+ProcessPixel - 13604889cy 882838h 15cy/h
+
+Final (with if) -------------------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 43258363cy 1h 43258363cy/h
+RenderGroupToOutput - 42304044cy 13h 3254157cy/h
+DrawRectangleHopefullyQuickly - 38245030cy 68h 562426cy/h
+ProcessPixel - 38216526cy 882838h 43cy/h
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 12645725cy 1h 12645725cy/h
+RenderGroupToOutput - 12523772cy 13h 963367cy/h
+DrawRectangleHopefullyQuickly - 11902942cy 68h 175043cy/h
+ProcessPixel - 11899747cy 882838h 13cy/h

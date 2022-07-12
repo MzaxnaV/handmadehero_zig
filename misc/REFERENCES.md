@@ -29,6 +29,7 @@ Collection of references, not all are realted to Handmade Hero.
 
 ## O
 - [OpenGL Tutorial, Arcsynthesis archieved](https://www.roiatalla.com/public/arcsynthesis/html/index.html)
+- [Optimization Resources, AgnerFog](https://www.agner.org/optimize/)
 
 ## P
 - [Physically Based Rendering, (Matt Pharr, Wenzel Jakob, and Greg Humphreys)](https://www.pbr-book.org/)

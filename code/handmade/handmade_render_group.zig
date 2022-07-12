@@ -378,24 +378,27 @@ pub const loaded_bitmap = struct {
         const inv255_4x = @splat(4, @as(f32, inv255));
         const one255 = 255;
         const one255_4x = @splat(4, @as(f32, one255));
-        const half_4x = @splat(4, @as(f32, 0.5));
 
         const one = @splat(4, @as(f32, 1));
         const zero = @splat(4, @as(f32, 0));
+        const maskff = @splat(4, @as(i32, 0xff));
 
-        const colourr_4x = @splat(4, hm.R(colour));
-        const colourg_4x = @splat(4, hm.G(colour));
-        const colourb_4x = @splat(4, hm.B(colour));
-        const coloura_4x = @splat(4, hm.A(colour));
+        const colourr_4x: simd.f32x4 = @splat(4, hm.R(colour));
+        const colourg_4x: simd.f32x4 = @splat(4, hm.G(colour));
+        const colourb_4x: simd.f32x4 = @splat(4, hm.B(colour));
+        const coloura_4x: simd.f32x4 = @splat(4, hm.A(colour));
 
-        const nXAxisx_4x = @splat(4, hm.X(nXAxis));
-        const nXAxisy_4x = @splat(4, hm.Y(nXAxis));
+        const nXAxisx_4x: simd.f32x4 = @splat(4, hm.X(nXAxis));
+        const nXAxisy_4x: simd.f32x4 = @splat(4, hm.Y(nXAxis));
 
-        const nYAxisx_4x = @splat(4, hm.X(nYAxis));
-        const nYAxisy_4x = @splat(4, hm.Y(nYAxis));
+        const nYAxisx_4x: simd.f32x4 = @splat(4, hm.X(nYAxis));
+        const nYAxisy_4x: simd.f32x4 = @splat(4, hm.Y(nYAxis));
 
-        const originx_4x = @splat(4, hm.X(origin));
-        const originy_4x = @splat(4, hm.Y(origin));
+        const originx_4x: simd.f32x4 = @splat(4, hm.X(origin));
+        const originy_4x: simd.f32x4 = @splat(4, hm.Y(origin));
+
+        const widthm2: simd.f32x4 = @splat(4, @intToFloat(f32, texture.width - 2));
+        const heightm2: simd.f32x4 = @splat(4, @intToFloat(f32, texture.height - 2));
 
         var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, xMin) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, yMin * buffer.pitch);
 
@@ -407,40 +410,8 @@ pub const loaded_bitmap = struct {
             var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
             var xi = xMin;
             while (xi <= xMax) : (xi += 4) {
-                var texelAr: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelAg: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelAb: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelAa: simd.f32x4 = .{ 0, 0, 0, 0 };
 
-                var texelBr: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelBg: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelBb: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelBa: simd.f32x4 = .{ 0, 0, 0, 0 };
-
-                var texelCr: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelCg: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelCb: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelCa: simd.f32x4 = .{ 0, 0, 0, 0 };
-
-                var texelDr: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelDg: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelDb: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var texelDa: simd.f32x4 = .{ 0, 0, 0, 0 };
-
-                var destr: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var destg: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var destb: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var desta: simd.f32x4 = .{ 0, 0, 0, 0 };
-
-                var blendedr: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var blendedg: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var blendedb: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var blendeda: simd.f32x4 = .{ 0, 0, 0, 0 };
-
-                var fX: simd.f32x4 = .{ 0, 0, 0, 0 };
-                var fY: simd.f32x4 = .{ 0, 0, 0, 0 };
-
-                var shouldFill: [4]bool = .{ false, false, false, false };
+                // var shouldFill: [4]bool = .{ false, false, false, false };
 
                 const pixelPX: simd.f32x4 = .{
                     @intToFloat(f32, @intCast(i32, 0) + xi),
@@ -453,145 +424,162 @@ pub const loaded_bitmap = struct {
                 const dx: simd.f32x4 = pixelPX - originx_4x;
                 const dy: simd.f32x4 = pixelPY - originy_4x;
 
-                const u: simd.f32x4 = dx * nXAxisx_4x + dy * nXAxisy_4x;
-                const v: simd.f32x4 = dx * nYAxisx_4x + dy * nYAxisy_4x;
+                var u: simd.f32x4 = dx * nXAxisx_4x + dy * nXAxisy_4x;
+                var v: simd.f32x4 = dx * nYAxisx_4x + dy * nYAxisy_4x;
 
-                var I = @as(u32, 0);
-                while (I < 4) : (I += 1) {
-                    shouldFill[I] = u[I] >= 0 and u[I] <= 1 and v[I] >= 0 and v[I] <= 1;
+                var writeMask: simd.u1x4 = @bitCast(simd.u1x4, (u >= zero)) & @bitCast(simd.u1x4, (u <= one)) &
+                    @bitCast(simd.u1x4, (v >= zero)) & @bitCast(simd.u1x4, (v <= one));
 
-                    if (shouldFill[I]) {
-                        const tX = (u[I] * @intToFloat(f32, texture.width - 2));
-                        const tY = (v[I] * @intToFloat(f32, texture.height - 2));
+                // if (@reduce(.Or, writeMask) != 0)
+                {
+                    const originalDest: simd.u32x4 = pixel[0..4].*;
 
-                        const X: i32 = @floatToInt(i32, tX);
-                        const Y: i32 = @floatToInt(i32, tY);
+                    u = @minimum(@maximum(u, zero), one);
+                    v = @minimum(@maximum(v, zero), one);
 
-                        fX[I] = tX - @intToFloat(f32, X);
-                        fY[I] = tY - @intToFloat(f32, Y);
+                    var sampleA: simd.u32x4 = .{ 0, 0, 0, 0 };
+                    var sampleB: simd.u32x4 = .{ 0, 0, 0, 0 };
+                    var sampleC: simd.u32x4 = .{ 0, 0, 0, 0 };
+                    var sampleD: simd.u32x4 = .{ 0, 0, 0, 0 };
 
-                        assert((X >= 0) and (X < texture.width));
-                        assert((Y >= 0) and (Y < texture.height));
+                    const tX: simd.f32x4 = u * widthm2;
+                    const tY: simd.f32x4 = v * heightm2;
 
-                        const ptrOffset = Y * texture.pitch + X * @sizeOf(u32);
+                    const fetchX_4x: simd.i32x4 = simd.i.cvttps(tX);
+                    const fetchY_4x: simd.i32x4 = simd.i.cvttps(tY);
+
+                    const fX = tX - simd.i.cvtepi32(fetchX_4x);
+                    const fY = tY - simd.i.cvtepi32(fetchY_4x);
+
+                    var I = @as(u32, 0);
+                    while (I < 4) : (I += 1) {
+                        const fetchX: i32 = fetchX_4x[I];
+                        const fetchY: i32 = fetchY_4x[I];
+
+                        assert((fetchX >= 0) and (fetchX < texture.width));
+                        assert((fetchY >= 0) and (fetchY < texture.height));
+
+                        const ptrOffset = fetchY * texture.pitch + fetchX * @sizeOf(u32);
                         const texelPtr = if (ptrOffset > 0) texture.memory + @intCast(usize, ptrOffset) else texture.memory - @intCast(usize, -ptrOffset);
                         const pitchOffset = if (texture.pitch > 0) texelPtr + @intCast(usize, texture.pitch) else texelPtr - @intCast(usize, -texture.pitch);
 
-                        var samplea = @ptrCast(*align(@alignOf(u8)) u32, texelPtr).*;
-                        var sampleb = @ptrCast(*align(@alignOf(u8)) u32, texelPtr + @sizeOf(u32)).*;
-                        var samplec = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset).*;
-                        var sampled = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset + @sizeOf(u32)).*;
+                        sampleA[I] = @ptrCast(*align(@alignOf(u8)) u32, texelPtr).*;
+                        sampleB[I] = @ptrCast(*align(@alignOf(u8)) u32, texelPtr + @sizeOf(u32)).*;
+                        sampleC[I] = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset).*;
+                        sampleD[I] = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset + @sizeOf(u32)).*;
+                    }
 
-                        texelAr[I] = @intToFloat(f32, ((samplea >> 16) & 0xff));
-                        texelAg[I] = @intToFloat(f32, ((samplea >> 8) & 0xff));
-                        texelAb[I] = @intToFloat(f32, ((samplea >> 0) & 0xff));
-                        texelAa[I] = @intToFloat(f32, ((samplea >> 24) & 0xff));
+                    var texelAb: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleA) & maskff);
+                    var texelAg: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleA >> @splat(4, @as(u5, 8))) & maskff);
+                    var texelAr: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleA >> @splat(4, @as(u5, 16))) & maskff);
+                    var texelAa: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleA >> @splat(4, @as(u5, 24))) & maskff);
 
-                        texelBr[I] = @intToFloat(f32, ((sampleb >> 16) & 0xff));
-                        texelBg[I] = @intToFloat(f32, ((sampleb >> 8) & 0xff));
-                        texelBb[I] = @intToFloat(f32, ((sampleb >> 0) & 0xff));
-                        texelBa[I] = @intToFloat(f32, ((sampleb >> 24) & 0xff));
+                    var texelBb: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleB) & maskff);
+                    var texelBg: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleB >> @splat(4, @as(u5, 8))) & maskff);
+                    var texelBr: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleB >> @splat(4, @as(u5, 16))) & maskff);
+                    var texelBa: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleB >> @splat(4, @as(u5, 24))) & maskff);
 
-                        texelCr[I] = @intToFloat(f32, ((samplec >> 16) & 0xff));
-                        texelCg[I] = @intToFloat(f32, ((samplec >> 8) & 0xff));
-                        texelCb[I] = @intToFloat(f32, ((samplec >> 0) & 0xff));
-                        texelCa[I] = @intToFloat(f32, ((samplec >> 24) & 0xff));
+                    var texelCb: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleC) & maskff);
+                    var texelCg: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleC >> @splat(4, @as(u5, 8))) & maskff);
+                    var texelCr: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleC >> @splat(4, @as(u5, 16))) & maskff);
+                    var texelCa: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleC >> @splat(4, @as(u5, 24))) & maskff);
 
-                        texelDr[I] = @intToFloat(f32, ((sampled >> 16) & 0xff));
-                        texelDg[I] = @intToFloat(f32, ((sampled >> 8) & 0xff));
-                        texelDb[I] = @intToFloat(f32, ((sampled >> 0) & 0xff));
-                        texelDa[I] = @intToFloat(f32, ((sampled >> 24) & 0xff));
+                    var texelDb: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleD) & maskff);
+                    var texelDg: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleD >> @splat(4, @as(u5, 8))) & maskff);
+                    var texelDr: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleD >> @splat(4, @as(u5, 16))) & maskff);
+                    var texelDa: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleD >> @splat(4, @as(u5, 24))) & maskff);
 
-                        destr[I] = @intToFloat(f32, ((pixel[I] >> 16) & 0xff));
-                        destg[I] = @intToFloat(f32, ((pixel[I] >> 8) & 0xff));
-                        destb[I] = @intToFloat(f32, ((pixel[I] >> 0) & 0xff));
-                        desta[I] = @intToFloat(f32, ((pixel[I] >> 24) & 0xff));
+                    var destb: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, originalDest) & maskff);
+                    var destg: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, originalDest >> @splat(4, @as(u5, 8))) & maskff);
+                    var destr: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, originalDest >> @splat(4, @as(u5, 16))) & maskff);
+                    var desta: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, originalDest >> @splat(4, @as(u5, 24))) & maskff);
+
+                    texelAr = (inv255_4x * texelAr) * (inv255_4x * texelAr);
+                    texelAg = (inv255_4x * texelAg) * (inv255_4x * texelAg);
+                    texelAb = (inv255_4x * texelAb) * (inv255_4x * texelAb);
+                    texelAa = inv255_4x * texelAa;
+
+                    texelBr = (inv255_4x * texelBr) * (inv255_4x * texelBr);
+                    texelBg = (inv255_4x * texelBg) * (inv255_4x * texelBg);
+                    texelBb = (inv255_4x * texelBb) * (inv255_4x * texelBb);
+                    texelBa = inv255_4x * texelBa;
+
+                    texelCr = (inv255_4x * texelCr) * (inv255_4x * texelCr);
+                    texelCg = (inv255_4x * texelCg) * (inv255_4x * texelCg);
+                    texelCb = (inv255_4x * texelCb) * (inv255_4x * texelCb);
+                    texelCa = inv255_4x * texelCa;
+
+                    texelDr = (inv255_4x * texelDr) * (inv255_4x * texelDr);
+                    texelDg = (inv255_4x * texelDg) * (inv255_4x * texelDg);
+                    texelDb = (inv255_4x * texelDb) * (inv255_4x * texelDb);
+                    texelDa = inv255_4x * texelDa;
+
+                    const ifX: simd.f32x4 = one - fX;
+                    const ifY: simd.f32x4 = one - fY;
+
+                    const l0: simd.f32x4 = ifY * ifX;
+                    const l1: simd.f32x4 = ifY * fX;
+                    const l2: simd.f32x4 = fY * ifX;
+                    const l3: simd.f32x4 = fY * fX;
+
+                    var texelr: simd.f32x4 = l0 * texelAr + l1 * texelBr + l2 * texelCr + l3 * texelDr;
+                    var texelg: simd.f32x4 = l0 * texelAg + l1 * texelBg + l2 * texelCg + l3 * texelDg;
+                    var texelb: simd.f32x4 = l0 * texelAb + l1 * texelBb + l2 * texelCb + l3 * texelDb;
+                    var texela: simd.f32x4 = l0 * texelAa + l1 * texelBa + l2 * texelCa + l3 * texelDa;
+
+                    texelr = texelr * colourr_4x;
+                    texelg = texelg * colourg_4x;
+                    texelb = texelb * colourb_4x;
+                    texela = texela * coloura_4x;
+
+                    // TODO (Manav): use _mm_min_ps and _mm_max_ps (minps maxps instruction) ?
+                    texelr = @minimum(@maximum(texelr, zero), one);
+                    texelg = @minimum(@maximum(texelg, zero), one);
+                    texelb = @minimum(@maximum(texelb, zero), one);
+                    texela = @minimum(@maximum(texela, zero), one); // NOTE (Manav): clamp alpha, we have a bug somewhere which makes alpha > 1
+
+                    destr = (inv255_4x * destr) * (inv255_4x * destr);
+                    destg = (inv255_4x * destg) * (inv255_4x * destg);
+                    destb = (inv255_4x * destb) * (inv255_4x * destb);
+                    desta = inv255_4x * desta;
+
+                    const invTexelA: simd.f32x4 = one - texela;
+                    var blendedr = invTexelA * destr + texelr;
+                    var blendedg = invTexelA * destg + texelg;
+                    var blendedb = invTexelA * destb + texelb;
+                    var blendeda = invTexelA * desta + texela;
+
+                    // TODO (Manav): use _mm_sqrt_ps (sqrtps instruction) ?
+                    blendedr = one255_4x * @sqrt(blendedr);
+                    blendedg = one255_4x * @sqrt(blendedg);
+                    blendedb = one255_4x * @sqrt(blendedb);
+                    blendeda = one255_4x * blendeda;
+
+                    const intr: simd.i32x4 = simd.i.cvtps(blendedr);
+                    const intg: simd.i32x4 = simd.i.cvtps(blendedg);
+                    const intb: simd.i32x4 = simd.i.cvtps(blendedb);
+                    const inta: simd.i32x4 = simd.i.cvtps(blendeda);
+
+                    const sr: simd.i32x4 = (intr << @splat(4, @as(u5, 16)));
+                    const sg: simd.i32x4 = (intg << @splat(4, @as(u5, 8)));
+                    const sb: simd.i32x4 = intb;
+                    const sa: simd.i32x4 = (inta << @splat(4, @as(u5, 24)));
+
+                    const out: simd.i32x4 = sr | sg | sb | sa;
+
+                    const maskedOut: simd.u32x4 = @select(u32, @bitCast(simd.bx4, writeMask), @bitCast(simd.u32x4, out), originalDest);
+
+                    // TODO (Manav): look into implementing _mm_maskmove_si128()
+                    {
+                        // const pixel_ptr = @ptrCast(*align(@alignOf(i32)) simd.i32x4, pixel); // unaligned access
+                        // pixel_ptr.* = maskedOut;
+
+                        comptime var i = 0;
+                        inline while (i < 4) : (i += 1) {
+                            pixel[i] = maskedOut[i];
+                        }
                     }
                 }
-
-                texelAr = (inv255_4x * texelAr) * (inv255_4x * texelAr);
-                texelAg = (inv255_4x * texelAg) * (inv255_4x * texelAg);
-                texelAb = (inv255_4x * texelAb) * (inv255_4x * texelAb);
-                texelAa = inv255_4x * texelAa;
-
-                texelBr = (inv255_4x * texelBr) * (inv255_4x * texelBr);
-                texelBg = (inv255_4x * texelBg) * (inv255_4x * texelBg);
-                texelBb = (inv255_4x * texelBb) * (inv255_4x * texelBb);
-                texelBa = inv255_4x * texelBa;
-
-                texelCr = (inv255_4x * texelCr) * (inv255_4x * texelCr);
-                texelCg = (inv255_4x * texelCg) * (inv255_4x * texelCg);
-                texelCb = (inv255_4x * texelCb) * (inv255_4x * texelCb);
-                texelCa = inv255_4x * texelCa;
-
-                texelDr = (inv255_4x * texelDr) * (inv255_4x * texelDr);
-                texelDg = (inv255_4x * texelDg) * (inv255_4x * texelDg);
-                texelDb = (inv255_4x * texelDb) * (inv255_4x * texelDb);
-                texelDa = inv255_4x * texelDa;
-
-                const ifX: simd.f32x4 = one - fX;
-                const ifY: simd.f32x4 = one - fY;
-
-                const l0: simd.f32x4 = ifY * ifX;
-                const l1: simd.f32x4 = ifY * fX;
-                const l2: simd.f32x4 = fY * ifX;
-                const l3: simd.f32x4 = fY * fX;
-
-                var texelr: simd.f32x4 = l0 * texelAr + l1 * texelBr + l2 * texelCr + l3 * texelDr;
-                var texelg: simd.f32x4 = l0 * texelAg + l1 * texelBg + l2 * texelCg + l3 * texelDg;
-                var texelb: simd.f32x4 = l0 * texelAb + l1 * texelBb + l2 * texelCb + l3 * texelDb;
-                var texela: simd.f32x4 = l0 * texelAa + l1 * texelBa + l2 * texelCa + l3 * texelDa;
-
-                texelr = texelr * colourr_4x;
-                texelg = texelg * colourg_4x;
-                texelb = texelb * colourb_4x;
-                texela = texela * coloura_4x;
-
-                // TODO (Manav): use _mm_min_ps and _mm_max_ps (minps maxps instruction) ?
-                texelr = @minimum(@maximum(texelr, zero), one);
-                texelg = @minimum(@maximum(texelg, zero), one);
-                texelb = @minimum(@maximum(texelb, zero), one);
-                texela = @minimum(@maximum(texela, zero), one); // NOTE (Manav): clamp alpha, we have a bug somewhere which makes alpha > 1
-
-                destr = (inv255_4x * destr) * (inv255_4x * destr);
-                destg = (inv255_4x * destg) * (inv255_4x * destg);
-                destb = (inv255_4x * destb) * (inv255_4x * destb);
-                desta = inv255_4x * desta;
-
-                const invTexelA: simd.f32x4 = one - texela;
-                blendedr = invTexelA * destr + texelr;
-                blendedg = invTexelA * destg + texelg;
-                blendedb = invTexelA * destb + texelb;
-                blendeda = invTexelA * desta + texela;
-
-                // TODO (Manav): use _mm_sqrt_ps (sqrtps instruction) ?
-                blendedr = one255_4x * @sqrt(blendedr);
-                blendedg = one255_4x * @sqrt(blendedg);
-                blendedb = one255_4x * @sqrt(blendedb);
-                blendeda = one255_4x * blendeda;
-
-                const intr = simd.i.cvttps(blendedr + half_4x);
-                const intg = simd.i.cvttps(blendedg + half_4x);
-                const intb = simd.i.cvttps(blendedb + half_4x);
-                const inta = simd.i.cvttps(blendeda + half_4x);
-
-                const sr = (intr << @splat(4, @as(u5, 16)));
-                const sg = (intg << @splat(4, @as(u5, 8)));
-                const sb = intb;
-                const sa = (inta << @splat(4, @as(u5, 24)));
-
-                const out = sr | sg | sb | sa;
-
-                {
-                    // const pixel_ptr = @ptrCast(*align(@alignOf(i32)) simd.i32x4, pixel); // unaligned access
-                    // pixel_ptr.* = out;
-
-                    comptime var i = 0;
-                    inline while (i < 4) : (i += 1) {
-                        pixel[i] = @bitCast(u32, out[i]);
-                    }
-                }
-
                 pixel += 4;
             }
             row += @intCast(u32, buffer.pitch);

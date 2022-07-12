@@ -153,28 +153,35 @@ test "simd" {
     const v1: simd.f32x4 = .{ 1.1, 2.2, 3.3, 4.4 };
     const v2: simd.f32x4 = .{ -4.4, -5.5, -6.6, -7.7 };
 
-    const zc1 = simd.z._mm_cvtps_epi32(v1);
-    const zc2 = simd.z._mm_cvtps_epi32(v2);
-    const zc3 = simd.z._mm_cvttps_epi32(v2);
+    const zc1: simd.i32x4 = simd.z._mm_cvtps_epi32(v1);
+    const zc2: simd.i32x4 = simd.z._mm_cvtps_epi32(v2);
+    const zc3: simd.i32x4 = simd.z._mm_cvttps_epi32(v2);
 
-    const ic1 = simd.i.cvtps(v1);
-    const ic2 = simd.i.cvtps(v2);
-    const ic3 = simd.i.cvttps(v2);
+    const ic1: simd.i32x4 = simd.i.cvtps(v1);
+    const ic2: simd.i32x4 = simd.i.cvtps(v2);
+    const ic3: simd.i32x4 = simd.i.cvttps(v2);
 
-    {
-        comptime var i = 0;
-        inline while (i < 4) : (i += 1) {
-            try testing.expectEqual(ic1[i], zc1[i]);
-            try testing.expectEqual(ic2[i], zc2[i]);
-            try testing.expectEqual(ic3[i], zc3[i]);
+    try testing.expectEqual(zc1, ic1);
+    try testing.expectEqual(zc2, ic2);
+    try testing.expectEqual(zc3, ic3);
 
-            try testing.expectEqual(zc1[i], i + 1);
-            try testing.expectEqual(ic3[i], -(4 + i));
-        }
+    try testing.expectEqual(simd.i32x4{ 1, 2, 3, 4 }, zc1);
+    try testing.expectEqual(simd.i32x4{ -4, -6, -7, -8 }, ic2);
+    try testing.expectEqual(simd.i32x4{ -4, -5, -6, -7 }, ic3);
 
-        try testing.expectEqual(zc2[0], -4);
-        try testing.expectEqual(zc2[1], -6);
-        try testing.expectEqual(ic2[2], -7);
-        try testing.expectEqual(ic2[3], -8);
-    }
+    const zc1i: simd.f32x4 = simd.z._mm_cvtepi32_ps(zc1);
+    const zc2i: simd.f32x4 = simd.z._mm_cvtepi32_ps(zc2);
+    const zc3i: simd.f32x4 = simd.z._mm_cvtepi32_ps(zc3);
+
+    const ic1i: simd.f32x4 = simd.i.cvtepi32(ic1);
+    const ic2i: simd.f32x4 = simd.i.cvtepi32(ic2);
+    const ic3i: simd.f32x4 = simd.i.cvtepi32(ic3);
+
+    try testing.expectEqual(zc1i, ic1i);
+    try testing.expectEqual(zc2i, ic2i);
+    try testing.expectEqual(zc3i, ic3i);
+
+    try testing.expectEqual(simd.f32x4{ 1, 2, 3, 4 }, zc1i);
+    try testing.expectEqual(simd.f32x4{ -4, -6, -7, -8 }, ic2i);
+    try testing.expectEqual(simd.f32x4{ -4, -5, -6, -7 }, ic3i);
 }
