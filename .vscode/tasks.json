@@ -56,6 +56,12 @@
                 "isDefault": true
             },
             "command": "zig build --verbose test"
+        },
+        {
+            "label": "Run iaca",
+            "type": "shell",
+            "command": "${workspaceFolder}/misc/iaca-version-2.3-win64/iaca.exe -o ${workspaceFolder}/misc/output.txt ${workspaceFolder}/build/handmade.dll",
+            "problemMatcher": []
         }
     ]
 }

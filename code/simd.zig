@@ -70,11 +70,16 @@ pub const z = struct {
     pub inline fn _mm_unpackhi_ps(a: f32x4, b: f32x4) f32x4 {
         return @shuffle(f32, a, b, i32x4{ 2, -3, 3, -4 });
     }
+
+    // TODO (Manav): untested
+    pub inline fn _mm_mullo_epi16(a: i32x4, b: i32x4) i32x4 {
+        return @bitCast(i32x4, @bitCast(u16x8, a) * @bitCast(u16x8, b));
+    }
 };
 
 /// simd intrinsics implemented using inline assembly
 pub const i = struct {
-    pub inline fn cvtps(v: f32x4) i32x4 {
+    pub inline fn _mm_cvtps_epi32(v: f32x4) i32x4 {
         const result = asm ("cvtps2dq %[v], %[v]"
             : [ret] "=&{xmm0}" (-> i32x4),
             : [v] "{xmm0}" (v),
@@ -83,7 +88,7 @@ pub const i = struct {
         return result;
     }
 
-    pub inline fn cvttps(v: f32x4) i32x4 {
+    pub inline fn _mm_cvttps_epi32(v: f32x4) i32x4 {
         const result = asm ("cvttps2dq  %[v], %[v]"
             : [ret] "=&{xmm0}" (-> i32x4),
             : [v] "{xmm0}" (v),
@@ -92,7 +97,7 @@ pub const i = struct {
         return result;
     }
 
-    pub inline fn cvtepi32(v: i32x4) f32x4 {
+    pub inline fn _mm_cvtepi32_ps(v: i32x4) f32x4 {
         const result = asm ("cvtdq2ps %[v], %[v]"
             : [ret] "=&{xmm0}" (-> f32x4),
             : [v] "{xmm0}" (v),
@@ -102,23 +107,55 @@ pub const i = struct {
     }
 
     // TODO (Manav): untested
-    pub inline fn unpacklo(a: f32x4, b: f32x4) f32x4 {
-        const result: f32x4 = asm volatile ("punpckldq %[a], %[b]"
-            : [ret] "={xmm1}" (-> f32x4),
-            : [b] "{xmm1}" (b),
-              [a] "{xmm0}" (a),
+    pub inline fn _mm_unpacklo_epi32(a: f32x4, b: f32x4) f32x4 {
+        const result: f32x4 = asm volatile ("punpckldq %[arg1], %[arg0]"
+            : [ret] "={xmm0}" (-> f32x4),
+            : [arg0] "{xmm0}" (b),
+              [arg1] "{xmm1}" (a),
         );
 
         return result;
     }
 
     // TODO (Manav): untested
-    pub inline fn unpackhi(a: f32x4, b: f32x4) f32x4 {
-        const result = asm ("punpckhdq %[arg1], %[arg2]"
+    pub inline fn _mm_unpackhi_epi32(a: f32x4, b: f32x4) f32x4 {
+        const result = asm ("punpckhdq %[arg1], %[arg0]"
             : [ret] "={xmm0}" (-> @Vector(4, f32)),
-            : [arg1] "{xmm1}" (b),
-              [arg2] "{xmm0}" (a),
+            : [arg0] "{xmm0}" (a),
+              [arg1] "{xmm1}" (b),
         );
+        return result;
+    }
+
+    // TODO (Manav): untested
+    pub inline fn _mm_mullo_epi16_(a: i32x4, b: i32x4) i32x4 {
+        const result = asm ("pmullw %[arg1], %[arg0]"
+            : [ret] "={xmm0}" (-> i32x4),
+            : [arg0] "{xmm0}" (a),
+              [arg1] "{xmm1}" (b),
+        );
+
+        return result;
+    }
+
+    // TODO (Manav): untested
+    pub inline fn _mm_rsqrt_ps(v: f32x4) f32x4 {
+        const result = asm ("rsqrtps %[v], %[v]"
+            : [ret] "=&{xmm0}" (-> f32x4),
+            : [v] "{xmm0}" (v),
+        );
+
+        return result;
+    }
+
+    // TODO (Manav): untested
+    pub export fn _mm_srli_epi32(v: i32x4, imm8: u32) i32x4 {
+        const result = asm ("psrld %[arg1], %[arg0]"
+            : [ret] "={xmm0}" (-> i32x4),
+            : [arg1] "{xmm1}" (imm8),
+              [arg0] "{xmm0}" (v),
+        );
+
         return result;
     }
 };

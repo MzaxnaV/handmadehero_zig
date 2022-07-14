@@ -157,9 +157,9 @@ test "simd" {
     const zc2: simd.i32x4 = simd.z._mm_cvtps_epi32(v2);
     const zc3: simd.i32x4 = simd.z._mm_cvttps_epi32(v2);
 
-    const ic1: simd.i32x4 = simd.i.cvtps(v1);
-    const ic2: simd.i32x4 = simd.i.cvtps(v2);
-    const ic3: simd.i32x4 = simd.i.cvttps(v2);
+    const ic1: simd.i32x4 = simd.i._mm_cvtps_epi32(v1);
+    const ic2: simd.i32x4 = simd.i._mm_cvtps_epi32(v2);
+    const ic3: simd.i32x4 = simd.i._mm_cvttps_epi32(v2);
 
     try testing.expectEqual(zc1, ic1);
     try testing.expectEqual(zc2, ic2);
@@ -173,9 +173,9 @@ test "simd" {
     const zc2i: simd.f32x4 = simd.z._mm_cvtepi32_ps(zc2);
     const zc3i: simd.f32x4 = simd.z._mm_cvtepi32_ps(zc3);
 
-    const ic1i: simd.f32x4 = simd.i.cvtepi32(ic1);
-    const ic2i: simd.f32x4 = simd.i.cvtepi32(ic2);
-    const ic3i: simd.f32x4 = simd.i.cvtepi32(ic3);
+    const ic1i: simd.f32x4 = simd.i._mm_cvtepi32_ps(ic1);
+    const ic2i: simd.f32x4 = simd.i._mm_cvtepi32_ps(ic2);
+    const ic3i: simd.f32x4 = simd.i._mm_cvtepi32_ps(ic3);
 
     try testing.expectEqual(zc1i, ic1i);
     try testing.expectEqual(zc2i, ic2i);
@@ -184,4 +184,7 @@ test "simd" {
     try testing.expectEqual(simd.f32x4{ 1, 2, 3, 4 }, zc1i);
     try testing.expectEqual(simd.f32x4{ -4, -6, -7, -8 }, ic2i);
     try testing.expectEqual(simd.f32x4{ -4, -5, -6, -7 }, ic3i);
+
+    // const rsqrtv1 = simd.i._mm_rsqrt_ps(v1);
+    // const rsqrtv2 = simd.i._mm_rsqrt_ps(v2);
 }

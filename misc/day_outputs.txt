@@ -398,3 +398,151 @@ UpdateAndRender - 44077149cy 1h 44077149cy/h
 RenderGroupToOutput - 43965614cy 1h 43965614cy/h
 DrawRectangleSlowly - 43325773cy 71h 610222cy/h
 ProcessPixel - 43309285cy 930181h 46cy/h
+
+Day 120: --------------------------------------------------------------------------------------------------------------
+
+IACA Report:
+Block Throughput: 197.81 Cycles       Throughput Bottleneck: Dependency chains (possibly between iterations)
+--------------------------------------------------------------------------------------------------
+|  Port  |   0   -  DV   |   1   |   2   -   D   |   3   -   D   |   4   |   5   |   6   |   7   |
+--------------------------------------------------------------------------------------------------
+| Cycles | 52.5     9.0  | 52.5  | 151.5   130.0 | 151.5   130.0 | 179.0 | 44.5  | 42.5  | 136.0 |
+--------------------------------------------------------------------------------------------------
+Total Num Of Uops: 814
+
+Bake multiplies to colour_4x ------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 48386865cy 1h 48386865cy/h
+RenderGroupToOutput - 47202875cy 1h 47202875cy/h
+DrawRectangleQuickly - 45152093cy 71h 635944cy/h
+ProcessPixel - 45028760cy 918544h 49cy/h
+
+IACA Report:
+Block Throughput: 190.33 Cycles       Throughput Bottleneck: Dependency chains (possibly between iterations)
+--------------------------------------------------------------------------------------------------
+|  Port  |   0   -  DV   |   1   |   2   -   D   |   3   -   D   |   4   |   5   |   6   |   7   |
+--------------------------------------------------------------------------------------------------
+| Cycles | 44.7     9.0  | 44.7  | 148.5   128.0 | 148.5   128.0 | 174.0 | 44.2  | 42.4  | 133.0 |
+--------------------------------------------------------------------------------------------------
+Total Num Of Uops: 784
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 12920938cy 1h 12920938cy/h
+RenderGroupToOutput - 12729464cy 1h 12729464cy/h
+DrawRectangleQuickly - 12395963cy 71h 174591cy/h
+ProcessPixel - 12392503cy 934622h 13cy/h
+
+Remove multiply ops ---------------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 47143704cy 1h 47143704cy/h
+RenderGroupToOutput - 45960509cy 1h 45960509cy/h
+DrawRectangleQuickly - 43640032cy 71h 614648cy/h
+ProcessPixel - 43526756cy 918544h 47cy/h
+
+IACA Report:
+Block Throughput: 185.71 Cycles       Throughput Bottleneck: Dependency chains (possibly between iterations)
+--------------------------------------------------------------------------------------------------
+|  Port  |   0   -  DV   |   1   |   2   -   D   |   3   -   D   |   4   |   5   |   6   |   7   |
+--------------------------------------------------------------------------------------------------
+| Cycles | 42.2     9.0  | 42.2  | 146.5   126.5 | 146.6   126.5 | 170.0 | 42.2  | 41.4  | 129.9 |
+--------------------------------------------------------------------------------------------------
+Total Num Of Uops: 765
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 12576202cy 1h 12576202cy/h
+RenderGroupToOutput - 12445326cy 1h 12445326cy/h
+DrawRectangleQuickly - 11681310cy 71h 164525cy/h
+ProcessPixel - 11668989cy 918544h 12cy/h
+
+converting everything to use 16 bit squaring --------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 50620149cy 1h 50620149cy/h
+RenderGroupToOutput - 49255082cy 1h 49255082cy/h
+DrawRectangleQuickly - 47720151cy 71h 672114cy/h
+ProcessPixel - 47601763cy 918544h 51cy/h
+
+IACA Report:
+Block Throughput: 231.14 Cycles       Throughput Bottleneck: Dependency chains (possibly between iterations)
+--------------------------------------------------------------------------------------------------
+|  Port  |   0   -  DV   |   1   |   2   -   D   |   3   -   D   |   4   |   5   |   6   |   7   |
+--------------------------------------------------------------------------------------------------
+| Cycles | 58.0     9.0  | 58.0  | 175.5   148.5 | 175.5   148.5 | 215.0 | 58.0  | 58.0  | 161.0 |
+--------------------------------------------------------------------------------------------------
+Total Num Of Uops: 980
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 14678140cy 1h 14678140cy/h
+RenderGroupToOutput - 14465051cy 1h 14465051cy/h
+DrawRectangleQuickly - 14106380cy 71h 198681cy/h
+ProcessPixel - 14101918cy 918544h 15cy/h
+
+local variables -------------------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 47473897cy 1h 47473897cy/h
+RenderGroupToOutput - 46358595cy 1h 46358595cy/h
+DrawRectangleQuickly - 44896162cy 71h 632340cy/h
+ProcessPixel - 44839902cy 930042h 48cy/h
+
+IACA Report:
+Block Throughput: 229.52 Cycles       Throughput Bottleneck: Dependency chains (possibly between iterations)
+--------------------------------------------------------------------------------------------------
+|  Port  |   0   -  DV   |   1   |   2   -   D   |   3   -   D   |   4   |   5   |   6   |   7   |
+--------------------------------------------------------------------------------------------------
+| Cycles | 58.0     9.0  | 58.0  | 173.0   145.5 | 174.0   145.5 | 215.0 | 58.0  | 58.0  | 159.0 |
+--------------------------------------------------------------------------------------------------
+Total Num Of Uops: 974
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 11790142cy 1h 11790142cy/h
+RenderGroupToOutput - 11438534cy 1h 11438534cy/h
+DrawRectangleQuickly - 10026082cy 71h 141212cy/h
+ProcessPixel - 10020218cy 918544h 10cy/h
+
+rsqrt -----------------------------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 49839069cy 1h 49839069cy/h
+RenderGroupToOutput - 48433422cy 1h 48433422cy/h
+DrawRectangleQuickly - 46587518cy 71h 656162cy/h
+ProcessPixel - 46469163cy 918544h 50cy/h
+
+IACA Report:
+Block Throughput: 239.95 Cycles       Throughput Bottleneck: Dependency chains (possibly between iterations)
+--------------------------------------------------------------------------------------------------
+|  Port  |   0   -  DV   |   1   |   2   -   D   |   3   -   D   |   4   |   5   |   6   |   7   |
+--------------------------------------------------------------------------------------------------
+| Cycles | 58.8     0.0  | 58.8  | 182.4   151.5 | 182.4   151.5 | 227.0 | 58.8  | 58.7  | 165.2 |
+--------------------------------------------------------------------------------------------------
+Total Num Of Uops: 1016
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 14894572cy 1h 14894572cy/h
+RenderGroupToOutput - 14629739cy 1h 14629739cy/h
+DrawRectangleQuickly - 14128581cy 71h 198994cy/h
+ProcessPixel - 14124019cy 918544h 15cy/h
+
+day120 final ----------------------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 53302391cy 1h 53302391cy/h
+RenderGroupToOutput - 51240220cy 1h 51240220cy/h
+DrawRectangleQuickly - 50043340cy 71h 704835cy/h
+ProcessPixel - 49997060cy 927943h 53cy/h
+
+IACA Report:
+Block Throughput: 246.33 Cycles       Throughput Bottleneck: Backend. Port4
+--------------------------------------------------------------------------------------------------
+|  Port  |   0   -  DV   |   1   |   2   -   D   |   3   -   D   |   4   |   5   |   6   |   7   |
+--------------------------------------------------------------------------------------------------
+| Cycles | 61.0     0.0  | 61.0  | 187.2   154.5 | 187.2   154.5 | 236.0 | 61.0  | 61.0  | 170.5 |
+--------------------------------------------------------------------------------------------------
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 11830682cy 1h 11830682cy/h
+RenderGroupToOutput - 11690836cy 1h 11690836cy/h
+DrawRectangleQuickly - 11365280cy 71h 160074cy/h
+ProcessPixel - 11355192cy 905578h 12cy/h

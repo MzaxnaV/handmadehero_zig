@@ -9,6 +9,22 @@ const hi = @import("handmade_intrinsics.zig");
 
 const simd = @import("simd");
 
+// Works with iaca 2.3 (couldn't make it work with 3.0)
+pub const iasa = struct {
+    pub inline fn Start() void {
+        if (NOT_IGNORE) {
+            asm volatile ("movl $111, %%ebx\n.byte 0x64, 0x67, 0x90" ::: "memory");
+        }
+    }
+
+    // DO NOT USE DEFER
+    pub inline fn End() void {
+        if (NOT_IGNORE) {
+            asm volatile ("movl $222, %%ebx\n.byte 0x64, 0x67, 0x90" ::: "memory");
+        }
+    }
+};
+
 // doc ------------------------------------------------------------------------------------------------------------------------------------
 
 // 1) Everything outside the renderer, Y _always_ goes upward, X to the right.
@@ -378,13 +394,20 @@ pub const loaded_bitmap = struct {
 
         const inv255 = 1.0 / 255.0;
         const inv255_4x = @splat(4, @as(f32, inv255));
-        const one255 = 255;
-        const one255_4x = @splat(4, @as(f32, one255));
+        // const one255 = 255;
+        // const one255_4x = @splat(4, @as(f32, one255));
+
+        // const normalizedC = 1.0 / 255.0;
+        // const normalizedSqC = 1.0 / hm.Square(255.0);
 
         const one = @splat(4, @as(f32, 1));
         const four_4x = @splat(4, @as(f32, 4));
         const zero = @splat(4, @as(f32, 0));
         const maskff = @splat(4, @as(i32, 0xff));
+        const maskffff = @splat(4, @as(i32, 0xffff));
+        const maskff00ff = @splat(4, @as(i32, 0xff00ff));
+        _ = maskffff;
+        _ = maskff00ff;
 
         const colourr_4x: simd.f32x4 = @splat(4, hm.R(colour));
         const colourg_4x: simd.f32x4 = @splat(4, hm.G(colour));
@@ -399,11 +422,15 @@ pub const loaded_bitmap = struct {
 
         const originx_4x: simd.f32x4 = @splat(4, hm.X(origin));
         const originy_4x: simd.f32x4 = @splat(4, hm.Y(origin));
+        const maxColourValue: simd.f32x4 = @splat(4, @as(f32, 255 * 255));
 
         const widthm2: simd.f32x4 = @splat(4, @intToFloat(f32, texture.width - 2));
         const heightm2: simd.f32x4 = @splat(4, @intToFloat(f32, texture.height - 2));
 
         var row = @ptrCast([*]u8, buffer.memory) + @intCast(u32, xMin) * platform.BITMAP_BYTES_PER_PIXEL + @intCast(u32, yMin * buffer.pitch);
+
+        const texturePitch = texture.pitch;
+        const textureMemory = texture.memory;
 
         platform.BEGIN_TIMED_BLOCK(.ProcessPixel);
         defer platform.END_TIMED_BLOCK_COUNTED(.ProcessPixel, @intCast(u32, (xMax - xMin + 1) * (yMax - yMin + 1)));
@@ -422,6 +449,8 @@ pub const loaded_bitmap = struct {
 
             var xi = xMin;
             while (xi <= xMax) : (xi += 4) {
+                iasa.Start();
+
                 var u: simd.f32x4 = pixelPX * nXAxisx_4x + pixelPY * nXAxisy_4x;
                 var v: simd.f32x4 = pixelPX * nYAxisx_4x + pixelPY * nYAxisy_4x;
 
@@ -443,11 +472,11 @@ pub const loaded_bitmap = struct {
                     const tX: simd.f32x4 = u * widthm2;
                     const tY: simd.f32x4 = v * heightm2;
 
-                    const fetchX_4x: simd.i32x4 = simd.i.cvttps(tX);
-                    const fetchY_4x: simd.i32x4 = simd.i.cvttps(tY);
+                    const fetchX_4x: simd.i32x4 = simd.i._mm_cvttps_epi32(tX);
+                    const fetchY_4x: simd.i32x4 = simd.i._mm_cvttps_epi32(tY);
 
-                    const fX = tX - simd.i.cvtepi32(fetchX_4x);
-                    const fY = tY - simd.i.cvtepi32(fetchY_4x);
+                    const fX = tX - simd.i._mm_cvtepi32_ps(fetchX_4x);
+                    const fY = tY - simd.i._mm_cvtepi32_ps(fetchY_4x);
 
                     var I = @as(u32, 0);
                     while (I < 4) : (I += 1) {
@@ -457,9 +486,9 @@ pub const loaded_bitmap = struct {
                         assert((fetchX >= 0) and (fetchX < texture.width));
                         assert((fetchY >= 0) and (fetchY < texture.height));
 
-                        const ptrOffset = fetchY * texture.pitch + fetchX * @sizeOf(u32);
-                        const texelPtr = if (ptrOffset > 0) texture.memory + @intCast(usize, ptrOffset) else texture.memory - @intCast(usize, -ptrOffset);
-                        const pitchOffset = if (texture.pitch > 0) texelPtr + @intCast(usize, texture.pitch) else texelPtr - @intCast(usize, -texture.pitch);
+                        const ptrOffset = fetchY * texturePitch + fetchX * @sizeOf(u32);
+                        const texelPtr = if (ptrOffset > 0) textureMemory + @intCast(usize, ptrOffset) else textureMemory - @intCast(usize, -ptrOffset);
+                        const pitchOffset = if (texturePitch > 0) texelPtr + @intCast(usize, texturePitch) else texelPtr - @intCast(usize, -texturePitch);
 
                         sampleA[I] = @ptrCast(*align(@alignOf(u8)) u32, texelPtr).*;
                         sampleB[I] = @ptrCast(*align(@alignOf(u8)) u32, texelPtr + @sizeOf(u32)).*;
@@ -467,50 +496,87 @@ pub const loaded_bitmap = struct {
                         sampleD[I] = @ptrCast(*align(@alignOf(u8)) u32, pitchOffset + @sizeOf(u32)).*;
                     }
 
-                    var texelAb: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleA) & maskff);
-                    var texelAg: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleA >> @splat(4, @as(u5, 8))) & maskff);
-                    var texelAr: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleA >> @splat(4, @as(u5, 16))) & maskff);
-                    var texelAa: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleA >> @splat(4, @as(u5, 24))) & maskff);
+                    var texelArb: simd.i32x4 = @bitCast(simd.i32x4, sampleA) & maskff00ff;
+                    var texelAag: simd.i32x4 = @bitCast(simd.i32x4, sampleA >> @splat(4, @as(u5, 8))) & maskff00ff;
+                    texelArb = simd.z._mm_mullo_epi16(texelArb, texelArb);
+                    var texelAa: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, texelAag >> @splat(4, @as(u5, 16))) & maskff); // cvtepi32
+                    texelAag = simd.z._mm_mullo_epi16(texelAag, texelAag);
 
-                    var texelBb: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleB) & maskff);
-                    var texelBg: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleB >> @splat(4, @as(u5, 8))) & maskff);
-                    var texelBr: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleB >> @splat(4, @as(u5, 16))) & maskff);
-                    var texelBa: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleB >> @splat(4, @as(u5, 24))) & maskff);
+                    var texelBrb: simd.i32x4 = @bitCast(simd.i32x4, sampleB) & maskff00ff;
+                    var texelBag: simd.i32x4 = @bitCast(simd.i32x4, sampleB >> @splat(4, @as(u5, 8))) & maskff00ff;
+                    texelBrb = simd.z._mm_mullo_epi16(texelBrb, texelBrb);
+                    var texelBa: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, texelBag >> @splat(4, @as(u5, 16))) & maskff);
+                    texelBag = simd.z._mm_mullo_epi16(texelBag, texelBag);
 
-                    var texelCb: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleC) & maskff);
-                    var texelCg: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleC >> @splat(4, @as(u5, 8))) & maskff);
-                    var texelCr: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleC >> @splat(4, @as(u5, 16))) & maskff);
-                    var texelCa: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleC >> @splat(4, @as(u5, 24))) & maskff);
+                    var texelCrb: simd.i32x4 = @bitCast(simd.i32x4, sampleC) & maskff00ff;
+                    var texelCag: simd.i32x4 = @bitCast(simd.i32x4, sampleC >> @splat(4, @as(u5, 8))) & maskff00ff;
+                    texelCrb = simd.z._mm_mullo_epi16(texelCrb, texelCrb);
+                    var texelCa: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, texelCag >> @splat(4, @as(u5, 16))) & maskff);
+                    texelCag = simd.z._mm_mullo_epi16(texelCag, texelCag);
 
-                    var texelDb: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleD) & maskff);
-                    var texelDg: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleD >> @splat(4, @as(u5, 8))) & maskff);
-                    var texelDr: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleD >> @splat(4, @as(u5, 16))) & maskff);
-                    var texelDa: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, sampleD >> @splat(4, @as(u5, 24))) & maskff);
+                    var texelDrb: simd.i32x4 = @bitCast(simd.i32x4, sampleD) & maskff00ff;
+                    var texelDag: simd.i32x4 = @bitCast(simd.i32x4, sampleD >> @splat(4, @as(u5, 8))) & maskff00ff;
+                    texelDrb = simd.z._mm_mullo_epi16(texelDrb, texelDrb);
+                    var texelDa: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, texelDag >> @splat(4, @as(u5, 16))) & maskff);
+                    texelDag = simd.z._mm_mullo_epi16(texelDag, texelDag);
 
-                    var destb: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, originalDest) & maskff);
-                    var destg: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, originalDest >> @splat(4, @as(u5, 8))) & maskff);
-                    var destr: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, originalDest >> @splat(4, @as(u5, 16))) & maskff);
-                    var desta: simd.f32x4 = simd.i.cvtepi32(@bitCast(simd.i32x4, originalDest >> @splat(4, @as(u5, 24))) & maskff);
+                    // var texelAb: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleA) & maskff);
+                    // var texelAg: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleA >> @splat(4, @as(u5, 8))) & maskff);
+                    // var texelAr: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleA >> @splat(4, @as(u5, 16))) & maskff);
+                    // var texelAa: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleA >> @splat(4, @as(u5, 24))) & maskff);
 
-                    texelAr = (inv255_4x * texelAr) * (inv255_4x * texelAr);
-                    texelAg = (inv255_4x * texelAg) * (inv255_4x * texelAg);
-                    texelAb = (inv255_4x * texelAb) * (inv255_4x * texelAb);
-                    texelAa = inv255_4x * texelAa;
+                    // var texelBb: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleB) & maskff);
+                    // var texelBg: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleB >> @splat(4, @as(u5, 8))) & maskff);
+                    // var texelBr: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleB >> @splat(4, @as(u5, 16))) & maskff);
+                    // var texelBa: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleB >> @splat(4, @as(u5, 24))) & maskff);
 
-                    texelBr = (inv255_4x * texelBr) * (inv255_4x * texelBr);
-                    texelBg = (inv255_4x * texelBg) * (inv255_4x * texelBg);
-                    texelBb = (inv255_4x * texelBb) * (inv255_4x * texelBb);
-                    texelBa = inv255_4x * texelBa;
+                    // var texelCb: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleC) & maskff);
+                    // var texelCg: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleC >> @splat(4, @as(u5, 8))) & maskff);
+                    // var texelCr: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleC >> @splat(4, @as(u5, 16))) & maskff);
+                    // var texelCa: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleC >> @splat(4, @as(u5, 24))) & maskff);
 
-                    texelCr = (inv255_4x * texelCr) * (inv255_4x * texelCr);
-                    texelCg = (inv255_4x * texelCg) * (inv255_4x * texelCg);
-                    texelCb = (inv255_4x * texelCb) * (inv255_4x * texelCb);
-                    texelCa = inv255_4x * texelCa;
+                    // var texelDb: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleD) & maskff);
+                    // var texelDg: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleD >> @splat(4, @as(u5, 8))) & maskff);
+                    // var texelDr: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleD >> @splat(4, @as(u5, 16))) & maskff);
+                    // var texelDa: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleD >> @splat(4, @as(u5, 24))) & maskff);
 
-                    texelDr = (inv255_4x * texelDr) * (inv255_4x * texelDr);
-                    texelDg = (inv255_4x * texelDg) * (inv255_4x * texelDg);
-                    texelDb = (inv255_4x * texelDb) * (inv255_4x * texelDb);
-                    texelDa = inv255_4x * texelDa;
+                    var destb: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, originalDest) & maskff);
+                    var destg: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, originalDest >> @splat(4, @as(u5, 8))) & maskff);
+                    var destr: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, originalDest >> @splat(4, @as(u5, 16))) & maskff);
+                    var desta: simd.f32x4 = simd.i._mm_cvtepi32_ps(@bitCast(simd.i32x4, originalDest >> @splat(4, @as(u5, 24))) & maskff);
+
+                    // FIXME TODO (Manav): // shifting right doesn't work here, investigate properly why.
+                    var texelAr: simd.f32x4 = simd.i._mm_cvtepi32_ps(simd.i._mm_srli_epi32(texelArb, 16));
+                    var texelAg: simd.f32x4 = simd.i._mm_cvtepi32_ps(texelAag & maskffff);
+                    var texelAb: simd.f32x4 = simd.i._mm_cvtepi32_ps(texelArb & maskffff);
+
+                    var texelBr: simd.f32x4 = simd.i._mm_cvtepi32_ps(simd.i._mm_srli_epi32(texelArb, 16));
+                    var texelBg: simd.f32x4 = simd.i._mm_cvtepi32_ps(texelBag & maskffff);
+                    var texelBb: simd.f32x4 = simd.i._mm_cvtepi32_ps(texelBrb & maskffff);
+
+                    var texelCr: simd.f32x4 = simd.i._mm_cvtepi32_ps(simd.i._mm_srli_epi32(texelArb, 16));
+                    var texelCg: simd.f32x4 = simd.i._mm_cvtepi32_ps(texelCag & maskffff);
+                    var texelCb: simd.f32x4 = simd.i._mm_cvtepi32_ps(texelCrb & maskffff);
+
+                    var texelDr: simd.f32x4 = simd.i._mm_cvtepi32_ps(simd.i._mm_srli_epi32(texelArb, 16));
+                    var texelDg: simd.f32x4 = simd.i._mm_cvtepi32_ps(texelDag & maskffff);
+                    var texelDb: simd.f32x4 = simd.i._mm_cvtepi32_ps(texelDrb & maskffff);
+
+                    // texelAr = texelAr * texelAr;
+                    // texelAg = texelAg * texelAg;
+                    // texelAb = texelAb * texelAb;
+
+                    // texelBr = texelBr * texelBr;
+                    // texelBg = texelBg * texelBg;
+                    // texelBb = texelBb * texelBb;
+
+                    // texelCr = texelCr * texelCr;
+                    // texelCg = texelCg * texelCg;
+                    // texelCb = texelCb * texelCb;
+
+                    // texelDr = texelDr * texelDr;
+                    // texelDg = texelDg * texelDg;
+                    // texelDb = texelDb * texelDb;
 
                     const ifX: simd.f32x4 = one - fX;
                     const ifY: simd.f32x4 = one - fY;
@@ -531,32 +597,32 @@ pub const loaded_bitmap = struct {
                     texela = texela * coloura_4x;
 
                     // TODO (Manav): use _mm_min_ps and _mm_max_ps (minps maxps instruction) ?
-                    texelr = @minimum(@maximum(texelr, zero), one);
-                    texelg = @minimum(@maximum(texelg, zero), one);
-                    texelb = @minimum(@maximum(texelb, zero), one);
-                    texela = @minimum(@maximum(texela, zero), one); // NOTE (Manav): clamp alpha, we have a bug somewhere which makes alpha > 1
+                    texelr = @minimum(@maximum(texelr, zero), maxColourValue);
+                    texelg = @minimum(@maximum(texelg, zero), maxColourValue);
+                    texelb = @minimum(@maximum(texelb, zero), maxColourValue);
+                    // texela = @minimum(@maximum(texela, zero), one); // NOTE (Manav): clamp alpha, we have a bug somewhere which makes alpha > 1
 
-                    destr = (inv255_4x * destr) * (inv255_4x * destr);
-                    destg = (inv255_4x * destg) * (inv255_4x * destg);
-                    destb = (inv255_4x * destb) * (inv255_4x * destb);
-                    desta = inv255_4x * desta;
+                    destr = destr * destr;
+                    destg = destg * destg;
+                    destb = destb * destb;
+                    // desta = desta;
 
-                    const invTexelA: simd.f32x4 = one - texela;
+                    const invTexelA: simd.f32x4 = one - (texela * inv255_4x);
                     var blendedr = invTexelA * destr + texelr;
                     var blendedg = invTexelA * destg + texelg;
                     var blendedb = invTexelA * destb + texelb;
                     var blendeda = invTexelA * desta + texela;
 
                     // TODO (Manav): use _mm_sqrt_ps (sqrtps instruction) ?
-                    blendedr = one255_4x * @sqrt(blendedr);
-                    blendedg = one255_4x * @sqrt(blendedg);
-                    blendedb = one255_4x * @sqrt(blendedb);
-                    blendeda = one255_4x * blendeda;
+                    blendedr = blendedr * simd.i._mm_rsqrt_ps(blendedr);
+                    blendedg = blendedg * simd.i._mm_rsqrt_ps(blendedg);
+                    blendedb = blendedb * simd.i._mm_rsqrt_ps(blendedb);
+                    blendeda = blendeda;
 
-                    const intr: simd.i32x4 = simd.i.cvtps(blendedr);
-                    const intg: simd.i32x4 = simd.i.cvtps(blendedg);
-                    const intb: simd.i32x4 = simd.i.cvtps(blendedb);
-                    const inta: simd.i32x4 = simd.i.cvtps(blendeda);
+                    const intr: simd.i32x4 = simd.i._mm_cvtps_epi32(blendedr);
+                    const intg: simd.i32x4 = simd.i._mm_cvtps_epi32(blendedg);
+                    const intb: simd.i32x4 = simd.i._mm_cvtps_epi32(blendedb);
+                    const inta: simd.i32x4 = simd.i._mm_cvtps_epi32(blendeda);
 
                     const sr: simd.i32x4 = (intr << @splat(4, @as(u5, 16)));
                     const sg: simd.i32x4 = (intg << @splat(4, @as(u5, 8)));
@@ -579,6 +645,8 @@ pub const loaded_bitmap = struct {
                 }
                 pixelPX += four_4x;
                 pixel += 4;
+
+                iasa.End();
             }
             row += @intCast(u32, buffer.pitch);
         }

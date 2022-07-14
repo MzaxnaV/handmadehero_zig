@@ -107,7 +107,7 @@ pub const sound_output_buffer = struct {
 
 pub const button_state = packed struct {
     haltTransitionCount: u32 = 0,
-    // NOTE: (Manav) endedDown is a boolean
+    // endedDown is a boolean
     endedDown: u32 = 0,
 };
 
