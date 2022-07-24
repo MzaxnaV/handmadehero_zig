@@ -9,18 +9,22 @@ const hi = @import("handmade_intrinsics.zig");
 
 const simd = @import("simd");
 
-// Works with iaca 2.3 (couldn't make it work with 3.0)
-pub const iasa = struct {
-    pub inline fn Start() void {
-        if (NOT_IGNORE) {
-            asm volatile ("movl $111, %%ebx\n.byte 0x64, 0x67, 0x90" ::: "memory");
+pub const perf_analyzer = struct {
+    /// Works with iaca 2.3 (couldn't make it work with 3.0).
+    /// DO NOT USE `defer` on `End()`.
+    const method = enum { IASA, LLVM_MCA };
+
+    pub inline fn Start(comptime m: method, comptime region: []const u8) void {
+        switch (m) {
+            .IASA => asm volatile ("movl $111, %%ebx\n.byte 0x64, 0x67, 0x90" ::: "memory"),
+            .LLVM_MCA => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: "memory"),
         }
     }
 
-    // DO NOT USE DEFER
-    pub inline fn End() void {
-        if (NOT_IGNORE) {
-            asm volatile ("movl $222, %%ebx\n.byte 0x64, 0x67, 0x90" ::: "memory");
+    pub inline fn End(comptime m: method, comptime region: []const u8) void {
+        switch (m) {
+            .IASA => asm volatile ("movl $222, %%ebx\n.byte 0x64, 0x67, 0x90" ::: "memory"),
+            .LLVM_MCA => asm volatile ("# LLVM-MCA-END " ++ region ::: "memory"),
         }
     }
 };
@@ -449,7 +453,7 @@ pub const loaded_bitmap = struct {
 
             var xi = xMin;
             while (xi <= xMax) : (xi += 4) {
-                iasa.Start();
+                perf_analyzer.Start(.LLVM_MCA, "ProcessPixel");
 
                 var u: simd.f32x4 = pixelPX * nXAxisx_4x + pixelPY * nXAxisy_4x;
                 var v: simd.f32x4 = pixelPX * nYAxisx_4x + pixelPY * nYAxisy_4x;
@@ -646,7 +650,7 @@ pub const loaded_bitmap = struct {
                 pixelPX += four_4x;
                 pixel += 4;
 
-                iasa.End();
+                perf_analyzer.End(.LLVM_MCA, "ProcessPixel");
             }
             row += @intCast(u32, buffer.pitch);
         }

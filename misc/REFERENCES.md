@@ -12,6 +12,9 @@ Collection of references, not all are realted to Handmade Hero.
 - [Fabian Giesen blog](https://fgiesen.wordpress.com/)
 - [Floating-Point Arithmetic, What Every Computer Scientist Should Know About Floating-Point Arithmetic](https://docs.oracle.com/cd/E19957-01/800-7895/800-7895.pdf)
 
+## G
+- [GCC with LLVM/Clang/LLD/LLDB, WinLibs build](https://winlibs.com/)
+
 ## H
 - [Hardware Surveys, Steam](https://store.steampowered.com/hwsurvey/)
 - [HDR Lighting (John Hable, video)](https://www.gdcvault.com/play/1012351/Uncharted-2-HDR), [pdf](https://www.slideshare.net/naughty_dog/lighting-shading-by-john-hable)

@@ -16,8 +16,10 @@ pub const u8x16 = @Vector(16, u8);
 pub const u1x4 = @Vector(4, u1);
 pub const bx4 = @Vector(4, bool);
 
-/// simd intrinsics implemented using language features
+/// simd intrinsics implemented using language features, use these when possible
 pub const z = struct {
+
+    // TODO (Manav): doesn't generate a call to cvtps2dq, yet
     pub inline fn _mm_cvtps_epi32(v: f32x4) i32x4 {
         var result = i32x4{};
         comptime var index = 0;
@@ -77,7 +79,7 @@ pub const z = struct {
     }
 };
 
-/// simd intrinsics implemented using inline assembly
+/// simd intrinsics implemented using inline assembly, not using contraints
 pub const i = struct {
     pub inline fn _mm_cvtps_epi32(v: f32x4) i32x4 {
         const result = asm ("cvtps2dq %[v], %[v]"
@@ -128,7 +130,7 @@ pub const i = struct {
     }
 
     // TODO (Manav): untested
-    pub inline fn _mm_mullo_epi16_(a: i32x4, b: i32x4) i32x4 {
+    pub inline fn _mm_mullo_epi16(a: i32x4, b: i32x4) i32x4 {
         const result = asm ("pmullw %[arg1], %[arg0]"
             : [ret] "={xmm0}" (-> i32x4),
             : [arg0] "{xmm0}" (a),
