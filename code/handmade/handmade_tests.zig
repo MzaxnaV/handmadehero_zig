@@ -185,6 +185,33 @@ test "simd" {
     try testing.expectEqual(simd.f32x4{ -4, -6, -7, -8 }, ic2i);
     try testing.expectEqual(simd.f32x4{ -4, -5, -6, -7 }, ic3i);
 
+    const a1: simd.i32x4 = .{ 0x01020304, 0x05060708, 0x090a0b0c, 0x0d0e0f00 };
+    const a2: simd.i32x4 = .{
+        @bitCast(i32, @as(u32, 0xd0e0f000)),
+        @bitCast(i32, @as(u32, 0x90a0b0c0)),
+        @bitCast(i32, @as(u32, 0x50607080)),
+        @bitCast(i32, @as(u32, 0x10203040)),
+    };
+
+    try testing.expectEqual(simd.z._mm_mullo_epi16(a1, a2), simd.i32x4{
+        @bitCast(i32, @as(u32, 0x81c0c000)),
+        @bitCast(i32, @as(u32, 0x83c0c600)),
+        @bitCast(i32, @as(u32, 0x83c0c600)),
+        @bitCast(i32, @as(u32, 0x81c0c000)),
+    });
+    try testing.expectEqual(simd.z._mm_mulhi_epi16(a1, a2), simd.i32x4{
+        @bitCast(i32, @as(u32, 0xffd0ffcf)),
+        @bitCast(i32, @as(u32, 0xfdd0fdd2)),
+        @bitCast(i32, @as(u32, 0x02d604da)),
+        @bitCast(i32, @as(u32, 0x00d202d3)),
+    });
+
+    try testing.expectEqual(simd.i._mm_mullo_epi16(ic1, ic2), simd.z._mm_mullo_epi16(zc1, zc2));
+    try testing.expectEqual(simd.i._mm_mulhi_epi16(ic1, ic2), simd.z._mm_mulhi_epi16(zc1, zc2));
+
+    try testing.expectEqual(simd.i._mm_srli_epi32(ic1, 2), simd.z._mm_srli_epi32(zc1, 2));
+    try testing.expectEqual(simd.i._mm_srli_epi32(ic2, 2), simd.z._mm_srli_epi32(zc2, 2));
+
     // const rsqrtv1 = simd.i._mm_rsqrt_ps(v1);
     // const rsqrtv2 = simd.i._mm_rsqrt_ps(v2);
 }

@@ -75,7 +75,40 @@ pub const z = struct {
 
     // TODO (Manav): untested
     pub inline fn _mm_mullo_epi16(a: i32x4, b: i32x4) i32x4 {
-        return @bitCast(i32x4, @bitCast(u16x8, a) * @bitCast(u16x8, b));
+        const __a = @bitCast(i16x8, a);
+        const __b = @bitCast(i16x8, b);
+
+        return @bitCast(i32x4, u16x8{
+            @truncate(u16, @bitCast(u32, @as(i32, __a[0]) * @as(i32, __b[0]))),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[1]) * @as(i32, __b[1]))),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[2]) * @as(i32, __b[2]))),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[3]) * @as(i32, __b[3]))),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[4]) * @as(i32, __b[4]))),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[5]) * @as(i32, __b[5]))),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[6]) * @as(i32, __b[6]))),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[7]) * @as(i32, __b[7]))),
+        });
+    }
+
+    // TODO (Manav): untested
+    pub export fn _mm_mulhi_epi16(a: i32x4, b: i32x4) i32x4 {
+        const __a = @bitCast(i16x8, a);
+        const __b = @bitCast(i16x8, b);
+
+        return @bitCast(i32x4, u16x8{
+            @truncate(u16, @bitCast(u32, @as(i32, __a[0]) * @as(i32, __b[0]) >> 16)),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[1]) * @as(i32, __b[1]) >> 16)),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[2]) * @as(i32, __b[2]) >> 16)),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[3]) * @as(i32, __b[3]) >> 16)),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[4]) * @as(i32, __b[4]) >> 16)),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[5]) * @as(i32, __b[5]) >> 16)),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[6]) * @as(i32, __b[6]) >> 16)),
+            @truncate(u16, @bitCast(u32, @as(i32, __a[7]) * @as(i32, __b[7]) >> 16)),
+        });
+    }
+
+    pub inline fn _mm_srli_epi32(v: i32x4, imm8: u5) i32x4 {
+        return @bitCast(i32x4, (@bitCast(u32x4, v) >> @splat(4, imm8)));
     }
 };
 
@@ -132,6 +165,17 @@ pub const i = struct {
     // TODO (Manav): untested
     pub inline fn _mm_mullo_epi16(a: i32x4, b: i32x4) i32x4 {
         const result = asm ("pmullw %[arg1], %[arg0]"
+            : [ret] "={xmm0}" (-> i32x4),
+            : [arg0] "{xmm0}" (a),
+              [arg1] "{xmm1}" (b),
+        );
+
+        return result;
+    }
+
+    // TODO (Manav): untested
+    pub inline fn _mm_mulhi_epi16(a: i32x4, b: i32x4) i32x4 {
+        const result = asm ("pmulhw %[arg1], %[arg0]"
             : [ret] "={xmm0}" (-> i32x4),
             : [arg0] "{xmm0}" (a),
               [arg1] "{xmm1}" (b),

@@ -7,6 +7,7 @@ Collection of references, not all are realted to Handmade Hero.
 
 ## B
 - [Blending Layer Equations](https://nothings.org/gamedev/blend_equations_with_destination_alpha.txt), [Sean Barrel Gamedev](https://nothings.org/gamedev/)
+- [Book list, RealTimeRendering](https://www.realtimerendering.com/books.html)
 
 ## F
 - [Fabian Giesen blog](https://fgiesen.wordpress.com/)
