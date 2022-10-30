@@ -35,6 +35,7 @@ pub fn build(b: *std.build.Builder) void {
     lib.setBuildMode(mode);
     lib.addPackage(platform);
     lib.addPackage(simd);
+    lib.emit_llvm_ir = .{ .emit_to = "misc/handmade.ll" };
     lib.emit_asm = .{ .emit_to = "misc/handmade.s" };
     lib.setOutputDir("build");
     lib.addOptions("build_consts", options);

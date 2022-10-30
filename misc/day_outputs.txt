@@ -546,3 +546,62 @@ UpdateAndRender - 11830682cy 1h 11830682cy/h
 RenderGroupToOutput - 11690836cy 1h 11690836cy/h
 DrawRectangleQuickly - 11365280cy 71h 160074cy/h
 ProcessPixel - 11355192cy 905578h 12cy/h
+
+change computer (Tiger Lake) ------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 230673974cy 1h 230673974cy/h
+RenderGroupToOutput - 228141816cy 1h 228141816cy/h
+DrawRectangleQuickly - 225301666cy 71h 3173262cy/h
+ProcessPixel - 225209680cy 920968h 244cy/h
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      258300
+Total Cycles:      129906
+Total uOps:        344400
+Dispatch Width:    6
+uOps Per Cycle:    2.65
+IPC:               1.99
+Block RThroughput: 634.0
+
+Cycles with backend pressure increase [ 35.65% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 24.38% ]
+  - ICXPort0  [ 2.54% ]
+  - ICXPort1  [ 3.54% ]
+  - ICXPort2  [ 8.70% ]
+  - ICXPort3  [ 8.70% ]
+  - ICXPort4  [ 19.99% ]
+  - ICXPort5  [ 5.61% ]
+  - ICXPort6  [ 1.69% ]
+  - ICXPort7  [ 6.15% ]
+  Data Dependencies:      [ 31.11% ]
+  - Register Dependencies [ 31.11% ]
+  - Memory Dependencies   [ 0.00% ]
+
+RELEASE-FAST CYCLE COUNTS:
+UpdateAndRender - 30103963cy 1h 30103963cy/h
+RenderGroupToOutput - 29409337cy 1h 29409337cy/h
+DrawRectangleQuickly - 27636807cy 71h 389250cy/h
+ProcessPixel - 27626003cy 914277h 30cy/h
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      20600
+Total Cycles:      11337
+Total uOps:        22700
+Dispatch Width:    6
+uOps Per Cycle:    2.00
+IPC:               1.82
+Block RThroughput: 61.0
+
+Cycles with backend pressure increase [ 94.28% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 52.81% ]
+  - ICXPort0  [ 38.71% ]
+  - ICXPort1  [ 36.08% ]
+  - ICXPort5  [ 20.26% ]
+  Data Dependencies:      [ 66.12% ]
+  - Register Dependencies [ 66.12% ]
+  - Memory Dependencies   [ 0.00% ]

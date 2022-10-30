@@ -57,16 +57,16 @@
             },
             "command": "zig build --verbose test"
         },
-        {
-            "label": "Run iaca",
-            "type": "shell",
-            "command": "${workspaceFolder}/misc/iaca-version-2.3-win64/iaca.exe -o ${workspaceFolder}/misc/iaca_output.txt ${workspaceFolder}/build/handmade.dll",
-            "problemMatcher": []
-        },
+        // {
+        //     "label": "Run iaca",
+        //     "type": "shell",
+        //     "command": "${workspaceFolder}/misc/iaca-version-2.3-win64/iaca.exe -o ${workspaceFolder}/misc/iaca_output.txt ${workspaceFolder}/build/handmade.dll",
+        //     "problemMatcher": []
+        // },
         {
             "label": "Run llvm-mca",
             "type": "shell",
-            "command": "llvm-mca -all-stats -all-views ${workspaceFolder}/misc/handmade.s > ${workspaceFolder}/misc/llvm_mca_output.txt",
+            "command": "${workspaceFolder}/misc/llvm_mca_output.bat",
             "problemMatcher": []
         }
     ]

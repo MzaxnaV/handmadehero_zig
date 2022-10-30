@@ -6,4 +6,5 @@ zig-out
 
 /data/test*
 
-/misc/handmade.s
+/misc/*.s
+/misc/*.ll
