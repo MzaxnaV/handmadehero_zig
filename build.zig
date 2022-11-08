@@ -13,21 +13,21 @@ pub fn build(b: *std.build.Builder) void {
 
     const platform = std.build.Pkg{
         .name = "handmade_platform",
-        .path = .{ .path = "./code/handmade_platform.zig" },
+        .source = .{ .path = "./code/handmade_platform.zig" },
         .dependencies = &[_]std.build.Pkg{.{
             .name = "build_consts",
-            .path = options.getSource(),
+            .source = options.getSource(),
         }},
     };
 
     const simd = std.build.Pkg{
         .name = "simd",
-        .path = .{ .path = "./code/simd.zig" },
+        .source = .{ .path = "./code/simd.zig" },
     };
 
     const win32 = std.build.Pkg{
         .name = "win32",
-        .path = .{ .path = "./code/zigwin32/win32.zig" },
+        .source = .{ .path = "./code/zigwin32/win32.zig" },
     };
 
     const lib = b.addSharedLibrary(lib_name, "code/handmade/handmade.zig", b.version(1, 0, 0));

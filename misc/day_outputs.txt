@@ -605,3 +605,262 @@ Throughput Bottlenecks:
   Data Dependencies:      [ 66.12% ]
   - Register Dependencies [ 66.12% ]
   - Memory Dependencies   [ 0.00% ]
+
+manually fetch / sample loop  -----------------------------------------------------------------------------------------
+
+RELEASE CYCLE COUNTS:
+UpdateAndRender - 21972800cy 1h 21972800cy/h
+RenderGroupToOutput - 21720550cy 1h 21720550cy/h
+DrawRectangleQuickly - 21064344cy 71h 296680cy/h
+ProcessPixel - 21056764cy 918544h 22cy/h
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      20600
+Total Cycles:      11237
+Total uOps:        22800
+Dispatch Width:    6
+uOps Per Cycle:    2.03
+IPC:               1.83
+Block RThroughput: 61.0
+
+Cycles with backend pressure increase [ 96.87% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 50.64% ]
+  - ICXPort0  [ 38.18% ]
+  - ICXPort1  [ 36.40% ]
+  - ICXPort5  [ 23.11% ]
+  Data Dependencies:      [ 68.43% ]
+  - Register Dependencies [ 68.43% ]
+  - Memory Dependencies   [ 0.00% ]
+
+Frame Buffer division -------------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 10765924cy 1h 10765924cy/h
+RenderGroupToOutput - 8336452cy 1h 8336452cy/h
+DrawRectangleQuickly - 4252586cy 142h 29947cy/h
+ProcessPixel - 4149946cy 20556h 201cy/h
+
+RELEASE CYCLE COUNTS:
+UpdateAndRender - 1255108cy 1h 1255108cy/h
+RenderGroupToOutput - 1039758cy 1h 1039758cy/h
+DrawRectangleQuickly - 455108cy 148h 3075cy/h
+ProcessPixel - 444276cy 17227h 25cy/h
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      21200
+Total Cycles:      11139
+Total uOps:        23000
+Dispatch Width:    6
+uOps Per Cycle:    2.06
+IPC:               1.90
+Block RThroughput: 61.0
+
+Cycles with backend pressure increase [ 91.49% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 52.84% ]
+  - ICXPort0  [ 42.09% ]
+  - ICXPort1  [ 42.09% ]
+  - ICXPort2  [ 2.69% ]
+  - ICXPort3  [ 2.69% ]
+  - ICXPort5  [ 33.15% ]
+  Data Dependencies:      [ 55.64% ]
+  - Register Dependencies [ 55.64% ]
+  - Memory Dependencies   [ 0.00% ]
+
+Performance check for after fillRect ----------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 8723548cy 1h 8723548cy/h
+RenderGroupToOutput - 6469240cy 1h 6469240cy/h
+DrawRectangleQuickly - 3849010cy 148h 26006cy/h
+ProcessPixel - 3767352cy 16770h 224cy/h
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      391400
+Total Cycles:      203927
+Total uOps:        519300
+Dispatch Width:    6
+uOps Per Cycle:    2.55
+IPC:               1.92
+Block RThroughput: 948.0
+
+Cycles with backend pressure increase [ 32.61% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 19.85% ]
+  - ICXFPDivider  [ 0.05% ]
+  - ICXPort0  [ 3.04% ]
+  - ICXPort1  [ 2.75% ]
+  - ICXPort2  [ 7.40% ]
+  - ICXPort3  [ 7.40% ]
+  - ICXPort4  [ 16.71% ]
+  - ICXPort5  [ 3.78% ]
+  - ICXPort6  [ 2.36% ]
+  - ICXPort7  [ 5.10% ]
+  Data Dependencies:      [ 28.98% ]
+  - Register Dependencies [ 28.98% ]
+  - Memory Dependencies   [ 0.00% ]
+
+RELEASE CYCLE COUNTS:
+UpdateAndRender - 1361770cy 1h 1361770cy/h
+RenderGroupToOutput - 1129424cy 1h 1129424cy/h
+DrawRectangleQuickly - 445334cy 142h 3136cy/h
+ProcessPixel - 434588cy 16770h 25cy/h
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      21200
+Total Cycles:      11139
+Total uOps:        23000
+Dispatch Width:    6
+uOps Per Cycle:    2.06
+IPC:               1.90
+Block RThroughput: 61.0
+
+Cycles with backend pressure increase [ 91.48% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 52.84% ]
+  - ICXPort0  [ 42.09% ]
+  - ICXPort1  [ 42.09% ]
+  - ICXPort2  [ 2.69% ]
+  - ICXPort3  [ 2.69% ]
+  - ICXPort5  [ 31.36% ]
+  Data Dependencies:      [ 55.63% ]
+  - Register Dependencies [ 55.63% ]
+  - Memory Dependencies   [ 0.00% ]
+
+No change in performance when fillRect is used in the loop ------------------------------------------------------------
+
+Setting pixelPX only once outside the loop ----------------------------------------------------------------------------
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      21400
+Total Cycles:      10743
+Total uOps:        23200
+Dispatch Width:    6
+uOps Per Cycle:    2.16
+IPC:               1.99
+Block RThroughput: 61.0
+
+Cycles with backend pressure increase [ 93.95% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 54.80% ]
+  - ICXPort0  [ 42.73% ]
+  - ICXPort1  [ 42.73% ]
+  - ICXPort2  [ 2.79% ]
+  - ICXPort3  [ 2.79% ]
+  - ICXPort5  [ 33.45% ]
+  Data Dependencies:      [ 54.01% ]
+  - Register Dependencies [ 54.01% ]
+  - Memory Dependencies   [ 0.00% ]
+
+No change in performance when once Setting pixelPX everytime throughout the loop --------------------------------------
+
+Reverting to using originx_4x -----------------------------------------------------------------------------------------
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      21200
+Total Cycles:      11139
+Total uOps:        23000
+Dispatch Width:    6
+uOps Per Cycle:    2.06
+IPC:               1.90
+Block RThroughput: 61.0
+
+Cycles with backend pressure increase [ 91.48% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 52.84% ]
+  - ICXPort0  [ 42.09% ]
+  - ICXPort1  [ 42.09% ]
+  - ICXPort2  [ 2.69% ]
+  - ICXPort3  [ 2.69% ]
+  - ICXPort5  [ 31.36% ]
+  Data Dependencies:      [ 55.63% ]
+  - Register Dependencies [ 55.63% ]
+  - Memory Dependencies   [ 0.00% ]
+
+No change in performance when doing it aligned so it's not a problem --------------------------------------------------
+
+After masking the initial pixels (earlying out the fillRect tests) ----------------------------------------------------
+
+RELEASE CYCLE COUNTS:
+UpdateAndRender - 1413864cy 1h 1413864cy/h
+RenderGroupToOutput - 1208594cy 1h 1208594cy/h
+DrawRectangleQuickly - 540156cy 142h 3803cy/h
+ProcessPixel - 530046cy 23172h 22cy/h
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      18600
+Total Cycles:      7431
+Total uOps:        20200
+Dispatch Width:    6
+uOps Per Cycle:    2.72
+IPC:               2.50
+Block RThroughput: 53.5
+
+Cycles with backend pressure increase [ 95.26% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 84.51% ]
+  - ICXPort0  [ 71.09% ]
+  - ICXPort1  [ 63.09% ]
+  - ICXPort2  [ 6.65% ]
+  - ICXPort3  [ 6.65% ]
+  - ICXPort5  [ 49.60% ]
+  - ICXPort6  [ 4.00% ]
+  Data Dependencies:      [ 34.96% ]
+  - Register Dependencies [ 34.96% ]
+  - Memory Dependencies   [ 0.00% ]
+
+day121 end ------------------------------------------------------------------------------------------------------------
+
+DEBUG CYCLE COUNTS:
+UpdateAndRender - 273114504cy 1h 273114504cy/h
+RenderGroupToOutput - 269763248cy 32h 8430101cy/h
+DrawRectangleQuickly - 263051494cy 2272h 115779cy/h
+ProcessPixel - 261275844cy 908596h 287cy/h
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      469500
+Total Cycles:      272148
+Total uOps:        641500
+Dispatch Width:    6
+uOps Per Cycle:    2.36
+IPC:               1.73
+Block RThroughput: 1113.0
+
+RELEASE CYCLE COUNTS:
+UpdateAndRender - 64401290cy 1h 64401290cy/h
+RenderGroupToOutput - 63915374cy 32h 1997355cy/h
+DrawRectangleQuickly - 62302634cy 2272h 27421cy/h
+ProcessPixel - 61998812cy 881260h 70cy/h
+
+LLVM-MCA report:
+Iterations:        100
+Instructions:      19500
+Total Cycles:      12267
+Total uOps:        21500
+Dispatch Width:    6
+uOps Per Cycle:    1.75
+IPC:               1.59
+Block RThroughput: 60.0
+
+Cycles with backend pressure increase [ 95.55% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 47.15% ]
+  - ICXPort0  [ 36.58% ]
+  - ICXPort1  [ 32.95% ]
+  - ICXPort2  [ 1.63% ]
+  - ICXPort3  [ 1.63% ]
+  - ICXPort5  [ 15.46% ]
+  - ICXPort6  [ 1.22% ]
+  Data Dependencies:      [ 73.97% ]
+  - Register Dependencies [ 73.97% ]
+  - Memory Dependencies   [ 0.00% ]
+

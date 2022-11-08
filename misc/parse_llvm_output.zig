@@ -66,7 +66,7 @@ pub fn main() !void {
         _ = gpa.detectLeaks();
     }
 
-    const source = try std.fs.cwd().openFile("llvm_mca_output.txt", .{ .read = true });
+    const source = try std.fs.cwd().openFile("llvm_mca_output.txt", .{ .mode = .read_only });
     const dest = try std.fs.cwd().createFile("llvm_mca_output.md", .{ .truncate = true });
 
     var input_buf = try allocator.alloc(u8, 1000);
@@ -99,6 +99,8 @@ pub fn main() !void {
 
         try dest.writer().print("{s}", .{line});
     }
+
+    try dest.writer().print("```\n</details>\n</details>\n", .{});
 
     dest.close();
     source.close();

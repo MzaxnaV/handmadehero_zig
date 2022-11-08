@@ -1,4 +1,5 @@
 const SquareRoot = @import("handmade_intrinsics.zig").SquareRoot;
+const MaxInt = @import("std").math.maxInt;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -8,6 +9,54 @@ pub const v4 = Vector(4);
 
 pub const rect2 = Rectangle(2);
 pub const rect3 = Rectangle(3);
+
+pub const rect2i = struct {
+    const Self = @This();
+
+    xMin: i32,
+    yMin: i32,
+    xMax: i32,
+    yMax: i32,
+
+    pub inline fn Intersect(self: *Self, other: Self) void {
+        self.xMin = if (self.xMin < other.xMin) other.xMin else self.xMin;
+        self.yMin = if (self.yMin < other.yMin) other.yMin else self.yMin;
+        self.xMax = if (self.xMax > other.xMax) other.xMax else self.xMax;
+        self.yMax = if (self.yMax > other.yMax) other.yMax else self.yMax;
+    }
+
+    pub inline fn Union(self: *const Self, other: Self) void {
+        self.xMin = if (self.xMin < other.xMin) self.xMin else other.xMin;
+        self.yMin = if (self.yMin < other.yMin) self.yMin else other.yMin;
+        self.xMax = if (self.xMax > other.xMax) self.xMax else other.xMax;
+        self.yMax = if (self.yMax > other.yMax) self.yMax else other.yMax;
+    }
+
+    pub fn GetClampedRectArea(self: *const Self) i32 {
+        const width = (self.xMax - self.xMin);
+        const height = (self.yMax - self.yMin);
+        const result = if ((width > 0) and (height > 0)) width * height else 0;
+
+        return result;
+    }
+
+    pub inline fn HasArea(self: *const Self) bool {
+        const result = (self.xMin < self.xMax) and (self.yMin < self.yMax);
+
+        return result;
+    }
+
+    pub inline fn InvertedInfinityRectangle() Self {
+        var result = Self{
+            .xMin = MaxInt(i32),
+            .yMin = MaxInt(i32),
+            .xMax = -MaxInt(i32),
+            .yMax = -MaxInt(i32),
+        };
+
+        return result;
+    }
+};
 
 // generator functions ----------------------------------------------------------------------------------------------------------------------
 

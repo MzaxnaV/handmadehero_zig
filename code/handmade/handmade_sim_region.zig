@@ -360,7 +360,7 @@ pub fn TestWall(wallX: f32, relX: f32, relY: f32, playerDeltaX: f32, playerDelta
 
         if ((tResult >= 0) and (tMin.* > tResult)) {
             if ((y >= minY) and (y <= maxY)) {
-                tMin.* = @maximum(0, tResult - tEpsilon);
+                tMin.* = @max(0, tResult - tEpsilon);
                 hit = true;
             }
         }
@@ -582,7 +582,7 @@ pub fn MoveEntity(gameState: *hd.state, simRegion: *sim_region, entity: *sim_ent
 
                                                 if ((tResult >= 0) and (tMaxTest < tResult)) {
                                                     if ((y >= wall.minY) and (y <= wall.maxY)) {
-                                                        tMaxTest = @maximum(0, tResult - tEpsilon);
+                                                        tMaxTest = @max(0, tResult - tEpsilon);
                                                         testWallNormal = wall.normal;
                                                         hitThis = true;
                                                     }
@@ -610,7 +610,7 @@ pub fn MoveEntity(gameState: *hd.state, simRegion: *sim_region, entity: *sim_ent
 
                                                 if ((tResult >= 0) and (tMinTest > tResult)) {
                                                     if ((y >= wall.minY) and (y <= wall.maxY)) {
-                                                        tMinTest = @maximum(0, tResult - tEpsilon);
+                                                        tMinTest = @max(0, tResult - tEpsilon);
                                                         testWallNormal = wall.normal;
                                                         hitThis = true;
                                                     }

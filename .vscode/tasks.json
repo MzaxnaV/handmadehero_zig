@@ -10,7 +10,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -Drelease-fast=true --verbose & zig build test"
+            "command": "zig build -fstage1 -Drelease-fast=true --verbose & zig build test"
         },
         {
             "label": "Build and Test Project",
@@ -19,7 +19,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build --verbose & zig build test"
+            "command": "zig build -fstage1 --verbose & zig build test"
         },
         {
             "label": "Build Project",
@@ -37,7 +37,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -Drelease-fast=true --verbose lib"
+            "command": "zig build -fstage1 -Drelease-fast=true --verbose lib"
         },
         {
             "label": "Build Lib",
@@ -46,7 +46,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build --verbose lib"
+            "command": "zig build -fstage1 --verbose lib"
         },
         {
             "label": "Test Project",
@@ -57,12 +57,6 @@
             },
             "command": "zig build --verbose test"
         },
-        // {
-        //     "label": "Run iaca",
-        //     "type": "shell",
-        //     "command": "${workspaceFolder}/misc/iaca-version-2.3-win64/iaca.exe -o ${workspaceFolder}/misc/iaca_output.txt ${workspaceFolder}/build/handmade.dll",
-        //     "problemMatcher": []
-        // },
         {
             "label": "Run llvm-mca",
             "type": "shell",

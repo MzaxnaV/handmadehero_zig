@@ -402,7 +402,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
         }
     }
 
-    renderGroup.RenderGroupToOutput(buffer);
+    renderGroup.TiledRenderGroupToOutput(buffer);
 }
 
 fn ClearBitmap(bitmap: *game.loaded_bitmap) void {
@@ -842,7 +842,6 @@ pub export fn UpdateAndRender(
         }
 
         gameState.testDiffuse = MakeEmptyBitmap(&tranState.tranArena, 256, 256, false);
-        gameState.testDiffuse.DrawRectangle(.{ 0, 0 }, game.V2(gameState.testDiffuse.width, gameState.testDiffuse.height), .{ 0.5, 0.5, 0.5, 1 });
         gameState.testNormal = MakeEmptyBitmap(&tranState.tranArena, gameState.testDiffuse.width, gameState.testDiffuse.height, false);
 
         MakeSphereNormalMap(&gameState.testNormal, 0, 1, 1);
@@ -1305,7 +1304,7 @@ pub export fn UpdateAndRender(
         // game.Saturation(renderGroup, 0.5 + 0.5 * game.Sin(10 * gameState.time));
     }
 
-    renderGroup.RenderGroupToOutput(drawBuffer);
+    renderGroup.TiledRenderGroupToOutput(drawBuffer);
 
     game.EndSim(simRegion, gameState); // TODO (Manav): use defer
     game.EndTemporaryMemory(simMemory);

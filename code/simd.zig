@@ -18,10 +18,25 @@ pub const bx4 = @Vector(4, bool);
 
 /// simd intrinsics implemented using language features, use these when possible
 pub const z = struct {
+    pub inline fn _mm_storeu_ps(ptr: [*]f32, vec: f32x4) void {
+        @ptrCast(*align(1) f32x4, @alignCast(@alignOf(u8), ptr)).* = vec;
+    }
+
+    pub inline fn _mm_store_ps(ptr: [*]f32, vec: f32x4) void {
+        @ptrCast(*f32x4, @alignCast(@alignOf(f32x4), ptr)).* = vec;
+    }
+
+    pub inline fn _mm_load_ps(ptr: [*]const f32) f32x4 {
+        return @ptrCast(*const f32x4, @alignCast(@alignOf(f32x4), ptr)).*;
+    }
+
+    pub inline fn _mm_loadu_ps(ptr: [*]const f32) f32x4 {
+        return @ptrCast(*align(1) const f32x4, @alignCast(@alignOf(u8), ptr)).*;
+    }
 
     // TODO (Manav): doesn't generate a call to cvtps2dq, yet
     pub inline fn _mm_cvtps_epi32(v: f32x4) i32x4 {
-        var result = i32x4{};
+        var result = i32x4{0, 0, 0, 0};
         comptime var index = 0;
 
         inline while (index < 4) : (index += 1) {
@@ -32,7 +47,7 @@ pub const z = struct {
     }
 
     pub inline fn _mm_cvttps_epi32(v: f32x4) i32x4 {
-        var result = i32x4{};
+        var result = i32x4{0, 0, 0, 0};
         comptime var index = 0;
 
         inline while (index < 4) : (index += 1) {
@@ -43,7 +58,7 @@ pub const z = struct {
     }
 
     pub inline fn _mm_cvtepi32_ps(v: i32x4) f32x4 {
-        var result = f32x4{};
+        var result = f32x4{0, 0, 0, 0};
         comptime var index = 0;
 
         inline while (index < 4) : (index += 1) {
@@ -91,7 +106,7 @@ pub const z = struct {
     }
 
     // TODO (Manav): untested
-    pub export fn _mm_mulhi_epi16(a: i32x4, b: i32x4) i32x4 {
+    pub inline fn _mm_mulhi_epi16(a: i32x4, b: i32x4) i32x4 {
         const __a = @bitCast(i16x8, a);
         const __b = @bitCast(i16x8, b);
 
