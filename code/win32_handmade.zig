@@ -100,8 +100,8 @@ const win32_debug_time_marker = struct {
 const win32_game_code = struct {
     gameCodeDLL: ?win32.HINSTANCE = undefined,
     dllLastWriteTime: win32.FILETIME = undefined,
-    UpdateAndRender: ?platform.UpdateAndRenderType = null,
-    GetSoundSamples: ?platform.GetSoundSamplesType = null,
+    UpdateAndRender: ?platform.UpdateAndRenderFnPtrType = null,
+    GetSoundSamples: ?platform.GetSoundSamplesFnPtrType = null,
 
     isValid: bool = false,
 };
@@ -147,8 +147,8 @@ var globalWindowPosition = win32.WINDOWPLACEMENT{
 
 // library defs ---------------------------------------------------------------------------------------------------------------------------
 
-var XInputGetState: fn (u32, ?*win32.XINPUT_STATE) callconv(WINAPI) isize = undefined;
-var XInputSetState: fn (u32, ?*win32.XINPUT_VIBRATION) callconv(WINAPI) isize = undefined;
+var XInputGetState: *const fn (u32, ?*win32.XINPUT_STATE) callconv(WINAPI) isize = undefined;
+var XInputSetState: *const fn (u32, ?*win32.XINPUT_VIBRATION) callconv(WINAPI) isize = undefined;
 
 // Debug/temp functions ------------------------------------------------------------------------------------------------------------------
 
@@ -345,8 +345,8 @@ fn Win32LoadXinput() void {
 fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) void {
     if (win32.LoadLibraryW(win32.L("dsound.dll"))) |DSoundLibrary| {
         if (win32.GetProcAddress(DSoundLibrary, "DirectSoundCreate")) |funcptr| {
-            const DirectSoundCreateType = fn (?*const win32.Guid, ?*?*win32.IDirectSound, ?*win32.IUnknown) callconv(WINAPI) i32;
-            const DirectSoundCreate = @ptrCast(DirectSoundCreateType, funcptr);
+            const DirectSoundCreateFnPtrType = *const fn (?*const win32.Guid, ?*?*win32.IDirectSound, ?*win32.IUnknown) callconv(WINAPI) i32;
+            const DirectSoundCreate = @ptrCast(DirectSoundCreateFnPtrType, funcptr);
 
             var dS: ?*win32.IDirectSound = undefined;
             if (win32.SUCCEEDED(DirectSoundCreate(null, &dS, null))) {
@@ -553,8 +553,7 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
             var destSample = @ptrCast([*]u8, ptr);
             var byteIndex: DWORD = 0;
             while (byteIndex < region1Size) : (byteIndex += 1) {
-                destSample.* = 0;
-                destSample += 1;
+                destSample[byteIndex] = 0;
             }
         }
 
@@ -562,8 +561,7 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
             var destSample = @ptrCast([*]u8, ptr);
             var byteIndex: DWORD = 0;
             while (byteIndex < region2Size) : (byteIndex += 1) {
-                destSample.* = 0;
-                destSample += 1;
+                destSample[byteIndex] = 0;
             }
         }
 
@@ -636,7 +634,7 @@ fn Win32ProcessXInputStickValue(value: i16, deadZoneThreshold: u32) f32 {
 
 fn Win32GetInputFileLocation(state: *win32_state, inputStream: bool, slotIndex: u32, dest: [:0]u16) void {
     var exeName: [64]u16 = [1]u16{0} ** 64;
-    _ = win32.extra.wsprintfW(&exeName, win32.L("loop_edit_%d_%s.hmi"), slotIndex, if (inputStream) win32.L("input") else win32.L("state"));
+    _ = win32.extra.wsprintfW(@ptrCast([*:0]u16, &exeName), win32.L("loop_edit_%d_%s.hmi"), slotIndex, if (inputStream) win32.L("input") else win32.L("state"));
     Win32BuildEXEPathFileName(state, exeName[0..64], dest);
 }
 
@@ -829,14 +827,14 @@ fn HandleDebugCycleCounters(gameMemory: *platform.memory) void {
             if (counter.hitCount > 0) {
                 var textbuffer = [1]u16{0} ** 256;
                 _ = win32.extra.wsprintfW(
-                    &textbuffer,
+                    @ptrCast([*:0]u16, &textbuffer),
                     win32.L("%S - %I64ucy %dh %I64ucy/h\n"),
                     @tagName(counter.t).ptr,
                     counter.cycleCount,
                     counter.hitCount,
                     counter.cycleCount / counter.hitCount,
                 );
-                _ = win32.OutputDebugStringW(&textbuffer);
+                _ = win32.OutputDebugStringW(@ptrCast([*:0]u16, &textbuffer));
 
                 counter.hitCount = 0;
                 counter.cycleCount = 0;
@@ -962,12 +960,29 @@ inline fn rdtsc() u64 {
 
 // main -----------------------------------------------------------------------------------------------------------------------------------
 
+fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
+    const stringToPrint = @ptrCast([*:0]u8, @alignCast(@alignOf(u8), lpParameter.?));
+    while (true) {
+        win32.OutputDebugStringA(stringToPrint);
+        win32.Sleep(1000);
+    }
+
+    return 0;
+}
+
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
     var win32State = win32_state{
         .gameMemoryBlock = undefined,
         .recordingHandle = undefined,
         .playBackHandle = undefined,
     };
+
+    var param = [_:0]u8{ '\n', 'T', 'h', 'r', 'e', 'a', 'd', ' ', 'S', 't', 'a', 'r', 't', 'e', 'd', '!', '\n', '\n', 0 };
+
+    var threadID: DWORD = 0;
+
+    var threadHandle = win32.CreateThread(null, 0, ThreadProc, @ptrCast(*anyopaque, &param), .THREAD_CREATE_RUN_IMMEDIATELY, &threadID);
+    _ = win32.CloseHandle(threadHandle);
 
     var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;
     _ = win32.QueryPerformanceFrequency(&perfCountFrequencyResult);

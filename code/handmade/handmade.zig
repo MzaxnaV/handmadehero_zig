@@ -29,16 +29,16 @@ fn OutputSound(_: *game.state, soundBuffer: *platform.sound_output_buffer, toneH
 
     var sampleOut = soundBuffer.samples;
     var sampleIndex = @as(u32, 0);
-    while (sampleIndex < soundBuffer.sampleCount) : (sampleIndex += 1) {
+    while (sampleIndex < 2 * soundBuffer.sampleCount) : (sampleIndex += 2) {
         // !NOT_IGNORE:
         // const sineValue = @sin(gameState.tSine);
         // const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume);
 
         const sampleValue = 0;
-        sampleOut.* = sampleValue;
-        sampleOut += 1;
-        sampleOut.* = sampleValue;
-        sampleOut += 1;
+        sampleOut[sampleIndex] = sampleValue;
+        // sampleOut += 1;
+        sampleOut[sampleIndex + 1] = sampleValue;
+        // sampleOut += 1;
 
         // !NOT_IGNORE:
         // gameState.tSine += 2.0 * platform.PI32 * 1.0 / @intToFloat(f32, wavePeriod);
@@ -94,7 +94,7 @@ fn DEBUGLoadBMP(
 
     const readResult = ReadEntireFile(thread, fileName);
     if (readResult.contentSize != 0) {
-        const header = @ptrCast(*bitmap_header, readResult.contents);
+        const header = @ptrCast(*align(@alignOf(u8)) bitmap_header, readResult.contents);
         const pixels = readResult.contents + header.bitmapOffset;
         result.width = header.width;
         result.height = header.height;
@@ -458,12 +458,12 @@ fn MakeSphereDiffuseMap(bitmap: *const game.loaded_bitmap, cX: f32, cY: f32) voi
                 alpha,
             };
 
-            pixel.* = (@floatToInt(u32, game.A(colour) + 0.5) << 24) |
+            pixel[x] = (@floatToInt(u32, game.A(colour) + 0.5) << 24) |
                 (@floatToInt(u32, game.R(colour) + 0.5) << 16) |
                 (@floatToInt(u32, game.G(colour) + 0.5) << 8) |
                 (@floatToInt(u32, game.B(colour) + 0.5) << 0);
 
-            pixel += 1;
+            // pixel += 1;
         }
         row += @intCast(usize, bitmap.pitch);
     }
@@ -496,12 +496,12 @@ fn MakeSphereNormalMap(bitmap: *const game.loaded_bitmap, roughness: f32, cX: f3
                 255 * roughness,
             };
 
-            pixel.* = (@floatToInt(u32, game.A(colour) + 0.5) << 24) |
+            pixel[x] = (@floatToInt(u32, game.A(colour) + 0.5) << 24) |
                 (@floatToInt(u32, game.R(colour) + 0.5) << 16) |
                 (@floatToInt(u32, game.G(colour) + 0.5) << 8) |
                 (@floatToInt(u32, game.B(colour) + 0.5) << 0);
 
-            pixel += 1;
+            // pixel += 1;
         }
         row += @intCast(usize, bitmap.pitch);
     }
@@ -597,13 +597,7 @@ pub export fn UpdateAndRender(
 ) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
-        if (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args.len != @typeInfo(platform.UpdateAndRenderType).Fn.args.len or
-            (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[0].arg_type.? != @typeInfo(platform.UpdateAndRenderType).Fn.args[0].arg_type.?) or
-            (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[1].arg_type.? != @typeInfo(platform.UpdateAndRenderType).Fn.args[1].arg_type.?) or
-            (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[2].arg_type.? != @typeInfo(platform.UpdateAndRenderType).Fn.args[2].arg_type.?) or
-            (@typeInfo(@TypeOf(UpdateAndRender)).Fn.args[3].arg_type.? != @typeInfo(platform.UpdateAndRenderType).Fn.args[3].arg_type.?) or
-            @typeInfo(@TypeOf(UpdateAndRender)).Fn.return_type.? != @typeInfo(platform.UpdateAndRenderType).Fn.return_type.?)
-        {
+        if (@typeInfo(platform.UpdateAndRenderFnPtrType).Pointer.child != @TypeOf(UpdateAndRender)) {
             @compileError("Function signature mismatch!");
         }
     }
@@ -1317,12 +1311,7 @@ pub export fn UpdateAndRender(
 pub export fn GetSoundSamples(_: *platform.thread_context, gameMemory: *platform.memory, soundBuffer: *platform.sound_output_buffer) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
-        if (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args.len != @typeInfo(platform.GetSoundSamplesType).Fn.args.len or
-            (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args[0].arg_type.? != @typeInfo(platform.GetSoundSamplesType).Fn.args[0].arg_type.?) or
-            (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args[1].arg_type.? != @typeInfo(platform.GetSoundSamplesType).Fn.args[1].arg_type.?) or
-            (@typeInfo(@TypeOf(GetSoundSamples)).Fn.args[2].arg_type.? != @typeInfo(platform.GetSoundSamplesType).Fn.args[2].arg_type.?) or
-            @typeInfo(@TypeOf(GetSoundSamples)).Fn.return_type.? != @typeInfo(platform.GetSoundSamplesType).Fn.return_type.?)
-        {
+        if (@typeInfo(platform.GetSoundSamplesFnPtrType).Pointer.child != @TypeOf(GetSoundSamples)) {
             @compileError("Function signature mismatch!");
         }
     }

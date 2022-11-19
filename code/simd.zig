@@ -36,7 +36,7 @@ pub const z = struct {
 
     // TODO (Manav): doesn't generate a call to cvtps2dq, yet
     pub inline fn _mm_cvtps_epi32(v: f32x4) i32x4 {
-        var result = i32x4{0, 0, 0, 0};
+        var result = i32x4{ 0, 0, 0, 0 };
         comptime var index = 0;
 
         inline while (index < 4) : (index += 1) {
@@ -47,7 +47,7 @@ pub const z = struct {
     }
 
     pub inline fn _mm_cvttps_epi32(v: f32x4) i32x4 {
-        var result = i32x4{0, 0, 0, 0};
+        var result = i32x4{ 0, 0, 0, 0 };
         comptime var index = 0;
 
         inline while (index < 4) : (index += 1) {
@@ -58,7 +58,7 @@ pub const z = struct {
     }
 
     pub inline fn _mm_cvtepi32_ps(v: i32x4) f32x4 {
-        var result = f32x4{0, 0, 0, 0};
+        var result = f32x4{ 0, 0, 0, 0 };
         comptime var index = 0;
 
         inline while (index < 4) : (index += 1) {

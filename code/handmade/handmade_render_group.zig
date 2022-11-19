@@ -93,9 +93,10 @@ pub const loaded_bitmap = struct {
         while (y < fillRect.yMax) : (y += 2) {
             var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
             var x = fillRect.xMin;
+            var index = @as(u32, 0);
             while (x < fillRect.xMax) : (x += 1) {
-                pixel.* = colour32;
-                pixel += 1;
+                pixel[index] = colour32;
+                index += 1;
             }
             row += @intCast(u32, 2 * buffer.pitch);
         }
@@ -172,6 +173,7 @@ pub const loaded_bitmap = struct {
         var y = yMin;
         while (y <= yMax) : (y += 1) {
             var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
+            var index = @as(u32, 0);
             var x = xMin;
             while (x <= xMax) : (x += 1) {
                 if (NOT_IGNORE) {
@@ -294,15 +296,15 @@ pub const loaded_bitmap = struct {
 
                         var blended255 = Linear1ToSRGB255(blended);
 
-                        pixel.* = (@floatToInt(u32, hm.A(blended255) + 0.5) << 24) |
+                        pixel[index] = (@floatToInt(u32, hm.A(blended255) + 0.5) << 24) |
                             (@floatToInt(u32, hm.R(blended255) + 0.5) << 16) |
                             (@floatToInt(u32, hm.G(blended255) + 0.5) << 8) |
                             (@floatToInt(u32, hm.B(blended255) + 0.5) << 0);
                     }
                 } else {
-                    pixel.* = colour32;
+                    pixel[index] = colour32;
                 }
-                pixel += 1;
+                index += 1;
             }
             row += @intCast(u32, buffer.pitch);
         }
@@ -869,7 +871,7 @@ pub const render_group_entry_type = enum {
     Rectangle,
     CoordinateSystem,
 
-    pub fn Type(self: render_group_entry_type) type {
+    pub fn Type(comptime self: render_group_entry_type) type {
         return switch (self) {
             .Clear => render_entry_clear,
             .Bitmap => render_entry_bitmap,

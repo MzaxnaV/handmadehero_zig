@@ -27,9 +27,9 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
         contents: [*]u8 = undefined,
     };
 
-    pub const debug_platform_free_file_memory = fn (*thread_context, *anyopaque) void;
-    pub const debug_platform_read_entire_file = fn (*thread_context, [*:0]const u8) debug_read_file_result;
-    pub const debug_platform_write_entire_file = fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool;
+    pub const debug_platform_free_file_memory = *const fn (*thread_context, *anyopaque) void;
+    pub const debug_platform_read_entire_file = *const fn (*thread_context, [*:0]const u8) debug_read_file_result;
+    pub const debug_platform_write_entire_file = *const fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool;
 
     // move this to someplace proper
     inline fn __rdtsc() u64 {
@@ -105,14 +105,14 @@ pub const sound_output_buffer = struct {
     samples: [*]i16,
 };
 
-pub const button_state = packed struct {
+pub const button_state = extern struct {
     haltTransitionCount: u32 = 0,
     // endedDown is a boolean
     endedDown: u32 = 0,
 };
 
 const input_buttons = extern union {
-    mapped: struct {
+    mapped: extern struct {
         moveUp: button_state,
         moveDown: button_state,
         moveLeft: button_state,
@@ -192,5 +192,5 @@ pub const END_TIMED_BLOCK_COUNTED = handmade_internal.EndTimedBlockCounted;
 
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 
-pub const GetSoundSamplesType = fn (*thread_context, *memory, *sound_output_buffer) void;
-pub const UpdateAndRenderType = fn (*thread_context, *memory, *input, *offscreen_buffer) void;
+pub const GetSoundSamplesFnPtrType = *const fn (*thread_context, *memory, *sound_output_buffer) callconv(.C) void;
+pub const UpdateAndRenderFnPtrType = *const fn (*thread_context, *memory, *input, *offscreen_buffer) callconv(.C) void;
