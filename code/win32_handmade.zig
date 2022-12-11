@@ -28,6 +28,12 @@ const win32 = struct {
             param1: ?[*:0]const u16,
             ...,
         ) callconv(@import("std").os.windows.WINAPI) i32;
+
+        extern "USER32" fn wsprintfA(
+            param0: ?win32.PSTR,
+            param1: ?[*:0]const u8,
+            ...,
+        ) callconv(@import("std").os.windows.WINAPI) i32;
     };
 };
 
@@ -960,11 +966,41 @@ inline fn rdtsc() u64 {
 
 // main -----------------------------------------------------------------------------------------------------------------------------------
 
+const win32_thread_info = struct {
+    logicalThreadIndex: u32,
+};
+
+const work_queue_entry = struct {
+    stringToPrint: ?[*:0]const u8 = null,
+};
+
+var entryCount: u32 = 0;
+var nextEntryToDo: u32 = 0;
+var entries: [256]work_queue_entry = [1]work_queue_entry{.{}} ** 256;
+
+fn PushString(string: [*:0]const u8) void {
+    std.debug.assert(entryCount < entries.len);
+    var entry: *work_queue_entry = &entries[entryCount];
+
+    entry.stringToPrint = string;
+    entryCount += 1;
+}
+
 fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
-    const stringToPrint = @ptrCast([*:0]u8, @alignCast(@alignOf(u8), lpParameter.?));
+    const threadInfo = @ptrCast(*win32_thread_info, @alignCast(@alignOf(win32_thread_info), lpParameter.?));
+
     while (true) {
-        win32.OutputDebugStringA(stringToPrint);
-        win32.Sleep(1000);
+        if (nextEntryToDo < entryCount) {
+            const entryIndex = nextEntryToDo;
+            nextEntryToDo += 1;
+
+            const entry = entries[entryIndex];
+
+            var buffer = [1:0]u8{0} ** 256;
+            std.debug.print("Thread {}: {s}\n", .{ threadInfo.logicalThreadIndex, entry.stringToPrint.? });
+            _ = win32.extra.wsprintfA(&buffer, "Thread %u: %s\n", threadInfo.logicalThreadIndex, entry.stringToPrint.?);
+            _ = win32.OutputDebugStringA(&buffer);
+        }
     }
 
     return 0;
@@ -977,12 +1013,42 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         .playBackHandle = undefined,
     };
 
-    var param = [_:0]u8{ '\n', 'T', 'h', 'r', 'e', 'a', 'd', ' ', 'S', 't', 'a', 'r', 't', 'e', 'd', '!', '\n', '\n', 0 };
+    // var param = [_:0]u8{ '\n', 'T', 'h', 'r', 'e', 'a', 'd', ' ', 'S', 't', 'a', 'r', 't', 'e', 'd', '!', '\n', '\n', 0 };
 
-    var threadID: DWORD = 0;
+    var threadInfo = [1]win32_thread_info{.{ .logicalThreadIndex = 0 }} ** 15;
 
-    var threadHandle = win32.CreateThread(null, 0, ThreadProc, @ptrCast(*anyopaque, &param), .THREAD_CREATE_RUN_IMMEDIATELY, &threadID);
-    _ = win32.CloseHandle(threadHandle);
+    var threadIndex = @as(u32, 0);
+    while (threadIndex < 15) : (threadIndex += 1) {
+        var info: *win32_thread_info = &threadInfo[threadIndex];
+        info.logicalThreadIndex = threadIndex;
+
+        var threadID: DWORD = 0;
+        var threadHandle = win32.CreateThread(
+            null,
+            0,
+            ThreadProc,
+            @ptrCast(*anyopaque, info),
+            .THREAD_CREATE_RUN_IMMEDIATELY,
+            &threadID,
+        );
+        _ = win32.CloseHandle(threadHandle);
+    }
+
+    PushString("String 0");
+    PushString("String 1");
+    PushString("String 2");
+    PushString("String 3");
+    PushString("String 4");
+    PushString("String 5");
+    PushString("String 6");
+    PushString("String 7");
+    PushString("String 8");
+    PushString("String 9");
+    PushString("String 10");
+    PushString("String 11");
+    PushString("String 12");
+    PushString("String 13");
+    PushString("String 14");
 
     var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;
     _ = win32.QueryPerformanceFrequency(&perfCountFrequencyResult);
