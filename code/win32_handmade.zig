@@ -34,6 +34,9 @@ const win32 = struct {
             param1: ?[*:0]const u8,
             ...,
         ) callconv(@import("std").os.windows.WINAPI) i32;
+
+        const SEMAPHORE_ALL_ACCESS = 0x1f003;
+        const INFINITE = @as(u32, 4294967295);
     };
 };
 
@@ -967,39 +970,52 @@ inline fn rdtsc() u64 {
 // main -----------------------------------------------------------------------------------------------------------------------------------
 
 const win32_thread_info = struct {
-    logicalThreadIndex: u32,
+    logicalThreadIndex: u32 = 0,
+    semaphoreHandle: win32.HANDLE,
 };
 
 const work_queue_entry = struct {
     stringToPrint: ?[*:0]const u8 = null,
 };
 
-var entryCount: u32 = 0;
-var nextEntryToDo: u32 = 0;
-var entries: [256]work_queue_entry = [1]work_queue_entry{.{}} ** 256;
+const global = struct {
+    entryCompletionCount: u32 = 0,
+    nextEntryToDo: u32 = 0,
+    entryCount: u32 = 0,
+    entries: [256]work_queue_entry = [1]work_queue_entry{.{}} ** 256,
+};
 
-fn PushString(string: [*:0]const u8) void {
-    std.debug.assert(entryCount < entries.len);
-    var entry: *work_queue_entry = &entries[entryCount];
+var g: global = .{};
 
+fn PushString(semaphoreHandle: ?win32.HANDLE, string: [*:0]const u8) void {
+    // TODO: (Manav): hacky atm, think properly about these
+    const entryCount = @atomicRmw(u32, &g.entryCount, .Add, 1, .AcqRel);
+    std.debug.assert(entryCount < g.entries.len);
+
+    var entry: *work_queue_entry = &g.entries[entryCount];
     entry.stringToPrint = string;
-    entryCount += 1;
+
+    _ = win32.ReleaseSemaphore(semaphoreHandle, 1, null);
 }
 
 fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
     const threadInfo = @ptrCast(*win32_thread_info, @alignCast(@alignOf(win32_thread_info), lpParameter.?));
 
     while (true) {
-        if (nextEntryToDo < entryCount) {
-            const entryIndex = nextEntryToDo;
-            nextEntryToDo += 1;
-
-            const entry = entries[entryIndex];
-
+        // TODO: (Manav): hacky atm, think properly about these
+        // increment first then decrement as other threads can modify nextEntryToDo.
+        const entryIndex = @atomicRmw(u32, &g.nextEntryToDo, .Add, 1, .AcqRel);
+        if (entryIndex < @atomicLoad(u32, &g.entryCount, .Acquire)) {
+            const entry = g.entries[entryIndex];
             var buffer = [1:0]u8{0} ** 256;
             std.debug.print("Thread {}: {s}\n", .{ threadInfo.logicalThreadIndex, entry.stringToPrint.? });
             _ = win32.extra.wsprintfA(&buffer, "Thread %u: %s\n", threadInfo.logicalThreadIndex, entry.stringToPrint.?);
             _ = win32.OutputDebugStringA(&buffer);
+
+            _ = @atomicRmw(u32, &g.entryCompletionCount, .Add, 1, .Monotonic);
+        } else {
+            _ = @atomicRmw(u32, &g.nextEntryToDo, .Sub, 1, .AcqRel);
+            _ = win32.WaitForSingleObjectEx(threadInfo.semaphoreHandle, win32.extra.INFINITE, win32.FALSE);
         }
     }
 
@@ -1013,13 +1029,16 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         .playBackHandle = undefined,
     };
 
-    // var param = [_:0]u8{ '\n', 'T', 'h', 'r', 'e', 'a', 'd', ' ', 'S', 't', 'a', 'r', 't', 'e', 'd', '!', '\n', '\n', 0 };
+    var threadInfo = [1]win32_thread_info{.{ .semaphoreHandle = undefined }} ** 8;
 
-    var threadInfo = [1]win32_thread_info{.{ .logicalThreadIndex = 0 }} ** 15;
+    const initialCount = 0;
+    const threadCount = threadInfo.len;
+    var semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.extra.SEMAPHORE_ALL_ACCESS);
 
     var threadIndex = @as(u32, 0);
-    while (threadIndex < 15) : (threadIndex += 1) {
+    while (threadIndex < threadCount) : (threadIndex += 1) {
         var info: *win32_thread_info = &threadInfo[threadIndex];
+        info.semaphoreHandle = semaphoreHandle.?;
         info.logicalThreadIndex = threadIndex;
 
         var threadID: DWORD = 0;
@@ -1034,21 +1053,45 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         _ = win32.CloseHandle(threadHandle);
     }
 
-    PushString("String 0");
-    PushString("String 1");
-    PushString("String 2");
-    PushString("String 3");
-    PushString("String 4");
-    PushString("String 5");
-    PushString("String 6");
-    PushString("String 7");
-    PushString("String 8");
-    PushString("String 9");
-    PushString("String 10");
-    PushString("String 11");
-    PushString("String 12");
-    PushString("String 13");
-    PushString("String 14");
+    PushString(semaphoreHandle, "String 0");
+    PushString(semaphoreHandle, "String 1");
+    PushString(semaphoreHandle, "String 2");
+    PushString(semaphoreHandle, "String 3");
+    PushString(semaphoreHandle, "String 4");
+    PushString(semaphoreHandle, "String 5");
+    PushString(semaphoreHandle, "String 6");
+    PushString(semaphoreHandle, "String 7");
+    PushString(semaphoreHandle, "String 8");
+    PushString(semaphoreHandle, "String 9");
+    // PushString(semaphoreHandle, "String 10");
+    // PushString(semaphoreHandle, "String 11");
+    // PushString(semaphoreHandle, "String 12");
+    // PushString(semaphoreHandle, "String 13");
+    // PushString(semaphoreHandle, "String 14");
+    // PushString(semaphoreHandle, "String 15");
+
+    win32.Sleep(5000);
+
+    PushString(semaphoreHandle, "String A0");
+    PushString(semaphoreHandle, "String A1");
+    PushString(semaphoreHandle, "String A2");
+    PushString(semaphoreHandle, "String A3");
+    PushString(semaphoreHandle, "String A4");
+    PushString(semaphoreHandle, "String A5");
+    PushString(semaphoreHandle, "String A6");
+    PushString(semaphoreHandle, "String A7");
+    PushString(semaphoreHandle, "String A8");
+    PushString(semaphoreHandle, "String A9");
+    // PushString(semaphoreHandle, "String A10");
+    // PushString(semaphoreHandle, "String A11");
+    // PushString(semaphoreHandle, "String A12");
+    // PushString(semaphoreHandle, "String A13");
+    // PushString(semaphoreHandle, "String A14");
+    // PushString(semaphoreHandle, "String A15");
+
+    while (g.entryCount != g.entryCompletionCount) {
+        std.debug.print("", .{});
+    }
 
     var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;
     _ = win32.QueryPerformanceFrequency(&perfCountFrequencyResult);
