@@ -1178,30 +1178,59 @@ pub const render_group = struct {
         }
     }
 
-    pub fn TiledRenderGroupToOutput(self: *Self, outputTarget: *loaded_bitmap) void {
+    const tile_render_work = struct {
+        renderGroup: *render_group = undefined,
+        outputTarget: *loaded_bitmap = undefined,
+        clipRect: hm.rect2i = .{},
+    };
+
+    pub fn DoTiledRenderWork(data: *anyopaque) void {
+        const work: *tile_render_work = @ptrCast(*tile_render_work, @alignCast(@alignOf(tile_render_work), data));
+
+        work.renderGroup.RenderGroupToOutput(work.outputTarget, work.clipRect, false);
+        work.renderGroup.RenderGroupToOutput(work.outputTarget, work.clipRect, true);
+    }
+
+    pub fn TiledRenderGroupToOutput(
+        self: *Self,
+        // renderQueue: *platform_work_queue,
+        outputTarget: *loaded_bitmap,
+    ) void {
         const tileCountX = 4;
         const tileCountY = 4;
+        var workArray: [tileCountX * tileCountY]tile_render_work = [1]tile_render_work{.{}} ** (tileCountX * tileCountY);
 
         const tileWidth = @divTrunc(outputTarget.width, tileCountX);
         const tileHeight = @divTrunc(outputTarget.height, tileCountY);
 
+        var workCount = @as(u32, 0);
         var tileY = @as(i32, 0);
         while (tileY < tileCountY) : (tileY += 1) {
             var tileX = @as(i32, 0);
             while (tileX < tileCountX) : (tileX += 1) {
-                var clipRect = hm.rect2i{
-                    .xMin = tileX * tileWidth + 4,
-                    .xMax = 0,
-                    .yMin = tileY * tileHeight + 4,
-                    .yMax = 0,
-                };
+                var work: *tile_render_work = &workArray[workCount];
+                workCount += 1;
 
+                var clipRect = hm.rect2i{};
+                clipRect.xMin = tileX * tileWidth + 4;
                 clipRect.xMax = clipRect.xMin + tileWidth - 4;
+                clipRect.yMin = tileY * tileHeight + 4;
                 clipRect.yMax = clipRect.yMin + tileHeight - 4;
-                // const clipRect = hm.rect2i{ .xMin = 0, .yMin = 0, .xMax = outputTarget.width, .yMax = outputTarget.height };
-                self.RenderGroupToOutput(outputTarget, clipRect, false);
-                self.RenderGroupToOutput(outputTarget, clipRect, true);
+
+                work.renderGroup = self;
+                work.outputTarget = outputTarget;
+                work.clipRect = clipRect;
+
+                // renderQueue.AddEntry(DoTiledRenderWork, work);
             }
+        }
+
+        // renderQueue.CompleteAllWork(renderQueue);
+
+        var workIndex = @as(u32, 0);
+        while (workIndex < workCount) : (workIndex += 1) {
+            var work: *tile_render_work = &workArray[workIndex];
+            DoTiledRenderWork(@ptrCast(*anyopaque, work));
         }
     }
 };

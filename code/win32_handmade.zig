@@ -40,6 +40,8 @@ const win32 = struct {
     };
 };
 
+const Atomic = std.atomic.Atomic;
+
 const platform = @import("handmade_platform");
 const handmade_internal = platform.handmade_internal;
 
@@ -969,57 +971,87 @@ inline fn rdtsc() u64 {
 
 // main -----------------------------------------------------------------------------------------------------------------------------------
 
-const win32_thread_info = struct {
-    logicalThreadIndex: u32 = 0,
-    semaphoreHandle: win32.HANDLE,
+const work_queue_entry_storage = struct {
+    userPointer: *const anyopaque = undefined,
+};
+
+const work_queue = struct {
+    entryCompletionCount: Atomic(u32) = Atomic(u32).init(0),
+    nextEntryToDo: Atomic(u32) = Atomic(u32).init(0),
+    entryCount: Atomic(u32) = Atomic(u32).init(0),
+    semaphoreHandle: ?win32.HANDLE,
+
+    entries: [256]work_queue_entry_storage = [1]work_queue_entry_storage{.{}} ** 256,
 };
 
 const work_queue_entry = struct {
-    stringToPrint: ?[*:0]const u8 = null,
+    data: *const anyopaque = undefined,
+    isValid: bool = false,
 };
 
-const global = struct {
-    entryCompletionCount: u32 = 0,
-    nextEntryToDo: u32 = 0,
-    entryCount: u32 = 0,
-    entries: [256]work_queue_entry = [1]work_queue_entry{.{}} ** 256,
-};
-
-var g: global = .{};
-
-fn PushString(semaphoreHandle: ?win32.HANDLE, string: [*:0]const u8) void {
+fn AddWorkQueueEntry(queue: *work_queue, pointer: *const anyopaque) void {
     // TODO: (Manav): hacky atm, think properly about these
-    const entryCount = @atomicRmw(u32, &g.entryCount, .Add, 1, .AcqRel);
-    std.debug.assert(entryCount < g.entries.len);
-
-    var entry: *work_queue_entry = &g.entries[entryCount];
-    entry.stringToPrint = string;
-
-    _ = win32.ReleaseSemaphore(semaphoreHandle, 1, null);
+    std.debug.assert(queue.entryCount.value < queue.entries.len);
+    queue.entries[queue.entryCount.value].userPointer = pointer;
+    _ = queue.entryCount.fetchAdd(1, .SeqCst);
+    _ = win32.ReleaseSemaphore(queue.semaphoreHandle, 1, null);
 }
+
+fn CompleteAndGetNextWorkQueueEntry(queue: *work_queue, completed: work_queue_entry) work_queue_entry {
+    var result = work_queue_entry{};
+
+    if (completed.isValid) {
+        _ = queue.entryCompletionCount.fetchAdd(1, .SeqCst);
+    }
+
+    if (queue.nextEntryToDo.value < queue.entryCount.value) {
+        // TODO: (Manav): hacky atm, think properly about these
+        const index = queue.nextEntryToDo.fetchAdd(1, .SeqCst);
+        result.data = queue.entries[index].userPointer;
+        result.isValid = true;
+    }
+
+    return result;
+}
+
+fn QueueWorkStillInProgress(queue: *work_queue) bool {
+    var result = (queue.entryCount.value != queue.entryCompletionCount.value);
+    return result;
+}
+
+fn DoWorkerWork(entry: work_queue_entry, logicalThreadIndex: u32) void {
+    std.debug.assert(entry.isValid);
+
+    var buffer = [1:0]u8{0} ** 256;
+
+    std.debug.print("Thread {}: {s}\n", .{ logicalThreadIndex, @ptrCast([*:0]const u8, entry.data)});
+    _ = win32.extra.wsprintfA(&buffer, "Thread %u: %s\n", logicalThreadIndex, @ptrCast([*:0]const u8, entry.data));
+    _ = win32.OutputDebugStringA(&buffer);
+}
+
+const win32_thread_info = struct {
+    logicalThreadIndex: u32 = 0,
+    queue: *work_queue,
+};
 
 fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
     const threadInfo = @ptrCast(*win32_thread_info, @alignCast(@alignOf(win32_thread_info), lpParameter.?));
 
+    var entry: work_queue_entry = .{};
     while (true) {
-        // TODO: (Manav): hacky atm, think properly about these
-        // increment first then decrement as other threads can modify nextEntryToDo.
-        const entryIndex = @atomicRmw(u32, &g.nextEntryToDo, .Add, 1, .AcqRel);
-        if (entryIndex < @atomicLoad(u32, &g.entryCount, .Acquire)) {
-            const entry = g.entries[entryIndex];
-            var buffer = [1:0]u8{0} ** 256;
-            std.debug.print("Thread {}: {s}\n", .{ threadInfo.logicalThreadIndex, entry.stringToPrint.? });
-            _ = win32.extra.wsprintfA(&buffer, "Thread %u: %s\n", threadInfo.logicalThreadIndex, entry.stringToPrint.?);
-            _ = win32.OutputDebugStringA(&buffer);
-
-            _ = @atomicRmw(u32, &g.entryCompletionCount, .Add, 1, .Monotonic);
+        entry = CompleteAndGetNextWorkQueueEntry(threadInfo.queue, entry);
+        if (entry.isValid) {
+            DoWorkerWork(entry, threadInfo.logicalThreadIndex);
         } else {
-            _ = @atomicRmw(u32, &g.nextEntryToDo, .Sub, 1, .AcqRel);
-            _ = win32.WaitForSingleObjectEx(threadInfo.semaphoreHandle, win32.extra.INFINITE, win32.FALSE);
+            _ = win32.WaitForSingleObjectEx(threadInfo.queue.semaphoreHandle, win32.extra.INFINITE, win32.FALSE);
         }
     }
 
     return 0;
+}
+
+fn PushString(queue: *work_queue, string: [*:0]const u8) void {
+    AddWorkQueueEntry(queue, @ptrCast(*const anyopaque, string));
 }
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
@@ -1029,16 +1061,16 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         .playBackHandle = undefined,
     };
 
-    var threadInfo = [1]win32_thread_info{.{ .semaphoreHandle = undefined }} ** 8;
-
+    var threadInfo = [1]win32_thread_info{.{ .queue = undefined }} ** 7;
     const initialCount = 0;
     const threadCount = threadInfo.len;
-    var semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.extra.SEMAPHORE_ALL_ACCESS);
+
+    var queue = work_queue{ .semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.extra.SEMAPHORE_ALL_ACCESS) };
 
     var threadIndex = @as(u32, 0);
     while (threadIndex < threadCount) : (threadIndex += 1) {
         var info: *win32_thread_info = &threadInfo[threadIndex];
-        info.semaphoreHandle = semaphoreHandle.?;
+        info.queue = &queue;
         info.logicalThreadIndex = threadIndex;
 
         var threadID: DWORD = 0;
@@ -1050,47 +1082,39 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             .THREAD_CREATE_RUN_IMMEDIATELY,
             &threadID,
         );
+
+        // std.debug.print("Created thread {} with id: {}\n", .{ info.logicalThreadIndex, threadID });
         _ = win32.CloseHandle(threadHandle);
     }
 
-    PushString(semaphoreHandle, "String 0");
-    PushString(semaphoreHandle, "String 1");
-    PushString(semaphoreHandle, "String 2");
-    PushString(semaphoreHandle, "String 3");
-    PushString(semaphoreHandle, "String 4");
-    PushString(semaphoreHandle, "String 5");
-    PushString(semaphoreHandle, "String 6");
-    PushString(semaphoreHandle, "String 7");
-    PushString(semaphoreHandle, "String 8");
-    PushString(semaphoreHandle, "String 9");
-    // PushString(semaphoreHandle, "String 10");
-    // PushString(semaphoreHandle, "String 11");
-    // PushString(semaphoreHandle, "String 12");
-    // PushString(semaphoreHandle, "String 13");
-    // PushString(semaphoreHandle, "String 14");
-    // PushString(semaphoreHandle, "String 15");
+    PushString(&queue, "String A0");
+    PushString(&queue, "String A1");
+    PushString(&queue, "String A2");
+    PushString(&queue, "String A3");
+    PushString(&queue, "String A4");
+    PushString(&queue, "String A5");
+    PushString(&queue, "String A6");
+    PushString(&queue, "String A7");
+    PushString(&queue, "String A8");
+    PushString(&queue, "String A9");
 
-    win32.Sleep(5000);
+    PushString(&queue, "String B0");
+    PushString(&queue, "String B1");
+    PushString(&queue, "String B2");
+    PushString(&queue, "String B3");
+    PushString(&queue, "String B4");
+    PushString(&queue, "String B5");
+    PushString(&queue, "String B6");
+    PushString(&queue, "String B7");
+    PushString(&queue, "String B8");
+    PushString(&queue, "String B9");
 
-    PushString(semaphoreHandle, "String A0");
-    PushString(semaphoreHandle, "String A1");
-    PushString(semaphoreHandle, "String A2");
-    PushString(semaphoreHandle, "String A3");
-    PushString(semaphoreHandle, "String A4");
-    PushString(semaphoreHandle, "String A5");
-    PushString(semaphoreHandle, "String A6");
-    PushString(semaphoreHandle, "String A7");
-    PushString(semaphoreHandle, "String A8");
-    PushString(semaphoreHandle, "String A9");
-    // PushString(semaphoreHandle, "String A10");
-    // PushString(semaphoreHandle, "String A11");
-    // PushString(semaphoreHandle, "String A12");
-    // PushString(semaphoreHandle, "String A13");
-    // PushString(semaphoreHandle, "String A14");
-    // PushString(semaphoreHandle, "String A15");
-
-    while (g.entryCount != g.entryCompletionCount) {
-        std.debug.print("", .{});
+    var entry = work_queue_entry{};
+    while (QueueWorkStillInProgress(&queue)) {
+        entry = CompleteAndGetNextWorkQueueEntry(&queue, entry);
+        if (entry.isValid) {
+            DoWorkerWork(entry, 7);
+        }
     }
 
     var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;

@@ -13,10 +13,10 @@ pub const rect3 = Rectangle(3);
 pub const rect2i = struct {
     const Self = @This();
 
-    xMin: i32,
-    yMin: i32,
-    xMax: i32,
-    yMax: i32,
+    xMin: i32 = 0,
+    yMin: i32 = 0,
+    xMax: i32 = 0,
+    yMax: i32 = 0,
 
     pub inline fn Intersect(self: *Self, other: Self) void {
         self.xMin = if (self.xMin < other.xMin) other.xMin else self.xMin;
