@@ -1184,18 +1184,19 @@ pub const render_group = struct {
         clipRect: hm.rect2i = .{},
     };
 
-    pub fn DoTiledRenderWork(data: *anyopaque) void {
+    pub fn DoTiledRenderWork(_: *platform.work_queue, data: *anyopaque) void {
+        comptime {
+            if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(DoTiledRenderWork)) {
+                @compileError("Function signature mismatch!");
+            }
+        }
         const work: *tile_render_work = @ptrCast(*tile_render_work, @alignCast(@alignOf(tile_render_work), data));
 
         work.renderGroup.RenderGroupToOutput(work.outputTarget, work.clipRect, false);
         work.renderGroup.RenderGroupToOutput(work.outputTarget, work.clipRect, true);
     }
 
-    pub fn TiledRenderGroupToOutput(
-        self: *Self,
-        // renderQueue: *platform_work_queue,
-        outputTarget: *loaded_bitmap,
-    ) void {
+    pub fn TiledRenderGroupToOutput(self: *Self, renderQueue: *platform.work_queue, outputTarget: *loaded_bitmap) void {
         const tileCountX = 4;
         const tileCountY = 4;
         var workArray: [tileCountX * tileCountY]tile_render_work = [1]tile_render_work{.{}} ** (tileCountX * tileCountY);
@@ -1221,17 +1222,16 @@ pub const render_group = struct {
                 work.outputTarget = outputTarget;
                 work.clipRect = clipRect;
 
-                // renderQueue.AddEntry(DoTiledRenderWork, work);
+                if (NOT_IGNORE) {
+                    hd.PlatformAddEntry(renderQueue, DoTiledRenderWork, work);
+                } else {
+                    DoTiledRenderWork(renderQueue, work);
+                }
+
             }
         }
 
-        // renderQueue.CompleteAllWork(renderQueue);
-
-        var workIndex = @as(u32, 0);
-        while (workIndex < workCount) : (workIndex += 1) {
-            var work: *tile_render_work = &workArray[workIndex];
-            DoTiledRenderWork(@ptrCast(*anyopaque, work));
-        }
+        hd.PlatformCompleteAllWork(renderQueue);
     }
 };
 

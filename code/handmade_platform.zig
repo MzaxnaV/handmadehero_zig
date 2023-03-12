@@ -71,15 +71,18 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
 
     inline fn EndTimedBlock(comptime id: debug_cycle_counter_type) void {
         if (debugGlobalMemory) |m| {
-            m.counters[@enumToInt(id)].cycleCount += __rdtsc() - m.counters[@enumToInt(id)].startCyleCount;
-            m.counters[@enumToInt(id)].hitCount += 1;
+            var startCycleCount = m.counters[@enumToInt(id)].startCyleCount;
+            // TODO things are busted.
+            m.counters[@enumToInt(id)].cycleCount +%= __rdtsc() -% startCycleCount;
+            m.counters[@enumToInt(id)].hitCount +%= 1;
         }
     }
 
     inline fn EndTimedBlockCounted(comptime id: debug_cycle_counter_type, count: u32) void {
         if (debugGlobalMemory) |m| {
-            m.counters[@enumToInt(id)].cycleCount += __rdtsc() - m.counters[@enumToInt(id)].startCyleCount;
-            m.counters[@enumToInt(id)].hitCount += count;
+            // TODO things are busted.
+            m.counters[@enumToInt(id)].cycleCount +%= __rdtsc() -% m.counters[@enumToInt(id)].startCyleCount;
+            m.counters[@enumToInt(id)].hitCount +%= count;
         }
     }
 } else {};
@@ -156,12 +159,26 @@ pub const input = struct {
 
 const len = if (HANDMADE_INTERNAL) @typeInfo(handmade_internal.debug_cycle_counter_type).Enum.fields.len else 0;
 
+// TODO (Manav): replace this with an "interface" using a vtable???, https://youtu.be/AHc4x1uXBQE?t=783
+pub const work_queue = opaque {};
+
+pub const work_queue_callback = *const fn (queue: *work_queue, data: *anyopaque) void;
+pub const add_entry = *const fn (queue: *work_queue, callback: work_queue_callback, data: *anyopaque) void;
+pub const complete_all_work = *const fn (queue: *work_queue) void;
+
 pub const memory = struct {
     isInitialized: bool = false,
+
     permanentStorageSize: u64,
     permanentStorage: [*]u8,
+
     transientStorageSize: u64,
     transientStorage: [*]u8,
+
+    highPriorityQueue: *work_queue,
+
+    PlatformAddEntry: add_entry,
+    PlatformCompleteAllWork: complete_all_work,
 
     DEBUGPlatformFreeFileMemory: handmade_internal.debug_platform_free_file_memory = undefined,
     DEBUGPlatformReadEntireFile: handmade_internal.debug_platform_read_entire_file = undefined,

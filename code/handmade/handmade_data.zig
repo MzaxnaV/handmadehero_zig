@@ -136,6 +136,8 @@ pub const transient_state = struct {
     groundBufferCount: u32,
     groundBuffers: [*]ground_buffer,
 
+    renderQueue: *platform.work_queue,
+
     envMapWidth: u32,
     envMapHeight: u32,
     envMaps: [3]hrg.environment_map,
@@ -248,3 +250,7 @@ pub fn AddCollisionRule(gameState: *state, unsortedStorageIndexA: u32, unsortedS
         rule.storageIndexB = storageIndexB;
     }
 }
+
+// TODO (Manav): this is weird, we already have a function pointer in gameMemory
+pub var PlatformAddEntry: platform.add_entry = undefined;
+pub var PlatformCompleteAllWork: platform.complete_all_work = undefined;

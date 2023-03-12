@@ -402,7 +402,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
         }
     }
 
-    renderGroup.TiledRenderGroupToOutput(buffer);
+    renderGroup.TiledRenderGroupToOutput(tranState.renderQueue, buffer);
 }
 
 fn ClearBitmap(bitmap: *game.loaded_bitmap) void {
@@ -617,6 +617,9 @@ pub export fn UpdateAndRender(
     const pixelsToMeters = 1.0 / 42.0;
 
     if (!gameMemory.isInitialized) {
+        game.PlatformAddEntry = gameMemory.PlatformAddEntry;
+        game.PlatformCompleteAllWork = gameMemory.PlatformCompleteAllWork;
+
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
 
@@ -825,6 +828,8 @@ pub export fn UpdateAndRender(
             gameMemory.transientStorageSize - @sizeOf(game.transient_state),
             gameMemory.transientStorage + @sizeOf(game.transient_state),
         );
+
+        tranState.renderQueue = gameMemory.highPriorityQueue;
 
         tranState.groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushArray(game.ground_buffer, tranState.groundBufferCount);
@@ -1298,7 +1303,7 @@ pub export fn UpdateAndRender(
         // game.Saturation(renderGroup, 0.5 + 0.5 * game.Sin(10 * gameState.time));
     }
 
-    renderGroup.TiledRenderGroupToOutput(drawBuffer);
+    renderGroup.TiledRenderGroupToOutput(tranState.renderQueue, drawBuffer);
 
     game.EndSim(simRegion, gameState); // TODO (Manav): use defer
     game.EndTemporaryMemory(simMemory);

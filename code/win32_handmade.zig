@@ -971,78 +971,87 @@ inline fn rdtsc() u64 {
 
 // main -----------------------------------------------------------------------------------------------------------------------------------
 
-const work_queue_entry_storage = struct {
-    userPointer: *const anyopaque = undefined,
+const win32_work_queue_entry = struct {
+    callback: ?platform.work_queue_callback = null,
+    data: ?*anyopaque = null,
 };
 
-const work_queue = struct {
-    entryCompletionCount: Atomic(u32) = Atomic(u32).init(0),
-    nextEntryToDo: Atomic(u32) = Atomic(u32).init(0),
-    entryCount: Atomic(u32) = Atomic(u32).init(0),
+const win32_work_queue = struct {
+    const Self = @This();
+
+    completionGoal: Atomic(u32) = Atomic(u32).init(0),
+    completionCount: Atomic(u32) = Atomic(u32).init(0),
+
+    nextEntryToWrite: Atomic(u32) = Atomic(u32).init(0),
+    nextEntryToRead: Atomic(u32) = Atomic(u32).init(0),
     semaphoreHandle: ?win32.HANDLE,
 
-    entries: [256]work_queue_entry_storage = [1]work_queue_entry_storage{.{}} ** 256,
+    entries: [256]win32_work_queue_entry = [1]win32_work_queue_entry{.{}} ** 256,
+
+    fn from(queue: *platform.work_queue) *Self {
+        return @ptrCast(*Self, @alignCast(@alignOf(Self), queue));
+    }
+
+    fn to(self: *Self) *platform.work_queue {
+        return @ptrCast(*platform.work_queue, self);
+    }
 };
 
-const work_queue_entry = struct {
-    data: *const anyopaque = undefined,
-    isValid: bool = false,
-};
+fn Win32AddEntry(q: *platform.work_queue, callback: platform.work_queue_callback, data: *anyopaque) void {
+    const queue = win32_work_queue.from(q);
 
-fn AddWorkQueueEntry(queue: *work_queue, pointer: *const anyopaque) void {
-    // TODO: (Manav): hacky atm, think properly about these
-    std.debug.assert(queue.entryCount.value < queue.entries.len);
-    queue.entries[queue.entryCount.value].userPointer = pointer;
-    _ = queue.entryCount.fetchAdd(1, .SeqCst);
+    const newNextEntryToWrite: u32 = ((queue.nextEntryToWrite.value + 1) % @as(u32, queue.entries.len));
+
+    std.debug.assert(newNextEntryToWrite != queue.nextEntryToRead.value);
+
+    const entry: *win32_work_queue_entry = &queue.entries[queue.nextEntryToWrite.value];
+    entry.data = data;
+    entry.callback = callback;
+
+    _ = queue.completionGoal.fetchAdd(1, .Monotonic);
+    queue.nextEntryToWrite.store(newNextEntryToWrite, .SeqCst);
+
     _ = win32.ReleaseSemaphore(queue.semaphoreHandle, 1, null);
 }
 
-fn CompleteAndGetNextWorkQueueEntry(queue: *work_queue, completed: work_queue_entry) work_queue_entry {
-    var result = work_queue_entry{};
+fn Win32DoNextWorkQueueEntry(queue: *win32_work_queue) bool {
+    var weShouldSleep = false;
 
-    if (completed.isValid) {
-        _ = queue.entryCompletionCount.fetchAdd(1, .SeqCst);
+    const originalNextEntryToRead = queue.nextEntryToRead.load(.SeqCst);
+    const newNextEntryToRead = (originalNextEntryToRead + 1) % @as(u32, queue.entries.len);
+    if (originalNextEntryToRead != queue.nextEntryToWrite.load(.SeqCst)) {
+        if (queue.nextEntryToRead.compareAndSwap(originalNextEntryToRead, newNextEntryToRead, .SeqCst, .SeqCst)) |_| {} else {
+            var entry = queue.entries[originalNextEntryToRead];
+            entry.callback.?(queue.to(), entry.data.?);
+            _ = queue.completionCount.fetchAdd(1, .SeqCst);
+        }
+    } else {
+        weShouldSleep = true;
     }
 
-    if (queue.nextEntryToDo.value < queue.entryCount.value) {
-        // TODO: (Manav): hacky atm, think properly about these
-        const index = queue.nextEntryToDo.fetchAdd(1, .SeqCst);
-        result.data = queue.entries[index].userPointer;
-        result.isValid = true;
+    return weShouldSleep;
+}
+
+fn Win32CompleteAllWork(q: *platform.work_queue) void {
+    const queue = win32_work_queue.from(q);
+    while (queue.completionGoal.value != queue.completionCount.value) {
+        _ = Win32DoNextWorkQueueEntry(queue);
     }
 
-    return result;
-}
-
-fn QueueWorkStillInProgress(queue: *work_queue) bool {
-    var result = (queue.entryCount.value != queue.entryCompletionCount.value);
-    return result;
-}
-
-fn DoWorkerWork(entry: work_queue_entry, logicalThreadIndex: u32) void {
-    std.debug.assert(entry.isValid);
-
-    var buffer = [1:0]u8{0} ** 256;
-
-    std.debug.print("Thread {}: {s}\n", .{ logicalThreadIndex, @ptrCast([*:0]const u8, entry.data)});
-    _ = win32.extra.wsprintfA(&buffer, "Thread %u: %s\n", logicalThreadIndex, @ptrCast([*:0]const u8, entry.data));
-    _ = win32.OutputDebugStringA(&buffer);
+    queue.completionGoal.store(0, .SeqCst);
+    queue.completionCount.store(0, .SeqCst);
 }
 
 const win32_thread_info = struct {
     logicalThreadIndex: u32 = 0,
-    queue: *work_queue,
+    queue: *win32_work_queue,
 };
 
 fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
     const threadInfo = @ptrCast(*win32_thread_info, @alignCast(@alignOf(win32_thread_info), lpParameter.?));
 
-    var entry: work_queue_entry = .{};
     while (true) {
-        entry = CompleteAndGetNextWorkQueueEntry(threadInfo.queue, entry);
-        if (entry.isValid) {
-            DoWorkerWork(entry, threadInfo.logicalThreadIndex);
-        } else {
+        if (Win32DoNextWorkQueueEntry(threadInfo.queue)) {
             _ = win32.WaitForSingleObjectEx(threadInfo.queue.semaphoreHandle, win32.extra.INFINITE, win32.FALSE);
         }
     }
@@ -1050,8 +1059,12 @@ fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
     return 0;
 }
 
-fn PushString(queue: *work_queue, string: [*:0]const u8) void {
-    AddWorkQueueEntry(queue, @ptrCast(*const anyopaque, string));
+fn DoWorkerWork(_: *platform.work_queue, data: *anyopaque) void {
+    var buffer = [1:0]u8{0} ** 256;
+
+    // std.debug.print("Thread {}: {s}\n", .{ win32.GetCurrentThreadId(), @ptrCast([*:0]const u8, data) });
+    _ = win32.extra.wsprintfA(&buffer, "Thread %u: %s\n", win32.GetCurrentThreadId(), @ptrCast([*:0]const u8, data));
+    _ = win32.OutputDebugStringA(&buffer);
 }
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
@@ -1065,7 +1078,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     const initialCount = 0;
     const threadCount = threadInfo.len;
 
-    var queue = work_queue{ .semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.extra.SEMAPHORE_ALL_ACCESS) };
+    var queue = win32_work_queue{ .semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.extra.SEMAPHORE_ALL_ACCESS) };
 
     var threadIndex = @as(u32, 0);
     while (threadIndex < threadCount) : (threadIndex += 1) {
@@ -1087,35 +1100,51 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         _ = win32.CloseHandle(threadHandle);
     }
 
-    PushString(&queue, "String A0");
-    PushString(&queue, "String A1");
-    PushString(&queue, "String A2");
-    PushString(&queue, "String A3");
-    PushString(&queue, "String A4");
-    PushString(&queue, "String A5");
-    PushString(&queue, "String A6");
-    PushString(&queue, "String A7");
-    PushString(&queue, "String A8");
-    PushString(&queue, "String A9");
+    var a0 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '0' };
+    var a1 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '1' };
+    var a2 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '2' };
+    var a3 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '3' };
+    var a4 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '4' };
+    var a5 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '5' };
+    var a6 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '6' };
+    var a7 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '7' };
+    var a8 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '8' };
+    var a9 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '9' };
 
-    PushString(&queue, "String B0");
-    PushString(&queue, "String B1");
-    PushString(&queue, "String B2");
-    PushString(&queue, "String B3");
-    PushString(&queue, "String B4");
-    PushString(&queue, "String B5");
-    PushString(&queue, "String B6");
-    PushString(&queue, "String B7");
-    PushString(&queue, "String B8");
-    PushString(&queue, "String B9");
+    var b0 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '0' };
+    var b1 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '1' };
+    var b2 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '2' };
+    var b3 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '3' };
+    var b4 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '4' };
+    var b5 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '5' };
+    var b6 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '6' };
+    var b7 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '7' };
+    var b8 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '8' };
+    var b9 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '9' };
 
-    var entry = work_queue_entry{};
-    while (QueueWorkStillInProgress(&queue)) {
-        entry = CompleteAndGetNextWorkQueueEntry(&queue, entry);
-        if (entry.isValid) {
-            DoWorkerWork(entry, 7);
-        }
-    }
+    Win32AddEntry(queue.to(), DoWorkerWork, &a0);
+    Win32AddEntry(queue.to(), DoWorkerWork, &a1);
+    Win32AddEntry(queue.to(), DoWorkerWork, &a2);
+    Win32AddEntry(queue.to(), DoWorkerWork, &a3);
+    Win32AddEntry(queue.to(), DoWorkerWork, &a4);
+    Win32AddEntry(queue.to(), DoWorkerWork, &a5);
+    Win32AddEntry(queue.to(), DoWorkerWork, &a6);
+    Win32AddEntry(queue.to(), DoWorkerWork, &a7);
+    Win32AddEntry(queue.to(), DoWorkerWork, &a8);
+    Win32AddEntry(queue.to(), DoWorkerWork, &a9);
+
+    Win32AddEntry(queue.to(), DoWorkerWork, &b0);
+    Win32AddEntry(queue.to(), DoWorkerWork, &b1);
+    Win32AddEntry(queue.to(), DoWorkerWork, &b2);
+    Win32AddEntry(queue.to(), DoWorkerWork, &b3);
+    Win32AddEntry(queue.to(), DoWorkerWork, &b4);
+    Win32AddEntry(queue.to(), DoWorkerWork, &b5);
+    Win32AddEntry(queue.to(), DoWorkerWork, &b6);
+    Win32AddEntry(queue.to(), DoWorkerWork, &b7);
+    Win32AddEntry(queue.to(), DoWorkerWork, &b8);
+    Win32AddEntry(queue.to(), DoWorkerWork, &b9);
+
+    Win32CompleteAllWork(queue.to());
 
     var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;
     _ = win32.QueryPerformanceFrequency(&perfCountFrequencyResult);
@@ -1137,8 +1166,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
     Win32LoadXinput();
 
-    Win32ResizeDIBSection(&globalBackBuffer, 960, 540);
-    // Win32ResizeDIBSection(&globalBackBuffer, 1920, 1080)
+    // Win32ResizeDIBSection(&globalBackBuffer, 960, 540);
+    Win32ResizeDIBSection(&globalBackBuffer, 1920, 1080);
 
     debugGlobalShowCursor = HANDMADE_INTERNAL;
 
@@ -1183,7 +1212,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 monitorRefreshHz = @intCast(u32, win32RefreshRate);
             }
 
-            const gameUpdateHz = @divTrunc(monitorRefreshHz, 2);
+            // const gameUpdateHz = @divTrunc(monitorRefreshHz, 2);
+            const gameUpdateHz = monitorRefreshHz;
             const targetSecondsPerFrame = 1.0 / @intToFloat(f32, gameUpdateHz);
 
             var soundOutput = win32_sound_output{
@@ -1221,6 +1251,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     .transientStorageSize = platform.GigaBytes(1),
                     .permanentStorage = undefined,
                     .transientStorage = undefined,
+                    .highPriorityQueue = queue.to(),
+                    .PlatformAddEntry = Win32AddEntry,
+                    .PlatformCompleteAllWork = Win32CompleteAllWork,
                     .DEBUGPlatformFreeFileMemory = DEBUGWin32FreeFileMemory,
                     .DEBUGPlatformReadEntireFile = DEBUGWin32ReadEntireFile,
                     .DEBUGPlatformWriteEntireFile = DEBUGWin32WriteEntireFile,
@@ -1600,16 +1633,17 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             newInput = oldInput;
                             oldInput = temp;
 
-                            if (!NOT_IGNORE) {
+                            if (NOT_IGNORE) {
                                 var endCycleCount = rdtsc();
                                 const cyclesElapsed = endCycleCount - lastCycleCount;
                                 lastCycleCount = endCycleCount;
 
                                 const fps: f64 = 0;
                                 const mcpf = @intToFloat(f64, cyclesElapsed) / (1000 * 1000);
-                                var fpsBuffer = [1]u16{0} ** 256;
-                                _ = win32.extra.wsprintfW(&fpsBuffer, win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), msPerFrame, fps, mcpf);
-                                _ = win32.OutputDebugStringW(&fpsBuffer);
+                                var fpsBuffer = [1:0]u16{0} ** 256;
+                                _ = win32.extra.wsprintfW(@ptrCast([*:0]u16, &fpsBuffer), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), msPerFrame, fps, mcpf);
+                                std.debug.print("{d:.2}, {d:.2}, {d:.2}\n", .{ msPerFrame, fps, mcpf });
+                                _ = win32.OutputDebugStringW(@ptrCast([*:0]u16, &fpsBuffer));
                             }
 
                             if (HANDMADE_INTERNAL) {
