@@ -1,9 +1,11 @@
 const f32_max = @import("std").math.f32_max;
 
-/// `False` - slow code not allowed, `True` - slow code welcome.
-const HANDMADE_SLOW = @import("build_consts").HANDMADE_SLOW;
-/// `False` - Build for public release, `True` - Build for developer only
-const HANDMADE_INTERNAL = @import("build_consts").HANDMADE_INTERNAL;
+/// Debug
+const NOT_IGNORE = true;
+/// Debug: `False` - slow code not allowed, `True` - slow code welcome.
+const HANDMADE_SLOW = true;
+/// Debug: `False` - Build for public release, `True` - Build for developer only
+const HANDMADE_INTERNAL = true;
 
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
@@ -64,25 +66,25 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
 
     inline fn BeginTimedBlock(comptime id: debug_cycle_counter_type) void {
         if (debugGlobalMemory) |m| {
-            m.counters[@enumToInt(id)].t = id;
-            m.counters[@enumToInt(id)].startCyleCount = __rdtsc();
+            m.counters[@intFromEnum(id)].t = id;
+            m.counters[@intFromEnum(id)].startCyleCount = __rdtsc();
         }
     }
 
     inline fn EndTimedBlock(comptime id: debug_cycle_counter_type) void {
         if (debugGlobalMemory) |m| {
-            var startCycleCount = m.counters[@enumToInt(id)].startCyleCount;
+            var startCycleCount = m.counters[@intFromEnum(id)].startCyleCount;
             // TODO things are busted.
-            m.counters[@enumToInt(id)].cycleCount +%= __rdtsc() -% startCycleCount;
-            m.counters[@enumToInt(id)].hitCount +%= 1;
+            m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% startCycleCount;
+            m.counters[@intFromEnum(id)].hitCount +%= 1;
         }
     }
 
     inline fn EndTimedBlockCounted(comptime id: debug_cycle_counter_type, count: u32) void {
         if (debugGlobalMemory) |m| {
             // TODO things are busted.
-            m.counters[@enumToInt(id)].cycleCount +%= __rdtsc() -% m.counters[@enumToInt(id)].startCyleCount;
-            m.counters[@enumToInt(id)].hitCount +%= count;
+            m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% m.counters[@intFromEnum(id)].startCyleCount;
+            m.counters[@intFromEnum(id)].hitCount +%= count;
         }
     }
 } else {};

@@ -93,7 +93,7 @@ pub fn GetWorldChunk(memoryArena: ?*hd.memory_arena, w: *world, chunkX: i32, chu
     assert(chunkY < TILE_CHUNK_SAFE_MARGIN);
     assert(chunkZ < TILE_CHUNK_SAFE_MARGIN);
 
-    const hashValue = @bitCast(u32, 19 * chunkX + 7 * chunkY + 3 * chunkZ);
+    const hashValue = @as(u32, @bitCast(19 * chunkX + 7 * chunkY + 3 * chunkZ));
     const hashSlot = hashValue & (w.chunkHash.len - 1);
     assert(hashSlot < w.chunkHash.len);
 
@@ -130,7 +130,7 @@ pub fn GetWorldChunk(memoryArena: ?*hd.memory_arena, w: *world, chunkX: i32, chu
 inline fn RecanonicalizeCoord(chunkDim: f32, tile: *i32, tileRel: *f32) void {
     var offSet = RoundF32ToInt(i32, tileRel.* / chunkDim);
     tile.* +%= offSet;
-    tileRel.* -= @intToFloat(f32, offSet) * chunkDim;
+    tileRel.* -= @as(f32, @floatFromInt(offSet)) * chunkDim;
 
     assert(IsCanonicalCoord(chunkDim, tileRel.*));
 }
@@ -149,9 +149,9 @@ pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset
 
 pub inline fn Substract(w: *const world, a: *const world_position, b: *const world_position) hm.v3 {
     const dTile = hm.v3{
-        @intToFloat(f32, a.chunkX) - @intToFloat(f32, b.chunkX),
-        @intToFloat(f32, a.chunkY) - @intToFloat(f32, b.chunkY),
-        @intToFloat(f32, a.chunkZ) - @intToFloat(f32, b.chunkZ),
+        @as(f32, @floatFromInt(a.chunkX)) - @as(f32, @floatFromInt(b.chunkX)),
+        @as(f32, @floatFromInt(a.chunkY)) - @as(f32, @floatFromInt(b.chunkY)),
+        @as(f32, @floatFromInt(a.chunkZ)) - @as(f32, @floatFromInt(b.chunkZ)),
     };
 
     const result = hm.Add(hm.Hammard(w.chunkDimInMeters, dTile), hm.Sub(a.offset_, b.offset_));
@@ -250,7 +250,7 @@ pub fn ChangeEntityLocation(arena: *hd.memory_arena, w: *world, lowEntityIndex: 
     var oldP: ?*const world_position = null;
     var newP: ?*const world_position = null;
 
-    if (!he.IsSet(&lowEntity.sim, @enumToInt(hsr.sim_entity_flags.NonSpatial)) and IsValid(lowEntity.p)) {
+    if (!he.IsSet(&lowEntity.sim, @intFromEnum(hsr.sim_entity_flags.NonSpatial)) and IsValid(lowEntity.p)) {
         oldP = &lowEntity.p;
     }
 
@@ -262,10 +262,10 @@ pub fn ChangeEntityLocation(arena: *hd.memory_arena, w: *world, lowEntityIndex: 
 
     if (newP) |p| {
         lowEntity.p = p.*;
-        he.ClearFlags(&lowEntity.sim, @enumToInt(hsr.sim_entity_flags.NonSpatial));
+        he.ClearFlags(&lowEntity.sim, @intFromEnum(hsr.sim_entity_flags.NonSpatial));
     } else {
         lowEntity.p = NullPosition();
-        he.AddFlags(&lowEntity.sim, @enumToInt(hsr.sim_entity_flags.NonSpatial));
+        he.AddFlags(&lowEntity.sim, @intFromEnum(hsr.sim_entity_flags.NonSpatial));
     }
 }
 

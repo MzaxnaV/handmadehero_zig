@@ -16,32 +16,32 @@ pub const memory_arena = struct {
 
     pub inline fn Initialize(self: *memory_arena, size: platform.memory_index, base: [*]u8) void {
         self.size = size;
-        self.base_addr = @ptrToInt(base);
+        self.base_addr = @intFromPtr(base);
         self.used = 0;
         self.tempCount = 0;
     }
 
     pub inline fn PushSize(self: *memory_arena, comptime alignment: u5, size: platform.memory_index) [*]align(alignment) u8 {
-        const adjusted_addr = std.mem.alignForward(self.base_addr + self.used, alignment);
+        const adjusted_addr = std.mem.alignForward(usize, self.base_addr + self.used, alignment);
         const padding = adjusted_addr - (self.base_addr + self.used);
 
         std.debug.assert((self.used + size + padding) <= self.size);
-        const result = @intToPtr([*]align(alignment) u8, adjusted_addr);
+        const result = @as([*]align(alignment) u8, @ptrFromInt(adjusted_addr));
         self.used += size + padding;
 
         return result;
     }
 
     pub inline fn PushStruct(self: *memory_arena, comptime T: type) *T {
-        return @ptrCast(*T, self.PushSize(@alignOf(T), @sizeOf(T)));
+        return @as(*T, @ptrCast(self.PushSize(@alignOf(T), @sizeOf(T))));
     }
 
     pub inline fn PushSlice(self: *memory_arena, comptime T: type, comptime count: platform.memory_index) *[count]T {
-        return @ptrCast(*[count]T, self.PushSize(@alignOf(T), count * @sizeOf(*[]T)));
+        return @as(*[count]T, @ptrCast(self.PushSize(@alignOf(T), count * @sizeOf(*[]T))));
     }
 
     pub inline fn PushArray(self: *memory_arena, comptime T: type, count: platform.memory_index) [*]T {
-        return @ptrCast([*]T, self.PushSize(@alignOf(T), count * @sizeOf(T)));
+        return @as([*]T, @ptrCast(self.PushSize(@alignOf(T), count * @sizeOf(T))));
     }
 
     pub inline fn CheckArena(self: *memory_arena) void {
@@ -146,7 +146,9 @@ pub const transient_state = struct {
 // inline pub functions -------------------------------------------------------------------------------------------------------------------
 
 pub inline fn ZeroSize(size: platform.memory_index, ptr: [*]u8) void {
-    @memset(ptr, 0, size);
+    @memset(ptr[0..size], 0);
+
+    //@memset(ptr, 0, size);
 
     // NOTE (Manav): this is slow :/, use memset
     // var byte = ptr;
@@ -178,7 +180,7 @@ pub inline fn EndTemporaryMemory(tempMem: temporary_memory) void {
 
 // NOTE (Manav): works for slices too.
 pub inline fn ZeroStruct(comptime T: type, ptr: *T) void {
-    ZeroSize(@sizeOf(T), @ptrCast([*]u8, ptr));
+    ZeroSize(@sizeOf(T), @as([*]u8, @ptrCast(ptr)));
 }
 
 pub inline fn GetLowEntity(gameState: *state, index: u32) ?*low_entity {

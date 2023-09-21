@@ -200,8 +200,8 @@ fn AddEntityRaw(gameState: *hd.state, simRegion: *sim_region, storageIndex: u32,
                 entity.?.* = lowEntity.sim;
                 LoadEntityReference(gameState, simRegion, &entity.?.sword);
 
-                assert(!he.IsSet(&lowEntity.sim, @enumToInt(sim_entity_flags.Simming)));
-                he.AddFlags(&lowEntity.sim, @enumToInt(sim_entity_flags.Simming));
+                assert(!he.IsSet(&lowEntity.sim, @intFromEnum(sim_entity_flags.Simming)));
+                he.AddFlags(&lowEntity.sim, @intFromEnum(sim_entity_flags.Simming));
             }
 
             entity.?.storageIndex = storageIndex;
@@ -236,7 +236,7 @@ pub fn AddEntity(gameState: *hd.state, simRegion: *sim_region, storageIndex: u32
 
 pub inline fn GetSimSpaceP(simRegion: *sim_region, stored: *hd.low_entity) hm.v3 {
     var result = he.Invalid;
-    if (!he.IsSet(&stored.sim, @enumToInt(sim_entity_flags.NonSpatial))) {
+    if (!he.IsSet(&stored.sim, @intFromEnum(sim_entity_flags.NonSpatial))) {
         result = hw.Substract(simRegion.world, &stored.p, &simRegion.origin);
     }
 
@@ -277,7 +277,7 @@ pub fn BeginSim(simArena: *hd.memory_arena, gameState: *hd.state, world: *hw.wor
                         while (entityIndexIndex < b.entityCount) : (entityIndexIndex += 1) {
                             const lowEntityIndex = b.lowEntityIndex[entityIndexIndex];
                             const low = &gameState.lowEntities[lowEntityIndex];
-                            if (!he.IsSet(&low.sim, @enumToInt(sim_entity_flags.NonSpatial))) {
+                            if (!he.IsSet(&low.sim, @intFromEnum(sim_entity_flags.NonSpatial))) {
                                 var simSpaceP = GetSimSpaceP(simRegion, low);
                                 if (EntityOverlapsRectangle(simSpaceP, low.sim.collision.totalVolume, simRegion.bounds)) {
                                     _ = AddEntity(gameState, simRegion, lowEntityIndex, low, &simSpaceP);
@@ -299,13 +299,13 @@ pub fn EndSim(region: *sim_region, gameState: *hd.state) void {
         const entity: *sim_entity = &region.entities[entityIndex];
         const stored = &gameState.lowEntities[entity.storageIndex];
 
-        assert(he.IsSet(&stored.sim, @enumToInt(sim_entity_flags.Simming)));
+        assert(he.IsSet(&stored.sim, @intFromEnum(sim_entity_flags.Simming)));
         stored.sim = entity.*;
-        assert(!he.IsSet(&stored.sim, @enumToInt(sim_entity_flags.Simming)));
+        assert(!he.IsSet(&stored.sim, @intFromEnum(sim_entity_flags.Simming)));
 
         StoreEntityReference(&stored.sim.sword);
 
-        const newP = if (he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial)))
+        const newP = if (he.IsSet(entity, @intFromEnum(sim_entity_flags.NonSpatial)))
             hw.NullPosition()
         else
             hw.MapIntoChunkSpace(gameState.world, region.origin, entity.p);
@@ -381,11 +381,11 @@ fn CanCollide(gameState: *hd.state, unsortedA: *sim_entity, unsortedB: *sim_enti
             a = unsortedB;
         }
 
-        if (he.IsSet(a, @enumToInt(sim_entity_flags.Collides)) and
-            he.IsSet(b, @enumToInt(sim_entity_flags.Collides)))
+        if (he.IsSet(a, @intFromEnum(sim_entity_flags.Collides)) and
+            he.IsSet(b, @intFromEnum(sim_entity_flags.Collides)))
         {
-            if (!he.IsSet(a, @enumToInt(sim_entity_flags.NonSpatial)) and
-                !he.IsSet(b, @enumToInt(sim_entity_flags.NonSpatial)))
+            if (!he.IsSet(a, @intFromEnum(sim_entity_flags.NonSpatial)) and
+                !he.IsSet(b, @intFromEnum(sim_entity_flags.NonSpatial)))
             {
                 result = true;
             }
@@ -416,7 +416,7 @@ fn HandleCollision(gameState: *hd.state, unsortedA: *sim_entity, unsortedB: *sim
 
     var a = unsortedA;
     var b = unsortedB;
-    if (@enumToInt(a.entityType) > @enumToInt(b.entityType)) {
+    if (@intFromEnum(a.entityType) > @intFromEnum(b.entityType)) {
         b = unsortedA;
         a = unsortedB;
     }
@@ -486,7 +486,7 @@ pub fn EntitiesOverlap(entity: *sim_entity, testEntity: *sim_entity, epsilon: hm
 }
 
 pub fn MoveEntity(gameState: *hd.state, simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec: *const move_spec, accelaration: hm.v3) void {
-    assert(!he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial)));
+    assert(!he.IsSet(entity, @intFromEnum(sim_entity_flags.NonSpatial)));
 
     var ddP = accelaration;
     // const world = gameState.world;
@@ -500,7 +500,7 @@ pub fn MoveEntity(gameState: *hd.state, simRegion: *sim_region, entity: *sim_ent
 
     ddP = hm.Scale(ddP, moveSpec.speed);
     hm.AddTo(&ddP, hm.Scale(entity.dP, -moveSpec.drag));
-    if (!he.IsSet(entity, @enumToInt(sim_entity_flags.ZSupported))) {
+    if (!he.IsSet(entity, @intFromEnum(sim_entity_flags.ZSupported))) {
         hm.AddTo(&ddP, hm.v3{ 0, 0, -9.8 });
     }
 
@@ -531,13 +531,13 @@ pub fn MoveEntity(gameState: *hd.state, simRegion: *sim_region, entity: *sim_ent
 
             const desiredPosition = hm.Add(entity.p, playerDelta);
 
-            if (!he.IsSet(entity, @enumToInt(sim_entity_flags.NonSpatial))) {
+            if (!he.IsSet(entity, @intFromEnum(sim_entity_flags.NonSpatial))) {
                 var testHighEntityIndex = @as(u32, 0);
                 while (testHighEntityIndex < simRegion.entityCount) : (testHighEntityIndex += 1) {
                     const testEntity = &simRegion.entities[testHighEntityIndex];
 
                     const overlapEpsilon = 0.001;
-                    if (((he.IsSet(testEntity, @enumToInt(sim_entity_flags.Traversable)) and
+                    if (((he.IsSet(testEntity, @intFromEnum(sim_entity_flags.Traversable)) and
                         EntitiesOverlap(entity, testEntity, .{ overlapEpsilon, overlapEpsilon, overlapEpsilon })) or
                         CanCollide(gameState, entity, testEntity)))
                     {
@@ -566,7 +566,7 @@ pub fn MoveEntity(gameState: *hd.state, simRegion: *sim_region, entity: *sim_ent
                                         test_wall{ .x = hm.Y(maxCorner), .relX = hm.Y(rel), .relY = hm.X(rel), .deltaX = hm.Y(playerDelta), .deltaY = hm.X(playerDelta), .minY = hm.X(minCorner), .maxY = hm.X(maxCorner), .normal = hm.v3{ 0, 1, 0 } },
                                     };
 
-                                    if (he.IsSet(testEntity, @enumToInt(sim_entity_flags.Traversable))) {
+                                    if (he.IsSet(testEntity, @intFromEnum(sim_entity_flags.Traversable))) {
                                         var tMaxTest = tMax;
                                         var hitThis = false;
 
@@ -672,14 +672,14 @@ pub fn MoveEntity(gameState: *hd.state, simRegion: *sim_region, entity: *sim_ent
 
     ground += hm.Z(entity.p) - hm.Z(he.GetEntityGroundPoint(entity));
     if ((hm.Z(entity.p) <= ground) or
-        (he.IsSet(entity, @enumToInt(sim_entity_flags.ZSupported)) and
+        (he.IsSet(entity, @intFromEnum(sim_entity_flags.ZSupported)) and
         (hm.Z(entity.dP) == 0)))
     {
         entity.p[2] = ground;
         entity.dP[2] = 0;
-        he.AddFlags(entity, @enumToInt(sim_entity_flags.ZSupported));
+        he.AddFlags(entity, @intFromEnum(sim_entity_flags.ZSupported));
     } else {
-        he.ClearFlags(entity, @enumToInt(sim_entity_flags.ZSupported));
+        he.ClearFlags(entity, @intFromEnum(sim_entity_flags.ZSupported));
     }
 
     if (entity.distanceLimit != 0) {

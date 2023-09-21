@@ -94,13 +94,13 @@ fn DEBUGLoadBMP(
 
     const readResult = ReadEntireFile(thread, fileName);
     if (readResult.contentSize != 0) {
-        const header = @ptrCast(*align(@alignOf(u8)) bitmap_header, readResult.contents);
+        const header = @as(*align(@alignOf(u8)) bitmap_header, @ptrCast(readResult.contents));
         const pixels = readResult.contents + header.bitmapOffset;
         result.width = header.width;
         result.height = header.height;
         result.memory = pixels;
         result.alignPercentage = TopDownAlign(&result, game.V2(alignX, topDownAlignY));
-        result.widthOverHeight = game.SafeRatiof0(@intToFloat(f32, result.width), @intToFloat(f32, result.height));
+        result.widthOverHeight = game.SafeRatiof0(@as(f32, @floatFromInt(result.width)), @as(f32, @floatFromInt(result.height)));
 
         assert(header.height >= 0);
         assert(header.compression == 3);
@@ -115,22 +115,22 @@ fn DEBUGLoadBMP(
         const blueScan = game.FindLeastSignificantSetBit(blueMask);
         const alphaScan = game.FindLeastSignificantSetBit(alphaMask);
 
-        const redShiftDown = @intCast(u5, redScan);
-        const greenShiftDown = @intCast(u5, greenScan);
-        const blueShiftDown = @intCast(u5, blueScan);
-        const alphaShiftDown = @intCast(u5, alphaScan);
+        const redShiftDown = @as(u5, @intCast(redScan));
+        const greenShiftDown = @as(u5, @intCast(greenScan));
+        const blueShiftDown = @as(u5, @intCast(blueScan));
+        const alphaShiftDown = @as(u5, @intCast(alphaScan));
 
-        const sourceDest = @ptrCast([*]align(1) u32, result.memory);
+        const sourceDest = @as([*]align(1) u32, @ptrCast(result.memory));
 
         var index = @as(u32, 0);
-        while (index < @intCast(u32, header.height * header.width)) : (index += 1) {
+        while (index < @as(u32, @intCast(header.height * header.width))) : (index += 1) {
             const c = sourceDest[index];
 
             var texel = game.v4{
-                @intToFloat(f32, (c & redMask) >> redShiftDown),
-                @intToFloat(f32, (c & greenMask) >> greenShiftDown),
-                @intToFloat(f32, (c & blueMask) >> blueShiftDown),
-                @intToFloat(f32, (c & alphaMask) >> alphaShiftDown),
+                @as(f32, @floatFromInt((c & redMask) >> redShiftDown)),
+                @as(f32, @floatFromInt((c & greenMask) >> greenShiftDown)),
+                @as(f32, @floatFromInt((c & blueMask) >> blueShiftDown)),
+                @as(f32, @floatFromInt((c & alphaMask) >> alphaShiftDown)),
             };
 
             texel = game.SRGB255ToLinear1(texel);
@@ -143,17 +143,17 @@ fn DEBUGLoadBMP(
             texel = game.Linear1ToSRGB255(texel);
 
             sourceDest[index] =
-                (@floatToInt(u32, (game.A(texel) + 0.5)) << 24 |
-                @floatToInt(u32, (game.R(texel) + 0.5)) << 16 |
-                @floatToInt(u32, (game.G(texel) + 0.5)) << 8 |
-                @floatToInt(u32, (game.B(texel) + 0.5)) << 0);
+                (@as(u32, @intFromFloat((game.A(texel) + 0.5))) << 24 |
+                @as(u32, @intFromFloat((game.R(texel) + 0.5))) << 16 |
+                @as(u32, @intFromFloat((game.G(texel) + 0.5))) << 8 |
+                @as(u32, @intFromFloat((game.B(texel) + 0.5))) << 0);
         }
     }
 
     result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
 
     if (!NOT_IGNORE) {
-        result.memory += @intCast(usize, result.pitch * (result.height - 1));
+        result.memory += @as(usize, @intCast(result.pitch * (result.height - 1)));
         result.pitch = -result.width;
     }
 
@@ -197,28 +197,28 @@ fn AddGroundedEntity(gameState: *game.state, entityType: game.entity_type, p: ga
 }
 
 fn AddStandardRoom(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), absTileZ, .{ 0, 0, 0 });
+    const p = ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Space, p, gameState.standardRoomCollision);
 
-    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Traversable));
+    game.AddFlags(&entity.low.sim, @intFromEnum(game.sim_entity_flags.Traversable));
 
     return entity;
 }
 
 fn AddWall(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), absTileZ, .{ 0, 0, 0 });
+    const p = ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Wall, p, gameState.wallCollision);
 
-    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
+    game.AddFlags(&entity.low.sim, @intFromEnum(game.sim_entity_flags.Collides));
 
     return entity;
 }
 
 fn AddStairs(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), absTileZ, .{ 0, 0, 0 });
+    const p = ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Stairwell, p, gameState.stairCollision);
 
-    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides));
+    game.AddFlags(&entity.low.sim, @intFromEnum(game.sim_entity_flags.Collides));
     entity.low.sim.walkableDim = .{ game.X(entity.low.sim.collision.totalVolume.dim), game.Y(entity.low.sim.collision.totalVolume.dim) };
     entity.low.sim.walkableHeight = gameState.typicalFloorHeight;
 
@@ -242,7 +242,7 @@ fn AddSword(gameState: *game.state) add_low_entity_result {
 
     entity.low.sim.collision = gameState.swordCollision;
 
-    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Movable));
+    game.AddFlags(&entity.low.sim, @intFromEnum(game.sim_entity_flags.Movable));
 
     return entity;
 }
@@ -251,7 +251,7 @@ fn AddPlayer(gameState: *game.state) add_low_entity_result {
     const p = gameState.cameraP;
     var entity = AddGroundedEntity(gameState, .Hero, p, gameState.playerCollision);
 
-    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
+    game.AddFlags(&entity.low.sim, @intFromEnum(game.sim_entity_flags.Collides) | @intFromEnum(game.sim_entity_flags.Movable));
 
     InitHitPoints(entity.low, 3);
 
@@ -266,10 +266,10 @@ fn AddPlayer(gameState: *game.state) add_low_entity_result {
 }
 
 fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+    const p = ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Monstar, p, gameState.monstarCollision);
 
-    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
+    game.AddFlags(&entity.low.sim, @intFromEnum(game.sim_entity_flags.Collides) | @intFromEnum(game.sim_entity_flags.Movable));
 
     InitHitPoints(entity.low, 3);
 
@@ -277,10 +277,10 @@ fn AddMonstar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u3
 }
 
 fn AddFamiliar(gameState: *game.state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @intCast(i32, absTileX), @intCast(i32, absTileY), @intCast(i32, absTileZ), .{ 0, 0, 0 });
+    const p = ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Familiar, p, gameState.familiarCollision);
 
-    game.AddFlags(&entity.low.sim, @enumToInt(game.sim_entity_flags.Collides) | @enumToInt(game.sim_entity_flags.Movable));
+    game.AddFlags(&entity.low.sim, @intFromEnum(game.sim_entity_flags.Collides) | @intFromEnum(game.sim_entity_flags.Movable));
 
     return entity;
 }
@@ -290,7 +290,7 @@ fn DrawHitpoints(entity: *game.sim_entity, pieceGroup: *game.render_group) void 
         const healthDim = game.v2{ 0.2, 0.2 };
         const spacingX = 1.5 * game.X(healthDim);
         var hitP = game.v2{
-            -0.5 * @intToFloat(f32, entity.hitPointMax - 1) * spacingX,
+            -0.5 * @as(f32, @floatFromInt(entity.hitPointMax - 1)) * spacingX,
             -0.25,
         };
         const dHitP = game.v2{ spacingX, 0 };
@@ -339,7 +339,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
     buffer.alignPercentage = game.v2{ 0.5, 0.5 };
     buffer.widthOverHeight = 1.0;
 
-    const renderGroup = game.render_group.Allocate(&tranState.tranArena, platform.MegaBytes(4), @intCast(u32, buffer.width), @intCast(u32, buffer.height));
+    const renderGroup = game.render_group.Allocate(&tranState.tranArena, platform.MegaBytes(4), @as(u32, @intCast(buffer.width)), @as(u32, @intCast(buffer.height)));
 
     renderGroup.Clear(.{ 1, 1, 0, 1 });
 
@@ -359,9 +359,9 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                     const chunkY = chunkP.chunkY + chunkOffsetY;
                     const chunkZ = chunkP.chunkZ;
 
-                    var series = game.RandomSeed(@bitCast(u32, 139 * chunkX + 593 * chunkY + 329 * chunkZ));
+                    var series = game.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
 
-                    const center = game.v2{ @intToFloat(f32, chunkOffsetX) * width, @intToFloat(f32, chunkOffsetY) * height };
+                    const center = game.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
 
                     var grassIndex = @as(u32, 0);
                     while (grassIndex < 50) : (grassIndex += 1) {
@@ -386,9 +386,9 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
                     const chunkY = chunkP.chunkY + chunkOffsetY;
                     const chunkZ = chunkP.chunkZ;
 
-                    var series = game.RandomSeed(@bitCast(u32, 139 * chunkX + 593 * chunkY + 329 * chunkZ));
+                    var series = game.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
 
-                    const center = game.v2{ @intToFloat(f32, chunkOffsetX) * width, @intToFloat(f32, chunkOffsetY) * height };
+                    const center = game.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
 
                     var grassIndex = @as(u32, 0);
                     while (grassIndex < 50) : (grassIndex += 1) {
@@ -406,7 +406,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
 }
 
 fn ClearBitmap(bitmap: *game.loaded_bitmap) void {
-    const totalBitmapSize = @intCast(usize, bitmap.width * bitmap.height * platform.BITMAP_BYTES_PER_PIXEL);
+    const totalBitmapSize = @as(usize, @intCast(bitmap.width * bitmap.height * platform.BITMAP_BYTES_PER_PIXEL));
     game.ZeroSize(totalBitmapSize, bitmap.memory);
 }
 
@@ -416,7 +416,7 @@ fn MakeEmptyBitmap(arena: *game.memory_arena, width: i32, height: i32, clearToZe
     result.width = width;
     result.height = height;
     result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
-    const totalBitmapSize = @intCast(usize, result.width * result.height * platform.BITMAP_BYTES_PER_PIXEL);
+    const totalBitmapSize = @as(usize, @intCast(result.width * result.height * platform.BITMAP_BYTES_PER_PIXEL));
     result.memory = arena.PushSize(@alignOf(u8), totalBitmapSize);
     if (clearToZero) {
         ClearBitmap(&result);
@@ -427,17 +427,17 @@ fn MakeEmptyBitmap(arena: *game.memory_arena, width: i32, height: i32, clearToZe
 
 /// Defaults: ```cX = 1.0, cY = 1.0```
 fn MakeSphereDiffuseMap(bitmap: *const game.loaded_bitmap, cX: f32, cY: f32) void {
-    const invWidth = 1.0 / (@intToFloat(f32, bitmap.width) - 1);
-    const invHeight = 1.0 / (@intToFloat(f32, bitmap.height) - 1);
+    const invWidth = 1.0 / (@as(f32, @floatFromInt(bitmap.width)) - 1);
+    const invHeight = 1.0 / (@as(f32, @floatFromInt(bitmap.height)) - 1);
 
     var row = bitmap.memory;
 
     var y = @as(u32, 0);
     while (y < bitmap.height) : (y += 1) {
         var x = @as(u32, 0);
-        var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
+        var pixel = @as([*]u32, @ptrCast(@alignCast(@alignOf(u32), row)));
         while (x < bitmap.width) : (x += 1) {
-            const bitmapUV = game.v2{ invWidth * @intToFloat(f32, x), invHeight * @intToFloat(f32, y) };
+            const bitmapUV = game.v2{ invWidth * @as(f32, @floatFromInt(x)), invHeight * @as(f32, @floatFromInt(y)) };
 
             const nX = cX * (2 * game.X(bitmapUV) - 1);
             const nY = cY * (2 * game.Y(bitmapUV) - 1);
@@ -458,30 +458,30 @@ fn MakeSphereDiffuseMap(bitmap: *const game.loaded_bitmap, cX: f32, cY: f32) voi
                 alpha,
             };
 
-            pixel[x] = (@floatToInt(u32, game.A(colour) + 0.5) << 24) |
-                (@floatToInt(u32, game.R(colour) + 0.5) << 16) |
-                (@floatToInt(u32, game.G(colour) + 0.5) << 8) |
-                (@floatToInt(u32, game.B(colour) + 0.5) << 0);
+            pixel[x] = (@as(u32, @intFromFloat(game.A(colour) + 0.5)) << 24) |
+                (@as(u32, @intFromFloat(game.R(colour) + 0.5)) << 16) |
+                (@as(u32, @intFromFloat(game.G(colour) + 0.5)) << 8) |
+                (@as(u32, @intFromFloat(game.B(colour) + 0.5)) << 0);
 
             // pixel += 1;
         }
-        row += @intCast(usize, bitmap.pitch);
+        row += @as(usize, @intCast(bitmap.pitch));
     }
 }
 
 /// Defaults: ```cX = 1.0, cY = 1.0```
 fn MakeSphereNormalMap(bitmap: *const game.loaded_bitmap, roughness: f32, cX: f32, cY: f32) void {
-    const invWidth = 1.0 / (@intToFloat(f32, bitmap.width) - 1);
-    const invHeight = 1.0 / (@intToFloat(f32, bitmap.height) - 1);
+    const invWidth = 1.0 / (@as(f32, @floatFromInt(bitmap.width)) - 1);
+    const invHeight = 1.0 / (@as(f32, @floatFromInt(bitmap.height)) - 1);
 
     var row = bitmap.memory;
 
     var y = @as(u32, 0);
     while (y < bitmap.height) : (y += 1) {
         var x = @as(u32, 0);
-        var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
+        var pixel = @as([*]u32, @ptrCast(@alignCast(@alignOf(u32), row)));
         while (x < bitmap.width) : (x += 1) {
-            const bitmapUV = game.v2{ invWidth * @intToFloat(f32, x), invHeight * @intToFloat(f32, y) };
+            const bitmapUV = game.v2{ invWidth * @as(f32, @floatFromInt(x)), invHeight * @as(f32, @floatFromInt(y)) };
 
             const nX = cX * (2 * game.X(bitmapUV) - 1);
             const nY = cY * (2 * game.Y(bitmapUV) - 1);
@@ -496,14 +496,14 @@ fn MakeSphereNormalMap(bitmap: *const game.loaded_bitmap, roughness: f32, cX: f3
                 255 * roughness,
             };
 
-            pixel[x] = (@floatToInt(u32, game.A(colour) + 0.5) << 24) |
-                (@floatToInt(u32, game.R(colour) + 0.5) << 16) |
-                (@floatToInt(u32, game.G(colour) + 0.5) << 8) |
-                (@floatToInt(u32, game.B(colour) + 0.5) << 0);
+            pixel[x] = (@as(u32, @intFromFloat(game.A(colour) + 0.5)) << 24) |
+                (@as(u32, @intFromFloat(game.R(colour) + 0.5)) << 16) |
+                (@as(u32, @intFromFloat(game.G(colour) + 0.5)) << 8) |
+                (@as(u32, @intFromFloat(game.B(colour) + 0.5)) << 0);
 
             // pixel += 1;
         }
-        row += @intCast(usize, bitmap.pitch);
+        row += @as(usize, @intCast(bitmap.pitch));
     }
 }
 
@@ -516,7 +516,7 @@ fn MakePyramidNormalMap(bitmap: *const game.loaded_bitmap, roughness: f32) void 
     var y = @as(i32, 0);
     while (y < bitmap.height) : (y += 1) {
         var x = @as(i32, 0);
-        var pixel = @ptrCast([*]u32, @alignCast(@alignOf(u32), row));
+        var pixel = @as([*]u32, @ptrCast(@alignCast(@alignOf(u32), row)));
         while (x < bitmap.width) : (x += 1) {
             // const bitmapUV = game.v2{ invWidth * @intToFloat(f32, x), invHeight * @intToFloat(f32, y) };
 
@@ -544,14 +544,14 @@ fn MakePyramidNormalMap(bitmap: *const game.loaded_bitmap, roughness: f32) void 
                 255 * roughness,
             };
 
-            pixel.* = (@floatToInt(u32, game.A(colour) + 0.5) << 24) |
-                (@floatToInt(u32, game.R(colour) + 0.5) << 16) |
-                (@floatToInt(u32, game.G(colour) + 0.5) << 8) |
-                (@floatToInt(u32, game.B(colour) + 0.5) << 0);
+            pixel.* = (@as(u32, @intFromFloat(game.A(colour) + 0.5)) << 24) |
+                (@as(u32, @intFromFloat(game.R(colour) + 0.5)) << 16) |
+                (@as(u32, @intFromFloat(game.G(colour) + 0.5)) << 8) |
+                (@as(u32, @intFromFloat(game.B(colour) + 0.5)) << 0);
 
             pixel += 1;
         }
-        row += @intCast(usize, bitmap.pitch);
+        row += @as(usize, @intCast(bitmap.pitch));
     }
 }
 
@@ -573,8 +573,8 @@ pub inline fn ChunkPosFromTilePos(w: *game.world, absTileX: i32, absTileY: i32, 
 
 inline fn TopDownAlign(bitmap: *const game.loaded_bitmap, alignment: game.v2) game.v2 {
     const fixedAlignment = game.v2{
-        game.SafeRatiof0(game.X(alignment), @intToFloat(f32, bitmap.width)),
-        game.SafeRatiof0(@intToFloat(f32, bitmap.height - 1) - game.Y(alignment), @intToFloat(f32, bitmap.height)),
+        game.SafeRatiof0(game.X(alignment), @as(f32, @floatFromInt(bitmap.width))),
+        game.SafeRatiof0(@as(f32, @floatFromInt(bitmap.height - 1)) - game.Y(alignment), @as(f32, @floatFromInt(bitmap.height))),
     };
     return fixedAlignment;
 }
@@ -610,7 +610,7 @@ pub export fn UpdateAndRender(
     defer platform.END_TIMED_BLOCK(.UpdateAndRender);
 
     assert(@sizeOf(game.state) <= gameMemory.permanentStorageSize);
-    const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
+    const gameState = @as(*game.state, @ptrCast(@alignCast(@alignOf(game.state), gameMemory.permanentStorage)));
 
     const groundBufferWidth = 256.0;
     const groundBufferHeight = 256.0;
@@ -814,7 +814,7 @@ pub export fn UpdateAndRender(
             const familiarOffsetY = series.RandomBetweenI32(-3, -1);
 
             if ((familiarOffsetX != 0) or (familiarOffsetY != 0)) {
-                _ = AddFamiliar(gameState, @intCast(u32, @intCast(i32, cameraTileX) + familiarOffsetX), @intCast(u32, @intCast(i32, cameraTileY) + familiarOffsetY), cameraTileZ);
+                _ = AddFamiliar(gameState, @as(u32, @intCast(@as(i32, @intCast(cameraTileX)) + familiarOffsetX)), @as(u32, @intCast(@as(i32, @intCast(cameraTileY)) + familiarOffsetY)), cameraTileZ);
             }
         }
 
@@ -822,7 +822,7 @@ pub export fn UpdateAndRender(
     }
 
     assert(@sizeOf(game.transient_state) <= gameMemory.transientStorageSize);
-    const tranState = @ptrCast(*game.transient_state, @alignCast(@alignOf(game.transient_state), gameMemory.transientStorage));
+    const tranState = @as(*game.transient_state, @ptrCast(@alignCast(@alignOf(game.transient_state), gameMemory.transientStorage)));
     if (!tranState.initialized) {
         tranState.tranArena.Initialize(
             gameMemory.transientStorageSize - @sizeOf(game.transient_state),
@@ -854,7 +854,7 @@ pub export fn UpdateAndRender(
             var height = tranState.envMapHeight;
             var lodIndex = @as(u32, 0);
             while (lodIndex < map.lod.len) : (lodIndex += 1) {
-                map.lod[lodIndex] = MakeEmptyBitmap(&tranState.tranArena, @intCast(i32, width), @intCast(i32, height), false);
+                map.lod[lodIndex] = MakeEmptyBitmap(&tranState.tranArena, @as(i32, @intCast(width)), @as(i32, @intCast(height)), false);
                 width >>= 1;
                 height >>= 1;
             }
@@ -873,7 +873,7 @@ pub export fn UpdateAndRender(
 
     const world = gameState.world;
 
-    for (gameInput.controllers) |controller, controllerIndex| {
+    for (gameInput.controllers, 0..) |controller, controllerIndex| {
         const conHero = &gameState.controlledHeroes[controllerIndex];
         if (conHero.entityIndex == 0) {
             if (controller.buttons.mapped.start.endedDown != 0) {
@@ -924,21 +924,21 @@ pub export fn UpdateAndRender(
     }
 
     var drawBuffer_ = game.loaded_bitmap{
-        .width = @intCast(i32, buffer.width),
-        .height = @intCast(i32, buffer.height),
-        .pitch = @intCast(i32, buffer.pitch),
-        .memory = @ptrCast([*]u8, buffer.memory.?),
+        .width = @as(i32, @intCast(buffer.width)),
+        .height = @as(i32, @intCast(buffer.height)),
+        .pitch = @as(i32, @intCast(buffer.pitch)),
+        .memory = @as([*]u8, @ptrCast(buffer.memory.?)),
     };
     const drawBuffer = &drawBuffer_;
 
     const renderMemory = game.BeginTemporaryMemory(&tranState.tranArena);
-    const renderGroup = game.render_group.Allocate(&tranState.tranArena, platform.MegaBytes(4), @intCast(u32, drawBuffer.width), @intCast(u32, drawBuffer.height));
+    const renderGroup = game.render_group.Allocate(&tranState.tranArena, platform.MegaBytes(4), @as(u32, @intCast(drawBuffer.width)), @as(u32, @intCast(drawBuffer.height)));
 
     renderGroup.Clear(game.v4{ 0.25, 0.25, 0.25, 0 });
 
     const screenCenter = game.v2{
-        0.5 * @intToFloat(f32, drawBuffer.width),
-        0.5 * @intToFloat(f32, drawBuffer.height),
+        0.5 * @as(f32, @floatFromInt(drawBuffer.width)),
+        0.5 * @as(f32, @floatFromInt(drawBuffer.height)),
     };
 
     const screenBounds = game.GetCameraRectangleAtTarget(renderGroup);
@@ -1078,7 +1078,7 @@ pub export fn UpdateAndRender(
                                 switch (entity.sword) {
                                     .ptr => {
                                         const sword = entity.sword.ptr;
-                                        if (game.IsSet(sword, @enumToInt(game.sim_entity_flags.NonSpatial))) {
+                                        if (game.IsSet(sword, @intFromEnum(game.sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
                                             const dSwordV3 = game.v3{ game.X(conHero.dSword), game.Y(conHero.dSword), 0 };
                                             game.MakeEntitySpatial(sword, entity.p, game.Add(entity.dP, (game.Scale(dSwordV3, 5))));
@@ -1190,8 +1190,8 @@ pub export fn UpdateAndRender(
                 },
             }
 
-            if (!game.IsSet(entity, @enumToInt(game.sim_entity_flags.NonSpatial)) and
-                game.IsSet(entity, @enumToInt(game.sim_entity_flags.Movable)))
+            if (!game.IsSet(entity, @intFromEnum(game.sim_entity_flags.NonSpatial)) and
+                game.IsSet(entity, @intFromEnum(game.sim_entity_flags.Movable)))
             {
                 game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
@@ -1292,8 +1292,8 @@ pub export fn UpdateAndRender(
             while (index < tranState.envMaps.len) : (index += 1) {
                 const lod = &tranState.envMaps[index].lod[0];
 
-                xAxis = game.v2{ 0.5 * @intToFloat(f32, lod.width), 0 };
-                yAxis = game.v2{ 0, 0.5 * @intToFloat(f32, lod.height) };
+                xAxis = game.v2{ 0.5 * @as(f32, @floatFromInt(lod.width)), 0 };
+                yAxis = game.v2{ 0, 0.5 * @as(f32, @floatFromInt(lod.height)) };
 
                 _ = game.CoordinateSystem(renderGroup, mapP, xAxis, yAxis, .{ 1, 1, 1, 1 }, lod, null, null, null, null);
                 game.AddTo(&mapP, game.Add(yAxis, game.v2{ 0, 6 }));
@@ -1321,6 +1321,6 @@ pub export fn GetSoundSamples(_: *platform.thread_context, gameMemory: *platform
         }
     }
 
-    const gameState = @ptrCast(*game.state, @alignCast(@alignOf(game.state), gameMemory.permanentStorage));
+    const gameState = @as(*game.state, @ptrCast(@alignCast(@alignOf(game.state), gameMemory.permanentStorage)));
     OutputSound(gameState, soundBuffer, 400);
 }

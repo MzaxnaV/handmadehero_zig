@@ -2,59 +2,56 @@ const std = @import("std");
 
 const lib_name = "handmade";
 
-pub fn build(b: *std.build.Builder) void {
-    const mode = b.standardReleaseOptions();
+pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
-    const options = b.addOptions();
-    options.addOption(bool, "NOT_IGNORE", true);
-    options.addOption(bool, "HANDMADE_INTERNAL", true);
-    options.addOption(bool, "HANDMADE_SLOW", true); // TODO: let build mode decide it's value
+    const platform = b.createModule(.{
+        .source_file = .{ .path = "./code/handmade_platform.zig"},
+    });
 
-    const platform = std.build.Pkg{
-        .name = "handmade_platform",
-        .source = .{ .path = "./code/handmade_platform.zig" },
-        .dependencies = &[_]std.build.Pkg{.{
-            .name = "build_consts",
-            .source = options.getSource(),
-        }},
-    };
+    const simd = b.createModule(.{
+        .source_file = .{ .path = "./code/simd.zig"},
+    });
 
-    const simd = std.build.Pkg{
-        .name = "simd",
-        .source = .{ .path = "./code/simd.zig" },
-    };
+    const win32 = b.createModule(.{
+        .source_file = .{ .path = "./code/zwin32/win32.zig "},
+    });
+    
+    const lib = b.addSharedLibrary(.{
+        .name = lib_name, 
+        .root_source_file = .{ .path = "./code/handmade/handmade.zig" }, 
+        .version = .{ .major = 0, .minor = 1, .patch = 0},
+        .target = target,
+        .optimize = optimize,
+    });
 
-    const win32 = std.build.Pkg{
-        .name = "win32",
-        .source = .{ .path = "./code/zigwin32/win32.zig" },
-    };
+    lib.addModule("handmade_platform", platform);
+    lib.addModule("simd", simd);
+    _ = lib.getEmittedAsm();
 
-    const lib = b.addSharedLibrary(lib_name, "code/handmade/handmade.zig", b.version(1, 0, 0));
-    lib.setTarget(target);
-    lib.setBuildMode(mode);
-    lib.addPackage(platform);
-    lib.addPackage(simd);
-    lib.emit_llvm_ir = .{ .emit_to = "misc/handmade.ll" };
-    lib.emit_asm = .{ .emit_to = "misc/handmade.s" };
-    lib.setOutputDir("build");
-    lib.addOptions("build_consts", options);
+    const exe = b.addExecutable(.{
+        .name = "win32_handmade",
+        .root_source_file = .{ .path = "./code/win32_handmade.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
 
-    const exe = b.addExecutable("win32_handmade", "code/win32_handmade.zig");
-    exe.setTarget(target);
-    exe.setBuildMode(mode);
-    exe.addPackage(win32);
-    exe.addPackage(platform);
-    exe.setOutputDir("build");
-    exe.addOptions("build_consts", options);
+    exe.addModule("win32", win32);
+    exe.addModule("handmade_platform", platform);
 
-    var lib_tests = b.addTest("code/handmade/handmade_tests.zig");
-    lib_tests.setBuildMode(mode);
-    lib_tests.addPackage(platform);
-    lib_tests.addPackage(simd);
+    const lib_tests = b.addTest(.{
+        .root_source_file = .{ .path = "./code/handmade/handmade_tests.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    lib_tests.addModule("handmade_platform", platform);
+    lib_tests.addModule("simd", simd);
+
+    const run_test = b.addRunArtifact(lib_tests);
 
     const test_step = b.step("test", "Run handmade tests");
-    test_step.dependOn(&lib_tests.step);
+    test_step.dependOn(&run_test.step);
 
     const build_step = b.step("lib", "Build the handmade lib");
     build_step.dependOn(&lib.step);

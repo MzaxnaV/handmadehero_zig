@@ -63,7 +63,7 @@ pub const rect2i = struct {
 inline fn ToF32(a: anytype) f32 {
     return switch (@TypeOf(a)) {
         f32, comptime_float, comptime_int => @as(f32, a),
-        i32, u32 => @intToFloat(f32, a),
+        i32, u32 => @as(f32, @floatFromInt(a)),
         else => @compileError("Invalid type"),
     };
 }
@@ -207,12 +207,12 @@ pub inline fn SubFrom(vec: anytype, other: [vec.len]f32) void {
         if (@TypeOf(vec) != *[vec.len]f32) {
             @compileError("vec should be of the type *[N]f32");
         }
+    }
 
-        comptime var i = 0;
-        // TODO (Manav): check the performance vs normal while
-        inline while (i < vec.len) : (i += 1) {
-            (vec.*)[i] -= other[i];
-        }
+    comptime var i = 0;
+    // TODO (Manav): check the performance vs normal while
+    inline while (i < vec.len) : (i += 1) {
+        (vec.*)[i] -= other[i];
     }
 }
 
@@ -400,7 +400,7 @@ pub inline fn ToRectXY(a: rect3) rect2 {
 // functions (scalar operations) ----------------------------------------------------------------------------------------------------------
 
 pub inline fn AddI32ToU32(a: u32, b: i32) u32 {
-    const result = if (b > 0) a + @intCast(u32, b) else a - @intCast(u32, -b);
+    const result = if (b > 0) a + @as(u32, @intCast(b)) else a - @as(u32, @intCast(-b));
     return result;
 }
 

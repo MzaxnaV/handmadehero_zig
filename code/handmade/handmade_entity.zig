@@ -23,12 +23,12 @@ pub inline fn ClearFlags(entity: *hs.sim_entity, flag: u32) void {
 }
 
 pub inline fn MakeEntityNonSpatial(entity: *hs.sim_entity) void {
-    AddFlags(entity, @enumToInt(hs.sim_entity_flags.NonSpatial));
+    AddFlags(entity, @intFromEnum(hs.sim_entity_flags.NonSpatial));
     entity.p = Invalid;
 }
 
 pub inline fn MakeEntitySpatial(entity: *hs.sim_entity, p: hm.v3, dP: hm.v3) void {
-    ClearFlags(entity, @enumToInt(hs.sim_entity_flags.NonSpatial));
+    ClearFlags(entity, @intFromEnum(hs.sim_entity_flags.NonSpatial));
     entity.p = p;
     entity.dP = dP;
 }

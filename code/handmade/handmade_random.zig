@@ -536,8 +536,8 @@ pub const random_series = struct {
     }
 
     pub inline fn RandomUnilateral(self: *Self) f32 {
-        const divisor = 1.0 / @intToFloat(f32, maxRandomNumber);
-        const result = divisor * @intToFloat(f32, self.NextRandomU32());
+        const divisor = 1.0 / @as(f32, @floatFromInt(maxRandomNumber));
+        const result = divisor * @as(f32, @floatFromInt(self.NextRandomU32()));
         return result;
     }
 
@@ -552,7 +552,7 @@ pub const random_series = struct {
     }
 
     pub inline fn RandomBetweenI32(self: *Self, min: i32, max: i32) i32 {
-        const result = min + @mod(@intCast(i32, self.NextRandomU32()), ((max + 1) - min));
+        const result = min + @mod(@as(i32, @intCast(self.NextRandomU32())), ((max + 1) - min));
         return result;
     }
 };
