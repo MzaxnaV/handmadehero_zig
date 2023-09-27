@@ -7,21 +7,21 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const platform = b.createModule(.{
-        .source_file = .{ .path = "./code/handmade_platform.zig"},
+        .source_file = .{ .path = "./code/handmade_platform.zig" },
     });
 
     const simd = b.createModule(.{
-        .source_file = .{ .path = "./code/simd.zig"},
+        .source_file = .{ .path = "./code/simd.zig" },
     });
 
     const win32 = b.createModule(.{
-        .source_file = .{ .path = "./code/zwin32/win32.zig"},
+        .source_file = .{ .path = "./code/zwin32/win32.zig" },
     });
-    
+
     const lib = b.addSharedLibrary(.{
-        .name = lib_name, 
-        .root_source_file = .{ .path = "./code/handmade/handmade.zig" }, 
-        .version = .{ .major = 0, .minor = 1, .patch = 0},
+        .name = lib_name,
+        .root_source_file = .{ .path = "./code/handmade/handmade.zig" },
+        .version = .{ .major = 0, .minor = 1, .patch = 0 },
         .target = target,
         .optimize = optimize,
     });
@@ -57,6 +57,18 @@ pub fn build(b: *std.Build) void {
     const build_step = b.step("lib", "Build the handmade lib");
     build_step.dependOn(&lib.step);
 
-    b.installArtifact(lib);
-    b.installArtifact(exe);
+    const exe_install_step = b.addInstallArtifact(exe, .{
+        .dest_dir = .{ .override = .{ .custom = "../build" } }, // TODO: change prefix to build instead
+        .pdb_dir = .{ .override = .{ .custom = "../build" } },
+        .h_dir = .{ .override = .{ .custom = "../build" } },
+    });
+
+    const lib_install_step = b.addInstallArtifact(lib, .{
+        .dest_dir = .{ .override = .{ .custom = "../build" } },
+        .pdb_dir = .{ .override = .{ .custom = "../build" } },
+        .h_dir = .{ .override = .{ .custom = "../build" } },
+    });
+
+    b.getInstallStep().dependOn(&exe_install_step.step);
+    b.getInstallStep().dependOn(&lib_install_step.step);
 }
