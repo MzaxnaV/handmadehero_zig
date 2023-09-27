@@ -60,13 +60,11 @@ pub fn build(b: *std.Build) void {
     const exe_install_step = b.addInstallArtifact(exe, .{
         .dest_dir = .{ .override = .{ .custom = "../build" } }, // TODO: change prefix to build instead
         .pdb_dir = .{ .override = .{ .custom = "../build" } },
-        .h_dir = .{ .override = .{ .custom = "../build" } },
     });
 
     const lib_install_step = b.addInstallArtifact(lib, .{
         .dest_dir = .{ .override = .{ .custom = "../build" } },
         .pdb_dir = .{ .override = .{ .custom = "../build" } },
-        .h_dir = .{ .override = .{ .custom = "../build" } },
     });
 
     b.getInstallStep().dependOn(&exe_install_step.step);
