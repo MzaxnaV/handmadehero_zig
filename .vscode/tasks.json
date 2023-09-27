@@ -10,7 +10,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -Drelease-fast=true --verbose & zig build test"
+            "command": "zig build -Doptimize=ReleaseFast --verbose & zig build test"
         },
         {
             "label": "Build and Test Project",
@@ -37,7 +37,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -Drelease-fast=true --verbose lib"
+            "command": "zig build -Doptimize=ReleaseFast --verbose lib"
         },
         {
             "label": "Build Lib",
