@@ -39,7 +39,7 @@ pub fn build(b: *std.Build) void {
 
     exe.addModule("win32", win32);
     exe.addModule("handmade_platform", platform);
-    _ = exe.getEmittedAsm();
+    _ = exe.getEmittedAsm(); // TODO: move to misc
 
     const lib_tests = b.addTest(.{
         .root_source_file = .{ .path = "./code/handmade/handmade_tests.zig" },
@@ -48,6 +48,7 @@ pub fn build(b: *std.Build) void {
     });
     lib_tests.addModule("handmade_platform", platform);
     lib_tests.addModule("simd", simd);
+    _ = lib.getEmittedAsm(); // TODO: move to misc
 
     const run_test = b.addRunArtifact(lib_tests);
 
