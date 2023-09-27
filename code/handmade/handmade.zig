@@ -16,8 +16,8 @@ const handmade_internal = platform.handmade_internal;
 
 // build constants ------------------------------------------------------------------------------------------------------------------------
 
-const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
-const HANDMADE_INTERNAL = @import("build_consts").HANDMADE_INTERNAL;
+const NOT_IGNORE = platform.NOT_IGNORE;
+const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
 
@@ -435,7 +435,7 @@ fn MakeSphereDiffuseMap(bitmap: *const game.loaded_bitmap, cX: f32, cY: f32) voi
     var y = @as(u32, 0);
     while (y < bitmap.height) : (y += 1) {
         var x = @as(u32, 0);
-        var pixel = @as([*]u32, @ptrCast(@alignCast(@alignOf(u32), row)));
+        var pixel = @as([*]u32, @alignCast(@ptrCast(row)));
         while (x < bitmap.width) : (x += 1) {
             const bitmapUV = game.v2{ invWidth * @as(f32, @floatFromInt(x)), invHeight * @as(f32, @floatFromInt(y)) };
 
@@ -479,7 +479,7 @@ fn MakeSphereNormalMap(bitmap: *const game.loaded_bitmap, roughness: f32, cX: f3
     var y = @as(u32, 0);
     while (y < bitmap.height) : (y += 1) {
         var x = @as(u32, 0);
-        var pixel = @as([*]u32, @ptrCast(@alignCast(@alignOf(u32), row)));
+        var pixel = @as([*]u32, @alignCast(@ptrCast(row)));
         while (x < bitmap.width) : (x += 1) {
             const bitmapUV = game.v2{ invWidth * @as(f32, @floatFromInt(x)), invHeight * @as(f32, @floatFromInt(y)) };
 
@@ -516,7 +516,7 @@ fn MakePyramidNormalMap(bitmap: *const game.loaded_bitmap, roughness: f32) void 
     var y = @as(i32, 0);
     while (y < bitmap.height) : (y += 1) {
         var x = @as(i32, 0);
-        var pixel = @as([*]u32, @ptrCast(@alignCast(@alignOf(u32), row)));
+        var pixel = @as([*]u32, @alignCast(@ptrCast(row)));
         while (x < bitmap.width) : (x += 1) {
             // const bitmapUV = game.v2{ invWidth * @intToFloat(f32, x), invHeight * @intToFloat(f32, y) };
 
@@ -610,7 +610,7 @@ pub export fn UpdateAndRender(
     defer platform.END_TIMED_BLOCK(.UpdateAndRender);
 
     assert(@sizeOf(game.state) <= gameMemory.permanentStorageSize);
-    const gameState = @as(*game.state, @ptrCast(@alignCast(@alignOf(game.state), gameMemory.permanentStorage)));
+    const gameState = @as(*game.state, @alignCast(@ptrCast(gameMemory.permanentStorage)));
 
     const groundBufferWidth = 256.0;
     const groundBufferHeight = 256.0;
@@ -822,7 +822,7 @@ pub export fn UpdateAndRender(
     }
 
     assert(@sizeOf(game.transient_state) <= gameMemory.transientStorageSize);
-    const tranState = @as(*game.transient_state, @ptrCast(@alignCast(@alignOf(game.transient_state), gameMemory.transientStorage)));
+    const tranState = @as(*game.transient_state, @alignCast(@ptrCast(gameMemory.transientStorage)));
     if (!tranState.initialized) {
         tranState.tranArena.Initialize(
             gameMemory.transientStorageSize - @sizeOf(game.transient_state),
@@ -849,7 +849,7 @@ pub export fn UpdateAndRender(
 
         tranState.envMapWidth = 512;
         tranState.envMapHeight = 256;
-        for (tranState.envMaps) |*map| {
+        for (&tranState.envMaps) |*map| {
             var width = tranState.envMapWidth;
             var height = tranState.envMapHeight;
             var lodIndex = @as(u32, 0);
@@ -1321,6 +1321,6 @@ pub export fn GetSoundSamples(_: *platform.thread_context, gameMemory: *platform
         }
     }
 
-    const gameState = @as(*game.state, @ptrCast(@alignCast(@alignOf(game.state), gameMemory.permanentStorage)));
+    const gameState = @as(*game.state, @alignCast(@ptrCast(gameMemory.permanentStorage)));
     OutputSound(gameState, soundBuffer, 400);
 }

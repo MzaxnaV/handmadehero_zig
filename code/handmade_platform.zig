@@ -1,11 +1,9 @@
-const f32_max = @import("std").math.f32_max;
-
 /// Debug
-const NOT_IGNORE = true;
+pub const NOT_IGNORE = true;
 /// Debug: `False` - slow code not allowed, `True` - slow code welcome.
-const HANDMADE_SLOW = true;
+pub const HANDMADE_SLOW = true;
 /// Debug: `False` - Build for public release, `True` - Build for developer only
-const HANDMADE_INTERNAL = true;
+pub const HANDMADE_INTERNAL = true;
 
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
@@ -13,7 +11,7 @@ pub const PI32 = 3.14159265359;
 pub const CONTROLLERS = 5;
 pub const BITMAP_BYTES_PER_PIXEL = 4;
 
-pub const F32MAXIMUM = f32_max;
+pub const F32MAXIMUM = @import("std").math.floatMax(f32);
 
 // ----------------------------------------------------------------------------------------------------------------------------------------
 

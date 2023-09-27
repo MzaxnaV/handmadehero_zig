@@ -11,7 +11,7 @@ const SquareRoot = @import("handmade_intrinsics.zig").SquareRoot;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
-const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
+const NOT_IGNORE = @import("handmade_platform").NOT_IGNORE;
 
 pub const HIT_POINT_SUB_COUNT = 4;
 

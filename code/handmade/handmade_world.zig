@@ -273,7 +273,7 @@ pub fn InitializeWorld(w: *world, chunkDimInMeters: hm.v3) void {
     w.chunkDimInMeters = chunkDimInMeters;
     w.firstFree = null;
 
-    for (w.chunkHash) |*chunk| {
+    for (&w.chunkHash) |*chunk| {
         chunk.chunkX = TILE_CHUNK_UNINITIALIZED;
         chunk.firstBlock.entityCount = 0;
     }

@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const win32 = b.createModule(.{
-        .source_file = .{ .path = "./code/zwin32/win32.zig "},
+        .source_file = .{ .path = "./code/zwin32/win32.zig"},
     });
     
     const lib = b.addSharedLibrary(.{
@@ -39,6 +39,7 @@ pub fn build(b: *std.Build) void {
 
     exe.addModule("win32", win32);
     exe.addModule("handmade_platform", platform);
+    _ = exe.getEmittedAsm();
 
     const lib_tests = b.addTest(.{
         .root_source_file = .{ .path = "./code/handmade/handmade_tests.zig" },

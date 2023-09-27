@@ -45,13 +45,15 @@ const Atomic = std.atomic.Atomic;
 const platform = @import("handmade_platform");
 const handmade_internal = platform.handmade_internal;
 
+const DEBUG_RET = true;
+
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
-const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
-const HANDMADE_INTERNAL = @import("build_consts").HANDMADE_INTERNAL;
+const NOT_IGNORE = platform.NOT_IGNORE;
+const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 const WIN32_STATE_FILE_NAME_COUNT = win32.MAX_PATH;
 
-const allocationType = @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT));
+const allocationType = @as(win32.VIRTUAL_ALLOCATION_TYPE, @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT)));
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
@@ -165,12 +167,12 @@ var XInputSetState: *const fn (u32, ?*win32.XINPUT_VIBRATION) callconv(WINAPI) i
 
 fn CatStrings(sourceA: []const u16, sourceB: []const u16, dest: [:0]u16) void {
     var i: usize = 0;
-    for (sourceA) |charA, index| {
+    for (sourceA, 0..) |charA, index| {
         dest[index] = charA;
         i = index;
     }
 
-    for (sourceB) |charB, index| {
+    for (sourceB, 0..) |charB, index| {
         dest[i + index] = charB;
     }
 }
@@ -179,7 +181,7 @@ fn Win32GetEXEFileName(gameState: *win32_state) void {
     const sizeOfFilename = win32.GetModuleFileNameW(null, &gameState.exeFileName, @sizeOf(@TypeOf(gameState.exeFileName)));
     _ = sizeOfFilename;
 
-    for (gameState.exeFileName) |char, scanIndex| {
+    for (gameState.exeFileName, 0..) |char, scanIndex| {
         if (char == '\\') gameState.onePastLastEXEFileNameSlashIndex = scanIndex + 2;
     }
 }
@@ -199,11 +201,11 @@ fn DEBUGWin32ReadEntireFile(thread: *platform.thread_context, filename: [*:0]con
     if (fileHandle != null and fileHandle != win32.INVALID_HANDLE_VALUE) {
         var fileSize = win32.LARGE_INTEGER{ .QuadPart = 0 };
         if (win32.GetFileSizeEx(fileHandle, &fileSize) != 0) {
-            var fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @intCast(u32, fileSize.QuadPart) else unreachable;
+            var fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @as(u32, @intCast(fileSize.QuadPart)) else unreachable;
             if (win32.VirtualAlloc(null, fileSize32, allocationType, win32.PAGE_READWRITE)) |data| {
                 var bytesRead: DWORD = 0;
                 if (win32.ReadFile(fileHandle, data, fileSize32, &bytesRead, null) != 0 and fileSize32 == bytesRead) {
-                    result.contents = @ptrCast([*]u8, data);
+                    result.contents = @as([*]u8, @ptrCast(data));
                     result.contentSize = fileSize32;
                 } else {
                     DEBUGWin32FreeFileMemory(thread, data);
@@ -290,13 +292,13 @@ fn Win32LoadGameCode(sourceDLLName: [:0]const u16, tempDLLName: [:0]const u16, l
             result.isValid = true;
 
             if (win32.GetProcAddress(HANDMADE_DLL, "UpdateAndRender")) |funcptr| {
-                result.UpdateAndRender = @ptrCast(@TypeOf(result.UpdateAndRender), funcptr);
+                result.UpdateAndRender = @as(@TypeOf(result.UpdateAndRender), @ptrCast(funcptr));
             } else {
                 result.isValid = false;
             }
 
             if (win32.GetProcAddress(HANDMADE_DLL, "GetSoundSamples")) |funcptr| {
-                result.GetSoundSamples = @ptrCast(@TypeOf(result.GetSoundSamples), funcptr);
+                result.GetSoundSamples = @as(@TypeOf(result.GetSoundSamples), @ptrCast(funcptr));
             } else {
                 result.isValid = false;
             }
@@ -326,22 +328,22 @@ fn Win32LoadXinput() void {
     if (win32.LoadLibraryW(win32.L("xinput1_4.dll"))) |XInputLibrary| {
         // NOTE (Manav): NO TYPESAFETY TO WARN YOU, BEWARE :D
         if (win32.GetProcAddress(XInputLibrary, "XInputGetState")) |funcptr| {
-            XInputGetState = @ptrCast(@TypeOf(XInputGetState), funcptr);
+            XInputGetState = @as(@TypeOf(XInputGetState), @ptrCast(funcptr));
         } else {
             const state = struct {
                 fn XInputGetStateInternal(_: u32, _: ?*win32.XINPUT_STATE) callconv(WINAPI) isize {
-                    return @enumToInt(win32.ERROR_DEVICE_NOT_CONNECTED);
+                    return @intFromEnum(win32.ERROR_DEVICE_NOT_CONNECTED);
                 }
             };
             XInputGetState = state.XInputGetStateInternal;
         }
 
         if (win32.GetProcAddress(XInputLibrary, "XInputSetState")) |funcptr| {
-            XInputSetState = @ptrCast(@TypeOf(XInputSetState), funcptr);
+            XInputSetState = @as(@TypeOf(XInputSetState), @ptrCast(funcptr));
         } else {
             const state = struct {
                 fn XInputSetStateInternal(_: u32, _: ?*win32.XINPUT_VIBRATION) callconv(WINAPI) isize {
-                    return @enumToInt(win32.ERROR_DEVICE_NOT_CONNECTED);
+                    return @intFromEnum(win32.ERROR_DEVICE_NOT_CONNECTED);
                 }
             };
             XInputSetState = state.XInputSetStateInternal;
@@ -357,7 +359,7 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
     if (win32.LoadLibraryW(win32.L("dsound.dll"))) |DSoundLibrary| {
         if (win32.GetProcAddress(DSoundLibrary, "DirectSoundCreate")) |funcptr| {
             const DirectSoundCreateFnPtrType = *const fn (?*const win32.Guid, ?*?*win32.IDirectSound, ?*win32.IUnknown) callconv(WINAPI) i32;
-            const DirectSoundCreate = @ptrCast(DirectSoundCreateFnPtrType, funcptr);
+            const DirectSoundCreate = @as(DirectSoundCreateFnPtrType, @ptrCast(funcptr));
 
             var dS: ?*win32.IDirectSound = undefined;
             if (win32.SUCCEEDED(DirectSoundCreate(null, &dS, null))) {
@@ -453,15 +455,15 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u3
     buffer.bytesPerPixel = bytesPerPixel;
 
     buffer.info.bmiHeader.biSize = @sizeOf(win32.BITMAPINFOHEADER);
-    buffer.info.bmiHeader.biWidth = @intCast(i32, buffer.width);
-    buffer.info.bmiHeader.biHeight = @intCast(i32, buffer.height);
+    buffer.info.bmiHeader.biWidth = @as(i32, @intCast(buffer.width));
+    buffer.info.bmiHeader.biHeight = @as(i32, @intCast(buffer.height));
     buffer.info.bmiHeader.biPlanes = 1;
     buffer.info.bmiHeader.biBitCount = 32;
     buffer.info.bmiHeader.biCompression = win32.BI_RGB;
 
-    const bitmapMemorySize = @intCast(usize, bytesPerPixel * (buffer.width * buffer.height));
-    buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, @intToEnum(win32.VIRTUAL_ALLOCATION_TYPE, @enumToInt(win32.MEM_RESERVE) | @enumToInt(win32.MEM_COMMIT)), win32.PAGE_READWRITE);
-    buffer.pitch = @intCast(usize, width) * bytesPerPixel;
+    const bitmapMemorySize = @as(usize, @intCast(bytesPerPixel * (buffer.width * buffer.height)));
+    buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, @as(win32.VIRTUAL_ALLOCATION_TYPE, @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT))), win32.PAGE_READWRITE);
+    buffer.pitch = @as(usize, @intCast(width)) * bytesPerPixel;
 }
 
 fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: win32.HDC, windowWidth: i32, windowHeight: i32) void {
@@ -470,12 +472,12 @@ fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: wi
             deviceContext,
             0,
             0,
-            @intCast(i32, 2 * buffer.width),
-            @intCast(i32, 2 * buffer.height),
+            @as(i32, @intCast(2 * buffer.width)),
+            @as(i32, @intCast(2 * buffer.height)),
             0,
             0,
-            @intCast(i32, buffer.width),
-            @intCast(i32, buffer.height),
+            @as(i32, @intCast(buffer.width)),
+            @as(i32, @intCast(buffer.height)),
             buffer.memory,
             &buffer.info,
             win32.DIB_RGB_COLORS,
@@ -486,20 +488,20 @@ fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: wi
         const offsetY = 10;
 
         _ = win32.PatBlt(deviceContext, 0, 0, windowWidth, offsetY, win32.ROP_CODE.BLACKNESS);
-        _ = win32.PatBlt(deviceContext, 0, offsetY + @intCast(i32, buffer.height), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+        _ = win32.PatBlt(deviceContext, 0, offsetY + @as(i32, @intCast(buffer.height)), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
         _ = win32.PatBlt(deviceContext, 0, 0, offsetX, windowHeight, win32.ROP_CODE.BLACKNESS);
-        _ = win32.PatBlt(deviceContext, offsetX + @intCast(i32, buffer.width), 0, windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+        _ = win32.PatBlt(deviceContext, offsetX + @as(i32, @intCast(buffer.width)), 0, windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
 
         _ = win32.StretchDIBits(
             deviceContext,
             offsetX,
             offsetY,
-            @intCast(i32, buffer.width),
-            @intCast(i32, buffer.height),
+            @as(i32, @intCast(buffer.width)),
+            @as(i32, @intCast(buffer.height)),
             0,
             0,
-            @intCast(i32, buffer.width),
-            @intCast(i32, buffer.height),
+            @as(i32, @intCast(buffer.width)),
+            @as(i32, @intCast(buffer.height)),
             buffer.memory,
             &buffer.info,
             win32.DIB_RGB_COLORS,
@@ -525,9 +527,9 @@ fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32
         win32.WM_ACTIVATEAPP => {
             if (!NOT_IGNORE) {
                 if (wParam == win32.TRUE) {
-                    _ = win32.SetLayeredWindowAttributes(windowHandle, @bitCast(u32, win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 }), 255, win32.LWA_ALPHA);
+                    _ = win32.SetLayeredWindowAttributes(windowHandle, @as(u32, @bitCast(win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 })), 255, win32.LWA_ALPHA);
                 } else {
-                    _ = win32.SetLayeredWindowAttributes(windowHandle, @bitCast(u32, win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 }), 128, win32.LWA_ALPHA);
+                    _ = win32.SetLayeredWindowAttributes(windowHandle, @as(u32, @bitCast(win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 })), 128, win32.LWA_ALPHA);
                 }
             }
         },
@@ -561,7 +563,7 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
 
     if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, 0, soundOutput.secondaryBufferSize, &region1, &region1Size, &region2, &region2Size, 0))) {
         if (region1) |ptr| {
-            var destSample = @ptrCast([*]u8, ptr);
+            var destSample = @as([*]u8, @ptrCast(ptr));
             var byteIndex: DWORD = 0;
             while (byteIndex < region1Size) : (byteIndex += 1) {
                 destSample[byteIndex] = 0;
@@ -569,7 +571,7 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
         }
 
         if (region2) |ptr| {
-            var destSample = @ptrCast([*]u8, ptr);
+            var destSample = @as([*]u8, @ptrCast(ptr));
             var byteIndex: DWORD = 0;
             while (byteIndex < region2Size) : (byteIndex += 1) {
                 destSample[byteIndex] = 0;
@@ -589,7 +591,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
     if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
         if (region1) |ptr| {
             const region1SampleCount = region1Size / soundOutput.bytesPerSample;
-            var destSample = @ptrCast([*]i16, @alignCast(@alignOf(i16), ptr));
+            var destSample = @as([*]i16, @alignCast(@ptrCast(ptr)));
             var sourceSample = sourceBuffer.samples;
             var sampleIndex: DWORD = 0;
 
@@ -603,7 +605,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
 
         if (region2) |ptr| {
             const region2SampleCount = region2Size / soundOutput.bytesPerSample;
-            var destSample = @ptrCast([*]i16, @alignCast(@alignOf(i16), ptr));
+            var destSample = @as([*]i16, @alignCast(@ptrCast(ptr)));
             var sourceSample = sourceBuffer.samples;
             var sampleIndex: DWORD = 0;
 
@@ -627,17 +629,17 @@ fn Win32ProcessKeyboardMessage(newState: *platform.button_state, isDown: u32) vo
 }
 
 fn Win32ProcessXinputDigitalButton(xInputButtonState: DWORD, oldState: *platform.button_state, buttonBit: DWORD, newState: *platform.button_state) void {
-    newState.endedDown = @as(u32, @boolToInt((xInputButtonState & buttonBit) == buttonBit));
+    newState.endedDown = @as(u32, @intFromBool((xInputButtonState & buttonBit) == buttonBit));
     newState.haltTransitionCount = if (oldState.endedDown != newState.endedDown) 1 else 0;
 }
 
 fn Win32ProcessXInputStickValue(value: i16, deadZoneThreshold: u32) f32 {
     var result: f32 = 0;
 
-    if (value < -@intCast(i32, deadZoneThreshold)) {
-        result = @intToFloat(f32, @as(i32, value) + @intCast(i32, deadZoneThreshold)) / (32768.0 - @intToFloat(f32, deadZoneThreshold));
+    if (value < -@as(i32, @intCast(deadZoneThreshold))) {
+        result = @as(f32, @floatFromInt(@as(i32, value) + @as(i32, @intCast(deadZoneThreshold)))) / (32768.0 - @as(f32, @floatFromInt(deadZoneThreshold)));
     } else if (value > deadZoneThreshold) {
-        result = @intToFloat(f32, @as(i32, value) - @intCast(i32, deadZoneThreshold)) / (32767.0 - @intToFloat(f32, deadZoneThreshold));
+        result = @as(f32, @floatFromInt(@as(i32, value) - @as(i32, @intCast(deadZoneThreshold)))) / (32767.0 - @as(f32, @floatFromInt(deadZoneThreshold)));
     }
 
     return result;
@@ -645,7 +647,11 @@ fn Win32ProcessXInputStickValue(value: i16, deadZoneThreshold: u32) f32 {
 
 fn Win32GetInputFileLocation(state: *win32_state, inputStream: bool, slotIndex: u32, dest: [:0]u16) void {
     var exeName: [64]u16 = [1]u16{0} ** 64;
-    _ = win32.extra.wsprintfW(@ptrCast([*:0]u16, &exeName), win32.L("loop_edit_%d_%s.hmi"), slotIndex, if (inputStream) win32.L("input") else win32.L("state"));
+
+    const s = if (inputStream) win32.L("input") else win32.L("state");
+
+    _ = win32.extra.wsprintfW(@ptrCast(&exeName), win32.L("loop_edit_%d_%s.hmi"), slotIndex, s);
+
     Win32BuildEXEPathFileName(state, exeName[0..64], dest);
 }
 
@@ -730,8 +736,8 @@ fn Win32PlayBackInput(state: *win32_state, newInput: *platform.input) void {
 }
 
 fn ToggleFullscreen(window: win32.HWND) void {
-    const style = @intCast(u32, win32.GetWindowLongW(window, win32.GWL_STYLE));
-    if ((style & @enumToInt(win32.WS_OVERLAPPEDWINDOW)) != 0) {
+    const style = @as(u32, @intCast(win32.GetWindowLongW(window, win32.GWL_STYLE)));
+    if ((style & @intFromEnum(win32.WS_OVERLAPPEDWINDOW)) != 0) {
         var monitorInfo: win32.MONITORINFO = undefined;
         monitorInfo.cbSize = @sizeOf(win32.MONITORINFO);
         const windowPlacementSucceded = win32.GetWindowPlacement(window, &globalWindowPosition);
@@ -739,7 +745,7 @@ fn ToggleFullscreen(window: win32.HWND) void {
         const monitorInfoSucceded = win32.GetMonitorInfoW(monitorFromWindow, &monitorInfo);
 
         if ((windowPlacementSucceded != win32.FALSE) and (monitorInfoSucceded) != win32.FALSE) {
-            _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @bitCast(i32, style & ~@enumToInt(win32.WS_OVERLAPPEDWINDOW)));
+            _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @as(i32, @bitCast(style & ~@intFromEnum(win32.WS_OVERLAPPEDWINDOW))));
             _ = win32.SetWindowPos(
                 window,
                 null,
@@ -747,15 +753,15 @@ fn ToggleFullscreen(window: win32.HWND) void {
                 monitorInfo.rcMonitor.top,
                 monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
                 monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
-                @intToEnum(win32.SET_WINDOW_POS_FLAGS, @enumToInt(win32.SWP_NOOWNERZORDER) | @enumToInt(win32.SWP_FRAMECHANGED)),
+                @as(win32.SET_WINDOW_POS_FLAGS, @enumFromInt(@intFromEnum(win32.SWP_NOOWNERZORDER) | @intFromEnum(win32.SWP_FRAMECHANGED))),
             );
         }
     } else {
-        _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @bitCast(i32, style | @enumToInt(win32.WS_OVERLAPPEDWINDOW)));
+        _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @as(i32, @bitCast(style | @intFromEnum(win32.WS_OVERLAPPEDWINDOW))));
         _ = win32.SetWindowPlacement(window, &globalWindowPosition);
-        _ = win32.SetWindowPos(window, null, 0, 0, 0, 0, @intToEnum(
+        _ = win32.SetWindowPos(window, null, 0, 0, 0, 0, @as(
             win32.SET_WINDOW_POS_FLAGS,
-            @enumToInt(win32.SWP_NOMOVE) | @enumToInt(win32.SWP_NOSIZE) | @enumToInt(win32.SWP_NOZORDER) | @enumToInt(win32.SWP_NOOWNERZORDER) | @enumToInt(win32.SWP_FRAMECHANGED),
+            @enumFromInt(@intFromEnum(win32.SWP_NOMOVE) | @intFromEnum(win32.SWP_NOSIZE) | @intFromEnum(win32.SWP_NOZORDER) | @intFromEnum(win32.SWP_NOOWNERZORDER) | @intFromEnum(win32.SWP_FRAMECHANGED)),
         ));
     }
 }
@@ -766,24 +772,24 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platfor
         switch (message.message) {
             win32.WM_QUIT => globalRunning = false,
             win32.WM_KEYDOWN, win32.WM_KEYUP, win32.WM_SYSKEYDOWN, win32.WM_SYSKEYUP => {
-                const vkCode = @intToEnum(win32.VIRTUAL_KEY, message.wParam);
+                const vkCode = @as(win32.VIRTUAL_KEY, @enumFromInt(message.wParam));
                 const wasDown = ((message.lParam & (1 << 30)) != 0);
                 const isDown = ((message.lParam & (1 << 31)) == 0);
 
                 if (wasDown != isDown) {
                     switch (vkCode) {
-                        win32.VK_W => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveUp, @as(u32, @boolToInt(isDown))),
-                        win32.VK_A => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveLeft, @as(u32, @boolToInt(isDown))),
-                        win32.VK_S => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveDown, @as(u32, @boolToInt(isDown))),
-                        win32.VK_D => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveRight, @as(u32, @boolToInt(isDown))),
-                        win32.VK_Q => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.leftShoulder, @as(u32, @boolToInt(isDown))),
-                        win32.VK_E => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.rightShoulder, @as(u32, @boolToInt(isDown))),
-                        win32.VK_UP => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionUp, @as(u32, @boolToInt(isDown))),
-                        win32.VK_LEFT => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionLeft, @as(u32, @boolToInt(isDown))),
-                        win32.VK_DOWN => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionDown, @as(u32, @boolToInt(isDown))),
-                        win32.VK_RIGHT => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionRight, @as(u32, @boolToInt(isDown))),
-                        win32.VK_ESCAPE => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.back, @as(u32, @boolToInt(isDown))),
-                        win32.VK_SPACE => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.start, @as(u32, @boolToInt(isDown))),
+                        win32.VK_W => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveUp, @as(u32, @intFromBool(isDown))),
+                        win32.VK_A => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveLeft, @as(u32, @intFromBool(isDown))),
+                        win32.VK_S => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveDown, @as(u32, @intFromBool(isDown))),
+                        win32.VK_D => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.moveRight, @as(u32, @intFromBool(isDown))),
+                        win32.VK_Q => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.leftShoulder, @as(u32, @intFromBool(isDown))),
+                        win32.VK_E => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.rightShoulder, @as(u32, @intFromBool(isDown))),
+                        win32.VK_UP => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionUp, @as(u32, @intFromBool(isDown))),
+                        win32.VK_LEFT => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionLeft, @as(u32, @intFromBool(isDown))),
+                        win32.VK_DOWN => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionDown, @as(u32, @intFromBool(isDown))),
+                        win32.VK_RIGHT => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.actionRight, @as(u32, @intFromBool(isDown))),
+                        win32.VK_ESCAPE => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.back, @as(u32, @intFromBool(isDown))),
+                        win32.VK_SPACE => Win32ProcessKeyboardMessage(&keyboardController.buttons.mapped.start, @as(u32, @intFromBool(isDown))),
                         win32.VK_P => {
                             if (HANDMADE_INTERNAL) {
                                 if (isDown) {
@@ -834,18 +840,18 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platfor
 fn HandleDebugCycleCounters(gameMemory: *platform.memory) void {
     if (HANDMADE_INTERNAL) {
         _ = win32.OutputDebugStringW(win32.L("DEBUG CYCLE COUNTS:\n"));
-        for (gameMemory.counters) |*counter| {
+        for (&gameMemory.counters) |*counter| {
             if (counter.hitCount > 0) {
                 var textbuffer = [1]u16{0} ** 256;
                 _ = win32.extra.wsprintfW(
-                    @ptrCast([*:0]u16, &textbuffer),
+                    @as([*:0]u16, @ptrCast(&textbuffer)),
                     win32.L("%S - %I64ucy %dh %I64ucy/h\n"),
                     @tagName(counter.t).ptr,
                     counter.cycleCount,
                     counter.hitCount,
                     counter.cycleCount / counter.hitCount,
                 );
-                _ = win32.OutputDebugStringW(@ptrCast([*:0]u16, &textbuffer));
+                _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&textbuffer)));
 
                 counter.hitCount = 0;
                 counter.cycleCount = 0;
@@ -863,17 +869,20 @@ inline fn Win32GetWallClock() win32.LARGE_INTEGER {
 }
 
 inline fn Win32GetSecondsElapsed(start: win32.LARGE_INTEGER, end: win32.LARGE_INTEGER) f32 {
-    const result = @intToFloat(f32, (end.QuadPart - start.QuadPart)) / @intToFloat(f32, globalPerfCounterFrequency);
+    const result = @as(f32, @floatFromInt((end.QuadPart - start.QuadPart))) / @as(f32, @floatFromInt(globalPerfCounterFrequency));
 
     return result;
 }
 
 inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) void {
-    @memcpy(@ptrCast([*]u8, dest), @ptrCast([*]const u8, source), size);
+    const d : [*]u8 = @ptrCast(dest);
+    const s : [*] const u8 = @ptrCast(source);
 
-    // NOTE (Manav): loop below is incredibly slow.
-    // for (@ptrCast([*]const u8, source)[0..size]) |byte, index| {
-    //     @ptrCast([*]u8, dest)[index] = byte;
+    @memcpy(d[0..size], s[0..size]);
+
+    // // NOTE (Manav): loop below is incredibly slow.
+    // for (@as([*]const u8, @ptrCast(source))[0..size], 0..) |byte, index| {
+    //     @as([*]u8, @ptrCast(dest))[index] = byte;
     // }
 }
 
@@ -989,11 +998,11 @@ const win32_work_queue = struct {
     entries: [256]win32_work_queue_entry = [1]win32_work_queue_entry{.{}} ** 256,
 
     fn from(queue: *platform.work_queue) *Self {
-        return @ptrCast(*Self, @alignCast(@alignOf(Self), queue));
+        return @as(*Self, @alignCast(@ptrCast(queue)));
     }
 
     fn to(self: *Self) *platform.work_queue {
-        return @ptrCast(*platform.work_queue, self);
+        return @as(*platform.work_queue, @ptrCast(self));
     }
 };
 
@@ -1048,7 +1057,7 @@ const win32_thread_info = struct {
 };
 
 fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
-    const threadInfo = @ptrCast(*win32_thread_info, @alignCast(@alignOf(win32_thread_info), lpParameter.?));
+    const threadInfo = @as(*win32_thread_info, @alignCast(@ptrCast(lpParameter.?)));
 
     while (true) {
         if (Win32DoNextWorkQueueEntry(threadInfo.queue)) {
@@ -1063,7 +1072,7 @@ fn DoWorkerWork(_: *platform.work_queue, data: *anyopaque) void {
     var buffer = [1:0]u8{0} ** 256;
 
     // std.debug.print("Thread {}: {s}\n", .{ win32.GetCurrentThreadId(), @ptrCast([*:0]const u8, data) });
-    _ = win32.extra.wsprintfA(&buffer, "Thread %u: %s\n", win32.GetCurrentThreadId(), @ptrCast([*:0]const u8, data));
+    _ = win32.extra.wsprintfA(&buffer, "Thread %u: %s\n", win32.GetCurrentThreadId(), @as([*:0]const u8, @ptrCast(data)));
     _ = win32.OutputDebugStringA(&buffer);
 }
 
@@ -1091,7 +1100,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             null,
             0,
             ThreadProc,
-            @ptrCast(*anyopaque, info),
+            @as(*anyopaque, @ptrCast(info)),
             .THREAD_CREATE_RUN_IMMEDIATELY,
             &threadID,
         );
@@ -1172,7 +1181,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     debugGlobalShowCursor = HANDMADE_INTERNAL;
 
     const windowclass = .{
-        .style = @intToEnum(win32.WNDCLASS_STYLES, 0), // WS_EX_TOPMOST|WS_EX_LAYERED
+        .style = @as(win32.WNDCLASS_STYLES, @enumFromInt(0)), // WS_EX_TOPMOST|WS_EX_LAYERED
         .lpfnWndProc = Win32MainWindowCallback,
         .cbClsExtra = 0,
         .cbWndExtra = 0,
@@ -1186,10 +1195,10 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
     if (win32.RegisterClass(&windowclass) != 0) {
         if (win32.CreateWindowExW(
-            @intToEnum(win32.WINDOW_EX_STYLE, 0),
+            @as(win32.WINDOW_EX_STYLE, @enumFromInt(0)),
             windowclass.lpszClassName,
             win32.L("HandmadeHero"),
-            @intToEnum(win32.WINDOW_STYLE, @enumToInt(win32.WS_OVERLAPPEDWINDOW) | @enumToInt(win32.WS_VISIBLE)),
+            @as(win32.WINDOW_STYLE, @enumFromInt(@intFromEnum(win32.WS_OVERLAPPEDWINDOW) | @intFromEnum(win32.WS_VISIBLE))),
             win32.CW_USEDEFAULT,
             win32.CW_USEDEFAULT,
             win32.CW_USEDEFAULT,
@@ -1209,12 +1218,12 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             }
 
             if (win32RefreshRate > 1) {
-                monitorRefreshHz = @intCast(u32, win32RefreshRate);
+                monitorRefreshHz = @as(u32, @intCast(win32RefreshRate));
             }
 
             // const gameUpdateHz = @divTrunc(monitorRefreshHz, 2);
             const gameUpdateHz = monitorRefreshHz;
-            const targetSecondsPerFrame = 1.0 / @intToFloat(f32, gameUpdateHz);
+            const targetSecondsPerFrame = 1.0 / @as(f32, @floatFromInt(gameUpdateHz));
 
             var soundOutput = win32_sound_output{
                 .samplesPerSecond = 48000,
@@ -1222,7 +1231,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             };
 
             soundOutput.secondaryBufferSize = soundOutput.samplesPerSecond * soundOutput.bytesPerSample;
-            soundOutput.safetyBytes = @floatToInt(u32, (@intToFloat(f32, soundOutput.samplesPerSecond) * @intToFloat(f32, soundOutput.bytesPerSample) / @intToFloat(f32, gameUpdateHz)) / 3.0);
+            soundOutput.safetyBytes = @as(u32, @intFromFloat((@as(f32, @floatFromInt(soundOutput.samplesPerSecond)) * @as(f32, @floatFromInt(soundOutput.bytesPerSample)) / @as(f32, @floatFromInt(gameUpdateHz))) / 3.0));
 
             Win32InitDSound(windowHandle, soundOutput.samplesPerSecond, soundOutput.secondaryBufferSize);
             Win32ClearBuffer(&soundOutput);
@@ -1238,12 +1247,12 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 }
             }
 
-            if (@ptrCast(?[*]i16, @alignCast(@alignOf(i16), win32.VirtualAlloc(
+            if (@as(?[*]i16, @alignCast(@ptrCast(win32.VirtualAlloc(
                 null,
                 soundOutput.secondaryBufferSize,
                 allocationType,
                 win32.PAGE_READWRITE,
-            )))) |samples| {
+            ))))) |samples| {
                 // defer _ = win32.VirtualFree();
 
                 var gameMemory = platform.memory{
@@ -1259,17 +1268,18 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     .DEBUGPlatformWriteEntireFile = DEBUGWin32WriteEntireFile,
                 };
 
-                const baseAddress = if (HANDMADE_INTERNAL) (@intToPtr([*]u8, platform.TeraBytes(2))) else null;
+                const baseAddress = if (HANDMADE_INTERNAL) (@as([*]u8, @ptrFromInt(platform.TeraBytes(2)))) else null;
                 win32State.totalSize = gameMemory.permanentStorageSize + gameMemory.transientStorageSize;
 
                 if (win32.VirtualAlloc(baseAddress, win32State.totalSize, allocationType, win32.PAGE_READWRITE)) |memory| {
                     // defer _ = win32.VirtualFree();
 
+                    var replayIndex: u32 = 1;
+
                     win32State.gameMemoryBlock = memory;
-                    gameMemory.permanentStorage = @ptrCast([*]u8, win32State.gameMemoryBlock);
+                    gameMemory.permanentStorage = @as([*]u8, @ptrCast(win32State.gameMemoryBlock));
                     gameMemory.transientStorage = gameMemory.permanentStorage + gameMemory.permanentStorageSize;
 
-                    var replayIndex: u32 = 1;
                     while (replayIndex < win32State.replayBuffers.len) : (replayIndex += 1) {
                         var replayBuffer = &win32State.replayBuffers[replayIndex];
 
@@ -1277,7 +1287,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                         if (win32.CreateFileW(
                             &replayBuffer.fileName,
-                            @intToEnum(win32.FILE_ACCESS_FLAGS, @enumToInt(win32.FILE_GENERIC_WRITE) | @enumToInt(win32.FILE_GENERIC_READ)),
+                            @as(win32.FILE_ACCESS_FLAGS, @enumFromInt(@intFromEnum(win32.FILE_GENERIC_WRITE) | @intFromEnum(win32.FILE_GENERIC_READ))),
                             win32.FILE_SHARE_NONE,
                             null,
                             win32.CREATE_ALWAYS,
@@ -1367,23 +1377,23 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                             Win32ProcessKeyboardMessage(
                                 &newInput.mouseButtons[0],
-                                @as(u32, (@bitCast(u16, win32.GetKeyState(@enumToInt(win32.VK_LBUTTON))) & (1 << 15))),
+                                @as(u32, (@as(u16, @bitCast(win32.GetKeyState(@intFromEnum(win32.VK_LBUTTON)))) & (1 << 15))),
                             );
                             Win32ProcessKeyboardMessage(
                                 &newInput.mouseButtons[1],
-                                @as(u32, (@bitCast(u16, win32.GetKeyState(@enumToInt(win32.VK_MBUTTON))) & (1 << 15))),
+                                @as(u32, (@as(u16, @bitCast(win32.GetKeyState(@intFromEnum(win32.VK_MBUTTON)))) & (1 << 15))),
                             );
                             Win32ProcessKeyboardMessage(
                                 &newInput.mouseButtons[2],
-                                @as(u32, (@bitCast(u16, win32.GetKeyState(@enumToInt(win32.VK_RBUTTON))) & (1 << 15))),
+                                @as(u32, (@as(u16, @bitCast(win32.GetKeyState(@intFromEnum(win32.VK_RBUTTON)))) & (1 << 15))),
                             );
                             Win32ProcessKeyboardMessage(
                                 &newInput.mouseButtons[3],
-                                @as(u32, (@bitCast(u16, win32.GetKeyState(@enumToInt(win32.VK_XBUTTON1))) & (1 << 15))),
+                                @as(u32, (@as(u16, @bitCast(win32.GetKeyState(@intFromEnum(win32.VK_XBUTTON1)))) & (1 << 15))),
                             );
                             Win32ProcessKeyboardMessage(
                                 &newInput.mouseButtons[4],
-                                @as(u32, (@bitCast(u16, win32.GetKeyState(@enumToInt(win32.VK_XBUTTON2))) & (1 << 15))),
+                                @as(u32, (@as(u16, @bitCast(win32.GetKeyState(@intFromEnum(win32.VK_XBUTTON2)))) & (1 << 15))),
                             );
 
                             var maxControllerCount = win32.XUSER_MAX_COUNT;
@@ -1398,7 +1408,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 const newController = &newInput.controllers[ourControllerIndex];
 
                                 var controllerState: win32.XINPUT_STATE = undefined;
-                                if (XInputGetState(controllerIndex, &controllerState) == @enumToInt(win32.ERROR_SUCCESS)) {
+                                if (XInputGetState(controllerIndex, &controllerState) == @intFromEnum(win32.ERROR_SUCCESS)) {
                                     newController.isConnected = true;
                                     newController.isAnalog = oldController.isAnalog;
 
@@ -1512,9 +1522,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                                 const expectedSoundBytesPerFrame = @divTrunc(soundOutput.samplesPerSecond * soundOutput.bytesPerSample, gameUpdateHz);
                                 const secondsLeftUntilFLip = (targetSecondsPerFrame - fromBeginToAudioSeconds);
-                                const expectedBytesUntilFlip = @floatToInt(i32, (secondsLeftUntilFLip / targetSecondsPerFrame) * @intToFloat(f32, expectedSoundBytesPerFrame));
+                                const expectedBytesUntilFlip = @as(i32, @intFromFloat((secondsLeftUntilFLip / targetSecondsPerFrame) * @as(f32, @floatFromInt(expectedSoundBytesPerFrame))));
 
-                                const expectedFrameBoundaryByte = playCursor +% @bitCast(u32, expectedBytesUntilFlip);
+                                const expectedFrameBoundaryByte = playCursor +% @as(u32, @bitCast(expectedBytesUntilFlip));
 
                                 var safeWriteCursor = writeCursor;
                                 if (safeWriteCursor < playCursor) {
@@ -1565,7 +1575,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                         unwrappedWriteCursor += soundOutput.secondaryBufferSize;
                                     }
                                     audioLatencyBytes = unwrappedWriteCursor - playCursor;
-                                    audioLatencySeconds = (@intToFloat(f32, audioLatencyBytes) / @intToFloat(f32, soundOutput.bytesPerSample)) / @intToFloat(f32, soundOutput.samplesPerSecond);
+                                    audioLatencySeconds = (@as(f32, @floatFromInt(audioLatencyBytes)) / @as(f32, @floatFromInt(soundOutput.bytesPerSample))) / @as(f32, @floatFromInt(soundOutput.samplesPerSecond));
 
                                     if (!NOT_IGNORE) {
                                         var textbuffer = [1]u16{0} ** 256;
@@ -1584,7 +1594,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             var secondsElapsedForFrame = workSecondsElapsed;
                             if (secondsElapsedForFrame < targetSecondsPerFrame) {
                                 if (sleepIsGranular) {
-                                    const sleepMS = @floatToInt(DWORD, (1000.0 * (targetSecondsPerFrame - secondsElapsedForFrame)));
+                                    const sleepMS = @as(DWORD, @intFromFloat((1000.0 * (targetSecondsPerFrame - secondsElapsedForFrame))));
                                     if (sleepMS > 0) win32.Sleep(sleepMS);
                                 }
 
@@ -1639,11 +1649,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 lastCycleCount = endCycleCount;
 
                                 const fps: f64 = 0;
-                                const mcpf = @intToFloat(f64, cyclesElapsed) / (1000 * 1000);
+                                const mcpf = @as(f64, @floatFromInt(cyclesElapsed)) / (1000 * 1000);
                                 var fpsBuffer = [1:0]u16{0} ** 256;
-                                _ = win32.extra.wsprintfW(@ptrCast([*:0]u16, &fpsBuffer), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), msPerFrame, fps, mcpf);
+                                _ = win32.extra.wsprintfW(@as([*:0]u16, @ptrCast(&fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), msPerFrame, fps, mcpf);
                                 std.debug.print("{d:.2}, {d:.2}, {d:.2}\n", .{ msPerFrame, fps, mcpf });
-                                _ = win32.OutputDebugStringW(@ptrCast([*:0]u16, &fpsBuffer));
+                                _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&fpsBuffer)));
                             }
 
                             if (HANDMADE_INTERNAL) {

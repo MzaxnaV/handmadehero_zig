@@ -46,7 +46,7 @@ pub const perf_analyzer = struct {
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
 /// build constant to dynamically remove code sections
-const NOT_IGNORE = @import("build_consts").NOT_IGNORE;
+const NOT_IGNORE = @import("handmade_platform").NOT_IGNORE;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
@@ -1371,7 +1371,7 @@ const entity_basis_p_result = struct {
     valid: bool = false,
 };
 
-inline fn GetRenderEntityBasisP(group: *const render_group, entityBasis: *render_entity_basis, screenDim: hm.v2) entity_basis_p_result {
+inline fn GetRenderEntityBasisP(group: *const render_group, entityBasis: *align(@alignOf(u8)) render_entity_basis, screenDim: hm.v2) entity_basis_p_result {
     const screenCenter = hm.Scale(screenDim, 0.5);
 
     var result: entity_basis_p_result = .{};
