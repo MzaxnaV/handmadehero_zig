@@ -120,7 +120,7 @@ const win32_game_code = struct {
 };
 
 const win32_replay_buffer = struct {
-    fileHandle: ?win32.HANDLE = null,
+    fileHandle: win32.HANDLE = undefined,
     memoryMap: ?win32.HANDLE = null,
     fileName: [WIN32_STATE_FILE_NAME_COUNT:0]u16 = undefined,
     memoryBlock: ?*anyopaque = null,
@@ -198,7 +198,7 @@ fn DEBUGWin32ReadEntireFile(thread: *platform.thread_context, filename: [*:0]con
     var result = handmade_internal.debug_read_file_result{};
     var fileHandle = win32.CreateFileA(filename, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
 
-    if (fileHandle != null and fileHandle != win32.INVALID_HANDLE_VALUE) {
+    if (fileHandle != win32.INVALID_HANDLE_VALUE) {
         var fileSize = win32.LARGE_INTEGER{ .QuadPart = 0 };
         if (win32.GetFileSizeEx(fileHandle, &fileSize) != 0) {
             var fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @as(u32, @intCast(fileSize.QuadPart)) else unreachable;
@@ -218,7 +218,7 @@ fn DEBUGWin32ReadEntireFile(thread: *platform.thread_context, filename: [*:0]con
         }
         _ = win32.CloseHandle(fileHandle);
     } else {
-        // TODO: logging
+        std.debug.print("Failed to create File Handle: {s}\n", .{"DEBUGWin32ReadEntireFile"});
     }
 
     return result;
@@ -228,7 +228,7 @@ fn DEBUGWin32WriteEntireFile(_: *platform.thread_context, fileName: [*:0]const u
     var result = false;
     var fileHandle = win32.CreateFileA(fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_MODE.NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null);
 
-    if (fileHandle != null and fileHandle != win32.INVALID_HANDLE_VALUE) {
+    if (fileHandle != win32.INVALID_HANDLE_VALUE) {
         var bytesWritten: DWORD = 0;
         if (win32.WriteFile(fileHandle, memory, memorySize, &bytesWritten, null) != 0) {
             result = (bytesWritten == memorySize);
@@ -238,7 +238,7 @@ fn DEBUGWin32WriteEntireFile(_: *platform.thread_context, fileName: [*:0]const u
 
         _ = win32.CloseHandle(fileHandle);
     } else {
-        // TODO: logging
+        std.debug.print("Failed to create File Handle: {s}\n", .{"DEBUGWin32WriteEntireFile"});
     }
 
     return result;
@@ -671,8 +671,12 @@ fn Win32BeginRecordingInput(state: *win32_state, inputRecordingIndex: u32) void 
         var fileName = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
         Win32GetInputFileLocation(state, true, inputRecordingIndex, fileName[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
-        if (win32.CreateFileW(&fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null)) |handle| {
+        const handle = win32.CreateFileW(&fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null);
+
+        if (handle != win32.INVALID_HANDLE_VALUE) {
             state.recordingHandle = handle;
+        } else {
+            std.debug.print("Failed to create File Handle: {s}\n", .{"Win32BeginRecordingInput"});
         }
 
         if (!NOT_IGNORE) {
@@ -699,8 +703,12 @@ fn Win32BeginInputPlayBack(state: *win32_state, inputPlayingIndex: u32) void {
         var fileName = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
         Win32GetInputFileLocation(state, true, inputPlayingIndex, fileName[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
-        if (win32.CreateFileW(&fileName, win32.FILE_GENERIC_READ, win32.FILE_SHARE_NONE, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null)) |handle| {
+        const handle = win32.CreateFileW(&fileName, win32.FILE_GENERIC_READ, win32.FILE_SHARE_NONE, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
+
+        if (handle != win32.INVALID_HANDLE_VALUE) {
             state.playBackHandle = handle;
+        } else {
+            std.debug.print("Failed to create File Handle: {s}\n", .{"Win32BeginInputPlayBack"});
         }
 
         if (!NOT_IGNORE) {
@@ -875,8 +883,8 @@ inline fn Win32GetSecondsElapsed(start: win32.LARGE_INTEGER, end: win32.LARGE_IN
 }
 
 inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) void {
-    const d : [*]u8 = @ptrCast(dest);
-    const s : [*] const u8 = @ptrCast(source);
+    const d: [*]u8 = @ptrCast(dest);
+    const s: [*]const u8 = @ptrCast(source);
 
     @memcpy(d[0..size], s[0..size]);
 
@@ -1285,7 +1293,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                         Win32GetInputFileLocation(&win32State, false, replayIndex, replayBuffer.fileName[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
-                        if (win32.CreateFileW(
+                        replayBuffer.fileHandle = win32.CreateFileW(
                             &replayBuffer.fileName,
                             @as(win32.FILE_ACCESS_FLAGS, @enumFromInt(@intFromEnum(win32.FILE_GENERIC_WRITE) | @intFromEnum(win32.FILE_GENERIC_READ))),
                             win32.FILE_SHARE_NONE,
@@ -1293,10 +1301,10 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             win32.CREATE_ALWAYS,
                             win32.SECURITY_ANONYMOUS,
                             null,
-                        )) |handle| {
-                            replayBuffer.fileHandle = handle;
-                        } else {
-                            std.debug.print("Failed to create File Handle\n", .{});
+                        );
+
+                        if (replayBuffer.fileHandle == win32.INVALID_HANDLE_VALUE) {
+                            std.debug.print("Failed to create File Handle: {s}\n", .{"wWinMain > replayBuffer"});
                         }
 
                         var maxSize: win32.ULARGE_INTEGER = undefined;
