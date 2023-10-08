@@ -929,7 +929,7 @@ pub export fn UpdateAndRender(
         .memory = @as([*]u8, @ptrCast(buffer.memory.?)),
     };
     const drawBuffer = &drawBuffer_;
-    
+
     if (!NOT_IGNORE) {
         drawBuffer.width = 1279;
         drawBuffer.height = 719;
@@ -959,14 +959,10 @@ pub export fn UpdateAndRender(
                 const delta = game.Substract(world, &groundBuffer.p, &gameState.cameraP);
 
                 if ((game.Z(delta) >= -1.0) and (game.Z(delta) < 1.0)) {
-                    const basis = tranState.tranArena.PushStruct(game.render_basis);
-                    renderGroup.defaultBasis = basis;
-                    basis.p = delta;
-
                     const groundSideInMeters = game.X(world.chunkDimInMeters);
-                    renderGroup.PushBitmap(bitmap, groundSideInMeters, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(bitmap, groundSideInMeters, delta, .{ 1, 1, 1, 1 });
                     if (NOT_IGNORE) {
-                        renderGroup.PushRectOutline(.{ 0, 0, 0 }, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
+                        renderGroup.PushRectOutline(delta, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
                     }
                 }
             }
@@ -1027,10 +1023,6 @@ pub export fn UpdateAndRender(
 
     const cameraP: game.v3 = game.Substract(world, &gameState.cameraP, &simCenterP);
 
-    const b = tranState.tranArena.PushStruct(game.render_basis);
-    b.p = .{ 0, 0, 0 };
-    renderGroup.defaultBasis = b;
-
     renderGroup.PushRectOutline(.{ 0, 0, 0 }, screenBounds.GetDim(), .{ 1, 1, 0, 1 });
     // renderGroup.PushRectOutline( .{0, 0, 0}, game.XY(cameraBoundsInMeters.GetDim()), .{1, 1, 1, 1});
     renderGroup.PushRectOutline(.{ 0, 0, 0 }, game.XY(simBounds.GetDim()), .{ 0, 1, 1, 1 });
@@ -1050,9 +1042,6 @@ pub export fn UpdateAndRender(
             var moveSpec = game.DefaultMoveSpec();
             var ddP = game.v3{ 0, 0, 0 };
 
-            const basis = tranState.tranArena.PushStruct(game.render_basis);
-            renderGroup.defaultBasis = basis;
-
             const cameraRelativeGroundP: game.v3 = game.Sub(game.GetEntityGroundPoint(entity), cameraP);
             const fadeTopEndZ = 0.75 * gameState.typicalFloorHeight;
             const fadeTopStartZ = 0.5 * gameState.typicalFloorHeight;
@@ -1065,6 +1054,7 @@ pub export fn UpdateAndRender(
                 renderGroup.globalAlpha = game.ClampMapToRange(fadeBottomEndZ, game.Z(cameraRelativeGroundP), fadeBottomStartZ);
             }
 
+            // Update (pre-physics entity)
             const heroBitmaps = &gameState.heroBitmaps[entity.facingDirection];
             switch (entity.entityType) {
                 .Hero => {
@@ -1097,24 +1087,6 @@ pub export fn UpdateAndRender(
                             }
                         }
                     }
-
-                    const heroSizeC = 2.5;
-
-                    renderGroup.PushBitmap(&gameState.shadow, heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap(&heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                    renderGroup.PushBitmap(&heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                    renderGroup.PushBitmap(&heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-
-                    DrawHitpoints(entity, renderGroup);
-                },
-
-                .Wall => {
-                    renderGroup.PushBitmap(&gameState.tree, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                },
-
-                .Stairwell => {
-                    renderGroup.PushRect(.{ 0, 0, 0 }, entity.walkableDim, .{ 1, 0.5, 0, 1 });
-                    renderGroup.PushRect(.{ 0, 0, entity.walkableHeight }, entity.walkableDim, .{ 1, 1, 0, 1 });
                 },
 
                 .Sword => {
@@ -1129,8 +1101,6 @@ pub export fn UpdateAndRender(
                         // NOTE (Manav): invalid z position causes float overflow down the line when drawing bitmap because of zFudge,
                         // so not pushing bitmap when entity becomes non spatial
                     }
-                    renderGroup.PushBitmap(&gameState.shadow, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap(&gameState.sword, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Familiar => {
@@ -1162,7 +1132,50 @@ pub export fn UpdateAndRender(
                     moveSpec.unitMaxAccelVector = true;
                     moveSpec.speed = 50;
                     moveSpec.drag = 8;
+                },
 
+                .Null => {
+                    unreachable;
+                },
+
+                else  => {}
+            }
+
+            if (!game.IsSet(entity, @intFromEnum(game.sim_entity_flags.NonSpatial)) and
+                game.IsSet(entity, @intFromEnum(game.sim_entity_flags.Movable)))
+            {
+                game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
+            }
+
+            renderGroup.transform.offsetP = game.GetEntityGroundPoint(entity);
+
+            // Render (post-physics entity)
+            switch (entity.entityType) {
+                .Hero => {
+                    const heroSizeC = 2.5;
+                    renderGroup.PushBitmap(&gameState.shadow, heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap(&heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(&heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(&heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+
+                    DrawHitpoints(entity, renderGroup);
+                },
+
+                .Wall => {
+                    renderGroup.PushBitmap(&gameState.tree, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                },
+
+                .Stairwell => {
+                    renderGroup.PushRect(.{ 0, 0, 0 }, entity.walkableDim, .{ 1, 0.5, 0, 1 });
+                    renderGroup.PushRect(.{ 0, 0, entity.walkableHeight }, entity.walkableDim, .{ 1, 1, 0, 1 });
+                },
+
+                .Sword => {
+                    renderGroup.PushBitmap(&gameState.shadow, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap(&gameState.sword, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                },
+
+                .Familiar => {
                     entity.tBob += dt;
                     if (entity.tBob > 2 * platform.PI32) {
                         entity.tBob -= 2 * platform.PI32;
@@ -1193,14 +1206,6 @@ pub export fn UpdateAndRender(
                     unreachable;
                 },
             }
-
-            if (!game.IsSet(entity, @intFromEnum(game.sim_entity_flags.NonSpatial)) and
-                game.IsSet(entity, @intFromEnum(game.sim_entity_flags.Movable)))
-            {
-                game.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
-            }
-
-            basis.p = game.GetEntityGroundPoint(entity);
         }
     }
 
@@ -1277,7 +1282,7 @@ pub export fn UpdateAndRender(
             colour = .{ 1, 1, 1, 1 };
         }
 
-        _ = game.CoordinateSystem(
+        game.CoordinateSystem(
             renderGroup,
             game.Sub(game.Add(disp, origin), game.Scale(game.Add(xAxis, yAxis), 0.5)),
             xAxis,
@@ -1299,7 +1304,7 @@ pub export fn UpdateAndRender(
                 xAxis = game.v2{ 0.5 * @as(f32, @floatFromInt(lod.width)), 0 };
                 yAxis = game.v2{ 0, 0.5 * @as(f32, @floatFromInt(lod.height)) };
 
-                _ = game.CoordinateSystem(renderGroup, mapP, xAxis, yAxis, .{ 1, 1, 1, 1 }, lod, null, null, null, null);
+                game.CoordinateSystem(renderGroup, mapP, xAxis, yAxis, .{ 1, 1, 1, 1 }, lod, null, null, null, null);
                 game.AddTo(&mapP, game.Add(yAxis, game.v2{ 0, 6 }));
             }
         }

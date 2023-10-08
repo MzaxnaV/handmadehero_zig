@@ -465,7 +465,6 @@ pub const loaded_bitmap = extern struct {
 
                 var xi = xMin;
                 while (xi < xMax) : (xi += 4) {
-
                     var u: simd.f32x4 = pixelPX * nXAxisx_4x + pynX;
                     var v: simd.f32x4 = pixelPX * nYAxisx_4x + pynY;
 
@@ -679,7 +678,7 @@ pub const loaded_bitmap = extern struct {
                         const out: simd.i32x4 = sr | sg | sb | sa;
 
                         const maskedOut: simd.u32x4 = @select(u32, @as(simd.bx4, @bitCast(writeMask)), @as(simd.u32x4, @bitCast(out)), originalDest);
-                        
+
                         // @as(*align(@alignOf(u8)) simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
                         @as(*simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
                     }
@@ -694,7 +693,6 @@ pub const loaded_bitmap = extern struct {
                     } else {
                         clipMask = endClipMask;
                     }
-
                 }
                 row += @as(u32, @intCast(rowAdvance));
             }
@@ -888,15 +886,6 @@ pub const environment_map = extern struct {
     pZ: f32,
 };
 
-pub const render_basis = struct {
-    p: hm.v3 = hm.v3{ 0, 0, 0 },
-};
-
-pub const render_entity_basis = struct {
-    basis: *render_basis,
-    offset: hm.v3 = hm.v3{ 0, 0, 0 },
-};
-
 pub const render_group_entry_type = enum {
     Clear,
     Bitmap,
@@ -921,17 +910,17 @@ pub const render_entry_clear = struct {
     colour: hm.v4,
 };
 
-pub const render_entry_bitmap = struct {
+pub const render_entry_bitmap = struct { // make them packed?
     bitmap: *const loaded_bitmap,
-    entityBasis: render_entity_basis,
-    size: hm.v2,
+
     colour: hm.v4,
+    p: hm.v2,
+    size: hm.v2,
 };
 
 pub const render_entry_rectangle = struct {
-    entityBasis: render_entity_basis,
     colour: hm.v4,
-
+    p: hm.v2,
     dim: hm.v2,
 };
 
@@ -943,28 +932,63 @@ pub const render_entry_coordinate_system = struct {
     texture: *const loaded_bitmap,
     normalMap: ?*loaded_bitmap,
 
+    pixelsToMeters: f32,
+
     top: ?*environment_map,
     middle: ?*environment_map,
     bottom: ?*environment_map,
 };
 
-pub const render_group_camera = struct {
+pub const render_transform = struct {
+    /// This translates meters _on the monitor_ into pixels _on the monitor_.
+    metersToPixels: f32,
+    screenCenter: hm.v2,
+
     focalLength: f32,
     distanceAboveTarget: f32,
+
+    offsetP: hm.v3,
+    scale: f32,
 };
+
+const entity_basis_p_result = struct {
+    p: hm.v2 = hm.v2{ 0, 0 },
+    scale: f32 = 0,
+    valid: bool = false,
+};
+
+fn GetRenderEntityBasisP(transform: *const render_transform, originalP: hm.v3) entity_basis_p_result {
+    var result: entity_basis_p_result = .{};
+
+    const p: hm.v3 = hm.Add(originalP, transform.offsetP);
+    var distanceAboveTarget = transform.distanceAboveTarget;
+
+    if (!NOT_IGNORE) { // DEBUG CAMERA
+        distanceAboveTarget += 50;
+    }
+
+    const distanceToPZ = distanceAboveTarget - hm.Z(p);
+    const nearClipPlane = 0.2;
+
+    const rawXY: hm.v3 = hm.ToV3(hm.XY(p), 1);
+
+    if (distanceToPZ > nearClipPlane) {
+        const projectedXY: hm.v3 = hm.Scale(rawXY, transform.focalLength / distanceToPZ);
+        result.p = hm.Add(transform.screenCenter, hm.Scale(hm.XY(projectedXY), transform.metersToPixels));
+        result.scale = transform.metersToPixels * hm.Z(projectedXY);
+        result.valid = true;
+    }
+
+    return result;
+}
 
 pub const render_group = struct {
     const Self = @This();
 
-    gameCamera: render_group_camera,
-    renderCamera: render_group_camera,
-
-    /// This translates meters _on the monitor_ into pixels _on the monitor_.
-    metersToPixels: f32,
-    monitorHalfDimInMeters: hm.v2,
-
     globalAlpha: f32,
-    defaultBasis: *render_basis,
+
+    monitorHalfDimInMeters: hm.v2,
+    transform: render_transform,
 
     pushBufferSize: u32,
     maxPushBufferSize: u32,
@@ -974,26 +998,31 @@ pub const render_group = struct {
     pub fn Allocate(arena: *hd.memory_arena, maxPushBufferSize: u32, resolutionPixelsX: u32, resolutionPixelsY: u32) *Self {
         var result: *render_group = arena.PushStruct(render_group);
         result.pushBufferBase = arena.PushSize(@alignOf(u8), maxPushBufferSize);
-        result.defaultBasis = arena.PushStruct(render_basis);
-        result.defaultBasis.p = .{ 0, 0, 0 };
 
-        result.pushBufferSize = 0;
         result.maxPushBufferSize = maxPushBufferSize;
-
-        result.gameCamera.focalLength = 0.6;
-        result.gameCamera.distanceAboveTarget = 9.0;
-        result.renderCamera = result.gameCamera;
-        // result.renderCamera.distanceAboveTarget = 50.0;
+        result.pushBufferSize = 0;
 
         result.globalAlpha = 1.0;
 
         const widthOfMonitorInMeters = 0.635;
-        result.metersToPixels = @as(f32, @floatFromInt(resolutionPixelsX)) * widthOfMonitorInMeters;
-
-        const pixelsToMeters = 1 / result.metersToPixels;
-        result.monitorHalfDimInMeters = hm.v2{
+        const metersToPixels = @as(f32, @floatFromInt(resolutionPixelsX)) * widthOfMonitorInMeters;
+        const pixelsToMeters = hm.SafeRatiof1(1, metersToPixels);
+        
+        result.monitorHalfDimInMeters = .{
             0.5 * @as(f32, @floatFromInt(resolutionPixelsX)) * pixelsToMeters,
             0.5 * @as(f32, @floatFromInt(resolutionPixelsY)) * pixelsToMeters,
+        };
+
+        result.transform = .{
+            .metersToPixels = metersToPixels,
+            .focalLength = 0.6,
+            .distanceAboveTarget = 9.0, // 50.0
+            .screenCenter = .{
+                0.5 * @as(f32, @floatFromInt(resolutionPixelsX)),
+                0.5 * @as(f32, @floatFromInt(resolutionPixelsY)),
+            },
+            .offsetP = hm.v3{ 0, 0, 0 },
+            .scale = 1,
         };
 
         return result;
@@ -1024,28 +1053,32 @@ pub const render_group = struct {
 
     /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
     pub inline fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: hm.v3, colour: hm.v4) void {
-        if (PushRenderElements(self, .Bitmap)) |entry| {
-            entry.entityBasis.basis = self.defaultBasis;
-            entry.bitmap = bitmap;
+        const size = hm.V2(height * bitmap.widthOverHeight, height);
+        const alignment: hm.v2 = hm.Hammard(bitmap.alignPercentage, size);
+        const p = hm.Sub(offset, hm.ToV3(alignment, 0));
 
-            const size = hm.V2(height * bitmap.widthOverHeight, height);
-            const alignment: hm.v2 = hm.Hammard(bitmap.alignPercentage, size);
-
-            entry.entityBasis.offset = hm.Sub(offset, hm.ToV3(alignment, 0));
-            entry.colour = hm.Scale(colour, self.globalAlpha);
-            entry.size = size;
+        const basis: entity_basis_p_result = GetRenderEntityBasisP(&self.transform, p);
+        if (basis.valid) {
+            if (PushRenderElements(self, .Bitmap)) |entry| {
+                entry.bitmap = bitmap;
+                entry.p = basis.p;
+                entry.colour = hm.Scale(colour, self.globalAlpha);
+                entry.size = hm.Scale(size, basis.scale);
+            }
         }
     }
 
     /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
     pub inline fn PushRect(self: *Self, offset: hm.v3, dim: hm.v2, colour: hm.v4) void {
-        if (PushRenderElements(self, .Rectangle)) |piece| {
-            piece.entityBasis.basis = self.defaultBasis;
+        const p = hm.Sub(offset, hm.ToV3(hm.Scale(dim, 0.5), 0));
+        const basis: entity_basis_p_result = GetRenderEntityBasisP(&self.transform, p);
 
-            // piece.entityBasis.offset = offset - V3(0.5 * dim, 0);
-            piece.entityBasis.offset = hm.Sub(offset, hm.ToV3(hm.Scale(dim, 0.5), 0));
-            piece.colour = colour;
-            piece.dim = dim;
+        if (basis.valid) {
+            if (PushRenderElements(self, .Rectangle)) |rect| {
+                rect.p = basis.p;
+                rect.colour = colour;
+                rect.dim = hm.Scale(dim, basis.scale);
+            }
         }
     }
 
@@ -1069,32 +1102,41 @@ pub const render_group = struct {
     // zig fmt: off
     pub fn CoordinateSystem(self: *Self, origin: hm.v2, xAxis: hm.v2, yAxis: hm.v2, colour: hm.v4,
                             texture: *const loaded_bitmap, normalMap: ?*loaded_bitmap, 
-                            top: ?*environment_map, middle: ?*environment_map, bottom: ?*environment_map) *align(1) render_entry_coordinate_system 
+                            top: ?*environment_map, middle: ?*environment_map, bottom: ?*environment_map) void 
     // zig fmt: on
     {
-        const entryElement = PushRenderElements(self, .CoordinateSystem);
-        if (entryElement) |entry| {
-            entry.origin = origin;
-            entry.xAxis = xAxis;
-            entry.yAxis = yAxis;
-            entry.colour = colour;
-            entry.texture = texture;
-            entry.normalMap = normalMap;
-            entry.top = top;
-            entry.middle = middle;
-            entry.bottom = bottom;
-        }
-
-        return entryElement.?;
+        _ = bottom;
+        _ = middle;
+        _ = top;
+        _ = normalMap;
+        _ = texture;
+        _ = colour;
+        _ = yAxis;
+        _ = xAxis;
+        _ = origin;
+        _ = self;
+        // const basis: entity_basis_p_result = GetRenderEntityBasisP(self, &entry.entityBasis, screenDim);
+        // if (basis.valid) {
+        //     const entryElement = PushRenderElements(self, .CoordinateSystem);
+        //     if (entryElement) |entry| {
+        //         entry.origin = origin;
+        //         entry.xAxis = xAxis;
+        //         entry.yAxis = yAxis;
+        //         entry.colour = colour;
+        //         entry.texture = texture;
+        //         entry.normalMap = normalMap;
+        //         entry.top = top;
+        //         entry.middle = middle;
+        //         entry.bottom = bottom;
+        //     }
+        // }
     }
 
     pub fn RenderGroupToOutput(self: *Self, outputTarget: *loaded_bitmap, clipRect: hm.rect2i, even: bool) void {
         platform.BEGIN_TIMED_BLOCK(.RenderGroupToOutput);
         defer platform.END_TIMED_BLOCK(.RenderGroupToOutput);
 
-        const screenDim = hm.v2{ @as(f32, @floatFromInt(outputTarget.width)), @as(f32, @floatFromInt(outputTarget.height)) };
-
-        const pixelsToMeters = 1.0 / self.metersToPixels;
+        const nullPixelsToMeters = 1;
 
         var baseAddress = @as(u32, 0);
         while (baseAddress < self.pushBufferSize) {
@@ -1121,30 +1163,29 @@ pub const render_group = struct {
 
                 .Bitmap => {
                     const entry = @as(*align(@alignOf(u8)) render_entry_bitmap, @ptrCast(data));
-                    const basis: entity_basis_p_result = GetRenderEntityBasisP(self, &entry.entityBasis, screenDim);
 
                     if (!NOT_IGNORE) {
                         // outputTarget.DrawBitmap(entry.bitmap, hm.X(basis.p), hm.Y(basis.p), hm.A(entry.colour));
                         outputTarget.DrawRectangleSlowly(
-                            basis.p,
-                            hm.Scale(hm.V2(hm.X(entry.size), 0), basis.scale),
-                            hm.Scale(hm.V2(0, hm.Y(entry.size)), basis.scale),
+                            entry.p,
+                            hm.V2(hm.X(entry.size), 0),
+                            hm.V2(0, hm.Y(entry.size)),
                             entry.colour,
                             entry.bitmap,
                             null,
                             null,
                             null,
                             null,
-                            pixelsToMeters,
+                            nullPixelsToMeters,
                         );
                     } else {
                         outputTarget.DrawRectangleQuickly(
-                            basis.p,
-                            hm.Scale(hm.V2(hm.X(entry.size), 0), basis.scale),
-                            hm.Scale(hm.V2(0, hm.Y(entry.size)), basis.scale),
+                            entry.p,
+                            hm.V2(hm.X(entry.size), 0),
+                            hm.V2(0, hm.Y(entry.size)),
                             entry.colour,
                             entry.bitmap,
-                            pixelsToMeters,
+                            nullPixelsToMeters,
                             clipRect,
                             even,
                         );
@@ -1155,14 +1196,7 @@ pub const render_group = struct {
 
                 .Rectangle => {
                     const entry = @as(*align(@alignOf(u8)) render_entry_rectangle, @ptrCast(data));
-                    const basis: entity_basis_p_result = GetRenderEntityBasisP(self, &entry.entityBasis, screenDim);
-                    outputTarget.DrawRectangle(
-                        basis.p,
-                        hm.Add(basis.p, hm.Scale(entry.dim, basis.scale)),
-                        entry.colour,
-                        clipRect,
-                        even,
-                    );
+                    outputTarget.DrawRectangle(entry.p, hm.Add(entry.p, entry.dim), entry.colour, clipRect, even);
 
                     baseAddress += @sizeOf(@TypeOf(entry.*));
                 },
@@ -1181,7 +1215,7 @@ pub const render_group = struct {
                             entry.top,
                             entry.middle,
                             entry.bottom,
-                            pixelsToMeters,
+                            nullPixelsToMeters,
                         );
 
                         const colour = .{ 1, 1, 0, 1 };
@@ -1406,36 +1440,8 @@ inline fn BilinearSample(texture: *const loaded_bitmap, x: i32, y: i32) bilinear
     return result;
 }
 
-const entity_basis_p_result = struct {
-    p: hm.v2 = hm.v2{ 0, 0 },
-    scale: f32 = 0,
-    valid: bool = false,
-};
-
-inline fn GetRenderEntityBasisP(group: *const render_group, entityBasis: *align(@alignOf(u8)) render_entity_basis, screenDim: hm.v2) entity_basis_p_result {
-    const screenCenter = hm.Scale(screenDim, 0.5);
-
-    var result: entity_basis_p_result = .{};
-
-    const entityBaseP: hm.v3 = entityBasis.basis.p;
-
-    const distanceToPZ = group.renderCamera.distanceAboveTarget - hm.Z(entityBaseP);
-    const nearClipPlane = 0.2;
-
-    const rawXY: hm.v3 = hm.ToV3(hm.Add(hm.XY(entityBaseP), hm.XY(entityBasis.offset)), 1);
-
-    if (distanceToPZ > nearClipPlane) {
-        const projectedXY: hm.v3 = hm.Scale(rawXY, group.renderCamera.focalLength / distanceToPZ);
-        result.p = hm.Add(screenCenter, hm.Scale(hm.XY(projectedXY), group.metersToPixels));
-        result.scale = group.metersToPixels * hm.Z(projectedXY);
-        result.valid = true;
-    }
-
-    return result;
-}
-
-pub inline fn Unproject(group: *render_group, projectedXY: hm.v2, atDistanceFromCamera: f32) hm.v2 {
-    const worldXY = hm.Scale(projectedXY, atDistanceFromCamera / group.gameCamera.focalLength);
+pub inline fn Unproject(group: *const render_group, projectedXY: hm.v2, atDistanceFromCamera: f32) hm.v2 {
+    const worldXY = hm.Scale(projectedXY, atDistanceFromCamera / group.transform.focalLength);
 
     return worldXY;
 }
@@ -1449,6 +1455,6 @@ pub inline fn GetCameraRectangleAtDistance(group: *render_group, distanceFromCam
 }
 
 pub inline fn GetCameraRectangleAtTarget(group: *render_group) hm.rect2 {
-    const result = GetCameraRectangleAtDistance(group, group.gameCamera.distanceAboveTarget);
+    const result = GetCameraRectangleAtDistance(group, group.transform.distanceAboveTarget);
     return result;
 }
