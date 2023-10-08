@@ -461,9 +461,10 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u3
     buffer.info.bmiHeader.biBitCount = 32;
     buffer.info.bmiHeader.biCompression = win32.BI_RGB;
 
-    const bitmapMemorySize = @as(usize, @intCast(bytesPerPixel * (buffer.width * buffer.height)));
+    buffer.pitch = platform.Align(@as(usize, @intCast(width)) * bytesPerPixel, @alignOf(u16));
+
+    const bitmapMemorySize: usize = buffer.pitch * buffer.height;
     buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, @as(win32.VIRTUAL_ALLOCATION_TYPE, @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT))), win32.PAGE_READWRITE);
-    buffer.pitch = @as(usize, @intCast(width)) * bytesPerPixel;
 }
 
 fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: win32.HDC, windowWidth: i32, windowHeight: i32) void {
@@ -1091,7 +1092,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         .playBackHandle = undefined,
     };
 
-    var threadInfo = [1]win32_thread_info{.{ .queue = undefined }} ** 7;
+    var threadInfo = [1]win32_thread_info{.{ .queue = undefined }} ** 4; // change to 4 
     const initialCount = 0;
     const threadCount = threadInfo.len;
 
@@ -1185,6 +1186,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
     // Win32ResizeDIBSection(&globalBackBuffer, 960, 540);
     Win32ResizeDIBSection(&globalBackBuffer, 1920, 1080);
+    // NOTE (Manav): Unaligned load on pixel in DrawRectangleQuickly allows us to use 1279 x 719
+
 
     debugGlobalShowCursor = HANDMADE_INTERNAL;
 
@@ -1656,12 +1659,13 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 const cyclesElapsed = endCycleCount - lastCycleCount;
                                 lastCycleCount = endCycleCount;
 
-                                const fps: f64 = 0;
                                 const mcpf = @as(f64, @floatFromInt(cyclesElapsed)) / (1000 * 1000);
+                                const fps: f64 = 1000 / msPerFrame;
                                 var fpsBuffer = [1:0]u16{0} ** 256;
-                                _ = win32.extra.wsprintfW(@as([*:0]u16, @ptrCast(&fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), msPerFrame, fps, mcpf);
-                                std.debug.print("{d:.2}, {d:.2}, {d:.2}\n", .{ msPerFrame, fps, mcpf });
-                                _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&fpsBuffer)));
+                                _ = fpsBuffer;
+                                // _ = win32.extra.wsprintfW(@as([*:0]u16, @ptrCast(&fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), &msPerFrame, &fps, &mcpf);
+                                std.debug.print("{d:.2}ms/f, {d:.2}f/s, {d:.2}mc/f\n", .{ msPerFrame, fps, mcpf });
+                                // _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&fpsBuffer)));
                             }
 
                             if (HANDMADE_INTERNAL) {

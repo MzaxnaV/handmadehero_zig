@@ -1,4 +1,4 @@
-const assert = @import("std").debug.assert;
+const assert = @import("handmade_platform").Assert;
 const hm = @import("handmade_math.zig");
 const hs = @import("handmade_sim_region.zig");
 

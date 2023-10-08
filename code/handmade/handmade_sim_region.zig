@@ -1,5 +1,4 @@
-const std = @import("std");
-const assert = std.debug.assert;
+const assert = @import("handmade_platform").Assert;
 
 const hw = @import("handmade_world.zig");
 const hd = @import("handmade_data.zig");

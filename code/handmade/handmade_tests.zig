@@ -8,6 +8,12 @@ const hr = @import("handmade_random.zig");
 
 const simd = @import("simd");
 
+test "language" {
+    try testing.expectEqual(@divTrunc(-10, 21), 0);
+    try testing.expectEqual(@divTrunc(-11, 2), -5);
+    try testing.expectEqual(@divTrunc(11, -2), -5);
+}
+
 test "intrinsics" {
     try testing.expectEqual(hi.AbsoluteValue(-0.2), 0.2);
     try testing.expectEqual(hi.AbsoluteValue(0.2), 0.2);
@@ -199,15 +205,15 @@ test "simd" {
         @as(i32, @bitCast(@as(u32, 0x83c0c600))),
         @as(i32, @bitCast(@as(u32, 0x81c0c000))),
     });
-    // try testing.expectEqual(simd.z._mm_mulhi_epi16(a1, a2), simd.i32x4{
-    //     @as(i32, @bitCast(@as(u32, 0xffd0ffcf))),
-    //     @as(i32, @bitCast(@as(u32, 0xfdd0fdd2))),
-    //     @as(i32, @bitCast(@as(u32, 0x02d604da))),
-    //     @as(i32, @bitCast(@as(u32, 0x00d202d3))),
-    // });
+    try testing.expectEqual(simd.z._mm_mulhi_epi16(a1, a2), simd.i32x4{
+        @as(i32, @bitCast(@as(u32, 0xffd0ffcf))),
+        @as(i32, @bitCast(@as(u32, 0xfdd0fdd2))),
+        @as(i32, @bitCast(@as(u32, 0x02d604da))),
+        @as(i32, @bitCast(@as(u32, 0x00d202d3))),
+    });
 
     try testing.expectEqual(simd.i._mm_mullo_epi16(ic1, ic2), simd.z._mm_mullo_epi16(zc1, zc2));
-    // try testing.expectEqual(simd.i._mm_mulhi_epi16(ic1, ic2), simd.z._mm_mulhi_epi16(zc1, zc2));
+    try testing.expectEqual(simd.i._mm_mulhi_epi16(ic1, ic2), simd.z._mm_mulhi_epi16(zc1, zc2));
 
     try testing.expectEqual(simd.i._mm_srli_epi32(ic1, 2), simd.z._mm_srli_epi32(zc1, 2));
     try testing.expectEqual(simd.i._mm_srli_epi32(ic2, 2), simd.z._mm_srli_epi32(zc2, 2));

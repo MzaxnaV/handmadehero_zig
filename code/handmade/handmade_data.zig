@@ -1,5 +1,3 @@
-const std = @import("std");
-
 const platform = @import("handmade_platform");
 const hsr = @import("handmade_sim_region.zig");
 const hw = @import("handmade_world.zig");
@@ -8,7 +6,8 @@ const hrg = @import("handmade_render_group.zig");
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
-pub const memory_arena = struct {
+// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+pub const memory_arena = extern struct {
     size: platform.memory_index,
     base_addr: platform.memory_index,
     used: platform.memory_index,
@@ -22,10 +21,10 @@ pub const memory_arena = struct {
     }
 
     pub inline fn PushSize(self: *memory_arena, comptime alignment: u5, size: platform.memory_index) [*]align(alignment) u8 {
-        const adjusted_addr = std.mem.alignForward(usize, self.base_addr + self.used, alignment);
+        const adjusted_addr = platform.Align(self.base_addr + self.used, alignment);
         const padding = adjusted_addr - (self.base_addr + self.used);
 
-        std.debug.assert((self.used + size + padding) <= self.size);
+        platform.Assert((self.used + size + padding) <= self.size);
         const result = @as([*]align(alignment) u8, @ptrFromInt(adjusted_addr));
         self.used += size + padding;
 
@@ -45,7 +44,7 @@ pub const memory_arena = struct {
     }
 
     pub inline fn CheckArena(self: *memory_arena) void {
-        std.debug.assert(self.tempCount == 0);
+        platform.Assert(self.tempCount == 0);
     }
 };
 
@@ -81,7 +80,8 @@ pub const pairwise_collision_rule = struct {
     nextInHash: ?*pairwise_collision_rule,
 };
 
-pub const ground_buffer = struct {
+// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+pub const ground_buffer = extern struct {
     p: hw.world_position,
     bitmap: hrg.loaded_bitmap,
 };
@@ -130,7 +130,8 @@ pub const state = struct {
     testNormal: hrg.loaded_bitmap,
 };
 
-pub const transient_state = struct {
+// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+pub const transient_state = extern struct {
     initialized: bool,
     tranArena: memory_arena,
     groundBufferCount: u32,
@@ -172,9 +173,9 @@ pub inline fn BeginTemporaryMemory(arena: *memory_arena) temporary_memory {
 
 pub inline fn EndTemporaryMemory(tempMem: temporary_memory) void {
     var arena = tempMem.arena;
-    std.debug.assert(arena.used >= tempMem.used);
+    platform.Assert(arena.used >= tempMem.used);
     arena.used = tempMem.used;
-    std.debug.assert(tempMem.arena.tempCount > 0);
+    platform.Assert(tempMem.arena.tempCount > 0);
     arena.tempCount -= 1;
 }
 

@@ -1,5 +1,5 @@
-const std = @import("std");
-const assert = std.debug.assert;
+const platform = @import("handmade_platform");
+const assert = platform.Assert; 
 
 const hd = @import("handmade_data.zig");
 const hm = @import("handmade_math.zig");
@@ -10,14 +10,14 @@ const RoundF32ToInt = @import("handmade_intrinsics.zig").RoundF32ToInt;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
-const TILE_CHUNK_SAFE_MARGIN = std.math.maxInt(i32) / 64;
-const TILE_CHUNK_UNINITIALIZED = std.math.maxInt(i32);
+const TILE_CHUNK_SAFE_MARGIN = platform.MAXINT32 / 64;
+const TILE_CHUNK_UNINITIALIZED = platform.MAXINT32;
 
 const TILES_PER_CHUNK = 8;
 
 // tile data types ------------------------------------------------------------------------------------------------------------------------
 
-pub const world_position = struct {
+pub const world_position = extern struct {
     chunkX: i32 = 0,
     chunkY: i32 = 0,
     chunkZ: i32 = 0,
