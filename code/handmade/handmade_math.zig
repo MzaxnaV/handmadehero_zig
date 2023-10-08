@@ -457,7 +457,7 @@ pub inline fn Lerp(a: f32, t: f32, b: f32) f32 {
     return result;
 }
 
-pub inline fn SafeRatioN(num: f32, div: f32, n: f32) f32 {
+pub inline fn SafeRatioN(num: f32, div: f32, comptime n: comptime_float) f32 {
     var result = if (div != 0) num / div else n;
     return result;
 }
