@@ -601,6 +601,9 @@ pub export fn UpdateAndRender(
         }
     }
 
+    game.PlatformAddEntry = gameMemory.PlatformAddEntry;
+    game.PlatformCompleteAllWork = gameMemory.PlatformCompleteAllWork;
+
     if (HANDMADE_INTERNAL) {
         handmade_internal.debugGlobalMemory = gameMemory;
     }
@@ -616,9 +619,6 @@ pub export fn UpdateAndRender(
     const pixelsToMeters = 1.0 / 42.0;
 
     if (!gameMemory.isInitialized) {
-        game.PlatformAddEntry = gameMemory.PlatformAddEntry;
-        game.PlatformCompleteAllWork = gameMemory.PlatformCompleteAllWork;
-
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
 
@@ -929,6 +929,11 @@ pub export fn UpdateAndRender(
         .memory = @as([*]u8, @ptrCast(buffer.memory.?)),
     };
     const drawBuffer = &drawBuffer_;
+    
+    if (!NOT_IGNORE) {
+        drawBuffer.width = 1279;
+        drawBuffer.height = 719;
+    }
 
     const renderMemory = game.BeginTemporaryMemory(&tranState.tranArena);
     const renderGroup = game.render_group.Allocate(&tranState.tranArena, platform.MegaBytes(4), @as(u32, @intCast(drawBuffer.width)), @as(u32, @intCast(drawBuffer.height)));

@@ -679,6 +679,7 @@ pub const loaded_bitmap = extern struct {
                         const out: simd.i32x4 = sr | sg | sb | sa;
 
                         const maskedOut: simd.u32x4 = @select(u32, @as(simd.bx4, @bitCast(writeMask)), @as(simd.u32x4, @bitCast(out)), originalDest);
+                        
                         // @as(*align(@alignOf(u8)) simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
                         @as(*simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
                     }
@@ -1253,8 +1254,11 @@ pub const render_group = struct {
                 clipRect.yMin = tileY * tileHeight;
                 clipRect.yMax = clipRect.yMin + tileHeight;
 
-                if (clipRect.xMax > outputTarget.width) {
+                if (tileX == tileCountX - 1) {
                     clipRect.xMax = outputTarget.width;
+                }
+                if (tileY == tileCountY - 1) {
+                    clipRect.yMax = outputTarget.height;
                 }
 
                 work.renderGroup = self;

@@ -463,7 +463,7 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u3
 
     buffer.pitch = platform.Align(@as(usize, @intCast(width)) * bytesPerPixel, @alignOf(u16));
 
-    const bitmapMemorySize: usize = @intCast(bytesPerPixel * buffer.pitch * buffer.height);
+    const bitmapMemorySize: usize = buffer.pitch * buffer.height;
     buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, @as(win32.VIRTUAL_ALLOCATION_TYPE, @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT))), win32.PAGE_READWRITE);
 }
 
@@ -1186,6 +1186,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
     // Win32ResizeDIBSection(&globalBackBuffer, 960, 540);
     Win32ResizeDIBSection(&globalBackBuffer, 1920, 1080);
+    // NOTE (Manav): Unaligned load on pixel in DrawRectangleQuickly allows us to use 1279 x 719
+
 
     debugGlobalShowCursor = HANDMADE_INTERNAL;
 
