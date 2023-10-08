@@ -28,7 +28,6 @@ pub fn build(b: *std.Build) void {
 
     lib.addModule("handmade_platform", platform);
     lib.addModule("simd", simd);
-    _ = lib.getEmittedAsm();
 
     const exe = b.addExecutable(.{
         .name = "win32_handmade",
@@ -39,7 +38,6 @@ pub fn build(b: *std.Build) void {
 
     exe.addModule("win32", win32);
     exe.addModule("handmade_platform", platform);
-    _ = exe.getEmittedAsm(); // TODO: move to misc
 
     const lib_tests = b.addTest(.{
         .root_source_file = .{ .path = "./code/handmade/handmade_tests.zig" },
@@ -48,7 +46,6 @@ pub fn build(b: *std.Build) void {
     });
     lib_tests.addModule("handmade_platform", platform);
     lib_tests.addModule("simd", simd);
-    _ = lib.getEmittedAsm(); // TODO: move to misc
 
     const run_test = b.addRunArtifact(lib_tests);
 
@@ -68,6 +65,10 @@ pub fn build(b: *std.Build) void {
         .pdb_dir = .{ .override = .{ .custom = "../build" } },
     });
 
+    const asm_install_step = b.addInstallFile(lib.getEmittedAsm(), "../misc/handmade.s");
+
     b.getInstallStep().dependOn(&exe_install_step.step);
     b.getInstallStep().dependOn(&lib_install_step.step);
+    b.getInstallStep().dependOn(&asm_install_step.step);
+
 }
