@@ -1,7 +1,7 @@
-const std = @import("std");
-const assert = std.debug.assert;
+// const std = @import("std");
 
 const platform = @import("handmade_platform");
+const assert = platform.Assert;
 
 const hd = @import("handmade_data.zig");
 const hm = @import("handmade_math.zig");

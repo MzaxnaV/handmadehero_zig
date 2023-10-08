@@ -461,9 +461,10 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u3
     buffer.info.bmiHeader.biBitCount = 32;
     buffer.info.bmiHeader.biCompression = win32.BI_RGB;
 
-    const bitmapMemorySize = @as(usize, @intCast(bytesPerPixel * (buffer.width * buffer.height)));
+    buffer.pitch = platform.Align(@as(usize, @intCast(width)) * bytesPerPixel, @alignOf(u16));
+    
+    const bitmapMemorySize: usize = @intCast(bytesPerPixel * buffer.pitch * buffer.height);
     buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, @as(win32.VIRTUAL_ALLOCATION_TYPE, @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT))), win32.PAGE_READWRITE);
-    buffer.pitch = @as(usize, @intCast(width)) * bytesPerPixel;
 }
 
 fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: win32.HDC, windowWidth: i32, windowHeight: i32) void {

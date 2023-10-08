@@ -12,14 +12,14 @@ pub const CONTROLLERS = 5;
 pub const BITMAP_BYTES_PER_PIXEL = 4;
 
 pub const F32MAXIMUM = @import("std").math.floatMax(f32);
+pub const MAXINT32 = @import("std").math.maxInt(i32);
 
 // ----------------------------------------------------------------------------------------------------------------------------------------
 
-pub const handmade_slow = if (HANDMADE_SLOW) struct {
-    pub fn Assert(expression: bool) void {
-        if (!expression) unreachable;
-    }
-} else {};
+
+pub inline fn Assert(expression: bool) void {
+    if (HANDMADE_SLOW and !expression) unreachable;
+}
 
 pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     pub const debug_read_file_result = struct {
@@ -201,6 +201,10 @@ pub inline fn GigaBytes(comptime value: comptime_int) comptime_int {
 }
 pub inline fn TeraBytes(comptime value: comptime_int) comptime_int {
     return 1024 * GigaBytes(value);
+}
+
+pub inline fn Align(addr: usize, alignment: usize) usize {
+    return addr & ~(alignment - 1);
 }
 
 pub const BEGIN_TIMED_BLOCK = handmade_internal.BeginTimedBlock; // TODO (Manav): make it portable

@@ -1,5 +1,3 @@
-const std = @import("std");
-const assert = std.debug.assert;
 const platform = @import("handmade_platform");
 const game = struct {
     usingnamespace @import("handmade_entity.zig");
@@ -12,6 +10,7 @@ const game = struct {
     usingnamespace @import("handmade_world.zig");
 };
 
+const assert = platform.Assert;
 const handmade_internal = platform.handmade_internal;
 
 // build constants ------------------------------------------------------------------------------------------------------------------------
