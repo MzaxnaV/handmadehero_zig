@@ -49,7 +49,7 @@ pub const perf_analyzer = struct {
 const NOT_IGNORE = @import("handmade_platform").NOT_IGNORE;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
-// NOTE (Manav):, make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+// NOTE (Manav):, make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
 pub const loaded_bitmap = extern struct {
     alignPercentage: hm.v2 = .{ 0, 0 },
     widthOverHeight: f32 = 0,
@@ -359,15 +359,37 @@ pub const loaded_bitmap = extern struct {
         }
 
         if (fillRect.HasArea()) {
-            var startupClipMask: simd.u1x4 = .{ 0x1, 0x1, 0x1, 0x1 };
+            var startClipMask: simd.u1x4 = .{ 0x1, 0x1, 0x1, 0x1 };
+            var endClipMask: simd.u1x4 = .{ 0x1, 0x1, 0x1, 0x1 };
 
-            var fillWidth = fillRect.xMax - fillRect.xMin;
-            const fillWidthAlign = fillWidth & 3;
-            if (fillWidthAlign > 0) {
-                const adjustment = @as(u2, @intCast((4 - fillWidthAlign)));
-                startupClipMask = @as(simd.u1x4, @bitCast(@as(u4, @bitCast(startupClipMask)) << adjustment));
-                fillWidth += adjustment;
-                fillRect.xMin = fillRect.xMax - fillWidth;
+            const StartClipMasks: [4]simd.u1x4 = [_]simd.u1x4{
+                @bitCast(@as(u4, @bitCast(simd.u1x4{ 0x1, 0x1, 0x1, 0x1 })) << 0), // .{ 0x1, 0x1, 0x1, 0x1 },
+                @bitCast(@as(u4, @bitCast(simd.u1x4{ 0x1, 0x1, 0x1, 0x1 })) << 1), // .{ 0x0, 0x1, 0x1, 0x1 },
+                @bitCast(@as(u4, @bitCast(simd.u1x4{ 0x1, 0x1, 0x1, 0x1 })) << 2), // .{ 0x0, 0x0, 0x1, 0x1 },
+                @bitCast(@as(u4, @bitCast(simd.u1x4{ 0x1, 0x1, 0x1, 0x1 })) << 3), // .{ 0x0, 0x0, 0x0, 0x1 },
+            };
+
+            const EndClipMasks: [4]simd.u1x4 = [_]simd.u1x4{
+                @bitCast(@as(u4, @bitCast(simd.u1x4{ 0x1, 0x1, 0x1, 0x1 })) >> 0), // .{ 0x1, 0x1, 0x1, 0x1 },
+                @bitCast(@as(u4, @bitCast(simd.u1x4{ 0x1, 0x1, 0x1, 0x1 })) >> 3), // .{ 0x1, 0x0, 0x0, 0x0 },
+                @bitCast(@as(u4, @bitCast(simd.u1x4{ 0x1, 0x1, 0x1, 0x1 })) >> 2), // .{ 0x1, 0x1, 0x0, 0x0 },
+                @bitCast(@as(u4, @bitCast(simd.u1x4{ 0x1, 0x1, 0x1, 0x1 })) >> 1), // .{ 0x1, 0x1, 0x1, 0x0 },
+            };
+
+            {
+                const t: u2 = @intCast(fillRect.xMin & 3);
+                if (t != 0) {
+                    startClipMask = StartClipMasks[t];
+                    fillRect.xMin = fillRect.xMin & ~@as(i32, 3);
+                }
+            }
+
+            {
+                const t: u2 = @intCast(fillRect.xMax & 3);
+                if (t != 0) {
+                    endClipMask = EndClipMasks[t];
+                    fillRect.xMax = (fillRect.xMax & ~@as(i32, 3)) + 4;
+                }
             }
 
             const nXAxis = hm.Scale(xAxis, invXAxisLengthSq);
@@ -439,15 +461,15 @@ pub const loaded_bitmap = extern struct {
                     @as(f32, @floatFromInt(3 + xMin)),
                 } - originx_4x;
 
-                var clipMask: simd.u1x4 = startupClipMask;
+                var clipMask: simd.u1x4 = startClipMask;
 
                 var xi = xMin;
                 while (xi < xMax) : (xi += 4) {
-                    perf_analyzer.Start(.LLVM_MCA, "ProcessPixel");
 
                     var u: simd.f32x4 = pixelPX * nXAxisx_4x + pynX;
                     var v: simd.f32x4 = pixelPX * nYAxisx_4x + pynY;
 
+                    perf_analyzer.Start(.LLVM_MCA, "ProcessPixel");
                     var writeMask: simd.u1x4 = @as(simd.u1x4, @bitCast((u >= zero))) & @as(simd.u1x4, @bitCast((u <= one))) &
                         @as(simd.u1x4, @bitCast((v >= zero))) & @as(simd.u1x4, @bitCast((v <= one)));
 
@@ -657,15 +679,21 @@ pub const loaded_bitmap = extern struct {
                         const out: simd.i32x4 = sr | sg | sb | sa;
 
                         const maskedOut: simd.u32x4 = @select(u32, @as(simd.bx4, @bitCast(writeMask)), @as(simd.u32x4, @bitCast(out)), originalDest);
-                        @as(*align(@alignOf(u8)) simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
-                        // @ptrCast(*simd.u32x4, @alignOf(@alignCast(pixel)).* = maskedOut;
+                        // @as(*align(@alignOf(u8)) simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
+                        @as(*simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
                     }
+
+                    perf_analyzer.End(.LLVM_MCA, "ProcessPixel");
+
                     pixelPX += four_4x;
                     pixel += 4;
 
-                    clipMask = .{ 0x1, 0x1, 0x1, 0x1 };
+                    if ((xi + 8) < xMax) {
+                        clipMask = .{ 0x1, 0x1, 0x1, 0x1 };
+                    } else {
+                        clipMask = endClipMask;
+                    }
 
-                    perf_analyzer.End(.LLVM_MCA, "ProcessPixel");
                 }
                 row += @as(u32, @intCast(rowAdvance));
             }
@@ -853,7 +881,7 @@ pub const loaded_bitmap = extern struct {
     }
 };
 
-// NOTE (Manav): make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+// NOTE (Manav): make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
 pub const environment_map = extern struct {
     lod: [4]loaded_bitmap,
     pZ: f32,
@@ -1210,8 +1238,6 @@ pub const render_group = struct {
         const tileHeight = @divTrunc(outputTarget.height, tileCountY);
 
         tileWidth = @divTrunc(tileWidth + 3, 4) * 4;
-        // @breakpoint();
-
 
         var workCount = @as(u32, 0);
         var tileY = @as(i32, 0);
@@ -1222,10 +1248,14 @@ pub const render_group = struct {
                 workCount += 1;
 
                 var clipRect = hm.rect2i{};
-                clipRect.xMin = tileX * tileWidth + 4;
-                clipRect.xMax = clipRect.xMin + tileWidth - 4;
-                clipRect.yMin = tileY * tileHeight + 4;
-                clipRect.yMax = clipRect.yMin + tileHeight - 4;
+                clipRect.xMin = tileX * tileWidth;
+                clipRect.xMax = clipRect.xMin + tileWidth;
+                clipRect.yMin = tileY * tileHeight;
+                clipRect.yMax = clipRect.yMin + tileHeight;
+
+                if (clipRect.xMax > outputTarget.width) {
+                    clipRect.xMax = outputTarget.width;
+                }
 
                 work.renderGroup = self;
                 work.outputTarget = outputTarget;

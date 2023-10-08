@@ -1091,7 +1091,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         .playBackHandle = undefined,
     };
 
-    var threadInfo = [1]win32_thread_info{.{ .queue = undefined }} ** 7;
+    var threadInfo = [1]win32_thread_info{.{ .queue = undefined }} ** 4; // change to 4 
     const initialCount = 0;
     const threadCount = threadInfo.len;
 
