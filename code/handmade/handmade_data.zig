@@ -8,7 +8,8 @@ const hrg = @import("handmade_render_group.zig");
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
-pub const memory_arena = struct {
+// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+pub const memory_arena = extern struct {
     size: platform.memory_index,
     base_addr: platform.memory_index,
     used: platform.memory_index,
@@ -81,7 +82,8 @@ pub const pairwise_collision_rule = struct {
     nextInHash: ?*pairwise_collision_rule,
 };
 
-pub const ground_buffer = struct {
+// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+pub const ground_buffer = extern struct {
     p: hw.world_position,
     bitmap: hrg.loaded_bitmap,
 };
@@ -130,7 +132,8 @@ pub const state = struct {
     testNormal: hrg.loaded_bitmap,
 };
 
-pub const transient_state = struct {
+// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+pub const transient_state = extern struct {
     initialized: bool,
     tranArena: memory_arena,
     groundBufferCount: u32,

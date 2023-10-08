@@ -49,8 +49,8 @@ pub const perf_analyzer = struct {
 const NOT_IGNORE = @import("handmade_platform").NOT_IGNORE;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
-
-pub const loaded_bitmap = struct {
+// NOTE (Manav):, make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+pub const loaded_bitmap = extern struct {
     alignPercentage: hm.v2 = .{ 0, 0 },
     widthOverHeight: f32 = 0,
 
@@ -60,7 +60,7 @@ pub const loaded_bitmap = struct {
     memory: [*]u8 = undefined,
 
     // Draw routines -----------------------------------------------------------------------------------------------------------------------
-    // TODO: (Manav) should these really exist here?
+    // TODO (Manav): should these really exist here?
 
     pub fn DrawRectangle(buffer: *const loaded_bitmap, vMin: hm.v2, vMax: hm.v2, colour: hm.v4, clipRect: hm.rect2i, even: bool) void {
         const r = hm.R(colour);
@@ -853,7 +853,8 @@ pub const loaded_bitmap = struct {
     }
 };
 
-pub const environment_map = struct {
+// NOTE (Manav): make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+pub const environment_map = extern struct {
     lod: [4]loaded_bitmap,
     pZ: f32,
 };
@@ -1203,8 +1204,14 @@ pub const render_group = struct {
         const tileCountY = 4;
         var workArray: [tileCountX * tileCountY]tile_render_work = [1]tile_render_work{.{}} ** (tileCountX * tileCountY);
 
-        const tileWidth = @divTrunc(outputTarget.width, tileCountX);
+        assert((@intFromPtr(outputTarget.memory) & 15) == 0); // TODO (Manav): remove extern from structs and use alignment properly
+
+        var tileWidth = @divTrunc(outputTarget.width, tileCountX);
         const tileHeight = @divTrunc(outputTarget.height, tileCountY);
+
+        tileWidth = @divTrunc(tileWidth + 3, 4) * 4;
+        // @breakpoint();
+
 
         var workCount = @as(u32, 0);
         var tileY = @as(i32, 0);

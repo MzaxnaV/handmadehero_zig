@@ -17,7 +17,7 @@ const TILES_PER_CHUNK = 8;
 
 // tile data types ------------------------------------------------------------------------------------------------------------------------
 
-pub const world_position = struct {
+pub const world_position = extern struct {
     chunkX: i32 = 0,
     chunkY: i32 = 0,
     chunkZ: i32 = 0,
