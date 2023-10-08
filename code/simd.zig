@@ -19,7 +19,7 @@ pub const bx4 = @Vector(4, bool);
 /// simd intrinsics implemented using language features, use these when possible
 pub const z = struct {
     pub inline fn _mm_storeu_ps(ptr: [*]f32, vec: f32x4) void {
-        @as(*align(u8) f32x4, @alignCast(@ptrCast(ptr))).* = vec;
+        @as(*align(1) f32x4, @alignCast(@ptrCast(ptr))).* = vec;
     }
 
     pub inline fn _mm_store_ps(ptr: [*]f32, vec: f32x4) void {
@@ -31,7 +31,7 @@ pub const z = struct {
     }
 
     pub inline fn _mm_loadu_ps(ptr: [*]const f32) f32x4 {
-        return @as(*align(u8) const f32x4, @alignCast(@ptrCast(ptr))).*;
+        return @as(*align(1) const f32x4, @alignCast(@ptrCast(ptr))).*;
     }
 
     // TODO (Manav): doesn't generate a call to cvtps2dq, yet
@@ -88,39 +88,36 @@ pub const z = struct {
         return @shuffle(f32, a, b, i32x4{ 2, -3, 3, -4 });
     }
 
-    // TODO (Manav): untested
     pub inline fn _mm_mullo_epi16(a: i32x4, b: i32x4) i32x4 {
         const __a = @as(i16x8, @bitCast(a));
         const __b = @as(i16x8, @bitCast(b));
 
-        return @as(i32x4, @bitCast(u16x8{
-            @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[0]) * @as(i32, __b[0]))))),
-            @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[1]) * @as(i32, __b[1]))))),
-            @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[2]) * @as(i32, __b[2]))))),
-            @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[3]) * @as(i32, __b[3]))))),
-            @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[4]) * @as(i32, __b[4]))))),
-            @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[5]) * @as(i32, __b[5]))))),
-            @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[6]) * @as(i32, __b[6]))))),
-            @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[7]) * @as(i32, __b[7]))))),
-        }));
+        var result = u16x8{ 0, 0, 0, 0, 0, 0, 0, 0 };
+        comptime var index = 0;
+
+        inline while (index < 8) : (index += 1) {
+            result[index] = @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[index]) * @as(i32, __b[index])))));
+        }
+
+        return @as(i32x4, @bitCast(result));
     }
 
-    // TODO (Manav): generates incorrect code
-    // pub inline fn _mm_mulhi_epi16(a: i32x4, b: i32x4) i32x4 {
-    //     const __a = @as(i16x8, @bitCast(a));
-    //     const __b = @as(i16x8, @bitCast(b));
+    pub inline fn _mm_mulhi_epi16(a: i32x4, b: i32x4) i32x4 {
+        const __a = @as(i16x8, @bitCast(a));
+        const __b = @as(i16x8, @bitCast(b));
 
-    //     return @as(i32x4, @bitCast(u16x8{
-    //         @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[0]) * @as(i32, __b[0]) >> 16)))),
-    //         @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[1]) * @as(i32, __b[1]) >> 16)))),
-    //         @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[2]) * @as(i32, __b[2]) >> 16)))),
-    //         @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[3]) * @as(i32, __b[3]) >> 16)))),
-    //         @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[4]) * @as(i32, __b[4]) >> 16)))),
-    //         @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[5]) * @as(i32, __b[5]) >> 16)))),
-    //         @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[6]) * @as(i32, __b[6]) >> 16)))),
-    //         @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[7]) * @as(i32, __b[7]) >> 16)))),
-    //     }));
-    // }
+        var result = u16x8{ 0, 0, 0, 0, 0, 0, 0, 0 };
+        comptime var index = 0;
+
+        inline while (index < 8) : (index += 1) {
+            // NOTE: for some reason not storing these gives erros when function inlines
+            var __ai = @as(i32, __a[index]); 
+            var __bi = @as(i32, __b[index]);
+            result[index] = @as(u16, @truncate(@as(u32, @bitCast(__ai * __bi >> 16))));
+        }
+
+        return @as(i32x4, @bitCast(result));
+    }
 
     pub inline fn _mm_srli_epi32(v: i32x4, imm8: u5) i32x4 {
         return @as(i32x4, @bitCast((@as(u32x4, @bitCast(v)) >> @splat(imm8))));

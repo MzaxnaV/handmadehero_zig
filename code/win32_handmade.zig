@@ -1183,8 +1183,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
     Win32LoadXinput();
 
-    // Win32ResizeDIBSection(&globalBackBuffer, 960, 540);
-    Win32ResizeDIBSection(&globalBackBuffer, 1920, 1080);
+    Win32ResizeDIBSection(&globalBackBuffer, 960, 540);
+    // Win32ResizeDIBSection(&globalBackBuffer, 1920, 1080);
 
     debugGlobalShowCursor = HANDMADE_INTERNAL;
 
@@ -1656,12 +1656,13 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 const cyclesElapsed = endCycleCount - lastCycleCount;
                                 lastCycleCount = endCycleCount;
 
-                                const fps: f64 = 0;
                                 const mcpf = @as(f64, @floatFromInt(cyclesElapsed)) / (1000 * 1000);
+                                const fps: f64 = 1000 / msPerFrame;
                                 var fpsBuffer = [1:0]u16{0} ** 256;
-                                _ = win32.extra.wsprintfW(@as([*:0]u16, @ptrCast(&fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), msPerFrame, fps, mcpf);
-                                std.debug.print("{d:.2}, {d:.2}, {d:.2}\n", .{ msPerFrame, fps, mcpf });
-                                _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&fpsBuffer)));
+                                _ = fpsBuffer;
+                                // _ = win32.extra.wsprintfW(@as([*:0]u16, @ptrCast(&fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), &msPerFrame, &fps, &mcpf);
+                                std.debug.print("{d:.2}ms/f, {d:.2}f/s, {d:.2}mc/f\n", .{ msPerFrame, fps, mcpf });
+                                // _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&fpsBuffer)));
                             }
 
                             if (HANDMADE_INTERNAL) {
