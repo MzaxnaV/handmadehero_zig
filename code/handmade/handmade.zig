@@ -344,7 +344,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
 
     groundBuffer.p = chunkP.*;
 
-    if (!NOT_IGNORE) {
+    if (NOT_IGNORE) {
         const width = game.X(gameState.world.chunkDimInMeters);
         const height = game.Y(gameState.world.chunkDimInMeters);
         const haldDim = game.Scale(game.v2{ 0.5 * width, 0.5 * height }, 2);
