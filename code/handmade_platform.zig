@@ -16,11 +16,6 @@ pub const MAXINT32 = @import("std").math.maxInt(i32);
 
 // ----------------------------------------------------------------------------------------------------------------------------------------
 
-
-pub inline fn Assert(expression: bool) void {
-    if (HANDMADE_SLOW and !expression) unreachable;
-}
-
 pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     pub const debug_read_file_result = struct {
         contentSize: u32 = 0,
@@ -204,7 +199,12 @@ pub inline fn TeraBytes(comptime value: comptime_int) comptime_int {
 }
 
 pub inline fn Align(addr: usize, alignment: usize) usize {
-    return addr & ~(alignment - 1);
+    // return std.mem.alignForward(usize, addr, alignment);
+    return addr + (alignment - 1)  & ~(alignment - 1);
+}
+
+pub inline fn Assert(expression: bool) void {
+    if (HANDMADE_SLOW and !expression) unreachable;
 }
 
 pub const BEGIN_TIMED_BLOCK = handmade_internal.BeginTimedBlock; // TODO (Manav): make it portable
