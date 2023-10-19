@@ -949,6 +949,8 @@ pub const render_transform = struct {
 
     offsetP: hm.v3,
     scale: f32,
+
+    orthographic: bool,
 };
 
 const entity_basis_p_result = struct {
@@ -961,22 +963,30 @@ fn GetRenderEntityBasisP(transform: *const render_transform, originalP: hm.v3) e
     var result: entity_basis_p_result = .{};
 
     const p: hm.v3 = hm.Add(originalP, transform.offsetP);
-    var distanceAboveTarget = transform.distanceAboveTarget;
 
-    if (!NOT_IGNORE) { // DEBUG CAMERA
-        distanceAboveTarget += 50;
-    }
-
-    const distanceToPZ = distanceAboveTarget - hm.Z(p);
-    const nearClipPlane = 0.2;
-
-    const rawXY: hm.v3 = hm.ToV3(hm.XY(p), 1);
-
-    if (distanceToPZ > nearClipPlane) {
-        const projectedXY: hm.v3 = hm.Scale(rawXY, transform.focalLength / distanceToPZ);
-        result.p = hm.Add(transform.screenCenter, hm.Scale(hm.XY(projectedXY), transform.metersToPixels));
-        result.scale = transform.metersToPixels * hm.Z(projectedXY);
+    if (transform.orthographic) {
+        result.p = hm.Add(transform.screenCenter, hm.Scale(hm.XY(p), transform.metersToPixels));
+        result.scale = transform.metersToPixels;
         result.valid = true;
+    } else {
+        const offsetZ = 0;
+        var distanceAboveTarget = transform.distanceAboveTarget;
+
+        if (!NOT_IGNORE) { // DEBUG CAMERA
+            distanceAboveTarget += 50;
+        }
+
+        const distanceToPZ = distanceAboveTarget - hm.Z(p);
+        const nearClipPlane = 0.2;
+
+        const rawXY: hm.v3 = hm.ToV3(hm.XY(p), 1);
+
+        if (distanceToPZ > nearClipPlane) {
+            const projectedXY: hm.v3 = hm.Scale(rawXY, transform.focalLength / distanceToPZ);
+            result.scale = transform.metersToPixels * hm.Z(projectedXY);
+            result.p = hm.Add(hm.Add(transform.screenCenter, hm.Scale(hm.XY(projectedXY), transform.metersToPixels)), .{ 0, result.scale * offsetZ });
+            result.valid = true;
+        }
     }
 
     return result;
@@ -995,7 +1005,7 @@ pub const render_group = struct {
     pushBufferBase: [*]u8,
 
     /// Create render group using the memory `arena`, initialize it and return a pointer to it.
-    pub fn Allocate(arena: *hd.memory_arena, maxPushBufferSize: u32, resolutionPixelsX: u32, resolutionPixelsY: u32) *Self {
+    pub fn Allocate(arena: *hd.memory_arena, maxPushBufferSize: u32) *Self {
         var result: *render_group = arena.PushStruct(render_group);
         result.pushBufferBase = arena.PushSize(@alignOf(u8), maxPushBufferSize);
 
@@ -1004,28 +1014,47 @@ pub const render_group = struct {
 
         result.globalAlpha = 1.0;
 
-        const widthOfMonitorInMeters = 0.635;
-        const metersToPixels = @as(f32, @floatFromInt(resolutionPixelsX)) * widthOfMonitorInMeters;
-        const pixelsToMeters = hm.SafeRatiof1(1, metersToPixels);
-        
-        result.monitorHalfDimInMeters = .{
-            0.5 * @as(f32, @floatFromInt(resolutionPixelsX)) * pixelsToMeters,
-            0.5 * @as(f32, @floatFromInt(resolutionPixelsY)) * pixelsToMeters,
-        };
-
-        result.transform = .{
-            .metersToPixels = metersToPixels,
-            .focalLength = 0.6,
-            .distanceAboveTarget = 9.0, // 50.0
-            .screenCenter = .{
-                0.5 * @as(f32, @floatFromInt(resolutionPixelsX)),
-                0.5 * @as(f32, @floatFromInt(resolutionPixelsY)),
-            },
-            .offsetP = hm.v3{ 0, 0, 0 },
-            .scale = 1,
-        };
+        result.transform.offsetP = hm.v3{ 0, 0, 0 };
+        result.transform.scale = 1;
 
         return result;
+    }
+
+    pub fn Perspective(self: *Self, pixelWidth: u32, pixelHeight: u32, metersToPixels: f32, focalLength: f32, distanceAboveTarget: f32) void {
+        const pixelsToMeters = hm.SafeRatiof1(1, metersToPixels);
+
+        self.monitorHalfDimInMeters = .{
+            0.5 * @as(f32, @floatFromInt(pixelWidth)) * pixelsToMeters,
+            0.5 * @as(f32, @floatFromInt(pixelHeight)) * pixelsToMeters,
+        };
+
+        self.transform.metersToPixels = metersToPixels;
+        self.transform.focalLength = focalLength;
+        self.transform.distanceAboveTarget = distanceAboveTarget; // 50.0
+        self.transform.screenCenter = .{
+            0.5 * @as(f32, @floatFromInt(pixelWidth)),
+            0.5 * @as(f32, @floatFromInt(pixelHeight)),
+        };
+        self.transform.orthographic = false;
+    }
+
+    pub fn Orthographic(self: *Self, pixelWidth: u32, pixelHeight: u32, metersToPixels: f32) void {
+        const pixelsToMeters = hm.SafeRatiof1(1, metersToPixels);
+
+        self.monitorHalfDimInMeters = .{
+            0.5 * @as(f32, @floatFromInt(pixelWidth)) * pixelsToMeters,
+            0.5 * @as(f32, @floatFromInt(pixelHeight)) * pixelsToMeters,
+        };
+
+        self.transform.metersToPixels = metersToPixels;
+        self.transform.focalLength = 1;
+        self.transform.distanceAboveTarget = 1;
+        self.transform.screenCenter = .{
+            0.5 * @as(f32, @floatFromInt(pixelWidth)),
+            0.5 * @as(f32, @floatFromInt(pixelHeight)),
+        };
+
+        self.transform.orthographic = true;
     }
 
     fn PushRenderElements(self: *Self, comptime t: render_group_entry_type) ?*align(@alignOf(u8)) t.Type() {
@@ -1052,7 +1081,7 @@ pub const render_group = struct {
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
     /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
-    pub inline fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: hm.v3, colour: hm.v4) void {
+    pub fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: hm.v3, colour: hm.v4) void {
         const size = hm.V2(height * bitmap.widthOverHeight, height);
         const alignment: hm.v2 = hm.Hammard(bitmap.alignPercentage, size);
         const p = hm.Sub(offset, hm.ToV3(alignment, 0));
@@ -1164,6 +1193,9 @@ pub const render_group = struct {
                 .Bitmap => {
                     const entry = @as(*align(@alignOf(u8)) render_entry_bitmap, @ptrCast(data));
 
+                    const xAxis = hm.v2{ 1, 0 };
+                    const yAxis = hm.v2{ 0, 1 };
+
                     if (!NOT_IGNORE) {
                         // outputTarget.DrawBitmap(entry.bitmap, hm.X(basis.p), hm.Y(basis.p), hm.A(entry.colour));
                         outputTarget.DrawRectangleSlowly(
@@ -1181,8 +1213,8 @@ pub const render_group = struct {
                     } else {
                         outputTarget.DrawRectangleQuickly(
                             entry.p,
-                            hm.V2(hm.X(entry.size), 0),
-                            hm.V2(0, hm.Y(entry.size)),
+                            hm.Scale(xAxis, hm.X(entry.size)),
+                            hm.Scale(yAxis, hm.Y(entry.size)),
                             entry.colour,
                             entry.bitmap,
                             nullPixelsToMeters,
