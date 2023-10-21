@@ -1008,7 +1008,7 @@ pub const render_group = struct {
     /// Create render group using the memory `arena`, initialize it and return a pointer to it.
     pub fn Allocate(arena: *hd.memory_arena, maxPushBufferSize: u32) *Self {
         var result: *render_group = arena.PushStruct(render_group);
-        result.pushBufferBase = arena.PushSize(@alignOf(u8), maxPushBufferSize);
+        result.pushBufferBase = arena.PushSizeAlign(@alignOf(u8), maxPushBufferSize);
 
         result.maxPushBufferSize = maxPushBufferSize;
         result.pushBufferSize = 0;

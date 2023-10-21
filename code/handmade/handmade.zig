@@ -445,7 +445,7 @@ fn MakeEmptyBitmap(arena: *game.memory_arena, width: i32, height: i32, clearToZe
     result.height = height;
     result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
     const totalBitmapSize = @as(usize, @intCast(result.width * result.height * platform.BITMAP_BYTES_PER_PIXEL));
-    result.memory = arena.PushSize(@alignOf(u8), totalBitmapSize);
+    result.memory = arena.PushSizeAlign(16, totalBitmapSize);
     if (clearToZero) {
         ClearBitmap(&result);
     }

@@ -20,27 +20,31 @@ pub const memory_arena = extern struct {
         self.tempCount = 0;
     }
 
-    pub inline fn PushSize(self: *memory_arena, comptime alignment: u5, size: platform.memory_index) [*]align(alignment) u8 {
+    pub inline fn PushSize(self: *memory_arena, size: platform.memory_index) [*]align(@alignOf(u32)) u8 {
+        return self.PushSizeAlign(@alignOf(u32), size);
+    }
+
+    pub inline fn PushSizeAlign(self: *memory_arena, comptime alignment: u5, size: platform.memory_index) [*]align(alignment) u8 {
         const adjusted_addr = platform.Align(self.base_addr + self.used, alignment);
         const padding = adjusted_addr - (self.base_addr + self.used);
 
         platform.Assert((self.used + size + padding) <= self.size);
-        const result: [*]align(alignment) u8 = @ptrFromInt(adjusted_addr);
         self.used += size + padding;
 
+        const result: [*]align(alignment) u8 = @ptrFromInt(adjusted_addr);
         return result;
     }
 
     pub inline fn PushStruct(self: *memory_arena, comptime T: type) *T {
-        return @as(*T, @ptrCast(self.PushSize(@alignOf(T), @sizeOf(T))));
+        return @as(*T, @ptrCast(self.PushSizeAlign(@alignOf(T), @sizeOf(T))));
     }
 
     pub inline fn PushSlice(self: *memory_arena, comptime T: type, comptime count: platform.memory_index) *[count]T {
-        return @as(*[count]T, @ptrCast(self.PushSize(@alignOf(T), count * @sizeOf(*[]T))));
+        return @as(*[count]T, @ptrCast(self.PushSizeAlign(@alignOf(T), count * @sizeOf(*[]T))));
     }
 
     pub inline fn PushArray(self: *memory_arena, comptime T: type, count: platform.memory_index) [*]T {
-        return @as([*]T, @ptrCast(self.PushSize(@alignOf(T), count * @sizeOf(T))));
+        return @as([*]T, @ptrCast(self.PushSizeAlign(@alignOf(T), count * @sizeOf(T))));
     }
 
     pub inline fn CheckArena(self: *memory_arena) void {
