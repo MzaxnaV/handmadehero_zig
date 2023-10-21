@@ -139,6 +139,7 @@ pub const transient_state = extern struct {
 
     highPriorityQueue: *platform.work_queue,
     lowPriorityQueue: *platform.work_queue,
+    pad: u64,
 
     envMapWidth: u32,
     envMapHeight: u32,
