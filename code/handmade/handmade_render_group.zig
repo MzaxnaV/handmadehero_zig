@@ -396,19 +396,20 @@ pub const loaded_bitmap = extern struct {
             const nYAxis = hm.Scale(yAxis, invYAxisLengthSq);
 
             const inv255 = 1.0 / 255.0;
-            const inv255_4x = @as(simd.f32x4, @splat(inv255));
+            const inv255_4x: simd.f32x4 = @splat(inv255);
             // const one255 = 255;
             // const one255_4x = @splat(4, @as(f32, one255));
 
             // const normalizedC = 1.0 / 255.0;
             // const normalizedSqC = 1.0 / hm.Square(255.0);
 
-            const one = @as(simd.f32x4, @splat(1));
-            const four_4x = @as(simd.f32x4, @splat(4));
-            const zero = @as(simd.f32x4, @splat(0));
-            const maskff = @as(simd.i32x4, @splat(0xff));
-            const maskffff = @as(simd.i32x4, @splat(0xffff));
-            const maskff00ff = @as(simd.i32x4, @splat(0xff00ff));
+            const one: simd.f32x4 = @splat(1);
+            const half: simd.f32x4 = @splat(0.5);
+            const four_4x: simd.f32x4 = @splat(4);
+            const zero: simd.f32x4 = @splat(0);
+            const maskff: simd.i32x4 = @splat(0xff);
+            const maskffff: simd.i32x4 = @splat(0xffff);
+            const maskff00ff: simd.i32x4 = @splat(0xff00ff);
 
             const colourr_4x: simd.f32x4 = @splat(hm.R(colour));
             const colourg_4x: simd.f32x4 = @splat(hm.G(colour));
@@ -427,8 +428,8 @@ pub const loaded_bitmap = extern struct {
 
             const texturePitch_4x: simd.i32x4 = @splat(texture.pitch);
 
-            const widthm2: simd.f32x4 = @splat(@as(f32, @floatFromInt(texture.width - 2)));
-            const heightm2: simd.f32x4 = @splat(@as(f32, @floatFromInt(texture.height - 2)));
+            const widthM2: simd.f32x4 = @splat(@as(f32, @floatFromInt(texture.width - 2)));
+            const heightM2: simd.f32x4 = @splat(@as(f32, @floatFromInt(texture.height - 2)));
 
             var row = @as([*]u8, @ptrCast(buffer.memory)) + @as(u32, @intCast(fillRect.xMin)) * platform.BITMAP_BYTES_PER_PIXEL + @as(u32, @intCast(fillRect.yMin * buffer.pitch));
 
@@ -481,8 +482,8 @@ pub const loaded_bitmap = extern struct {
                         u = @min(@max(u, zero), one);
                         v = @min(@max(v, zero), one);
 
-                        const tX: simd.f32x4 = u * widthm2;
-                        const tY: simd.f32x4 = v * heightm2;
+                        const tX: simd.f32x4 = (u * widthM2) + half;
+                        const tY: simd.f32x4 = (v * heightM2) + half;
 
                         var fetchX_4x: simd.i32x4 = simd.z._mm_cvttps_epi32(tX);
                         var fetchY_4x: simd.i32x4 = simd.z._mm_cvttps_epi32(tY);
@@ -972,7 +973,7 @@ fn GetRenderEntityBasisP(transform: *const render_transform, originalP: hm.v3) e
         const offsetZ = 0;
         var distanceAboveTarget = transform.distanceAboveTarget;
 
-        if (!NOT_IGNORE) { // DEBUG CAMERA
+        if (NOT_IGNORE) { // DEBUG CAMERA
             distanceAboveTarget += 50;
         }
 
@@ -1081,7 +1082,7 @@ pub const render_group = struct {
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
     /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
-    pub fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: hm.v3, colour: hm.v4) void {
+    pub inline fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: hm.v3, colour: hm.v4) void {
         const size = hm.V2(height * bitmap.widthOverHeight, height);
         const alignment: hm.v2 = hm.Hammard(bitmap.alignPercentage, size);
         const p = hm.Sub(offset, hm.ToV3(alignment, 0));

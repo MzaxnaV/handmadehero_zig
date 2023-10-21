@@ -6,7 +6,7 @@ const hrg = @import("handmade_render_group.zig");
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
-// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
 pub const memory_arena = extern struct {
     size: platform.memory_index,
     base_addr: platform.memory_index,
@@ -25,7 +25,7 @@ pub const memory_arena = extern struct {
         const padding = adjusted_addr - (self.base_addr + self.used);
 
         platform.Assert((self.used + size + padding) <= self.size);
-        const result = @as([*]align(alignment) u8, @ptrFromInt(adjusted_addr));
+        const result: [*]align(alignment) u8 = @ptrFromInt(adjusted_addr);
         self.used += size + padding;
 
         return result;
@@ -80,7 +80,7 @@ pub const pairwise_collision_rule = struct {
     nextInHash: ?*pairwise_collision_rule,
 };
 
-// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
 pub const ground_buffer = extern struct {
     p: hw.world_position,
     bitmap: hrg.loaded_bitmap,
@@ -130,14 +130,16 @@ pub const state = struct {
     testNormal: hrg.loaded_bitmap,
 };
 
-// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned 
+// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
 pub const transient_state = extern struct {
     initialized: bool,
     tranArena: memory_arena,
     groundBufferCount: u32,
     groundBuffers: [*]ground_buffer,
 
-    renderQueue: *platform.work_queue,
+    highPriorityQueue: *platform.work_queue,
+    lowPriorityQueue: *platform.work_queue,
+    pad: u64,
 
     envMapWidth: u32,
     envMapHeight: u32,
