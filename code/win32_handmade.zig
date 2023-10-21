@@ -1006,7 +1006,7 @@ const win32_work_queue = struct {
 
     entries: [256]win32_work_queue_entry = [1]win32_work_queue_entry{.{}} ** 256,
 
-    pub fn MakeQueue(queue: *win32_work_queue, comptime threadCount: comptime_int) void {
+    fn MakeQueue(queue: *win32_work_queue, comptime threadCount: comptime_int) void {
         const initialCount = 0;
 
         queue.semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.extra.SEMAPHORE_ALL_ACCESS);
@@ -1028,11 +1028,11 @@ const win32_work_queue = struct {
         }
     }
 
-    pub fn from(queue: *platform.work_queue) *Self {
+    fn from(queue: *platform.work_queue) *Self {
         return @alignCast(@ptrCast(queue));
     }
 
-    pub fn to(self: *Self) *platform.work_queue {
+    fn to(self: *Self) *platform.work_queue {
         return @ptrCast(self);
     }
 };
