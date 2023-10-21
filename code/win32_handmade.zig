@@ -1002,16 +1002,38 @@ const win32_work_queue = struct {
 
     nextEntryToWrite: Atomic(u32) = Atomic(u32).init(0),
     nextEntryToRead: Atomic(u32) = Atomic(u32).init(0),
-    semaphoreHandle: ?win32.HANDLE,
+    semaphoreHandle: ?win32.HANDLE = null,
 
     entries: [256]win32_work_queue_entry = [1]win32_work_queue_entry{.{}} ** 256,
 
-    fn from(queue: *platform.work_queue) *Self {
-        return @as(*Self, @alignCast(@ptrCast(queue)));
+    pub fn MakeQueue(queue: *win32_work_queue, comptime threadCount: comptime_int) void {
+        const initialCount = 0;
+
+        queue.semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.extra.SEMAPHORE_ALL_ACCESS);
+
+        var threadIndex = @as(u32, 0);
+        while (threadIndex < threadCount) : (threadIndex += 1) {
+            var threadID: DWORD = 0;
+            var threadHandle = win32.CreateThread(
+                null,
+                0,
+                ThreadProc,
+                @ptrCast(queue),
+                .THREAD_CREATE_RUN_IMMEDIATELY,
+                &threadID,
+            );
+
+            // std.debug.print("Created thread {} with id: {}\n", .{ info.logicalThreadIndex, threadID });
+            _ = win32.CloseHandle(threadHandle);
+        }
     }
 
-    fn to(self: *Self) *platform.work_queue {
-        return @as(*platform.work_queue, @ptrCast(self));
+    pub fn from(queue: *platform.work_queue) *Self {
+        return @alignCast(@ptrCast(queue));
+    }
+
+    pub fn to(self: *Self) *platform.work_queue {
+        return @ptrCast(self);
     }
 };
 
@@ -1060,17 +1082,12 @@ fn Win32CompleteAllWork(q: *platform.work_queue) void {
     queue.completionCount.store(0, .SeqCst);
 }
 
-const win32_thread_info = struct {
-    logicalThreadIndex: u32 = 0,
-    queue: *win32_work_queue,
-};
-
 fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
-    const threadInfo = @as(*win32_thread_info, @alignCast(@ptrCast(lpParameter.?)));
+    const queue: *win32_work_queue = @alignCast(@ptrCast(lpParameter.?));
 
     while (true) {
-        if (Win32DoNextWorkQueueEntry(threadInfo.queue)) {
-            _ = win32.WaitForSingleObjectEx(threadInfo.queue.semaphoreHandle, win32.extra.INFINITE, win32.FALSE);
+        if (Win32DoNextWorkQueueEntry(queue)) {
+            _ = win32.WaitForSingleObjectEx(queue.semaphoreHandle, win32.extra.INFINITE, win32.FALSE);
         }
     }
 
@@ -1092,77 +1109,59 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         .playBackHandle = undefined,
     };
 
-    var threadInfo = [1]win32_thread_info{.{ .queue = undefined }} ** 4; // change to 4 
-    const initialCount = 0;
-    const threadCount = threadInfo.len;
+    var highQueue = win32_work_queue{};
+    var lowQueue = win32_work_queue{};
 
-    var queue = win32_work_queue{ .semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.extra.SEMAPHORE_ALL_ACCESS) };
+    highQueue.MakeQueue(4);
+    lowQueue.MakeQueue(2);
 
-    var threadIndex = @as(u32, 0);
-    while (threadIndex < threadCount) : (threadIndex += 1) {
-        var info: *win32_thread_info = &threadInfo[threadIndex];
-        info.queue = &queue;
-        info.logicalThreadIndex = threadIndex;
+    if (!NOT_IGNORE) {
+        var a0 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '0' };
+        var a1 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '1' };
+        var a2 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '2' };
+        var a3 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '3' };
+        var a4 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '4' };
+        var a5 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '5' };
+        var a6 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '6' };
+        var a7 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '7' };
+        var a8 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '8' };
+        var a9 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '9' };
 
-        var threadID: DWORD = 0;
-        var threadHandle = win32.CreateThread(
-            null,
-            0,
-            ThreadProc,
-            @as(*anyopaque, @ptrCast(info)),
-            .THREAD_CREATE_RUN_IMMEDIATELY,
-            &threadID,
-        );
+        var b0 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '0' };
+        var b1 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '1' };
+        var b2 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '2' };
+        var b3 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '3' };
+        var b4 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '4' };
+        var b5 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '5' };
+        var b6 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '6' };
+        var b7 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '7' };
+        var b8 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '8' };
+        var b9 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '9' };
 
-        // std.debug.print("Created thread {} with id: {}\n", .{ info.logicalThreadIndex, threadID });
-        _ = win32.CloseHandle(threadHandle);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &a0);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &a1);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &a2);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &a3);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &a4);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &a5);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &a6);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &a7);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &a8);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &a9);
+
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &b0);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &b1);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &b2);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &b3);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &b4);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &b5);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &b6);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &b7);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &b8);
+        Win32AddEntry(highQueue.to(), DoWorkerWork, &b9);
+
+        Win32CompleteAllWork(highQueue.to());
     }
-
-    var a0 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '0' };
-    var a1 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '1' };
-    var a2 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '2' };
-    var a3 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '3' };
-    var a4 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '4' };
-    var a5 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '5' };
-    var a6 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '6' };
-    var a7 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '7' };
-    var a8 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '8' };
-    var a9 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '9' };
-
-    var b0 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '0' };
-    var b1 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '1' };
-    var b2 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '2' };
-    var b3 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '3' };
-    var b4 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '4' };
-    var b5 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '5' };
-    var b6 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '6' };
-    var b7 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '7' };
-    var b8 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '8' };
-    var b9 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '9' };
-
-    Win32AddEntry(queue.to(), DoWorkerWork, &a0);
-    Win32AddEntry(queue.to(), DoWorkerWork, &a1);
-    Win32AddEntry(queue.to(), DoWorkerWork, &a2);
-    Win32AddEntry(queue.to(), DoWorkerWork, &a3);
-    Win32AddEntry(queue.to(), DoWorkerWork, &a4);
-    Win32AddEntry(queue.to(), DoWorkerWork, &a5);
-    Win32AddEntry(queue.to(), DoWorkerWork, &a6);
-    Win32AddEntry(queue.to(), DoWorkerWork, &a7);
-    Win32AddEntry(queue.to(), DoWorkerWork, &a8);
-    Win32AddEntry(queue.to(), DoWorkerWork, &a9);
-
-    Win32AddEntry(queue.to(), DoWorkerWork, &b0);
-    Win32AddEntry(queue.to(), DoWorkerWork, &b1);
-    Win32AddEntry(queue.to(), DoWorkerWork, &b2);
-    Win32AddEntry(queue.to(), DoWorkerWork, &b3);
-    Win32AddEntry(queue.to(), DoWorkerWork, &b4);
-    Win32AddEntry(queue.to(), DoWorkerWork, &b5);
-    Win32AddEntry(queue.to(), DoWorkerWork, &b6);
-    Win32AddEntry(queue.to(), DoWorkerWork, &b7);
-    Win32AddEntry(queue.to(), DoWorkerWork, &b8);
-    Win32AddEntry(queue.to(), DoWorkerWork, &b9);
-
-    Win32CompleteAllWork(queue.to());
 
     var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;
     _ = win32.QueryPerformanceFrequency(&perfCountFrequencyResult);
@@ -1187,7 +1186,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     // Win32ResizeDIBSection(&globalBackBuffer, 960, 540);
     Win32ResizeDIBSection(&globalBackBuffer, 1920, 1080);
     // NOTE (Manav): Unaligned load on pixel in DrawRectangleQuickly allows us to use 1279 x 719
-
 
     debugGlobalShowCursor = HANDMADE_INTERNAL;
 
@@ -1271,7 +1269,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     .transientStorageSize = platform.GigaBytes(1),
                     .permanentStorage = undefined,
                     .transientStorage = undefined,
-                    .highPriorityQueue = queue.to(),
+                    .highPriorityQueue = highQueue.to(),
+                    .lowPriorityQueue = lowQueue.to(),
                     .PlatformAddEntry = Win32AddEntry,
                     .PlatformCompleteAllWork = Win32CompleteAllWork,
                     .DEBUGPlatformFreeFileMemory = DEBUGWin32FreeFileMemory,

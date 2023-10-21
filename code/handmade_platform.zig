@@ -171,6 +171,7 @@ pub const memory = struct {
     transientStorage: [*]u8,
 
     highPriorityQueue: *work_queue,
+    lowPriorityQueue: *work_queue,
 
     PlatformAddEntry: add_entry,
     PlatformCompleteAllWork: complete_all_work,

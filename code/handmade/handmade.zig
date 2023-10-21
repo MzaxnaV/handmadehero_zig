@@ -330,7 +330,24 @@ fn MakeNullCollision(gameState: *game.state) *game.sim_entity_collision_volume_g
     return group;
 }
 
-fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, groundBuffer: *game.ground_buffer, chunkP: *const game.world_position) void {
+// pub fn DoTiledRenderWork(_: *platform.work_queue, data: *anyopaque) void {
+//     comptime {
+//         if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(DoTiledRenderWork)) {
+//             @compileError("Function signature mismatch!");
+//         }
+//     }
+//     const work: *tile_render_work = @as(*tile_render_work, @alignCast(@ptrCast(data)));
+
+//     work.renderGroup.RenderGroupToOutput(work.outputTarget, work.clipRect, false);
+//     work.renderGroup.RenderGroupToOutput(work.outputTarget, work.clipRect, true);
+// }
+
+fn FillGroundChunk(
+    tranState: *game.transient_state,
+    gameState: *game.state,
+    groundBuffer: *game.ground_buffer,
+    chunkP: *const game.world_position,
+) void {
     const groundMemory = game.BeginTemporaryMemory(&tranState.tranArena);
     defer game.EndTemporaryMemory(groundMemory);
 
@@ -344,7 +361,11 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
     const haldDim = game.Scale(.{ 0.5 * width, 0.5 * height }, 1);
 
     const renderGroup = game.render_group.Allocate(&tranState.tranArena, platform.MegaBytes(4));
-    renderGroup.Orthographic(@intCast(buffer.width), @intCast(buffer.height), @as(f32, @floatFromInt(buffer.width)) / width);
+    renderGroup.Orthographic(
+        @intCast(buffer.width),
+        @intCast(buffer.height),
+        @as(f32, @floatFromInt(buffer.width - 2)) / width,
+    );
     renderGroup.Clear(.{ 1, 0, 1, 1 });
 
     groundBuffer.p = chunkP.*;
@@ -360,9 +381,13 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
 
                 var series = game.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
 
-                var colour = game.v4{ 1, 0, 0, 1 };
-                if (@mod(chunkX, 2) == @mod(chunkY, 2)) {
-                    colour = game.v4{ 0, 0, 1, 1 };
+                var colour = game.v4{ 1, 1, 1, 1 };
+
+                if (!NOT_IGNORE) {
+                    colour = game.v4{ 1, 0, 0, 1};
+                    if (@mod(chunkX, 2) == @mod(chunkY, 2)) {
+                        colour = game.v4{ 0, 0, 1, 1 };
+                    }
                 }
 
                 const center = game.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
@@ -405,7 +430,7 @@ fn FillGroundChunk(tranState: *game.transient_state, gameState: *game.state, gro
         }
     }
 
-    renderGroup.TiledRenderGroupToOutput(tranState.renderQueue, buffer);
+    renderGroup.TiledRenderGroupToOutput(tranState.highPriorityQueue, buffer);
 }
 
 fn ClearBitmap(bitmap: *game.loaded_bitmap) void {
@@ -832,7 +857,9 @@ pub export fn UpdateAndRender(
             gameMemory.transientStorage + @sizeOf(game.transient_state),
         );
 
-        tranState.renderQueue = gameMemory.highPriorityQueue;
+        tranState.highPriorityQueue = gameMemory.highPriorityQueue;
+        tranState.lowPriorityQueue = gameMemory.lowPriorityQueue;
+
 
         tranState.groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushArray(game.ground_buffer, tranState.groundBufferCount);
@@ -945,7 +972,10 @@ pub export fn UpdateAndRender(
     const widthOfMonitorInMeters = 0.635;
     const metersToPixels = @as(f32, @floatFromInt(drawBuffer.width)) * widthOfMonitorInMeters;
 
-    renderGroup.Perspective(@intCast(drawBuffer.width), @intCast(drawBuffer.height), metersToPixels, 0.6, 9.0);
+    const focalLength = 0.6;
+    const distanceAboveTarget = 9.0;
+
+    renderGroup.Perspective(@intCast(drawBuffer.width), @intCast(drawBuffer.height), metersToPixels, focalLength, distanceAboveTarget);
 
     renderGroup.Clear(game.v4{ 0.25, 0.25, 0.25, 0 });
 
@@ -969,7 +999,7 @@ pub export fn UpdateAndRender(
 
                 if ((game.Z(delta) >= -1.0) and (game.Z(delta) < 1.0)) {
                     const groundSideInMeters = game.X(world.chunkDimInMeters);
-                    renderGroup.PushBitmap(bitmap, groundSideInMeters, delta, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(bitmap, 1.0 * groundSideInMeters, delta, .{ 1, 1, 1, 1 });
                     if (!NOT_IGNORE) {
                         renderGroup.PushRectOutline(delta, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
                     }
@@ -1321,7 +1351,7 @@ pub export fn UpdateAndRender(
         // game.Saturation(renderGroup, 0.5 + 0.5 * game.Sin(10 * gameState.time));
     }
 
-    renderGroup.TiledRenderGroupToOutput(tranState.renderQueue, drawBuffer);
+    renderGroup.TiledRenderGroupToOutput(tranState.highPriorityQueue, drawBuffer);
 
     game.EndSim(simRegion, gameState); // TODO (Manav): use defer
     game.EndTemporaryMemory(simMemory);
