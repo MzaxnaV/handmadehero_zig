@@ -172,8 +172,6 @@ pub const game_state = struct {
 
     testDiffuse: hrg.loaded_bitmap,
     testNormal: hrg.loaded_bitmap,
-
-    assets: game_assets,
 };
 
 pub const task_with_memory = struct {
@@ -197,6 +195,8 @@ pub const transient_state = struct {
     envMapWidth: u32,
     envMapHeight: u32,
     envMaps: [3]hrg.environment_map,
+
+    assets: game_assets,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------

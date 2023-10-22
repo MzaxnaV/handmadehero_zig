@@ -994,6 +994,7 @@ fn GetRenderEntityBasisP(transform: *const render_transform, originalP: hm.v3) e
 pub const render_group = struct {
     const Self = @This();
 
+    assets: *hd.game_assets,
     globalAlpha: f32,
 
     monitorHalfDimInMeters: hm.v2,
@@ -1004,7 +1005,7 @@ pub const render_group = struct {
     pushBufferBase: [*]u8,
 
     /// Create render group using the memory `arena`, initialize it and return a pointer to it.
-    pub fn Allocate(arena: *hd.memory_arena, maxPushBufferSize: u32) *Self {
+    pub fn Allocate(assets: *hd.game_assets, arena: *hd.memory_arena, maxPushBufferSize: u32) *Self {
         var pushBufferSize = maxPushBufferSize;
 
         var result: *render_group = arena.PushStruct(render_group);
@@ -1017,6 +1018,7 @@ pub const render_group = struct {
         result.maxPushBufferSize = pushBufferSize;
         result.pushBufferSize = 0;
 
+        result.assets = assets;
         result.globalAlpha = 1.0;
 
         result.transform.offsetP = hm.v3{ 0, 0, 0 };
@@ -1084,6 +1086,11 @@ pub const render_group = struct {
     }
 
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
+
+    pub inline fn PushBitmap2(self: *Self, ID: hd.game_asset_id, height: f32, offset: hm.v3, colour: hm.v4) void {
+        const bitmap: *loaded_bitmap = self.assets.GetBitmap(ID);
+        self.PushBitmap(bitmap, height, offset, colour);
+    }
 
     /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
     pub inline fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: hm.v3, colour: hm.v4) void {

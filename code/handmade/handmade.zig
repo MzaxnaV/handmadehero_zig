@@ -391,7 +391,7 @@ fn FillGroundChunk(
         assert(width == height);
         const haldDim = h.Scale(.{ 0.5 * width, 0.5 * height }, 1);
 
-        const renderGroup = h.render_group.Allocate(&task.arena, 0);
+        const renderGroup = h.render_group.Allocate(&tranState.assets, &task.arena, 0);
         renderGroup.Orthographic(
             @intCast(buffer.width),
             @intCast(buffer.height),
@@ -426,9 +426,9 @@ fn FillGroundChunk(
                     var grassIndex = @as(u32, 0);
                     while (grassIndex < 50) : (grassIndex += 1) {
                         const stamp = if (series.RandomChoice(2) == 1)
-                            &gameState.assets.grass[series.RandomChoice(gameState.assets.grass.len)]
+                            &tranState.assets.grass[series.RandomChoice(tranState.assets.grass.len)]
                         else
-                            &gameState.assets.stones[series.RandomChoice(gameState.assets.stones.len)];
+                            &tranState.assets.stones[series.RandomChoice(tranState.assets.stones.len)];
 
                         const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
                         renderGroup.PushBitmap(stamp, 2.5, h.ToV3(p, 0), colour);
@@ -452,7 +452,7 @@ fn FillGroundChunk(
 
                     var grassIndex = @as(u32, 0);
                     while (grassIndex < 50) : (grassIndex += 1) {
-                        const stamp = &gameState.assets.tufts[series.RandomChoice(gameState.assets.tufts.len)];
+                        const stamp = &tranState.assets.tufts[series.RandomChoice(tranState.assets.tufts.len)];
 
                         const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
                         renderGroup.PushBitmap(stamp, 0.1, h.ToV3(p, 0), .{ 1, 1, 1, 1 });
@@ -716,44 +716,6 @@ pub export fn UpdateAndRender(
 
         gameState.standardRoomCollision = MakeSimpleGroundedCollision(gameState, tilesPerWidth * tileSideInMeters, tilesPerHeight * tileSideInMeters, 0.9 * tileDepthInMeters);
 
-        gameState.assets.grass[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass00.bmp");
-        gameState.assets.grass[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass01.bmp");
-
-        gameState.assets.tufts[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp");
-        gameState.assets.tufts[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft01.bmp");
-        gameState.assets.tufts[2] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp");
-
-        gameState.assets.stones[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground00.bmp");
-        gameState.assets.stones[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground01.bmp");
-        gameState.assets.stones[2] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground02.bmp");
-        gameState.assets.stones[3] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground03.bmp");
-
-        gameState.assets.GetBitmap(.GAI_Backdrop).* = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
-        gameState.assets.GetBitmap(.GAI_Shadow).* = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp", 72, 182);
-        gameState.assets.GetBitmap(.GAI_Tree).* = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tree00.bmp", 40, 80);
-        gameState.assets.GetBitmap(.GAI_Stairwell).* = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock02.bmp");
-        gameState.assets.GetBitmap(.GAI_Sword).* = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock03.bmp", 29, 10);
-
-        gameState.assets.heroBitmaps[0].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
-        gameState.assets.heroBitmaps[0].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");
-        gameState.assets.heroBitmaps[0].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_torso.bmp");
-        SetTopDownAlignment(&gameState.assets.heroBitmaps[0], .{ 72, 182 });
-
-        gameState.assets.heroBitmaps[1].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_head.bmp");
-        gameState.assets.heroBitmaps[1].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_cape.bmp");
-        gameState.assets.heroBitmaps[1].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_torso.bmp");
-        SetTopDownAlignment(&gameState.assets.heroBitmaps[1], .{ 72, 182 });
-
-        gameState.assets.heroBitmaps[2].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_head.bmp");
-        gameState.assets.heroBitmaps[2].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_cape.bmp");
-        gameState.assets.heroBitmaps[2].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_torso.bmp");
-        SetTopDownAlignment(&gameState.assets.heroBitmaps[2], .{ 72, 182 });
-
-        gameState.assets.heroBitmaps[3].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp");
-        gameState.assets.heroBitmaps[3].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
-        gameState.assets.heroBitmaps[3].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
-        SetTopDownAlignment(&gameState.assets.heroBitmaps[3], .{ 72, 182 });
-
         var series = h.RandomSeed(1234);
 
         const screenBaseX = @as(u32, 0);
@@ -933,6 +895,44 @@ pub export fn UpdateAndRender(
             }
         }
 
+        tranState.assets.grass[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass00.bmp");
+        tranState.assets.grass[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass01.bmp");
+
+        tranState.assets.tufts[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp");
+        tranState.assets.tufts[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft01.bmp");
+        tranState.assets.tufts[2] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp");
+
+        tranState.assets.stones[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground00.bmp");
+        tranState.assets.stones[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground01.bmp");
+        tranState.assets.stones[2] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground02.bmp");
+        tranState.assets.stones[3] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground03.bmp");
+
+        tranState.assets.GetBitmap(.GAI_Backdrop).* = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_background.bmp");
+        tranState.assets.GetBitmap(.GAI_Shadow).* = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_shadow.bmp", 72, 182);
+        tranState.assets.GetBitmap(.GAI_Tree).* = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tree00.bmp", 40, 80);
+        tranState.assets.GetBitmap(.GAI_Stairwell).* = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock02.bmp");
+        tranState.assets.GetBitmap(.GAI_Sword).* = DEBUGLoadBMP(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/rock03.bmp", 29, 10);
+
+        tranState.assets.heroBitmaps[0].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
+        tranState.assets.heroBitmaps[0].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");
+        tranState.assets.heroBitmaps[0].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_torso.bmp");
+        SetTopDownAlignment(&tranState.assets.heroBitmaps[0], .{ 72, 182 });
+
+        tranState.assets.heroBitmaps[1].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_head.bmp");
+        tranState.assets.heroBitmaps[1].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_cape.bmp");
+        tranState.assets.heroBitmaps[1].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_torso.bmp");
+        SetTopDownAlignment(&tranState.assets.heroBitmaps[1], .{ 72, 182 });
+
+        tranState.assets.heroBitmaps[2].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_head.bmp");
+        tranState.assets.heroBitmaps[2].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_cape.bmp");
+        tranState.assets.heroBitmaps[2].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_torso.bmp");
+        SetTopDownAlignment(&tranState.assets.heroBitmaps[2], .{ 72, 182 });
+
+        tranState.assets.heroBitmaps[3].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp");
+        tranState.assets.heroBitmaps[3].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
+        tranState.assets.heroBitmaps[3].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
+        SetTopDownAlignment(&tranState.assets.heroBitmaps[3], .{ 72, 182 });
+
         tranState.initialized = true;
     }
 
@@ -1010,7 +1010,7 @@ pub export fn UpdateAndRender(
     }
 
     const renderMemory = h.BeginTemporaryMemory(&tranState.tranArena);
-    const renderGroup = h.render_group.Allocate(&tranState.tranArena, platform.MegaBytes(4));
+    const renderGroup = h.render_group.Allocate(&tranState.assets, &tranState.tranArena, platform.MegaBytes(4));
 
     const widthOfMonitorInMeters = 0.635;
     const metersToPixels = @as(f32, @floatFromInt(drawBuffer.width)) * widthOfMonitorInMeters;
@@ -1137,7 +1137,7 @@ pub export fn UpdateAndRender(
             }
 
             // Update (pre-physics entity)
-            const heroBitmaps = &gameState.assets.heroBitmaps[entity.facingDirection];
+            const heroBitmaps = &tranState.assets.heroBitmaps[entity.facingDirection];
             switch (entity.entityType) {
                 .Hero => {
                     for (gameState.controlledHeroes) |conHero| {
@@ -1235,7 +1235,7 @@ pub export fn UpdateAndRender(
             switch (entity.entityType) {
                 .Hero => {
                     const heroSizeC = 2.5;
-                    renderGroup.PushBitmap(gameState.assets.GetBitmap(.GAI_Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(.GAI_Shadow, heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
                     renderGroup.PushBitmap(&heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap(&heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap(&heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
@@ -1244,7 +1244,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Wall => {
-                    renderGroup.PushBitmap(gameState.assets.GetBitmap(.GAI_Tree), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(.GAI_Tree, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Stairwell => {
@@ -1253,8 +1253,8 @@ pub export fn UpdateAndRender(
                 },
 
                 .Sword => {
-                    renderGroup.PushBitmap(gameState.assets.GetBitmap(.GAI_Shadow), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap(gameState.assets.GetBitmap(.GAI_Sword), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(.GAI_Shadow, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(.GAI_Sword, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Familiar => {
@@ -1263,12 +1263,12 @@ pub export fn UpdateAndRender(
                         entity.tBob -= 2 * platform.PI32;
                     }
                     const bobSin = h.Sin(2 * entity.tBob);
-                    renderGroup.PushBitmap(gameState.assets.GetBitmap(.GAI_Shadow), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
+                    renderGroup.PushBitmap2(.GAI_Shadow, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
                     renderGroup.PushBitmap(&heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
                 },
 
                 .Monstar => {
-                    renderGroup.PushBitmap(gameState.assets.GetBitmap(.GAI_Shadow), 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(.GAI_Shadow, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
                     renderGroup.PushBitmap(&heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     DrawHitpoints(entity, renderGroup);
