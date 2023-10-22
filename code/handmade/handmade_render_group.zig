@@ -1088,8 +1088,10 @@ pub const render_group = struct {
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
     pub inline fn PushBitmap2(self: *Self, ID: hd.game_asset_id, height: f32, offset: hm.v3, colour: hm.v4) void {
-        const bitmap: *loaded_bitmap = self.assets.GetBitmap(ID);
-        self.PushBitmap(bitmap, height, offset, colour);
+        const bitmap: ?*loaded_bitmap = self.assets.GetBitmap(ID);
+        if (bitmap) |_| {
+            self.PushBitmap(bitmap.?, height, offset, colour);
+        }
     }
 
     /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```

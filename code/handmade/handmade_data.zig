@@ -129,7 +129,7 @@ pub const game_asset_id = enum(u32) {
 };
 
 pub const game_assets = struct {
-    bitmaps: [game_asset_id.len()]hrg.loaded_bitmap,
+    bitmaps: [game_asset_id.len()]?*hrg.loaded_bitmap,
 
     grass: [2]hrg.loaded_bitmap,
     stones: [4]hrg.loaded_bitmap,
@@ -137,8 +137,8 @@ pub const game_assets = struct {
 
     heroBitmaps: [4]hero_bitmaps,
 
-    pub inline fn GetBitmap(self: *game_assets, comptime ID: game_asset_id) *hrg.loaded_bitmap {
-        return &self.bitmaps[@intFromEnum(ID)];
+    pub inline fn GetBitmap(self: *game_assets, comptime ID: game_asset_id) ?*hrg.loaded_bitmap {
+        return self.bitmaps[@intFromEnum(ID)];
     }
 };
 
