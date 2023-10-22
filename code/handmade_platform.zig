@@ -157,7 +157,7 @@ const len = if (HANDMADE_INTERNAL) @typeInfo(handmade_internal.debug_cycle_count
 // TODO (Manav): replace this with an "interface" using a vtable???, https://youtu.be/AHc4x1uXBQE?t=783
 pub const work_queue = opaque {};
 
-pub const work_queue_callback = *const fn (queue: *work_queue, data: *anyopaque) void;
+pub const work_queue_callback = *const fn (queue: ?*work_queue, data: *anyopaque) void;
 pub const add_entry = *const fn (queue: *work_queue, callback: work_queue_callback, data: *anyopaque) void;
 pub const complete_all_work = *const fn (queue: *work_queue) void;
 

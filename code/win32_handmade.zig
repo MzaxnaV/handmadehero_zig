@@ -1112,8 +1112,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     var highQueue = win32_work_queue{};
     var lowQueue = win32_work_queue{};
 
-    highQueue.MakeQueue(4);
-    lowQueue.MakeQueue(2);
+    highQueue.MakeQueue(3);
+    lowQueue.MakeQueue(1);
 
     if (!NOT_IGNORE) {
         var a0 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '0' };
