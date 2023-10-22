@@ -152,7 +152,18 @@ test "handmade_misc" {
     const x = mem.PushStruct(u8);
     x.* = 24;
     try testing.expectEqual(x.*, @as([*]u8, @ptrFromInt(mem.base_addr))[0]);
+    try testing.expectEqual(@intFromPtr(x), mem.base_addr);
     try testing.expectEqual(@as(usize, 1), mem.used);
+
+    var sub_mem: hd.memory_arena = undefined;
+    sub_mem.SubArena(&mem, @alignOf(u8), 10);
+    try testing.expectEqual(sub_mem.base_addr, mem.base_addr + @sizeOf(u8));
+
+    const y = sub_mem.PushArray(u8, sub_mem.size);
+    y[0] = 35;
+    try testing.expectEqual(y[0], @as([*]u8, @ptrFromInt(sub_mem.base_addr))[0]);
+    try testing.expectEqual(sub_mem.used, sub_mem.size);
+
 }
 
 test "simd" {
