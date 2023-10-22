@@ -49,8 +49,7 @@ pub const perf_analyzer = struct {
 const NOT_IGNORE = @import("handmade_platform").NOT_IGNORE;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
-// NOTE (Manav):, make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
-pub const loaded_bitmap = extern struct {
+pub const loaded_bitmap = struct {
     alignPercentage: hm.v2 = .{ 0, 0 },
     widthOverHeight: f32 = 0,
 
@@ -881,8 +880,7 @@ pub const loaded_bitmap = extern struct {
     }
 };
 
-// NOTE (Manav): make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
-pub const environment_map = extern struct {
+pub const environment_map = struct {
     lod: [4]loaded_bitmap,
     pZ: f32,
 };
