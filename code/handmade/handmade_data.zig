@@ -114,7 +114,21 @@ pub const ground_buffer = struct {
     bitmap: hrg.loaded_bitmap,
 };
 
-pub const state = struct {
+pub const game_assets = struct {
+    backdrop: hrg.loaded_bitmap,
+    shadow: hrg.loaded_bitmap,
+    heroBitmaps: [4]hero_bitmaps,
+
+    grass: [2]hrg.loaded_bitmap,
+    stones: [4]hrg.loaded_bitmap,
+    tufts: [3]hrg.loaded_bitmap,
+
+    tree: hrg.loaded_bitmap,
+    sword: hrg.loaded_bitmap,
+    stairwell: hrg.loaded_bitmap,
+};
+
+pub const game_state = struct {
     worldArena: memory_arena,
     world: *hw.world,
 
@@ -127,18 +141,6 @@ pub const state = struct {
 
     lowEntityCount: u32,
     lowEntities: [100000]low_entity,
-
-    backdrop: hrg.loaded_bitmap,
-    shadow: hrg.loaded_bitmap,
-    heroBitmaps: [4]hero_bitmaps,
-
-    grass: [2]hrg.loaded_bitmap,
-    stones: [4]hrg.loaded_bitmap,
-    tufts: [3]hrg.loaded_bitmap,
-
-    tree: hrg.loaded_bitmap,
-    sword: hrg.loaded_bitmap,
-    stairwell: hrg.loaded_bitmap,
 
     collisionRuleHash: [256]?*pairwise_collision_rule,
     firstFreeCollisionRule: ?*pairwise_collision_rule,
@@ -156,6 +158,8 @@ pub const state = struct {
 
     testDiffuse: hrg.loaded_bitmap,
     testNormal: hrg.loaded_bitmap,
+
+    assets: game_assets,
 };
 
 pub const task_with_memory = struct {
@@ -221,7 +225,7 @@ pub inline fn ZeroStruct(comptime T: type, ptr: *T) void {
     ZeroSize(@sizeOf(T), @as([*]u8, @ptrCast(ptr)));
 }
 
-pub inline fn GetLowEntity(gameState: *state, index: u32) ?*low_entity {
+pub inline fn GetLowEntity(gameState: *game_state, index: u32) ?*low_entity {
     var result: ?*low_entity = null;
 
     if ((index > 0) and (index < gameState.lowEntityCount)) {
@@ -233,7 +237,7 @@ pub inline fn GetLowEntity(gameState: *state, index: u32) ?*low_entity {
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
-pub fn ClearCollisionRulesFor(gameState: *state, storageIndex: u32) void {
+pub fn ClearCollisionRulesFor(gameState: *game_state, storageIndex: u32) void {
     var hashBucket = @as(u32, 0);
     while (hashBucket < gameState.collisionRuleHash.len) : (hashBucket += 1) {
         var collisionRule = &gameState.collisionRuleHash[hashBucket];
@@ -253,7 +257,7 @@ pub fn ClearCollisionRulesFor(gameState: *state, storageIndex: u32) void {
     }
 }
 
-pub fn AddCollisionRule(gameState: *state, unsortedStorageIndexA: u32, unsortedStorageIndexB: u32, canCollide: bool) void {
+pub fn AddCollisionRule(gameState: *game_state, unsortedStorageIndexA: u32, unsortedStorageIndexB: u32, canCollide: bool) void {
     var storageIndexA = unsortedStorageIndexA;
     var storageIndexB = unsortedStorageIndexB;
     if (storageIndexA > storageIndexB) {
