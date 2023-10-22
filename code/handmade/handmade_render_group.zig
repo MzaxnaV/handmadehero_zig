@@ -971,7 +971,7 @@ fn GetRenderEntityBasisP(transform: *const render_transform, originalP: hm.v3) e
         const offsetZ = 0;
         var distanceAboveTarget = transform.distanceAboveTarget;
 
-        if (NOT_IGNORE) { // DEBUG CAMERA
+        if (!NOT_IGNORE) { // DEBUG CAMERA
             distanceAboveTarget += 50;
         }
 

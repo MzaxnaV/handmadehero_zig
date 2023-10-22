@@ -485,13 +485,18 @@ fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: wi
             win32.SRCCOPY,
         );
     } else {
-        const offsetX = 10;
-        const offsetY = 10;
+        var offsetX: i32 = 0;
+        var offsetY: i32 = 0;
 
-        _ = win32.PatBlt(deviceContext, 0, 0, windowWidth, offsetY, win32.ROP_CODE.BLACKNESS);
-        _ = win32.PatBlt(deviceContext, 0, offsetY + @as(i32, @intCast(buffer.height)), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
-        _ = win32.PatBlt(deviceContext, 0, 0, offsetX, windowHeight, win32.ROP_CODE.BLACKNESS);
-        _ = win32.PatBlt(deviceContext, offsetX + @as(i32, @intCast(buffer.width)), 0, windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+        if (!NOT_IGNORE) {
+            offsetX = 10;
+            offsetY = 10;
+
+            _ = win32.PatBlt(deviceContext, 0, 0, windowWidth, offsetY, win32.ROP_CODE.BLACKNESS);
+            _ = win32.PatBlt(deviceContext, 0, offsetY + @as(i32, @intCast(buffer.height)), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+            _ = win32.PatBlt(deviceContext, 0, 0, offsetX, windowHeight, win32.ROP_CODE.BLACKNESS);
+            _ = win32.PatBlt(deviceContext, offsetX + @as(i32, @intCast(buffer.width)), 0, windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+        }
 
         _ = win32.StretchDIBits(
             deviceContext,
