@@ -103,14 +103,14 @@ pub const sound_output_buffer = struct {
     samples: [*]i16,
 };
 
-pub const button_state = extern struct {
+pub const button_state = struct {
     haltTransitionCount: u32 = 0,
     // endedDown is a boolean
     endedDown: u32 = 0,
 };
 
-const input_buttons = extern union {
-    mapped: extern struct {
+const input_buttons = union {
+    mapped: struct {
         moveUp: button_state,
         moveDown: button_state,
         moveLeft: button_state,
