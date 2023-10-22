@@ -114,18 +114,32 @@ pub const ground_buffer = struct {
     bitmap: hrg.loaded_bitmap,
 };
 
+pub const game_asset_id = enum(u32) {
+    GAI_Backdrop = 0,
+    GAI_Shadow,
+    GAI_Tree,
+    GAI_Sword,
+    GAI_Stairwell,
+
+    fn len() comptime_int {
+        comptime {
+            return @typeInfo(game_asset_id).Enum.fields.len;
+        }
+    }
+};
+
 pub const game_assets = struct {
-    backdrop: hrg.loaded_bitmap,
-    shadow: hrg.loaded_bitmap,
-    heroBitmaps: [4]hero_bitmaps,
+    bitmaps: [game_asset_id.len()]hrg.loaded_bitmap,
 
     grass: [2]hrg.loaded_bitmap,
     stones: [4]hrg.loaded_bitmap,
     tufts: [3]hrg.loaded_bitmap,
 
-    tree: hrg.loaded_bitmap,
-    sword: hrg.loaded_bitmap,
-    stairwell: hrg.loaded_bitmap,
+    heroBitmaps: [4]hero_bitmaps,
+
+    pub inline fn GetBitmap(self: *game_assets, comptime ID: game_asset_id) *hrg.loaded_bitmap {
+        return &self.bitmaps[@intFromEnum(ID)];
+    }
 };
 
 pub const game_state = struct {
