@@ -485,13 +485,18 @@ fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: wi
             win32.SRCCOPY,
         );
     } else {
-        const offsetX = 10;
-        const offsetY = 10;
+        var offsetX: i32 = 0;
+        var offsetY: i32 = 0;
 
-        _ = win32.PatBlt(deviceContext, 0, 0, windowWidth, offsetY, win32.ROP_CODE.BLACKNESS);
-        _ = win32.PatBlt(deviceContext, 0, offsetY + @as(i32, @intCast(buffer.height)), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
-        _ = win32.PatBlt(deviceContext, 0, 0, offsetX, windowHeight, win32.ROP_CODE.BLACKNESS);
-        _ = win32.PatBlt(deviceContext, offsetX + @as(i32, @intCast(buffer.width)), 0, windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+        if (!NOT_IGNORE) {
+            offsetX = 10;
+            offsetY = 10;
+
+            _ = win32.PatBlt(deviceContext, 0, 0, windowWidth, offsetY, win32.ROP_CODE.BLACKNESS);
+            _ = win32.PatBlt(deviceContext, 0, offsetY + @as(i32, @intCast(buffer.height)), windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+            _ = win32.PatBlt(deviceContext, 0, 0, offsetX, windowHeight, win32.ROP_CODE.BLACKNESS);
+            _ = win32.PatBlt(deviceContext, offsetX + @as(i32, @intCast(buffer.width)), 0, windowWidth, windowHeight, win32.ROP_CODE.BLACKNESS);
+        }
 
         _ = win32.StretchDIBits(
             deviceContext,
@@ -1006,7 +1011,7 @@ const win32_work_queue = struct {
 
     entries: [256]win32_work_queue_entry = [1]win32_work_queue_entry{.{}} ** 256,
 
-    pub fn MakeQueue(queue: *win32_work_queue, comptime threadCount: comptime_int) void {
+    fn MakeQueue(queue: *win32_work_queue, comptime threadCount: comptime_int) void {
         const initialCount = 0;
 
         queue.semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.extra.SEMAPHORE_ALL_ACCESS);
@@ -1028,11 +1033,11 @@ const win32_work_queue = struct {
         }
     }
 
-    pub fn from(queue: *platform.work_queue) *Self {
+    fn from(queue: *platform.work_queue) *Self {
         return @alignCast(@ptrCast(queue));
     }
 
-    pub fn to(self: *Self) *platform.work_queue {
+    fn to(self: *Self) *platform.work_queue {
         return @ptrCast(self);
     }
 };
@@ -1112,8 +1117,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     var highQueue = win32_work_queue{};
     var lowQueue = win32_work_queue{};
 
-    highQueue.MakeQueue(4);
-    lowQueue.MakeQueue(2);
+    highQueue.MakeQueue(3);
+    lowQueue.MakeQueue(1);
 
     if (!NOT_IGNORE) {
         var a0 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '0' };

@@ -49,8 +49,7 @@ pub const perf_analyzer = struct {
 const NOT_IGNORE = @import("handmade_platform").NOT_IGNORE;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
-// NOTE (Manav):, make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
-pub const loaded_bitmap = extern struct {
+pub const loaded_bitmap = struct {
     alignPercentage: hm.v2 = .{ 0, 0 },
     widthOverHeight: f32 = 0,
 
@@ -881,8 +880,7 @@ pub const loaded_bitmap = extern struct {
     }
 };
 
-// NOTE (Manav): make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
-pub const environment_map = extern struct {
+pub const environment_map = struct {
     lod: [4]loaded_bitmap,
     pZ: f32,
 };
@@ -973,7 +971,7 @@ fn GetRenderEntityBasisP(transform: *const render_transform, originalP: hm.v3) e
         const offsetZ = 0;
         var distanceAboveTarget = transform.distanceAboveTarget;
 
-        if (NOT_IGNORE) { // DEBUG CAMERA
+        if (!NOT_IGNORE) { // DEBUG CAMERA
             distanceAboveTarget += 50;
         }
 
@@ -1007,10 +1005,16 @@ pub const render_group = struct {
 
     /// Create render group using the memory `arena`, initialize it and return a pointer to it.
     pub fn Allocate(arena: *hd.memory_arena, maxPushBufferSize: u32) *Self {
-        var result: *render_group = arena.PushStruct(render_group);
-        result.pushBufferBase = arena.PushSize(@alignOf(u8), maxPushBufferSize);
+        var pushBufferSize = maxPushBufferSize;
 
-        result.maxPushBufferSize = maxPushBufferSize;
+        var result: *render_group = arena.PushStruct(render_group);
+
+        if (pushBufferSize == 0) {
+            pushBufferSize = @intCast(arena.GetSizeRemaining(@alignOf(render_group)));
+        }
+        result.pushBufferBase = arena.PushSizeAlign(@alignOf(u8), pushBufferSize);
+
+        result.maxPushBufferSize = pushBufferSize;
         result.pushBufferSize = 0;
 
         result.globalAlpha = 1.0;
@@ -1162,7 +1166,7 @@ pub const render_group = struct {
         // }
     }
 
-    pub fn RenderGroupToOutput(self: *Self, outputTarget: *loaded_bitmap, clipRect: hm.rect2i, even: bool) void {
+    fn RenderGroupToOutput(self: *Self, outputTarget: *loaded_bitmap, clipRect: hm.rect2i, even: bool) void {
         platform.BEGIN_TIMED_BLOCK(.RenderGroupToOutput);
         defer platform.END_TIMED_BLOCK(.RenderGroupToOutput);
 
@@ -1283,7 +1287,7 @@ pub const render_group = struct {
         clipRect: hm.rect2i = .{},
     };
 
-    pub fn DoTiledRenderWork(_: *platform.work_queue, data: *anyopaque) void {
+    pub fn DoTiledRenderWork(_: ?*platform.work_queue, data: *anyopaque) void {
         comptime {
             if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(DoTiledRenderWork)) {
                 @compileError("Function signature mismatch!");
@@ -1295,12 +1299,31 @@ pub const render_group = struct {
         work.renderGroup.RenderGroupToOutput(work.outputTarget, work.clipRect, true);
     }
 
+    pub fn NonTiledRenderGroupToOutput(self: *Self, outputTarget: *loaded_bitmap) void {
+        assert((@intFromPtr(outputTarget.memory) & 15) == 0); // TODO (Manav): use alignment as a requirement in the stuct itself?
+
+        var clipRect = hm.rect2i{
+            .xMin = 0,
+            .xMax = outputTarget.width,
+            .yMin = 0,
+            .yMax = outputTarget.height,
+        };
+
+        var work = tile_render_work{
+            .renderGroup = self,
+            .outputTarget = outputTarget,
+            .clipRect = clipRect,
+        };
+
+        DoTiledRenderWork(null, &work);
+    }
+
     pub fn TiledRenderGroupToOutput(self: *Self, renderQueue: *platform.work_queue, outputTarget: *loaded_bitmap) void {
         const tileCountX = 4;
         const tileCountY = 4;
         var workArray: [tileCountX * tileCountY]tile_render_work = [1]tile_render_work{.{}} ** (tileCountX * tileCountY);
 
-        assert((@intFromPtr(outputTarget.memory) & 15) == 0); // TODO (Manav): remove extern from structs and use alignment properly
+        assert((@intFromPtr(outputTarget.memory) & 15) == 0); // TODO (Manav): use alignment as a requirement in the stuct itself?
 
         var tileWidth = @divTrunc(outputTarget.width, tileCountX);
         const tileHeight = @divTrunc(outputTarget.height, tileCountY);

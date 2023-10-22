@@ -6,8 +6,7 @@ const hrg = @import("handmade_render_group.zig");
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
-// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
-pub const memory_arena = extern struct {
+pub const memory_arena = struct {
     size: platform.memory_index,
     base_addr: platform.memory_index,
     used: platform.memory_index,
@@ -20,31 +19,60 @@ pub const memory_arena = extern struct {
         self.tempCount = 0;
     }
 
-    pub inline fn PushSize(self: *memory_arena, comptime alignment: u5, size: platform.memory_index) [*]align(alignment) u8 {
-        const adjusted_addr = platform.Align(self.base_addr + self.used, alignment);
-        const padding = adjusted_addr - (self.base_addr + self.used);
+    pub inline fn PushSize(self: *memory_arena, size: platform.memory_index) [*]align(@alignOf(u32)) u8 {
+        return self.PushSizeAlign(@alignOf(u32), size);
+    }
 
-        platform.Assert((self.used + size + padding) <= self.size);
-        const result: [*]align(alignment) u8 = @ptrFromInt(adjusted_addr);
-        self.used += size + padding;
+    pub inline fn PushSizeAlign(self: *memory_arena, comptime alignment: u5, sizeInit: platform.memory_index) [*]align(alignment) u8 {
+        const alignmentOffset = self.GetAlignmentOffset(alignment);
+
+        const size = sizeInit + alignmentOffset;
+        platform.Assert((self.used + size) <= self.size);
+
+        const result: [*]align(alignment) u8 = @ptrFromInt(self.base_addr + self.used + alignmentOffset);
+        self.used += size;
+
+        platform.Assert(size >= sizeInit);
+
+        return result;
+    }
+
+    pub inline fn GetAlignmentOffset(self: *memory_arena, comptime alignment: u5) platform.memory_index {
+        const resultPointer = self.base_addr + self.used;
+        const alignmentMask = alignment - 1;
+
+        const alignmentOffset = if ((resultPointer & alignmentMask) != 0) alignment - (resultPointer & alignmentMask) else 0;
+
+        return alignmentOffset;
+    }
+
+    pub inline fn GetSizeRemaining(self: *memory_arena, comptime alignment: u5) platform.memory_index {
+        const result = self.size - (self.used + self.GetAlignmentOffset(alignment));
 
         return result;
     }
 
     pub inline fn PushStruct(self: *memory_arena, comptime T: type) *T {
-        return @as(*T, @ptrCast(self.PushSize(@alignOf(T), @sizeOf(T))));
+        return @as(*T, @ptrCast(self.PushSizeAlign(@alignOf(T), @sizeOf(T))));
     }
 
     pub inline fn PushSlice(self: *memory_arena, comptime T: type, comptime count: platform.memory_index) *[count]T {
-        return @as(*[count]T, @ptrCast(self.PushSize(@alignOf(T), count * @sizeOf(*[]T))));
+        return @as(*[count]T, @ptrCast(self.PushSizeAlign(@alignOf(T), count * @sizeOf(*[]T))));
     }
 
     pub inline fn PushArray(self: *memory_arena, comptime T: type, count: platform.memory_index) [*]T {
-        return @as([*]T, @ptrCast(self.PushSize(@alignOf(T), count * @sizeOf(T))));
+        return @as([*]T, @ptrCast(self.PushSizeAlign(@alignOf(T), count * @sizeOf(T))));
     }
 
     pub inline fn CheckArena(self: *memory_arena) void {
         platform.Assert(self.tempCount == 0);
+    }
+
+    pub inline fn SubArena(self: *memory_arena, parentArena: *memory_arena, alignment: u5, size: platform.memory_index) void {
+        self.size = size;
+        self.base_addr = @intFromPtr(parentArena.PushSizeAlign(alignment, size));
+        self.used = 0;
+        self.tempCount = 0;
     }
 };
 
@@ -80,8 +108,7 @@ pub const pairwise_collision_rule = struct {
     nextInHash: ?*pairwise_collision_rule,
 };
 
-// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
-pub const ground_buffer = extern struct {
+pub const ground_buffer = struct {
     p: hw.world_position,
     bitmap: hrg.loaded_bitmap,
 };
@@ -130,16 +157,23 @@ pub const state = struct {
     testNormal: hrg.loaded_bitmap,
 };
 
-// NOTE: (Manav), make it extern temporarily so loaded_bitmap.memory in groundBuffers is aligned
-pub const transient_state = extern struct {
+pub const task_with_memory = struct {
+    beingUsed: bool,
+    arena: memory_arena,
+    memoryFlush: temporary_memory,
+};
+
+pub const transient_state = struct {
     initialized: bool,
     tranArena: memory_arena,
+
+    tasks: [4]task_with_memory,
+
     groundBufferCount: u32,
     groundBuffers: [*]ground_buffer,
 
     highPriorityQueue: *platform.work_queue,
     lowPriorityQueue: *platform.work_queue,
-    pad: u64,
 
     envMapWidth: u32,
     envMapHeight: u32,

@@ -330,17 +330,49 @@ fn MakeNullCollision(gameState: *game.state) *game.sim_entity_collision_volume_g
     return group;
 }
 
-// pub fn DoTiledRenderWork(_: *platform.work_queue, data: *anyopaque) void {
-//     comptime {
-//         if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(DoTiledRenderWork)) {
-//             @compileError("Function signature mismatch!");
-//         }
-//     }
-//     const work: *tile_render_work = @as(*tile_render_work, @alignCast(@ptrCast(data)));
+fn BeginTaskWithMemory(tranState: *game.transient_state) ?*game.task_with_memory {
+    var foundTask: ?*game.task_with_memory = null;
 
-//     work.renderGroup.RenderGroupToOutput(work.outputTarget, work.clipRect, false);
-//     work.renderGroup.RenderGroupToOutput(work.outputTarget, work.clipRect, true);
-// }
+    var taskIndex: u32 = 0;
+    while (taskIndex < tranState.tasks.len) : (taskIndex += 1) {
+        var task: *game.task_with_memory = &tranState.tasks[taskIndex];
+        if (!task.beingUsed) {
+            foundTask = task;
+            task.beingUsed = true;
+            task.memoryFlush = game.BeginTemporaryMemory(&task.arena);
+            break;
+        }
+    }
+
+    return foundTask;
+}
+
+inline fn EndTaskWithMemory(task: *game.task_with_memory) void {
+    game.EndTemporaryMemory(task.memoryFlush);
+
+    @fence(.SeqCst);
+
+    task.beingUsed = false;
+}
+
+const fill_ground_chunk_work = struct {
+    renderGroup: *game.render_group,
+    buffer: *game.loaded_bitmap,
+    task: *game.task_with_memory,
+};
+
+pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
+    comptime {
+        if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(FillGroundChunkWork)) {
+            @compileError("Function signature mismatch!");
+        }
+    }
+    const work: *fill_ground_chunk_work = @alignCast(@ptrCast(data));
+
+    work.renderGroup.NonTiledRenderGroupToOutput(work.buffer);
+
+    EndTaskWithMemory(work.task);
+}
 
 fn FillGroundChunk(
     tranState: *game.transient_state,
@@ -348,89 +380,93 @@ fn FillGroundChunk(
     groundBuffer: *game.ground_buffer,
     chunkP: *const game.world_position,
 ) void {
-    const groundMemory = game.BeginTemporaryMemory(&tranState.tranArena);
-    defer game.EndTemporaryMemory(groundMemory);
+    if (BeginTaskWithMemory(tranState)) |task| {
+        var work: *fill_ground_chunk_work = task.arena.PushStruct(fill_ground_chunk_work);
+        var buffer = &groundBuffer.bitmap;
+        buffer.alignPercentage = game.v2{ 0.5, 0.5 };
+        buffer.widthOverHeight = 1.0;
 
-    var buffer = &groundBuffer.bitmap;
-    buffer.alignPercentage = game.v2{ 0.5, 0.5 };
-    buffer.widthOverHeight = 1.0;
+        const width = game.X(gameState.world.chunkDimInMeters);
+        const height = game.Y(gameState.world.chunkDimInMeters);
+        assert(width == height);
+        const haldDim = game.Scale(.{ 0.5 * width, 0.5 * height }, 1);
 
-    const width = game.X(gameState.world.chunkDimInMeters);
-    const height = game.Y(gameState.world.chunkDimInMeters);
-    assert(width == height);
-    const haldDim = game.Scale(.{ 0.5 * width, 0.5 * height }, 1);
+        const renderGroup = game.render_group.Allocate(&task.arena, 0);
+        renderGroup.Orthographic(
+            @intCast(buffer.width),
+            @intCast(buffer.height),
+            @as(f32, @floatFromInt(buffer.width - 2)) / width,
+        );
+        renderGroup.Clear(.{ 1, 0, 1, 1 });
 
-    const renderGroup = game.render_group.Allocate(&tranState.tranArena, platform.MegaBytes(4));
-    renderGroup.Orthographic(
-        @intCast(buffer.width),
-        @intCast(buffer.height),
-        @as(f32, @floatFromInt(buffer.width - 2)) / width,
-    );
-    renderGroup.Clear(.{ 1, 0, 1, 1 });
+        groundBuffer.p = chunkP.*;
 
-    groundBuffer.p = chunkP.*;
+        {
+            var chunkOffsetY = @as(i32, -1);
+            while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
+                var chunkOffsetX = @as(i32, -1);
+                while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
+                    const chunkX = chunkP.chunkX + chunkOffsetX;
+                    const chunkY = chunkP.chunkY + chunkOffsetY;
+                    const chunkZ = chunkP.chunkZ;
 
-    {
-        var chunkOffsetY = @as(i32, -1);
-        while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
-            var chunkOffsetX = @as(i32, -1);
-            while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
-                const chunkX = chunkP.chunkX + chunkOffsetX;
-                const chunkY = chunkP.chunkY + chunkOffsetY;
-                const chunkZ = chunkP.chunkZ;
+                    var series = game.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
 
-                var series = game.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
+                    var colour = game.v4{ 1, 1, 1, 1 };
 
-                var colour = game.v4{ 1, 1, 1, 1 };
+                    if (!NOT_IGNORE) {
+                        colour = game.v4{ 1, 0, 0, 1 };
+                        if (@mod(chunkX, 2) == @mod(chunkY, 2)) {
+                            colour = game.v4{ 0, 0, 1, 1 };
+                        }
+                    }
 
-                if (!NOT_IGNORE) {
-                    colour = game.v4{ 1, 0, 0, 1};
-                    if (@mod(chunkX, 2) == @mod(chunkY, 2)) {
-                        colour = game.v4{ 0, 0, 1, 1 };
+                    const center = game.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
+
+                    var grassIndex = @as(u32, 0);
+                    while (grassIndex < 50) : (grassIndex += 1) {
+                        const stamp = if (series.RandomChoice(2) == 1)
+                            &gameState.grass[series.RandomChoice(gameState.grass.len)]
+                        else
+                            &gameState.stones[series.RandomChoice(gameState.stones.len)];
+
+                        const p = game.Add(center, game.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
+                        renderGroup.PushBitmap(stamp, 2.5, game.ToV3(p, 0), colour);
                     }
                 }
+            }
+        }
 
-                const center = game.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
+        {
+            var chunkOffsetY = @as(i32, -1);
+            while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
+                var chunkOffsetX = @as(i32, -1);
+                while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
+                    const chunkX = chunkP.chunkX + chunkOffsetX;
+                    const chunkY = chunkP.chunkY + chunkOffsetY;
+                    const chunkZ = chunkP.chunkZ;
 
-                var grassIndex = @as(u32, 0);
-                while (grassIndex < 50) : (grassIndex += 1) {
-                    const stamp = if (series.RandomChoice(2) == 1)
-                        &gameState.grass[series.RandomChoice(gameState.grass.len)]
-                    else
-                        &gameState.stones[series.RandomChoice(gameState.stones.len)];
+                    var series = game.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
 
-                    const p = game.Add(center, game.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
-                    renderGroup.PushBitmap(stamp, 2.5, game.ToV3(p, 0), colour);
+                    const center = game.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
+
+                    var grassIndex = @as(u32, 0);
+                    while (grassIndex < 50) : (grassIndex += 1) {
+                        const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
+
+                        const p = game.Add(center, game.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
+                        renderGroup.PushBitmap(stamp, 0.1, game.ToV3(p, 0), .{ 1, 1, 1, 1 });
+                    }
                 }
             }
         }
+
+        work.buffer = buffer;
+        work.renderGroup = renderGroup;
+        work.task = task;
+
+        game.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
     }
-
-    {
-        var chunkOffsetY = @as(i32, -1);
-        while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
-            var chunkOffsetX = @as(i32, -1);
-            while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
-                const chunkX = chunkP.chunkX + chunkOffsetX;
-                const chunkY = chunkP.chunkY + chunkOffsetY;
-                const chunkZ = chunkP.chunkZ;
-
-                var series = game.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
-
-                const center = game.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
-
-                var grassIndex = @as(u32, 0);
-                while (grassIndex < 50) : (grassIndex += 1) {
-                    const stamp = &gameState.tufts[series.RandomChoice(gameState.tufts.len)];
-
-                    const p = game.Add(center, game.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
-                    renderGroup.PushBitmap(stamp, 0.1, game.ToV3(p, 0), .{ 1, 1, 1, 1 });
-                }
-            }
-        }
-    }
-
-    renderGroup.TiledRenderGroupToOutput(tranState.highPriorityQueue, buffer);
 }
 
 fn ClearBitmap(bitmap: *game.loaded_bitmap) void {
@@ -445,7 +481,7 @@ fn MakeEmptyBitmap(arena: *game.memory_arena, width: i32, height: i32, clearToZe
     result.height = height;
     result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
     const totalBitmapSize = @as(usize, @intCast(result.width * result.height * platform.BITMAP_BYTES_PER_PIXEL));
-    result.memory = arena.PushSize(@alignOf(u8), totalBitmapSize);
+    result.memory = arena.PushSizeAlign(16, totalBitmapSize); // NOTE: force alignment by design, make aligned loaded bitmap ?
     if (clearToZero) {
         ClearBitmap(&result);
     }
@@ -857,9 +893,16 @@ pub export fn UpdateAndRender(
             gameMemory.transientStorage + @sizeOf(game.transient_state),
         );
 
+        var taskIndex: u32 = 0;
+        while (taskIndex < tranState.tasks.len) : (taskIndex += 1) {
+            var task = &tranState.tasks[taskIndex];
+
+            task.beingUsed = false;
+            task.arena.SubArena(&tranState.tranArena, 16, platform.MegaBytes(1));
+        }
+
         tranState.highPriorityQueue = gameMemory.highPriorityQueue;
         tranState.lowPriorityQueue = gameMemory.lowPriorityQueue;
-
 
         tranState.groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushArray(game.ground_buffer, tranState.groundBufferCount);
