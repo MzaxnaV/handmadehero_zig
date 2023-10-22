@@ -111,7 +111,7 @@ pub const z = struct {
 
         inline while (index < 8) : (index += 1) {
             // NOTE: for some reason not storing these gives erros when function inlines
-            var __ai = @as(i32, __a[index]); 
+            var __ai = @as(i32, __a[index]);
             var __bi = @as(i32, __b[index]);
             result[index] = @as(u16, @truncate(@as(u32, @bitCast(__ai * __bi >> 16))));
         }

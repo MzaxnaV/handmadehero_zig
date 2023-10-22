@@ -70,5 +70,4 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&exe_install_step.step);
     b.getInstallStep().dependOn(&lib_install_step.step);
     b.getInstallStep().dependOn(&asm_install_step.step);
-
 }

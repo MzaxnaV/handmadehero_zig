@@ -68,6 +68,7 @@ pub const memory_arena = struct {
         platform.Assert(self.tempCount == 0);
     }
 
+    /// Initialize arena of given `size` from `parentArena`
     pub inline fn SubArena(self: *memory_arena, parentArena: *memory_arena, alignment: u5, size: platform.memory_index) void {
         self.size = size;
         self.base_addr = @intFromPtr(parentArena.PushSizeAlign(alignment, size));

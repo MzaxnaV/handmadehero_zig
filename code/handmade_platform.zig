@@ -201,7 +201,7 @@ pub inline fn TeraBytes(comptime value: comptime_int) comptime_int {
 
 pub inline fn Align(addr: usize, alignment: usize) usize {
     // return std.mem.alignForward(usize, addr, alignment);
-    return addr + (alignment - 1)  & ~(alignment - 1);
+    return addr + (alignment - 1) & ~(alignment - 1);
 }
 
 pub inline fn Assert(expression: bool) void {

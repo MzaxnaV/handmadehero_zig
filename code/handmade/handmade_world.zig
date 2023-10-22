@@ -1,5 +1,5 @@
 const platform = @import("handmade_platform");
-const assert = platform.Assert; 
+const assert = platform.Assert;
 
 const hd = @import("handmade_data.zig");
 const hm = @import("handmade_math.zig");
