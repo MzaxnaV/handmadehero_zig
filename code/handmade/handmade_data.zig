@@ -4,6 +4,8 @@ const hw = @import("handmade_world.zig");
 const hm = @import("handmade_math.zig");
 const hrg = @import("handmade_render_group.zig");
 
+const hi = platform.handmade_internal;
+
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const memory_arena = struct {
@@ -68,6 +70,9 @@ pub const memory_arena = struct {
         platform.Assert(self.tempCount == 0);
     }
 
+    /// Initialize arena of given `size` from `parentArena`.
+    ///
+    /// Defaults: `alignment = 16`
     pub inline fn SubArena(self: *memory_arena, parentArena: *memory_arena, alignment: u5, size: platform.memory_index) void {
         self.size = size;
         self.base_addr = @intFromPtr(parentArena.PushSizeAlign(alignment, size));
@@ -113,7 +118,39 @@ pub const ground_buffer = struct {
     bitmap: hrg.loaded_bitmap,
 };
 
-pub const state = struct {
+pub const game_asset_id = enum(u32) {
+    GAI_Backdrop = 0,
+    GAI_Shadow,
+    GAI_Tree,
+    GAI_Sword,
+    GAI_Stairwell,
+
+    fn len() comptime_int {
+        comptime {
+            return @typeInfo(game_asset_id).Enum.fields.len;
+        }
+    }
+};
+
+pub const game_assets = struct {
+    tranState: *transient_state,
+    assetArena: memory_arena,
+    ReadEntireFile: hi.debug_platform_read_entire_file,
+
+    bitmaps: [game_asset_id.len()]?*hrg.loaded_bitmap,
+
+    grass: [2]hrg.loaded_bitmap,
+    stones: [4]hrg.loaded_bitmap,
+    tufts: [3]hrg.loaded_bitmap,
+
+    heroBitmaps: [4]hero_bitmaps,
+
+    pub inline fn GetBitmap(self: *game_assets, comptime ID: game_asset_id) ?*hrg.loaded_bitmap {
+        return self.bitmaps[@intFromEnum(ID)];
+    }
+};
+
+pub const game_state = struct {
     worldArena: memory_arena,
     world: *hw.world,
 
@@ -126,18 +163,6 @@ pub const state = struct {
 
     lowEntityCount: u32,
     lowEntities: [100000]low_entity,
-
-    backdrop: hrg.loaded_bitmap,
-    shadow: hrg.loaded_bitmap,
-    heroBitmaps: [4]hero_bitmaps,
-
-    grass: [2]hrg.loaded_bitmap,
-    stones: [4]hrg.loaded_bitmap,
-    tufts: [3]hrg.loaded_bitmap,
-
-    tree: hrg.loaded_bitmap,
-    sword: hrg.loaded_bitmap,
-    stairwell: hrg.loaded_bitmap,
 
     collisionRuleHash: [256]?*pairwise_collision_rule,
     firstFreeCollisionRule: ?*pairwise_collision_rule,
@@ -178,6 +203,8 @@ pub const transient_state = struct {
     envMapWidth: u32,
     envMapHeight: u32,
     envMaps: [3]hrg.environment_map,
+
+    assets: game_assets,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------
@@ -220,7 +247,7 @@ pub inline fn ZeroStruct(comptime T: type, ptr: *T) void {
     ZeroSize(@sizeOf(T), @as([*]u8, @ptrCast(ptr)));
 }
 
-pub inline fn GetLowEntity(gameState: *state, index: u32) ?*low_entity {
+pub inline fn GetLowEntity(gameState: *game_state, index: u32) ?*low_entity {
     var result: ?*low_entity = null;
 
     if ((index > 0) and (index < gameState.lowEntityCount)) {
@@ -232,7 +259,7 @@ pub inline fn GetLowEntity(gameState: *state, index: u32) ?*low_entity {
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
-pub fn ClearCollisionRulesFor(gameState: *state, storageIndex: u32) void {
+pub fn ClearCollisionRulesFor(gameState: *game_state, storageIndex: u32) void {
     var hashBucket = @as(u32, 0);
     while (hashBucket < gameState.collisionRuleHash.len) : (hashBucket += 1) {
         var collisionRule = &gameState.collisionRuleHash[hashBucket];
@@ -252,7 +279,7 @@ pub fn ClearCollisionRulesFor(gameState: *state, storageIndex: u32) void {
     }
 }
 
-pub fn AddCollisionRule(gameState: *state, unsortedStorageIndexA: u32, unsortedStorageIndexB: u32, canCollide: bool) void {
+pub fn AddCollisionRule(gameState: *game_state, unsortedStorageIndexA: u32, unsortedStorageIndexB: u32, canCollide: bool) void {
     var storageIndexA = unsortedStorageIndexA;
     var storageIndexB = unsortedStorageIndexB;
     if (storageIndexA > storageIndexB) {

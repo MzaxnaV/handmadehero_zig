@@ -150,7 +150,7 @@ pub inline fn GetEntityByStorageIndex(simRegion: *sim_region, storageIndex: u32)
     return result;
 }
 
-pub inline fn LoadEntityReference(gameState: *hd.state, simRegion: *sim_region, ref: *entity_reference) void {
+pub inline fn LoadEntityReference(gameState: *hd.game_state, simRegion: *sim_region, ref: *entity_reference) void {
     switch (ref.*) {
         .index => {
             if (ref.index > 0) {
@@ -181,7 +181,7 @@ pub inline fn StoreEntityReference(ref: *entity_reference) void {
     }
 }
 
-fn AddEntityRaw(gameState: *hd.state, simRegion: *sim_region, storageIndex: u32, source: ?*hd.low_entity) ?*sim_entity {
+fn AddEntityRaw(gameState: *hd.game_state, simRegion: *sim_region, storageIndex: u32, source: ?*hd.low_entity) ?*sim_entity {
     assert(storageIndex > 0);
     var entity: ?*sim_entity = null;
 
@@ -219,7 +219,7 @@ pub inline fn EntityOverlapsRectangle(p: hm.v3, volume: sim_entity_collision_vol
     return result;
 }
 
-pub fn AddEntity(gameState: *hd.state, simRegion: *sim_region, storageIndex: u32, source: ?*hd.low_entity, simP: ?*const hm.v3) ?*sim_entity {
+pub fn AddEntity(gameState: *hd.game_state, simRegion: *sim_region, storageIndex: u32, source: ?*hd.low_entity, simP: ?*const hm.v3) ?*sim_entity {
     var dest = AddEntityRaw(gameState, simRegion, storageIndex, source);
     if (dest) |_| {
         if (simP) |_| {
@@ -242,7 +242,7 @@ pub inline fn GetSimSpaceP(simRegion: *sim_region, stored: *hd.low_entity) hm.v3
     return result;
 }
 
-pub fn BeginSim(simArena: *hd.memory_arena, gameState: *hd.state, world: *hw.world, origin: hw.world_position, bounds: hm.rect3, dt: f32) *sim_region {
+pub fn BeginSim(simArena: *hd.memory_arena, gameState: *hd.game_state, world: *hw.world, origin: hw.world_position, bounds: hm.rect3, dt: f32) *sim_region {
     var simRegion: *sim_region = simArena.PushStruct(sim_region);
     hd.ZeroStruct([4096]sim_entity_hash, &simRegion.hash);
 
@@ -292,7 +292,7 @@ pub fn BeginSim(simArena: *hd.memory_arena, gameState: *hd.state, world: *hw.wor
     return simRegion;
 }
 
-pub fn EndSim(region: *sim_region, gameState: *hd.state) void {
+pub fn EndSim(region: *sim_region, gameState: *hd.game_state) void {
     var entityIndex = @as(u32, 0);
     while (entityIndex < region.entityCount) : (entityIndex += 1) {
         const entity: *sim_entity = &region.entities[entityIndex];
@@ -368,7 +368,7 @@ pub fn TestWall(wallX: f32, relX: f32, relY: f32, playerDeltaX: f32, playerDelta
     return hit;
 }
 
-fn CanCollide(gameState: *hd.state, unsortedA: *sim_entity, unsortedB: *sim_entity) bool {
+fn CanCollide(gameState: *hd.game_state, unsortedA: *sim_entity, unsortedB: *sim_entity) bool {
     var result = false;
 
     var a = unsortedA;
@@ -403,7 +403,7 @@ fn CanCollide(gameState: *hd.state, unsortedA: *sim_entity, unsortedB: *sim_enti
     return result;
 }
 
-fn HandleCollision(gameState: *hd.state, unsortedA: *sim_entity, unsortedB: *sim_entity) bool {
+fn HandleCollision(gameState: *hd.game_state, unsortedA: *sim_entity, unsortedB: *sim_entity) bool {
     var stopsOnCollision = false;
 
     if (unsortedA.entityType == .Sword) {
@@ -431,7 +431,7 @@ fn HandleCollision(gameState: *hd.state, unsortedA: *sim_entity, unsortedB: *sim
     return stopsOnCollision;
 }
 
-pub fn CanOverlap(_: *hd.state, mover: *sim_entity, region: *sim_entity) bool {
+pub fn CanOverlap(_: *hd.game_state, mover: *sim_entity, region: *sim_entity) bool {
     var result = false;
 
     if (mover != region) {
@@ -443,7 +443,7 @@ pub fn CanOverlap(_: *hd.state, mover: *sim_entity, region: *sim_entity) bool {
     return result;
 }
 
-pub fn HandleOverlap(_: *hd.state, mover: *sim_entity, region: *sim_entity, _: f32, ground: *f32) void {
+pub fn HandleOverlap(_: *hd.game_state, mover: *sim_entity, region: *sim_entity, _: f32, ground: *f32) void {
     if (region.entityType == .Stairwell) {
         ground.* = he.GetStairGround(region, he.GetEntityGroundPoint(mover));
     }
@@ -484,7 +484,7 @@ pub fn EntitiesOverlap(entity: *sim_entity, testEntity: *sim_entity, epsilon: hm
     return result;
 }
 
-pub fn MoveEntity(gameState: *hd.state, simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec: *const move_spec, accelaration: hm.v3) void {
+pub fn MoveEntity(gameState: *hd.game_state, simRegion: *sim_region, entity: *sim_entity, dt: f32, moveSpec: *const move_spec, accelaration: hm.v3) void {
     assert(!he.IsSet(entity, @intFromEnum(sim_entity_flags.NonSpatial)));
 
     var ddP = accelaration;

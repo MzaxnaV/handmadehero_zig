@@ -49,22 +49,22 @@ pub inline fn RotateRight(value: u32, amount: i8) u32 {
 }
 
 pub inline fn RoundF32ToInt(comptime T: type, float32: f32) T {
-    const result = @as(T, @intFromFloat(math.round(float32))); // use @round()?
+    const result: T = @intFromFloat(math.round(float32)); // use @round()?
     return result;
 }
 
 pub inline fn CeilF32ToI32(float32: f32) i32 {
-    const result = @as(i32, @intFromFloat(@ceil(float32)));
+    const result: i32 = @intFromFloat(@ceil(float32));
     return result;
 }
 
 pub inline fn TruncateF32ToI32(float32: f32) i32 {
-    const result = @as(i32, @intFromFloat(float32));
+    const result: i32 = @intFromFloat(float32);
     return result;
 }
 
 pub inline fn FloorF32ToI32(float32: f32) i32 {
-    const result = @as(i32, @intFromFloat(@floor(float32)));
+    const result: i32 = @intFromFloat(@floor(float32));
     return result;
 }
 

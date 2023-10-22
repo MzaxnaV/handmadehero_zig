@@ -163,7 +163,6 @@ test "handmade_misc" {
     y[0] = 35;
     try testing.expectEqual(y[0], @as([*]u8, @ptrFromInt(sub_mem.base_addr))[0]);
     try testing.expectEqual(sub_mem.used, sub_mem.size);
-
 }
 
 test "simd" {

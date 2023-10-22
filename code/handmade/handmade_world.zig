@@ -1,5 +1,5 @@
 const platform = @import("handmade_platform");
-const assert = platform.Assert; 
+const assert = platform.Assert;
 
 const hd = @import("handmade_data.zig");
 const hm = @import("handmade_math.zig");
@@ -17,7 +17,7 @@ const TILES_PER_CHUNK = 8;
 
 // tile data types ------------------------------------------------------------------------------------------------------------------------
 
-pub const world_position = extern struct {
+pub const world_position = struct {
     chunkX: i32 = 0,
     chunkY: i32 = 0,
     chunkZ: i32 = 0,
