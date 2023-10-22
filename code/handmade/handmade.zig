@@ -651,44 +651,64 @@ fn SetTopDownAlignment(bitmaps: *h.hero_bitmaps, alignment: h.v2) void {
     bitmaps.cape.alignPercentage = fixedAlignment;
 }
 
-fn DEBUGAllocateLoadBMP(
-    tranState: *h.transient_state,
-    thread: *platform.thread_context,
-    ReadEntireFile: handmade_internal.debug_platform_read_entire_file,
-    fileName: [*:0]const u8,
-    alignX: i32,
-    topDownAlignY: i32,
-) *h.loaded_bitmap {
-    const result = tranState.tranArena.PushStruct(h.loaded_bitmap);
-    result.* = DEBUGLoadBMP(thread, ReadEntireFile, fileName, alignX, topDownAlignY);
-    return result;
-}
-
-fn DEBUGAllocateLoadBMPDefaultAligned(
-    tranState: *h.transient_state,
-    thread: *platform.thread_context,
-    ReadEntireFile: handmade_internal.debug_platform_read_entire_file,
-    fileName: [*:0]const u8,
-) *h.loaded_bitmap {
-    const result = tranState.tranArena.PushStruct(h.loaded_bitmap);
-    result.* = DEBUGLoadBMPDefaultAligned(thread, ReadEntireFile, fileName);
-    return result;
-}
-
-fn LoadAssets(
-    tranState: *h.transient_state,
+const load_asset_work = struct {
     assets: *h.game_assets,
-    thread: *platform.thread_context,
-    ReadEntireFile: handmade_internal.debug_platform_read_entire_file,
-) void {
-    assets.bitmaps[@intFromEnum(h.game_asset_id.GAI_Backdrop)] = DEBUGAllocateLoadBMPDefaultAligned(tranState, thread, ReadEntireFile, "test/test_background.bmp");
-    assets.bitmaps[@intFromEnum(h.game_asset_id.GAI_Shadow)] = DEBUGAllocateLoadBMP(tranState, thread, ReadEntireFile, "test/test_hero_shadow.bmp", 72, 182);
-    assets.bitmaps[@intFromEnum(h.game_asset_id.GAI_Tree)] = DEBUGAllocateLoadBMP(tranState, thread, ReadEntireFile, "test2/tree00.bmp", 40, 80);
-    assets.bitmaps[@intFromEnum(h.game_asset_id.GAI_Stairwell)] = DEBUGAllocateLoadBMPDefaultAligned(tranState, thread, ReadEntireFile, "test2/rock02.bmp");
-    assets.bitmaps[@intFromEnum(h.game_asset_id.GAI_Sword)] = DEBUGAllocateLoadBMP(tranState, thread, ReadEntireFile, "test2/rock03.bmp", 29, 10);
+    fileName: [*:0]const u8,
+    ID: h.game_asset_id,
+    task: *h.task_with_memory,
+    bitmap: *h.loaded_bitmap,
+};
+
+pub fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
+    comptime {
+        if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(FillGroundChunkWork)) {
+            @compileError("Function signature mismatch!");
+        }
+    }
+    const work: *load_asset_work = @alignCast(@ptrCast(data));
+    var thread: *platform.thread_context = undefined; // TODO: dangerous
+
+    work.bitmap.* = DEBUGLoadBMPDefaultAligned(thread, work.assets.ReadEntireFile, work.fileName); // alignX: i32, topDownAlignY: i32,
+
+    @fence(.SeqCst);
+
+    work.assets.bitmaps[@intFromEnum(work.ID)] = work.bitmap;
+
+    EndTaskWithMemory(work.task);
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
+
+pub fn LoadAsset(assets: *h.game_assets, ID: h.game_asset_id) void {
+    if (BeginTaskWithMemory(assets.tranState)) |task| {
+        var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
+
+        work.assets = assets;
+        work.ID = ID;
+        work.fileName = "";
+        work.task = task;
+        work.bitmap = assets.assetArena.PushStruct(h.loaded_bitmap);
+
+        switch (ID) {
+            .GAI_Backdrop => work.fileName = "test/test_background.bmp",
+            .GAI_Shadow => {
+                work.fileName = "test/test_hero_shadow.bmp";
+                //  72, 182
+            },
+            .GAI_Tree => {
+                work.fileName = "test2/tree00.bmp";
+                // 40, 80
+            },
+            .GAI_Stairwell => work.fileName = "test2/rock02.bmp",
+            .GAI_Sword => {
+                work.fileName = "test2/rock03.bmp";
+                // 29, 10
+            },
+        }
+
+        h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
+    }
+}
 
 pub export fn UpdateAndRender(
     thread: *platform.thread_context,
@@ -892,6 +912,10 @@ pub export fn UpdateAndRender(
             gameMemory.transientStorage + @sizeOf(h.transient_state),
         );
 
+        tranState.assets.assetArena.SubArena(&tranState.tranArena, 16, platform.MegaBytes(64));
+        tranState.assets.ReadEntireFile = gameMemory.DEBUGPlatformReadEntireFile;
+        tranState.assets.tranState = tranState;
+
         var taskIndex: u32 = 0;
         while (taskIndex < tranState.tasks.len) : (taskIndex += 1) {
             var task = &tranState.tasks[taskIndex];
@@ -944,7 +968,7 @@ pub export fn UpdateAndRender(
         tranState.assets.stones[2] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground02.bmp");
         tranState.assets.stones[3] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground03.bmp");
 
-        LoadAssets(tranState, &tranState.assets, thread, gameMemory.DEBUGPlatformReadEntireFile);
+        // LoadAssets(tranState, &tranState.assets, thread, gameMemory.DEBUGPlatformReadEntireFile);
 
         tranState.assets.heroBitmaps[0].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
         tranState.assets.heroBitmaps[0].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");

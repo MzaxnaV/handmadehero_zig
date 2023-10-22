@@ -1091,6 +1091,8 @@ pub const render_group = struct {
         const bitmap: ?*loaded_bitmap = self.assets.GetBitmap(ID);
         if (bitmap) |_| {
             self.PushBitmap(bitmap.?, height, offset, colour);
+        } else {
+            @import("handmade.zig").LoadAsset(self.assets, ID);
         }
     }
 

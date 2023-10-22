@@ -4,6 +4,8 @@ const hw = @import("handmade_world.zig");
 const hm = @import("handmade_math.zig");
 const hrg = @import("handmade_render_group.zig");
 
+const hi = platform.handmade_internal;
+
 // game data types ------------------------------------------------------------------------------------------------------------------------
 
 pub const memory_arena = struct {
@@ -68,7 +70,9 @@ pub const memory_arena = struct {
         platform.Assert(self.tempCount == 0);
     }
 
-    /// Initialize arena of given `size` from `parentArena`
+    /// Initialize arena of given `size` from `parentArena`.
+    ///
+    /// Defaults: `alignment = 16`
     pub inline fn SubArena(self: *memory_arena, parentArena: *memory_arena, alignment: u5, size: platform.memory_index) void {
         self.size = size;
         self.base_addr = @intFromPtr(parentArena.PushSizeAlign(alignment, size));
@@ -129,6 +133,10 @@ pub const game_asset_id = enum(u32) {
 };
 
 pub const game_assets = struct {
+    tranState: *transient_state,
+    assetArena: memory_arena,
+    ReadEntireFile: hi.debug_platform_read_entire_file,
+
     bitmaps: [game_asset_id.len()]?*hrg.loaded_bitmap,
 
     grass: [2]hrg.loaded_bitmap,
