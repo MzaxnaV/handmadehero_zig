@@ -1088,9 +1088,8 @@ pub const render_group = struct {
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
     pub inline fn PushBitmap2(self: *Self, ID: hd.game_asset_id, height: f32, offset: hm.v3, colour: hm.v4) void {
-        const bitmap: ?*loaded_bitmap = self.assets.GetBitmap(ID);
-        if (bitmap) |_| {
-            self.PushBitmap(bitmap.?, height, offset, colour);
+        if (self.assets.GetBitmap(ID)) |bitmap| {
+            self.PushBitmap(bitmap, height, offset, colour);
         } else {
             @import("handmade.zig").LoadAsset(self.assets, ID);
         }
