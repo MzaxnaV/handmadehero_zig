@@ -1004,6 +1004,8 @@ pub const render_group = struct {
     maxPushBufferSize: u32,
     pushBufferBase: [*]u8,
 
+    missingResourceCount: u32,
+
     /// Create render group using the memory `arena`, initialize it and return a pointer to it.
     pub fn Allocate(assets: *hd.game_assets, arena: *hd.memory_arena, maxPushBufferSize: u32) *Self {
         var pushBufferSize = maxPushBufferSize;
@@ -1023,6 +1025,8 @@ pub const render_group = struct {
 
         result.transform.offsetP = hm.v3{ 0, 0, 0 };
         result.transform.scale = 1;
+
+        result.missingResourceCount = 0;
 
         return result;
     }
@@ -1092,6 +1096,7 @@ pub const render_group = struct {
             self.PushBitmap(bitmap, height, offset, colour);
         } else {
             @import("handmade.zig").LoadAsset(self.assets, ID);
+            self.missingResourceCount += 1;
         }
     }
 
@@ -1297,7 +1302,7 @@ pub const render_group = struct {
         clipRect: hm.rect2i = .{},
     };
 
-    pub fn DoTiledRenderWork(_: ?*platform.work_queue, data: *anyopaque) void {
+    fn DoTiledRenderWork(_: ?*platform.work_queue, data: *anyopaque) void {
         comptime {
             if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(DoTiledRenderWork)) {
                 @compileError("Function signature mismatch!");
@@ -1374,6 +1379,12 @@ pub const render_group = struct {
         }
 
         hd.PlatformCompleteAllWork(renderQueue);
+    }
+
+    pub inline fn AllResourcesPresent(self: *Self) bool {
+        const result = (self.missingResourceCount == 0);
+
+        return result;
     }
 };
 

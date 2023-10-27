@@ -118,14 +118,14 @@ pub const ground_buffer = struct {
     bitmap: hrg.loaded_bitmap,
 };
 
-pub const asset_state = enum
-{
+pub const asset_state = enum {
     AssetState_Unloaded,
     AssetState_Queued,
     AssetState_Loaded,
+    AssetState_Locked,
 };
-pub const asset_slot = struct
-{
+
+pub const asset_slot = struct {
     state: asset_state,
     bitmap: ?*hrg.loaded_bitmap,
 };
@@ -142,6 +142,27 @@ pub const game_asset_id = enum(u32) {
             return @typeInfo(game_asset_id).Enum.fields.len;
         }
     }
+};
+
+pub const asset_tag = struct {
+    ID: u32,
+    value: f32,
+};
+
+pub const asset_bitmap_info = struct {
+    alignPercentage: hm.v2 = .{ 0, 0 },
+    widthOverHeight: f32 = 0,
+
+    width: i32 = 0,
+    height: i32 = 0,
+
+    firstTagIndex: u32,
+    onePastLastTagIndex: u32,
+};
+
+pub const asset_group = struct {
+    firstTagIndex: u32,
+    onePastLastTagIndex: u32,
 };
 
 pub const game_assets = struct {

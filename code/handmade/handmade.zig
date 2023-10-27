@@ -374,6 +374,31 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     EndTaskWithMemory(work.task);
 }
 
+fn PickBest(infos: []h.asset_bitmap_info, tags: []h.asset_tag,  matchVector: []f32, weightVector: []f32) void {
+    var infoIndex: u32 = 0;
+    var bestDiff = platform.F32MAXIMUM;
+    var bestIndex: u32 = 0;
+
+    while (infoIndex < infos.ptr) : (infoIndex += 1) {
+        var info = infos[infoIndex];
+        var tagIndex: u32 = info.firstTagIndex;
+
+        var totalWeightedDiff: f32 = 0.0;
+
+        while (tagIndex < info.onePastLastTagIndex) : (tagIndex += 1) {
+            var tag: h.asset_tag = tags[tagIndex];
+            const difference = matchVector[tag.ID] - tag.value;
+            const weightedDiff = weightVector[tag.ID] * h.AbsoluteValue(difference);
+            totalWeightedDiff += weightedDiff;
+        }
+
+        if (bestDiff > totalWeightedDiff) {
+            bestDiff = totalWeightedDiff;
+            bestIndex = infoIndex;
+        }
+    }
+}
+
 fn FillGroundChunk(
     tranState: *h.transient_state,
     gameState: *h.game_state,
@@ -382,6 +407,8 @@ fn FillGroundChunk(
 ) void {
     if (BeginTaskWithMemory(tranState)) |task| {
         var work: *fill_ground_chunk_work = task.arena.PushStruct(fill_ground_chunk_work);
+
+
         var buffer = &groundBuffer.bitmap;
         buffer.alignPercentage = h.v2{ 0.5, 0.5 };
         buffer.widthOverHeight = 1.0;
@@ -398,8 +425,6 @@ fn FillGroundChunk(
             @as(f32, @floatFromInt(buffer.width - 2)) / width,
         );
         renderGroup.Clear(.{ 1, 0, 1, 1 });
-
-        groundBuffer.p = chunkP.*;
 
         {
             var chunkOffsetY = @as(i32, -1);
@@ -461,11 +486,19 @@ fn FillGroundChunk(
             }
         }
 
-        work.buffer = buffer;
-        work.renderGroup = renderGroup;
-        work.task = task;
+        if (renderGroup.AllResourcesPresent()) {
+            groundBuffer.p = chunkP.*;
 
-        h.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
+        if (renderGroup.AllResourcesPresent()) {
+            groundBuffer.p = chunkP.*;
+
+                work.buffer = buffer;
+                work.renderGroup = renderGroup;
+                work.task = task;
+
+                h.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
+        }
+        }
     }
 }
 
@@ -661,6 +694,8 @@ const load_asset_work = struct {
     hasAlignment: bool,
     alignX: i32,
     topDownAlignY: i32,
+
+    finalState: h.asset_state,
 };
 
 pub fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
@@ -681,7 +716,8 @@ pub fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
     @fence(.SeqCst);
 
     work.assets.bitmaps[@intFromEnum(work.ID)].bitmap = work.bitmap;
-    work.assets.bitmaps[@intFromEnum(work.ID)].state = .AssetState_Loaded;
+    work.assets.bitmaps[@intFromEnum(work.ID)].state = work.finalState;
+    work.assets.bitmaps[@intFromEnum(work.ID)].state = work.finalState;
 
     EndTaskWithMemory(work.task);
 }
@@ -699,6 +735,8 @@ pub fn LoadAsset(assets: *h.game_assets, ID: h.game_asset_id) void {
             work.task = task;
             work.hasAlignment = false;
             work.bitmap = assets.assetArena.PushStruct(h.loaded_bitmap);
+            work.finalState = .AssetState_Loaded;
+            work.finalState = .AssetState_Loaded;
 
             switch (ID) {
                 .GAI_Backdrop => work.fileName = "test/test_background.bmp",
