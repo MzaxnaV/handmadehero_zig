@@ -310,6 +310,10 @@ fn FillGroundChunk(
         );
         renderGroup.Clear(.{ 1, 0, 1, 1 });
 
+        work.buffer = buffer;
+        work.renderGroup = renderGroup;
+        work.task = task;
+
         {
             var chunkOffsetY = @as(i32, -1);
             while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
@@ -334,13 +338,10 @@ fn FillGroundChunk(
 
                     var grassIndex = @as(u32, 0);
                     while (grassIndex < 50) : (grassIndex += 1) {
-                        const stamp = if (series.RandomChoice(2) == 1)
-                            &tranState.assets.grass[series.RandomChoice(tranState.assets.grass.len)]
-                        else
-                            &tranState.assets.stones[series.RandomChoice(tranState.assets.stones.len)];
+                        const stamp = h.RandomAssetFrom(tranState.assets, if (series.RandomChoice(2) == 1) .Asset_Grass else .Asset_Stone, &series);
 
                         const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
-                        renderGroup.PushBitmap(stamp, 2.5, h.ToV3(p, 0), colour);
+                        renderGroup.PushBitmap2(stamp, 2.5, h.ToV3(p, 0), colour);
                     }
                 }
             }
@@ -361,10 +362,10 @@ fn FillGroundChunk(
 
                     var grassIndex = @as(u32, 0);
                     while (grassIndex < 50) : (grassIndex += 1) {
-                        const stamp = &tranState.assets.tufts[series.RandomChoice(tranState.assets.tufts.len)];
+                        var stamp: h.bitmap_id = h.RandomAssetFrom(tranState.assets, .Asset_Tuft, &series);
 
                         const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
-                        renderGroup.PushBitmap(stamp, 0.1, h.ToV3(p, 0), .{ 1, 1, 1, 1 });
+                        renderGroup.PushBitmap2(stamp, 0.1, h.ToV3(p, 0), .{ 1, 1, 1, 1 });
                     }
                 }
             }
@@ -373,11 +374,9 @@ fn FillGroundChunk(
         if (renderGroup.AllResourcesPresent()) {
             groundBuffer.p = chunkP.*;
 
-            work.buffer = buffer;
-            work.renderGroup = renderGroup;
-            work.task = task;
-
             h.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
+        } else {
+            EndTaskWithMemory(work.task);
         }
     }
 }

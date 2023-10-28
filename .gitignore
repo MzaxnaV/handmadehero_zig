@@ -8,3 +8,4 @@ zig-out
 
 /misc/*.s
 /misc/*.ll
+/misc/*.rdbg

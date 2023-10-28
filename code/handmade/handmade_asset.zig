@@ -2,9 +2,10 @@ const platform = @import("handmade_platform");
 
 const h = struct {
     usingnamespace @import("handmade_data.zig");
-    usingnamespace @import("handmade_render_group.zig");
-    usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_intrinsics.zig");
+    usingnamespace @import("handmade_math.zig");
+    usingnamespace @import("handmade_random.zig");
+    usingnamespace @import("handmade_render_group.zig");
     usingnamespace @import("handmade.zig");
 };
 
@@ -46,12 +47,16 @@ pub const asset_tag_id = enum {
 
 pub const asset_type_id = enum(u32) {
     Asset_NONE = 0,
-    Asset_Backdrop,
+
     Asset_Shadow,
     Asset_Tree,
     Asset_Sword,
-    Asset_Stairwell,
+    // Asset_Stairwell,
     Asset_Rock,
+
+    Asset_Grass,
+    Asset_Tuft,
+    Asset_Stone,
 
     fn len() comptime_int {
         comptime {
@@ -77,11 +82,8 @@ pub const asset_type = struct {
 };
 
 pub const asset_bitmap_info = struct {
+    filename: [*:0]const u8,
     alignPercentage: h.v2 = .{ 0, 0 },
-    widthOverHeight: f32 = 0,
-
-    width: i32 = 0,
-    height: i32 = 0,
 };
 
 pub const asset_group = struct {
@@ -93,7 +95,8 @@ pub const game_assets = struct {
     tranState: *h.transient_state,
     assetArena: h.memory_arena,
 
-    bitMapCount: u32,
+    bitmapCount: u32,
+    bitmapInfos: [*]asset_bitmap_info,
     bitmaps: [*]asset_slot,
 
     soundCount: u32,
@@ -107,15 +110,54 @@ pub const game_assets = struct {
 
     assetTypes: [asset_type_id.len()]asset_type,
 
-    grass: [2]h.loaded_bitmap,
-    stones: [4]h.loaded_bitmap,
-    tufts: [3]h.loaded_bitmap,
-
     heroBitmaps: [4]hero_bitmaps,
+
+    DEBUGUsedBitmapCount: u32,
+    DEBUGUsedAssetCount: u32,
+    DEBUGAssetType: ?*asset_type,
 
     pub inline fn GetBitmap(self: *game_assets, ID: bitmap_id) ?*h.loaded_bitmap {
         var result = self.bitmaps[ID.value].bitmap;
         return result;
+    }
+
+    fn DEBUGAddBitmapInfo(self: *game_assets, fileName: [*:0]const u8, alignPercentage: h.v2) bitmap_id {
+        assert(self.DEBUGUsedBitmapCount < self.bitmapCount);
+
+        const ID = bitmap_id{ .value = self.DEBUGUsedBitmapCount };
+        self.DEBUGUsedBitmapCount += 1;
+
+        var info: *asset_bitmap_info = &self.bitmapInfos[ID.value];
+        info.filename = fileName;
+        info.alignPercentage = alignPercentage;
+
+        return ID;
+    }
+
+    fn BeginAssetType(self: *game_assets, typeID: asset_type_id) void {
+        assert(self.DEBUGAssetType == null);
+
+        self.DEBUGAssetType = &self.assetTypes[@intFromEnum(typeID)];
+        self.DEBUGAssetType.?.firstAssetIndex = self.DEBUGUsedAssetCount;
+        self.DEBUGAssetType.?.onePastLastAssetIndex = self.DEBUGAssetType.?.firstAssetIndex;
+    }
+
+    fn EndAssetType(self: *game_assets) void {
+        assert(self.DEBUGAssetType != null);
+        self.DEBUGUsedAssetCount = self.DEBUGAssetType.?.onePastLastAssetIndex;
+        self.DEBUGAssetType = null;
+    }
+
+    /// Defaults: ```alignPercentage = .{0.5, 0.5 }```
+    fn AddBitmapAsset(self: *game_assets, fileName: [*:0]const u8, alignPercentage: h.v2) void {
+        assert(self.DEBUGAssetType != null);
+
+        var a: *asset = &self.assets[self.DEBUGAssetType.?.onePastLastAssetIndex];
+        self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
+
+        a.firstTagIndex = 0;
+        a.onePastLastTagIndex = 0;
+        a.slotId = self.DEBUGAddBitmapInfo(fileName, alignPercentage).value;
     }
 
     pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
@@ -124,59 +166,67 @@ pub const game_assets = struct {
         assets.assetArena.SubArena(arena, 16, size);
         assets.tranState = tranState;
 
-        assets.bitMapCount = asset_tag_id.len();
-        assets.bitmaps = arena.PushArray(asset_slot, assets.bitMapCount);
+        assets.bitmapCount = 256 * asset_tag_id.len();
+        assets.bitmapInfos = arena.PushArray(asset_bitmap_info, assets.bitmapCount);
+        assets.bitmaps = arena.PushArray(asset_slot, assets.bitmapCount);
 
         assets.soundCount = 1;
         assets.sounds = arena.PushArray(asset_slot, assets.soundCount);
 
-        assets.tagCount = 0;
-        assets.tags = undefined;
-
-        assets.assetCount = assets.bitMapCount;
+        assets.assetCount = assets.soundCount + assets.bitmapCount;
         assets.assets = arena.PushArray(asset, assets.assetCount);
 
-        for (0..assets.assetCount) |assetID| {
-            var assetType: *asset_type = &assets.assetTypes[assetID];
-            assetType.firstAssetIndex = @intCast(assetID);
-            assetType.onePastLastAssetIndex = @as(u32, @intCast(assetID)) + 1;
+        assets.DEBUGUsedBitmapCount = 1;
+        assets.DEBUGUsedAssetCount = 1;
 
-            var a: *asset = &assets.assets[assetType.firstAssetIndex];
-            a.firstTagIndex = 0;
-            a.onePastLastTagIndex = 0;
-            a.slotId = assetType.firstAssetIndex;
-        }
+        assets.BeginAssetType(.Asset_Shadow);
+        assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
+        assets.EndAssetType();
 
-        assets.grass[0] = DEBUGLoadBMPDefaultAligned("test2/grass00.bmp");
-        assets.grass[1] = DEBUGLoadBMPDefaultAligned("test2/grass01.bmp");
+        assets.BeginAssetType(.Asset_Tree);
+        assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
+        assets.EndAssetType();
 
-        assets.tufts[0] = DEBUGLoadBMPDefaultAligned("test2/tuft00.bmp");
-        assets.tufts[1] = DEBUGLoadBMPDefaultAligned("test2/tuft01.bmp");
-        assets.tufts[2] = DEBUGLoadBMPDefaultAligned("test2/tuft00.bmp");
+        assets.BeginAssetType(.Asset_Sword);
+        assets.AddBitmapAsset("test2/rock03.bmp", .{ 0.5, 0.65625 });
+        assets.EndAssetType();
 
-        assets.stones[0] = DEBUGLoadBMPDefaultAligned("test2/ground00.bmp");
-        assets.stones[1] = DEBUGLoadBMPDefaultAligned("test2/ground01.bmp");
-        assets.stones[2] = DEBUGLoadBMPDefaultAligned("test2/ground02.bmp");
-        assets.stones[3] = DEBUGLoadBMPDefaultAligned("test2/ground03.bmp");
+        assets.BeginAssetType(.Asset_Grass);
+        assets.AddBitmapAsset("test2/grass00.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test2/grass01.bmp", .{ 0.5, 0.5 });
+        assets.EndAssetType();
 
-        assets.heroBitmaps[0].head = DEBUGLoadBMPDefaultAligned("test/test_hero_right_head.bmp");
-        assets.heroBitmaps[0].cape = DEBUGLoadBMPDefaultAligned("test/test_hero_right_cape.bmp");
-        assets.heroBitmaps[0].torso = DEBUGLoadBMPDefaultAligned("test/test_hero_right_torso.bmp");
+        assets.BeginAssetType(.Asset_Tuft);
+        assets.AddBitmapAsset("test2/tuft00.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test2/tuft01.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test2/tuft02.bmp", .{ 0.5, 0.5 });
+        assets.EndAssetType();
+
+        assets.BeginAssetType(.Asset_Stone);
+        assets.AddBitmapAsset("test2/ground00.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test2/ground01.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test2/ground02.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test2/ground03.bmp", .{ 0.5, 0.5 });
+        assets.EndAssetType();
+
+        assets.heroBitmaps[0].head = DEBUGLoadBMP("test/test_hero_right_head.bmp", .{ 0.5, 0.5 });
+        assets.heroBitmaps[0].cape = DEBUGLoadBMP("test/test_hero_right_cape.bmp", .{ 0.5, 0.5 });
+        assets.heroBitmaps[0].torso = DEBUGLoadBMP("test/test_hero_right_torso.bmp", .{ 0.5, 0.5 });
         SetTopDownAlignment(&assets.heroBitmaps[0], .{ 72, 182 });
 
-        assets.heroBitmaps[1].head = DEBUGLoadBMPDefaultAligned("test/test_hero_back_head.bmp");
-        assets.heroBitmaps[1].cape = DEBUGLoadBMPDefaultAligned("test/test_hero_back_cape.bmp");
-        assets.heroBitmaps[1].torso = DEBUGLoadBMPDefaultAligned("test/test_hero_back_torso.bmp");
+        assets.heroBitmaps[1].head = DEBUGLoadBMP("test/test_hero_back_head.bmp", .{ 0.5, 0.5 });
+        assets.heroBitmaps[1].cape = DEBUGLoadBMP("test/test_hero_back_cape.bmp", .{ 0.5, 0.5 });
+        assets.heroBitmaps[1].torso = DEBUGLoadBMP("test/test_hero_back_torso.bmp", .{ 0.5, 0.5 });
         SetTopDownAlignment(&assets.heroBitmaps[1], .{ 72, 182 });
 
-        assets.heroBitmaps[2].head = DEBUGLoadBMPDefaultAligned("test/test_hero_left_head.bmp");
-        assets.heroBitmaps[2].cape = DEBUGLoadBMPDefaultAligned("test/test_hero_left_cape.bmp");
-        assets.heroBitmaps[2].torso = DEBUGLoadBMPDefaultAligned("test/test_hero_left_torso.bmp");
+        assets.heroBitmaps[2].head = DEBUGLoadBMP("test/test_hero_left_head.bmp", .{ 0.5, 0.5 });
+        assets.heroBitmaps[2].cape = DEBUGLoadBMP("test/test_hero_left_cape.bmp", .{ 0.5, 0.5 });
+        assets.heroBitmaps[2].torso = DEBUGLoadBMP("test/test_hero_left_torso.bmp", .{ 0.5, 0.5 });
         SetTopDownAlignment(&assets.heroBitmaps[2], .{ 72, 182 });
 
-        assets.heroBitmaps[3].head = DEBUGLoadBMPDefaultAligned("test/test_hero_front_head.bmp");
-        assets.heroBitmaps[3].cape = DEBUGLoadBMPDefaultAligned("test/test_hero_front_cape.bmp");
-        assets.heroBitmaps[3].torso = DEBUGLoadBMPDefaultAligned("test/test_hero_front_torso.bmp");
+        assets.heroBitmaps[3].head = DEBUGLoadBMP("test/test_hero_front_head.bmp", .{ 0.5, 0.5 });
+        assets.heroBitmaps[3].cape = DEBUGLoadBMP("test/test_hero_front_cape.bmp", .{ 0.5, 0.5 });
+        assets.heroBitmaps[3].torso = DEBUGLoadBMP("test/test_hero_front_torso.bmp", .{ 0.5, 0.5 });
         SetTopDownAlignment(&assets.heroBitmaps[3], .{ 72, 182 });
 
         return assets;
@@ -186,16 +236,6 @@ pub const game_assets = struct {
 pub const bitmap_id = struct { value: u32 };
 
 pub const audio_id = struct { value: u32 };
-
-/// Defaults: ```alignX =  , topDownAlignY = ```
-inline fn DEBUGLoadBMPDefaultAligned(
-    fileName: [*:0]const u8,
-) h.loaded_bitmap {
-    var result = DEBUGLoadBMP(fileName, 0, 0);
-    result.alignPercentage = .{ 0.5, 0.5 };
-
-    return result;
-}
 
 inline fn TopDownAlign(bitmap: *const h.loaded_bitmap, alignment: h.v2) h.v2 {
     const fixedAlignment = h.v2{
@@ -213,10 +253,10 @@ fn SetTopDownAlignment(bitmaps: *hero_bitmaps, alignment: h.v2) void {
     bitmaps.cape.alignPercentage = fixedAlignment;
 }
 
+/// Defaults: ```alignPercentage = .{0.5, 0.5 }```
 fn DEBUGLoadBMP(
     fileName: [*:0]const u8,
-    alignX: i32,
-    topDownAlignY: i32,
+    alignPercentage: h.v2,
 ) h.loaded_bitmap {
     const bitmap_header = packed struct {
         fileType: u16,
@@ -250,7 +290,7 @@ fn DEBUGLoadBMP(
         result.width = header.width;
         result.height = header.height;
         result.memory = pixels;
-        result.alignPercentage = TopDownAlign(&result, h.V2(alignX, topDownAlignY));
+        result.alignPercentage = alignPercentage;
         result.widthOverHeight = h.SafeRatiof0(@as(f32, @floatFromInt(result.width)), @as(f32, @floatFromInt(result.height)));
 
         assert(header.height >= 0);
@@ -313,14 +353,9 @@ fn DEBUGLoadBMP(
 
 const load_bitmap_work = struct {
     assets: *game_assets,
-    fileName: [*:0]const u8,
     ID: bitmap_id,
     task: *h.task_with_memory,
     bitmap: *h.loaded_bitmap,
-
-    hasAlignment: bool,
-    alignX: i32,
-    topDownAlignY: i32,
 
     finalState: asset_state,
 };
@@ -333,16 +368,12 @@ fn LoadBitmapWork(_: ?*platform.work_queue, data: *anyopaque) void {
     }
     const work: *load_bitmap_work = @alignCast(@ptrCast(data));
 
-    if (work.hasAlignment) {
-        work.bitmap.* = DEBUGLoadBMP(work.fileName, work.alignX, work.topDownAlignY);
-    } else {
-        work.bitmap.* = DEBUGLoadBMPDefaultAligned(work.fileName);
-    }
+    const info: asset_bitmap_info = work.assets.bitmapInfos[work.ID.value];
+    work.bitmap.* = DEBUGLoadBMP(info.filename, info.alignPercentage);
 
     @fence(.SeqCst);
 
     work.assets.bitmaps[work.ID.value].bitmap = work.bitmap;
-    work.assets.bitmaps[work.ID.value].state = work.finalState;
     work.assets.bitmaps[work.ID.value].state = work.finalState;
 
     h.EndTaskWithMemory(work.task);
@@ -356,38 +387,10 @@ pub fn LoadBitmap(assets: *game_assets, ID: bitmap_id) void {
             var work: *load_bitmap_work = task.arena.PushStruct(load_bitmap_work);
 
             work.assets = assets;
-            work.fileName = "";
             work.ID = ID;
             work.task = task;
             work.bitmap = assets.assetArena.PushStruct(h.loaded_bitmap);
-            work.hasAlignment = false;
             work.finalState = .AssetState_Loaded;
-
-            switch (@as(asset_type_id, @enumFromInt(ID.value))) {
-                .Asset_Backdrop => work.fileName = "test/test_background.bmp",
-                .Asset_Shadow => {
-                    work.fileName = "test/test_hero_shadow.bmp";
-                    work.alignX = 72;
-                    work.topDownAlignY = 182;
-                    work.hasAlignment = true;
-                },
-                .Asset_Tree => {
-                    work.fileName = "test2/tree00.bmp";
-                    work.alignX = 40;
-                    work.topDownAlignY = 80;
-                    work.hasAlignment = true;
-                },
-                .Asset_Stairwell => work.fileName = "test2/rock02.bmp",
-                .Asset_Sword => {
-                    work.fileName = "test2/rock03.bmp";
-                    work.alignX = 29;
-                    work.topDownAlignY = 10;
-                    work.hasAlignment = true;
-                },
-
-                .Asset_Rock => {},
-                .Asset_NONE => unreachable,
-            }
 
             h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadBitmapWork, work);
         }
@@ -397,6 +400,22 @@ pub fn LoadBitmap(assets: *game_assets, ID: bitmap_id) void {
 pub fn LoadSound(assets: *game_assets, ID: audio_id) void {
     _ = assets;
     _ = ID;
+}
+
+pub fn RandomAssetFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) bitmap_id {
+    var result: bitmap_id = .{ .value = 0 };
+
+    var assetType = assets.assetTypes[@intFromEnum(typeID)];
+
+    if (assetType.firstAssetIndex != assetType.onePastLastAssetIndex) {
+        const count = assetType.onePastLastAssetIndex - assetType.firstAssetIndex;
+        const choice = series.RandomChoice(count);
+
+        var a = assets.assets[choice + assetType.firstAssetIndex];
+        result.value = a.slotId;
+    }
+
+    return result;
 }
 
 pub fn GetFirstBitmapID(assets: *game_assets, typeID: asset_type_id) bitmap_id {

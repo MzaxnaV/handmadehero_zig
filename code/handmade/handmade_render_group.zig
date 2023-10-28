@@ -12,6 +12,9 @@ const h = struct {
 
 const simd = @import("simd");
 
+/// build constant to dynamically remove code sections
+const NOT_IGNORE = platform.NOT_IGNORE;
+
 pub const perf_analyzer = struct {
     /// DO NOT USE `defer` on `End()`.
     const method = enum {
@@ -45,11 +48,6 @@ pub const perf_analyzer = struct {
 //    are what control the scaling of things, whereas Z offsets inside a slice are what control Y offsetting.
 //
 // 5) All colour values specified to the renderer as v4's are in NON-premultiplied alpha.
-
-// constants ------------------------------------------------------------------------------------------------------------------------------
-
-/// build constant to dynamically remove code sections
-const NOT_IGNORE = @import("handmade_platform").NOT_IGNORE;
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
 pub const loaded_bitmap = struct {

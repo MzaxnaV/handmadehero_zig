@@ -202,7 +202,7 @@ pub const i = struct {
     }
 
     // TODO (Manav): untested
-    pub export fn _mm_srli_epi32(v: i32x4, imm8: u32) i32x4 {
+    pub inline fn _mm_srli_epi32(v: i32x4, imm8: u32) i32x4 {
         const result = asm ("psrld %[arg1], %[arg0]"
             : [ret] "={xmm0}" (-> i32x4),
             : [arg1] "{xmm1}" (imm8),
