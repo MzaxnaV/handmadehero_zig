@@ -118,6 +118,18 @@ pub const ground_buffer = struct {
     bitmap: hrg.loaded_bitmap,
 };
 
+pub const asset_state = enum {
+    AssetState_Unloaded,
+    AssetState_Queued,
+    AssetState_Loaded,
+    AssetState_Locked,
+};
+
+pub const asset_slot = struct {
+    state: asset_state,
+    bitmap: ?*hrg.loaded_bitmap,
+};
+
 pub const game_asset_id = enum(u32) {
     GAI_Backdrop = 0,
     GAI_Shadow,
@@ -132,12 +144,33 @@ pub const game_asset_id = enum(u32) {
     }
 };
 
+pub const asset_tag = struct {
+    ID: u32,
+    value: f32,
+};
+
+pub const asset_bitmap_info = struct {
+    alignPercentage: hm.v2 = .{ 0, 0 },
+    widthOverHeight: f32 = 0,
+
+    width: i32 = 0,
+    height: i32 = 0,
+
+    firstTagIndex: u32,
+    onePastLastTagIndex: u32,
+};
+
+pub const asset_group = struct {
+    firstTagIndex: u32,
+    onePastLastTagIndex: u32,
+};
+
 pub const game_assets = struct {
     tranState: *transient_state,
     assetArena: memory_arena,
     ReadEntireFile: hi.debug_platform_read_entire_file,
 
-    bitmaps: [game_asset_id.len()]?*hrg.loaded_bitmap,
+    bitmaps: [game_asset_id.len()]asset_slot,
 
     grass: [2]hrg.loaded_bitmap,
     stones: [4]hrg.loaded_bitmap,
@@ -146,7 +179,8 @@ pub const game_assets = struct {
     heroBitmaps: [4]hero_bitmaps,
 
     pub inline fn GetBitmap(self: *game_assets, comptime ID: game_asset_id) ?*hrg.loaded_bitmap {
-        return self.bitmaps[@intFromEnum(ID)];
+        var result = self.bitmaps[@intFromEnum(ID)].bitmap;
+        return result;
     }
 };
 

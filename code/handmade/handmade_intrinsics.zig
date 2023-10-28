@@ -92,3 +92,20 @@ pub inline fn FindLeastSignificantSetBit(value: u32) u32 {
 
     return result;
 }
+
+/// Performs a strong atomic compare exchange operation. It's the equivalent of this code, except atomic:
+///
+/// ```
+/// fn CompareExchange(comptime T: type, ptr: *T, expected_value: T, new_value: T) ?T {
+///    const old_value = ptr.*;
+///    if (old_value == expected_value) {
+///        ptr.* = new_value;
+///        return old_value;
+///    } else {
+///        return null;
+///    }
+/// }
+/// ```
+pub inline fn AtomicCompareExchange(comptime T: type, ptr: *T, expected_value: T, new_value: T) ?T {
+    return if (@cmpxchgStrong(T, ptr, expected_value, new_value, .SeqCst, .SeqCst)) |_| expected_value else null;
+}

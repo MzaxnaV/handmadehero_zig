@@ -374,6 +374,31 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     EndTaskWithMemory(work.task);
 }
 
+fn PickBest(infos: []h.asset_bitmap_info, tags: []h.asset_tag,  matchVector: []f32, weightVector: []f32) void {
+    var infoIndex: u32 = 0;
+    var bestDiff = platform.F32MAXIMUM;
+    var bestIndex: u32 = 0;
+
+    while (infoIndex < infos.ptr) : (infoIndex += 1) {
+        var info = infos[infoIndex];
+        var tagIndex: u32 = info.firstTagIndex;
+
+        var totalWeightedDiff: f32 = 0.0;
+
+        while (tagIndex < info.onePastLastTagIndex) : (tagIndex += 1) {
+            var tag: h.asset_tag = tags[tagIndex];
+            const difference = matchVector[tag.ID] - tag.value;
+            const weightedDiff = weightVector[tag.ID] * h.AbsoluteValue(difference);
+            totalWeightedDiff += weightedDiff;
+        }
+
+        if (bestDiff > totalWeightedDiff) {
+            bestDiff = totalWeightedDiff;
+            bestIndex = infoIndex;
+        }
+    }
+}
+
 fn FillGroundChunk(
     tranState: *h.transient_state,
     gameState: *h.game_state,
@@ -382,6 +407,8 @@ fn FillGroundChunk(
 ) void {
     if (BeginTaskWithMemory(tranState)) |task| {
         var work: *fill_ground_chunk_work = task.arena.PushStruct(fill_ground_chunk_work);
+
+
         var buffer = &groundBuffer.bitmap;
         buffer.alignPercentage = h.v2{ 0.5, 0.5 };
         buffer.widthOverHeight = 1.0;
@@ -398,8 +425,6 @@ fn FillGroundChunk(
             @as(f32, @floatFromInt(buffer.width - 2)) / width,
         );
         renderGroup.Clear(.{ 1, 0, 1, 1 });
-
-        groundBuffer.p = chunkP.*;
 
         {
             var chunkOffsetY = @as(i32, -1);
@@ -461,11 +486,19 @@ fn FillGroundChunk(
             }
         }
 
-        work.buffer = buffer;
-        work.renderGroup = renderGroup;
-        work.task = task;
+        if (renderGroup.AllResourcesPresent()) {
+            groundBuffer.p = chunkP.*;
 
-        h.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
+        if (renderGroup.AllResourcesPresent()) {
+            groundBuffer.p = chunkP.*;
+
+                work.buffer = buffer;
+                work.renderGroup = renderGroup;
+                work.task = task;
+
+                h.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
+        }
+        }
     }
 }
 
@@ -657,6 +690,12 @@ const load_asset_work = struct {
     ID: h.game_asset_id,
     task: *h.task_with_memory,
     bitmap: *h.loaded_bitmap,
+
+    hasAlignment: bool,
+    alignX: i32,
+    topDownAlignY: i32,
+
+    finalState: h.asset_state,
 };
 
 pub fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
@@ -668,11 +707,17 @@ pub fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
     const work: *load_asset_work = @alignCast(@ptrCast(data));
     var thread: *platform.thread_context = undefined; // TODO: dangerous
 
-    work.bitmap.* = DEBUGLoadBMPDefaultAligned(thread, work.assets.ReadEntireFile, work.fileName); // alignX: i32, topDownAlignY: i32,
+    if (work.hasAlignment) {
+        work.bitmap.* = DEBUGLoadBMP(thread, work.assets.ReadEntireFile, work.fileName, work.alignX, work.topDownAlignY);
+    } else {
+        work.bitmap.* = DEBUGLoadBMPDefaultAligned(thread, work.assets.ReadEntireFile, work.fileName);
+    }
 
     @fence(.SeqCst);
 
-    work.assets.bitmaps[@intFromEnum(work.ID)] = work.bitmap;
+    work.assets.bitmaps[@intFromEnum(work.ID)].bitmap = work.bitmap;
+    work.assets.bitmaps[@intFromEnum(work.ID)].state = work.finalState;
+    work.assets.bitmaps[@intFromEnum(work.ID)].state = work.finalState;
 
     EndTaskWithMemory(work.task);
 }
@@ -680,33 +725,43 @@ pub fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub fn LoadAsset(assets: *h.game_assets, ID: h.game_asset_id) void {
-    if (BeginTaskWithMemory(assets.tranState)) |task| {
-        var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
+    if (h.AtomicCompareExchange(h.asset_state, &assets.bitmaps[@intFromEnum(ID)].state, .AssetState_Unloaded, .AssetState_Queued)) |_| {
+        if (BeginTaskWithMemory(assets.tranState)) |task| {
+            var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
 
-        work.assets = assets;
-        work.ID = ID;
-        work.fileName = "";
-        work.task = task;
-        work.bitmap = assets.assetArena.PushStruct(h.loaded_bitmap);
+            work.assets = assets;
+            work.fileName = "";
+            work.ID = ID;
+            work.task = task;
+            work.bitmap = assets.assetArena.PushStruct(h.loaded_bitmap);
+            work.hasAlignment = false;
+            work.finalState = .AssetState_Loaded;
 
-        switch (ID) {
-            .GAI_Backdrop => work.fileName = "test/test_background.bmp",
-            .GAI_Shadow => {
-                work.fileName = "test/test_hero_shadow.bmp";
-                //  72, 182
-            },
-            .GAI_Tree => {
-                work.fileName = "test2/tree00.bmp";
-                // 40, 80
-            },
-            .GAI_Stairwell => work.fileName = "test2/rock02.bmp",
-            .GAI_Sword => {
-                work.fileName = "test2/rock03.bmp";
-                // 29, 10
-            },
+            switch (ID) {
+                .GAI_Backdrop => work.fileName = "test/test_background.bmp",
+                .GAI_Shadow => {
+                    work.fileName = "test/test_hero_shadow.bmp";
+                    work.alignX = 72;
+                    work.topDownAlignY = 182;
+                    work.hasAlignment = true;
+                },
+                .GAI_Tree => {
+                    work.fileName = "test2/tree00.bmp";
+                    work.alignX = 40;
+                    work.topDownAlignY = 80;
+                    work.hasAlignment = true;
+                },
+                .GAI_Stairwell => work.fileName = "test2/rock02.bmp",
+                .GAI_Sword => {
+                    work.fileName = "test2/rock03.bmp";
+                    work.alignX = 29;
+                    work.topDownAlignY = 10;
+                    work.hasAlignment = true;
+                },
+            }
+
+            h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         }
-
-        h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
     }
 }
 
@@ -967,8 +1022,6 @@ pub export fn UpdateAndRender(
         tranState.assets.stones[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground01.bmp");
         tranState.assets.stones[2] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground02.bmp");
         tranState.assets.stones[3] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground03.bmp");
-
-        // LoadAssets(tranState, &tranState.assets, thread, gameMemory.DEBUGPlatformReadEntireFile);
 
         tranState.assets.heroBitmaps[0].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
         tranState.assets.heroBitmaps[0].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");

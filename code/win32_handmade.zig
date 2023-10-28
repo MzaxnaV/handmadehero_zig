@@ -1099,7 +1099,7 @@ fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
     return 0;
 }
 
-fn DoWorkerWork(_: *platform.work_queue, data: *anyopaque) void {
+fn DoWorkerWork(_: ?*platform.work_queue, data: *anyopaque) void {
     var buffer = [1:0]u8{0} ** 256;
 
     // std.debug.print("Thread {}: {s}\n", .{ win32.GetCurrentThreadId(), @ptrCast([*:0]const u8, data) });
@@ -1121,27 +1121,27 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     lowQueue.MakeQueue(1);
 
     if (!NOT_IGNORE) {
-        var a0 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '0' };
-        var a1 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '1' };
-        var a2 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '2' };
-        var a3 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '3' };
-        var a4 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '4' };
-        var a5 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '5' };
-        var a6 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '6' };
-        var a7 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '7' };
-        var a8 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '8' };
-        var a9 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'A', '9' };
+        var a0 = "String A0".*;
+        var a1 = "String A1".*;
+        var a2 = "String A2".*;
+        var a3 = "String A3".*;
+        var a4 = "String A4".*;
+        var a5 = "String A5".*;
+        var a6 = "String A6".*;
+        var a7 = "String A7".*;
+        var a8 = "String A8".*;
+        var a9 = "String A9".*;
 
-        var b0 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '0' };
-        var b1 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '1' };
-        var b2 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '2' };
-        var b3 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '3' };
-        var b4 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '4' };
-        var b5 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '5' };
-        var b6 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '6' };
-        var b7 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '7' };
-        var b8 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '8' };
-        var b9 = [_:0]u8{ 'S', 't', 'r', 'i', 'n', 'g', ' ', 'B', '9' };
+        var b0 = "String B0".*;
+        var b1 = "String B1".*;
+        var b2 = "String B2".*;
+        var b3 = "String B3".*;
+        var b4 = "String B4".*;
+        var b5 = "String B5".*;
+        var b6 = "String B6".*;
+        var b7 = "String B7".*;
+        var b8 = "String B8".*;
+        var b9 = "String B9".*;
 
         Win32AddEntry(highQueue.to(), DoWorkerWork, &a0);
         Win32AddEntry(highQueue.to(), DoWorkerWork, &a1);
