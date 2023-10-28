@@ -730,12 +730,11 @@ pub fn LoadAsset(assets: *h.game_assets, ID: h.game_asset_id) void {
             var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
 
             work.assets = assets;
-            work.ID = ID;
             work.fileName = "";
+            work.ID = ID;
             work.task = task;
-            work.hasAlignment = false;
             work.bitmap = assets.assetArena.PushStruct(h.loaded_bitmap);
-            work.finalState = .AssetState_Loaded;
+            work.hasAlignment = false;
             work.finalState = .AssetState_Loaded;
 
             switch (ID) {
