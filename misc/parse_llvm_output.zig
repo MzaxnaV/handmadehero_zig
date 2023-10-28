@@ -24,6 +24,8 @@ const sub_headings = [_][]const u8{
     "Average Wait times",
 };
 
+const fileName = "llvm_mca_output";
+
 const StringIterator = struct {
     const Self = @This();
 
@@ -47,9 +49,7 @@ const StringIterator = struct {
             return null;
         }
 
-        var i: usize = 0;
-
-        while (i <= (self.slice.len - sub_str.len)) : (i += 1) {
+        for (0..(self.slice.len - sub_str.len + 1)) |i| {
             if ((self.slice[i] == sub_str[0]) and std.mem.eql(u8, sub_str, self.slice[i .. i + sub_str.len])) {
                 return i;
             }
@@ -66,8 +66,8 @@ pub fn main() !void {
         _ = gpa.detectLeaks();
     }
 
-    const source = try std.fs.cwd().openFile("llvm_mca_output.txt", .{ .mode = .read_only });
-    const dest = try std.fs.cwd().createFile("llvm_mca_output.md", .{ .truncate = true });
+    const source = try std.fs.cwd().openFile(fileName ++ ".txt", .{ .mode = .read_only });
+    const dest = try std.fs.cwd().createFile(fileName ++ ".md", .{ .truncate = true });
 
     var input_buf = try allocator.alloc(u8, 1000);
     defer allocator.free(input_buf);

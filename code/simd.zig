@@ -37,9 +37,8 @@ pub const z = struct {
     // TODO (Manav): doesn't generate a call to cvtps2dq, yet
     pub inline fn _mm_cvtps_epi32(v: f32x4) i32x4 {
         var result = i32x4{ 0, 0, 0, 0 };
-        comptime var index = 0;
 
-        inline while (index < 4) : (index += 1) {
+        inline for (0..4) |index| {
             result[index] = @as(i32, @intFromFloat(@round(v[index])));
         }
 
@@ -48,9 +47,8 @@ pub const z = struct {
 
     pub inline fn _mm_cvttps_epi32(v: f32x4) i32x4 {
         var result = i32x4{ 0, 0, 0, 0 };
-        comptime var index = 0;
 
-        inline while (index < 4) : (index += 1) {
+        inline for (0..4) |index| {
             result[index] = @as(i32, @intFromFloat(v[index]));
         }
 
@@ -59,9 +57,8 @@ pub const z = struct {
 
     pub inline fn _mm_cvtepi32_ps(v: i32x4) f32x4 {
         var result = f32x4{ 0, 0, 0, 0 };
-        comptime var index = 0;
 
-        inline while (index < 4) : (index += 1) {
+        inline for (0..4) |index| {
             result[index] = @as(f32, @floatFromInt(v[index]));
         }
 
@@ -93,9 +90,8 @@ pub const z = struct {
         const __b = @as(i16x8, @bitCast(b));
 
         var result = u16x8{ 0, 0, 0, 0, 0, 0, 0, 0 };
-        comptime var index = 0;
 
-        inline while (index < 8) : (index += 1) {
+        inline for (0..8) |index| {
             result[index] = @as(u16, @truncate(@as(u32, @bitCast(@as(i32, __a[index]) * @as(i32, __b[index])))));
         }
 
@@ -107,9 +103,8 @@ pub const z = struct {
         const __b = @as(i16x8, @bitCast(b));
 
         var result = u16x8{ 0, 0, 0, 0, 0, 0, 0, 0 };
-        comptime var index = 0;
 
-        inline while (index < 8) : (index += 1) {
+        inline for (0..8) |index| {
             // NOTE: for some reason not storing these gives erros when function inlines
             var __ai = @as(i32, __a[index]);
             var __bi = @as(i32, __b[index]);

@@ -1,4 +1,7 @@
-const SquareRoot = @import("handmade_intrinsics.zig").SquareRoot;
+const h = struct {
+    usingnamespace @import("handmade_intrinsics.zig");
+};
+
 const MaxInt = @import("std").math.maxInt;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------------
@@ -144,8 +147,7 @@ inline fn Rectangle(comptime n: comptime_int) type {
         pub inline fn IsInRect(self: *const Self, testP: v) bool {
             var result = true;
 
-            comptime var i = 0;
-            inline while (i < n) : (i += 1) {
+            inline for (0..n) |i| {
                 result = result and ((testP[i] >= self.min[i]) and (testP[i] < self.max[i]));
             }
 
@@ -155,8 +157,7 @@ inline fn Rectangle(comptime n: comptime_int) type {
         pub inline fn GetBarycentric(self: *const Self, p: v) v {
             var result: v = [1]f32{0} ** n;
 
-            comptime var i = 0;
-            inline while (i < n) : (i += 1) {
+            inline for (0..n) |i| {
                 result[i] = SafeRatiof0(p[i] - self.min[i], self.max[i] - self.min[i]);
             }
 
@@ -170,8 +171,7 @@ inline fn Rectangle(comptime n: comptime_int) type {
 pub inline fn Add(a: anytype, b: [a.len]f32) [a.len]f32 {
     var result = [1]f32{0} ** a.len;
 
-    comptime var i = 0;
-    inline while (i < result.len) : (i += 1) {
+    inline for (0..result.len) |i| {
         result[i] = a[i] + b[i];
     }
 
@@ -185,8 +185,7 @@ pub inline fn AddTo(vec: anytype, other: [vec.len]f32) void {
         }
     }
 
-    comptime var i = 0;
-    inline while (i < vec.len) : (i += 1) {
+    inline for (0..vec.len) |i| {
         (vec.*)[i] += other[i];
     }
 }
@@ -194,8 +193,7 @@ pub inline fn AddTo(vec: anytype, other: [vec.len]f32) void {
 pub inline fn Sub(a: anytype, b: [a.len]f32) [a.len]f32 {
     var result = [1]f32{0} ** a.len;
 
-    comptime var i = 0;
-    inline while (i < result.len) : (i += 1) {
+    inline for (0..result.len) |i| {
         result[i] = a[i] - b[i];
     }
 
@@ -209,9 +207,8 @@ pub inline fn SubFrom(vec: anytype, other: [vec.len]f32) void {
         }
     }
 
-    comptime var i = 0;
-    // TODO (Manav): check the performance vs normal while
-    inline while (i < vec.len) : (i += 1) {
+    // TODO (Manav): check the performance vs normal for
+    inline for (0..vec.len) |i| {
         (vec.*)[i] -= other[i];
     }
 }
@@ -219,8 +216,7 @@ pub inline fn SubFrom(vec: anytype, other: [vec.len]f32) void {
 pub inline fn Scale(vec: anytype, val: f32) [vec.len]f32 {
     var result = [1]f32{0} ** vec.len;
 
-    comptime var i = 0;
-    inline while (i < result.len) : (i += 1) {
+    inline for (0..result.len) |i| {
         result[i] = val * vec[i];
     }
 
@@ -230,8 +226,7 @@ pub inline fn Scale(vec: anytype, val: f32) [vec.len]f32 {
 pub inline fn Hammard(a: anytype, b: [a.len]f32) [a.len]f32 {
     var result = [1]f32{0} ** a.len;
 
-    comptime var i = 0;
-    inline while (i < result.len) : (i += 1) {
+    inline for (0..result.len) |i| {
         result[i] = a[i] * b[i];
     }
 
@@ -329,8 +324,7 @@ pub inline fn Inner(a: anytype, b: [a.len]f32) f32 {
     }
     var result = @as(f32, 0);
 
-    var i = @as(u32, 0);
-    while (i < a.len) : (i += 1) {
+    for (0..a.len) |i| {
         result += a[i] * b[i];
     }
 
@@ -348,7 +342,7 @@ pub inline fn LengthSq(a: anytype) f32 {
 }
 
 pub inline fn Length(a: anytype) f32 {
-    const result = SquareRoot(LengthSq(a));
+    const result = h.SquareRoot(LengthSq(a));
     return result;
 }
 

@@ -1,12 +1,13 @@
 const platform = @import("handmade_platform");
 const assert = platform.Assert;
 
-const hd = @import("handmade_data.zig");
-const hm = @import("handmade_math.zig");
-const he = @import("handmade_entity.zig");
-const hsr = @import("handmade_sim_region.zig");
-
-const RoundF32ToInt = @import("handmade_intrinsics.zig").RoundF32ToInt;
+const h = struct {
+    usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_math.zig");
+    usingnamespace @import("handmade_entity.zig");
+    usingnamespace @import("handmade_sim_region.zig");
+    usingnamespace @import("handmade_intrinsics.zig");
+};
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -22,7 +23,7 @@ pub const world_position = struct {
     chunkY: i32 = 0,
     chunkZ: i32 = 0,
 
-    offset_: hm.v3 = hm.v3{ 0, 0, 0 },
+    offset_: h.v3 = h.v3{ 0, 0, 0 },
 };
 
 pub const world_entity_block = struct {
@@ -42,7 +43,7 @@ pub const world_chunk = struct {
 };
 
 pub const world = struct {
-    chunkDimInMeters: hm.v3,
+    chunkDimInMeters: h.v3,
 
     firstFree: ?*world_entity_block,
 
@@ -69,11 +70,11 @@ inline fn IsCanonicalCoord(chunkDim: f32, tileRel: f32) bool {
     return result;
 }
 
-pub inline fn IsCanonical(w: *const world, offset: hm.v3) bool {
+pub inline fn IsCanonical(w: *const world, offset: h.v3) bool {
     const chunkDimInMeters = w.chunkDimInMeters;
-    const result = (IsCanonicalCoord(hm.X(chunkDimInMeters), hm.X(offset)) and
-        IsCanonicalCoord(hm.Y(chunkDimInMeters), hm.Y(offset)) and
-        IsCanonicalCoord(hm.Z(chunkDimInMeters), hm.Z(offset)));
+    const result = (IsCanonicalCoord(h.X(chunkDimInMeters), h.X(offset)) and
+        IsCanonicalCoord(h.Y(chunkDimInMeters), h.Y(offset)) and
+        IsCanonicalCoord(h.Z(chunkDimInMeters), h.Z(offset)));
     return result;
 }
 
@@ -85,7 +86,7 @@ pub inline fn AreInSameChunk(w: *const world, a: *const world_position, b: *cons
     return result;
 }
 
-pub fn GetWorldChunk(memoryArena: ?*hd.memory_arena, w: *world, chunkX: i32, chunkY: i32, chunkZ: i32) ?*world_chunk {
+pub fn GetWorldChunk(memoryArena: ?*h.memory_arena, w: *world, chunkX: i32, chunkY: i32, chunkZ: i32) ?*world_chunk {
     assert(chunkX > -TILE_CHUNK_SAFE_MARGIN);
     assert(chunkY > -TILE_CHUNK_SAFE_MARGIN);
     assert(chunkZ > -TILE_CHUNK_SAFE_MARGIN);
@@ -128,17 +129,17 @@ pub fn GetWorldChunk(memoryArena: ?*hd.memory_arena, w: *world, chunkX: i32, chu
 }
 
 inline fn RecanonicalizeCoord(chunkDim: f32, tile: *i32, tileRel: *f32) void {
-    var offSet = RoundF32ToInt(i32, tileRel.* / chunkDim);
+    var offSet = h.RoundF32ToInt(i32, tileRel.* / chunkDim);
     tile.* +%= offSet;
     tileRel.* -= @as(f32, @floatFromInt(offSet)) * chunkDim;
 
     assert(IsCanonicalCoord(chunkDim, tileRel.*));
 }
 
-pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset: hm.v3) world_position {
+pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset: h.v3) world_position {
     var result = basePos;
 
-    hm.AddTo(&result.offset_, offset); // NOTE (Manav): result.offset_ += offset
+    h.AddTo(&result.offset_, offset); // NOTE (Manav): result.offset_ += offset
 
     RecanonicalizeCoord(w.chunkDimInMeters[0], &result.chunkX, &result.offset_[0]);
     RecanonicalizeCoord(w.chunkDimInMeters[1], &result.chunkY, &result.offset_[1]);
@@ -147,14 +148,14 @@ pub inline fn MapIntoChunkSpace(w: *const world, basePos: world_position, offset
     return result;
 }
 
-pub inline fn Substract(w: *const world, a: *const world_position, b: *const world_position) hm.v3 {
-    const dTile = hm.v3{
+pub inline fn Substract(w: *const world, a: *const world_position, b: *const world_position) h.v3 {
+    const dTile = h.v3{
         @as(f32, @floatFromInt(a.chunkX)) - @as(f32, @floatFromInt(b.chunkX)),
         @as(f32, @floatFromInt(a.chunkY)) - @as(f32, @floatFromInt(b.chunkY)),
         @as(f32, @floatFromInt(a.chunkZ)) - @as(f32, @floatFromInt(b.chunkZ)),
     };
 
-    const result = hm.Add(hm.Hammard(w.chunkDimInMeters, dTile), hm.Sub(a.offset_, b.offset_));
+    const result = h.Add(h.Hammard(w.chunkDimInMeters, dTile), h.Sub(a.offset_, b.offset_));
 
     return result;
 }
@@ -179,7 +180,7 @@ pub inline fn CenteredChunkPoint(chunkX: i32, chunkY: i32, chunkZ: i32) world_po
 //     return result;
 // }
 
-pub fn ChangeEntityLocationRaw(arena: *hd.memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*const world_position, newP: ?*const world_position) void {
+pub fn ChangeEntityLocationRaw(arena: *h.memory_arena, w: *world, lowEntityIndex: u32, oldP: ?*const world_position, newP: ?*const world_position) void {
     assert((oldP == null) or IsValid(oldP.?.*));
     assert((newP == null) or IsValid(newP.?.*));
 
@@ -246,11 +247,11 @@ pub fn ChangeEntityLocationRaw(arena: *hd.memory_arena, w: *world, lowEntityInde
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
-pub fn ChangeEntityLocation(arena: *hd.memory_arena, w: *world, lowEntityIndex: u32, lowEntity: *hd.low_entity, newPInit: world_position) void {
+pub fn ChangeEntityLocation(arena: *h.memory_arena, w: *world, lowEntityIndex: u32, lowEntity: *h.low_entity, newPInit: world_position) void {
     var oldP: ?*const world_position = null;
     var newP: ?*const world_position = null;
 
-    if (!he.IsSet(&lowEntity.sim, @intFromEnum(hsr.sim_entity_flags.NonSpatial)) and IsValid(lowEntity.p)) {
+    if (!h.IsSet(&lowEntity.sim, @intFromEnum(h.sim_entity_flags.NonSpatial)) and IsValid(lowEntity.p)) {
         oldP = &lowEntity.p;
     }
 
@@ -262,14 +263,14 @@ pub fn ChangeEntityLocation(arena: *hd.memory_arena, w: *world, lowEntityIndex: 
 
     if (newP) |p| {
         lowEntity.p = p.*;
-        he.ClearFlags(&lowEntity.sim, @intFromEnum(hsr.sim_entity_flags.NonSpatial));
+        h.ClearFlags(&lowEntity.sim, @intFromEnum(h.sim_entity_flags.NonSpatial));
     } else {
         lowEntity.p = NullPosition();
-        he.AddFlags(&lowEntity.sim, @intFromEnum(hsr.sim_entity_flags.NonSpatial));
+        h.AddFlags(&lowEntity.sim, @intFromEnum(h.sim_entity_flags.NonSpatial));
     }
 }
 
-pub fn InitializeWorld(w: *world, chunkDimInMeters: hm.v3) void {
+pub fn InitializeWorld(w: *world, chunkDimInMeters: h.v3) void {
     w.chunkDimInMeters = chunkDimInMeters;
     w.firstFree = null;
 

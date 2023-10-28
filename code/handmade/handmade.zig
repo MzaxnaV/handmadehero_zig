@@ -374,18 +374,14 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     EndTaskWithMemory(work.task);
 }
 
-fn PickBest(infos: []h.asset_bitmap_info, tags: []h.asset_tag,  matchVector: []f32, weightVector: []f32) void {
-    var infoIndex: u32 = 0;
+fn PickBest(infos: []h.asset_bitmap_info, tags: []h.asset_tag, matchVector: []f32, weightVector: []f32) void {
     var bestDiff = platform.F32MAXIMUM;
     var bestIndex: u32 = 0;
 
-    while (infoIndex < infos.ptr) : (infoIndex += 1) {
-        var info = infos[infoIndex];
-        var tagIndex: u32 = info.firstTagIndex;
-
+    for (infos, 0..) |info, infoIndex| {
         var totalWeightedDiff: f32 = 0.0;
 
-        while (tagIndex < info.onePastLastTagIndex) : (tagIndex += 1) {
+        for (info.firstTagIndex..info.onePastLastTagIndex) |tagIndex| {
             var tag: h.asset_tag = tags[tagIndex];
             const difference = matchVector[tag.ID] - tag.value;
             const weightedDiff = weightVector[tag.ID] * h.AbsoluteValue(difference);
@@ -407,7 +403,6 @@ fn FillGroundChunk(
 ) void {
     if (BeginTaskWithMemory(tranState)) |task| {
         var work: *fill_ground_chunk_work = task.arena.PushStruct(fill_ground_chunk_work);
-
 
         var buffer = &groundBuffer.bitmap;
         buffer.alignPercentage = h.v2{ 0.5, 0.5 };
@@ -489,15 +484,11 @@ fn FillGroundChunk(
         if (renderGroup.AllResourcesPresent()) {
             groundBuffer.p = chunkP.*;
 
-        if (renderGroup.AllResourcesPresent()) {
-            groundBuffer.p = chunkP.*;
+            work.buffer = buffer;
+            work.renderGroup = renderGroup;
+            work.task = task;
 
-                work.buffer = buffer;
-                work.renderGroup = renderGroup;
-                work.task = task;
-
-                h.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
-        }
+            h.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
         }
     }
 }

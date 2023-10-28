@@ -1,8 +1,11 @@
 const platform = @import("handmade_platform");
-const hsr = @import("handmade_sim_region.zig");
-const hw = @import("handmade_world.zig");
-const hm = @import("handmade_math.zig");
-const hrg = @import("handmade_render_group.zig");
+
+const h = struct {
+    usingnamespace @import("handmade_sim_region.zig");
+    usingnamespace @import("handmade_world.zig");
+    usingnamespace @import("handmade_math.zig");
+    usingnamespace @import("handmade_render_group.zig");
+};
 
 const hi = platform.handmade_internal;
 
@@ -87,21 +90,21 @@ pub const temporary_memory = struct {
 };
 
 pub const hero_bitmaps = struct {
-    head: hrg.loaded_bitmap,
-    cape: hrg.loaded_bitmap,
-    torso: hrg.loaded_bitmap,
+    head: h.loaded_bitmap,
+    cape: h.loaded_bitmap,
+    torso: h.loaded_bitmap,
 };
 
 pub const low_entity = struct {
-    p: hw.world_position,
-    sim: hsr.sim_entity,
+    p: h.world_position,
+    sim: h.sim_entity,
 };
 
 pub const controlled_hero = struct {
     entityIndex: u32 = 0,
 
-    ddP: hm.v2 = hm.v2{ 0, 0 },
-    dSword: hm.v2 = hm.v2{ 0, 0 },
+    ddP: h.v2 = h.v2{ 0, 0 },
+    dSword: h.v2 = h.v2{ 0, 0 },
     dZ: f32 = 0,
 };
 
@@ -114,8 +117,8 @@ pub const pairwise_collision_rule = struct {
 };
 
 pub const ground_buffer = struct {
-    p: hw.world_position,
-    bitmap: hrg.loaded_bitmap,
+    p: h.world_position,
+    bitmap: h.loaded_bitmap,
 };
 
 pub const asset_state = enum {
@@ -127,7 +130,7 @@ pub const asset_state = enum {
 
 pub const asset_slot = struct {
     state: asset_state,
-    bitmap: ?*hrg.loaded_bitmap,
+    bitmap: ?*h.loaded_bitmap,
 };
 
 pub const game_asset_id = enum(u32) {
@@ -150,7 +153,7 @@ pub const asset_tag = struct {
 };
 
 pub const asset_bitmap_info = struct {
-    alignPercentage: hm.v2 = .{ 0, 0 },
+    alignPercentage: h.v2 = .{ 0, 0 },
     widthOverHeight: f32 = 0,
 
     width: i32 = 0,
@@ -172,13 +175,13 @@ pub const game_assets = struct {
 
     bitmaps: [game_asset_id.len()]asset_slot,
 
-    grass: [2]hrg.loaded_bitmap,
-    stones: [4]hrg.loaded_bitmap,
-    tufts: [3]hrg.loaded_bitmap,
+    grass: [2]h.loaded_bitmap,
+    stones: [4]h.loaded_bitmap,
+    tufts: [3]h.loaded_bitmap,
 
     heroBitmaps: [4]hero_bitmaps,
 
-    pub inline fn GetBitmap(self: *game_assets, comptime ID: game_asset_id) ?*hrg.loaded_bitmap {
+    pub inline fn GetBitmap(self: *game_assets, comptime ID: game_asset_id) ?*h.loaded_bitmap {
         var result = self.bitmaps[@intFromEnum(ID)].bitmap;
         return result;
     }
@@ -186,12 +189,12 @@ pub const game_assets = struct {
 
 pub const game_state = struct {
     worldArena: memory_arena,
-    world: *hw.world,
+    world: *h.world,
 
     typicalFloorHeight: f32,
 
     cameraFollowingEntityIndex: u32,
-    cameraP: hw.world_position = .{},
+    cameraP: h.world_position = .{},
 
     controlledHeroes: [platform.CONTROLLERS]controlled_hero,
 
@@ -201,19 +204,19 @@ pub const game_state = struct {
     collisionRuleHash: [256]?*pairwise_collision_rule,
     firstFreeCollisionRule: ?*pairwise_collision_rule,
 
-    nullCollision: *hsr.sim_entity_collision_volume_group,
-    swordCollision: *hsr.sim_entity_collision_volume_group,
-    stairCollision: *hsr.sim_entity_collision_volume_group,
-    playerCollision: *hsr.sim_entity_collision_volume_group,
-    monstarCollision: *hsr.sim_entity_collision_volume_group,
-    familiarCollision: *hsr.sim_entity_collision_volume_group,
-    wallCollision: *hsr.sim_entity_collision_volume_group,
-    standardRoomCollision: *hsr.sim_entity_collision_volume_group,
+    nullCollision: *h.sim_entity_collision_volume_group,
+    swordCollision: *h.sim_entity_collision_volume_group,
+    stairCollision: *h.sim_entity_collision_volume_group,
+    playerCollision: *h.sim_entity_collision_volume_group,
+    monstarCollision: *h.sim_entity_collision_volume_group,
+    familiarCollision: *h.sim_entity_collision_volume_group,
+    wallCollision: *h.sim_entity_collision_volume_group,
+    standardRoomCollision: *h.sim_entity_collision_volume_group,
 
     time: f32,
 
-    testDiffuse: hrg.loaded_bitmap,
-    testNormal: hrg.loaded_bitmap,
+    testDiffuse: h.loaded_bitmap,
+    testNormal: h.loaded_bitmap,
 };
 
 pub const task_with_memory = struct {
@@ -236,7 +239,7 @@ pub const transient_state = struct {
 
     envMapWidth: u32,
     envMapHeight: u32,
-    envMaps: [3]hrg.environment_map,
+    envMaps: [3]h.environment_map,
 
     assets: game_assets,
 };
