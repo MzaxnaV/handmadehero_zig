@@ -1,5 +1,6 @@
 const platform = @import("handmade_platform");
 const h = struct {
+    usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_entity.zig");
     usingnamespace @import("handmade_intrinsics.zig");
     usingnamespace @import("handmade_data.zig");
@@ -45,118 +46,6 @@ fn OutputSound(_: *h.game_state, soundBuffer: *platform.sound_output_buffer, ton
         //     gameState.tSine -= 2.0 * platform.PI32;
         // }
     }
-}
-
-/// Defaults: ```alignX =  , topDownAlignY = ```
-fn DEBUGLoadBMPDefaultAligned(
-    thread: *platform.thread_context,
-    ReadEntireFile: handmade_internal.debug_platform_read_entire_file,
-    fileName: [*:0]const u8,
-) h.loaded_bitmap {
-    var result = DEBUGLoadBMP(thread, ReadEntireFile, fileName, 0, 0);
-    result.alignPercentage = .{ 0.5, 0.5 };
-
-    return result;
-}
-
-fn DEBUGLoadBMP(
-    thread: *platform.thread_context,
-    ReadEntireFile: handmade_internal.debug_platform_read_entire_file,
-    fileName: [*:0]const u8,
-    alignX: i32,
-    topDownAlignY: i32,
-) h.loaded_bitmap {
-    const bitmap_header = packed struct {
-        fileType: u16,
-        fileSize: u32,
-        reserved1: u16,
-        reserved2: u16,
-        bitmapOffset: u32,
-        size: u32,
-        width: i32,
-        height: i32,
-        planes: u16,
-        bitsPerPixel: u16,
-        compression: u32,
-        sizeOfBitmap: u32,
-        horzResolution: u32,
-        vertResolution: u32,
-        colorsUsed: u32,
-        colorsImportant: u32,
-
-        redMask: u32,
-        greenMask: u32,
-        blueMask: u32,
-    };
-
-    var result = h.loaded_bitmap{};
-
-    const readResult = ReadEntireFile(thread, fileName);
-    if (readResult.contentSize != 0) {
-        const header = @as(*align(@alignOf(u8)) bitmap_header, @ptrCast(readResult.contents));
-        const pixels = readResult.contents + header.bitmapOffset;
-        result.width = header.width;
-        result.height = header.height;
-        result.memory = pixels;
-        result.alignPercentage = TopDownAlign(&result, h.V2(alignX, topDownAlignY));
-        result.widthOverHeight = h.SafeRatiof0(@as(f32, @floatFromInt(result.width)), @as(f32, @floatFromInt(result.height)));
-
-        assert(header.height >= 0);
-        assert(header.compression == 3);
-
-        const redMask = header.redMask;
-        const greenMask = header.greenMask;
-        const blueMask = header.blueMask;
-        const alphaMask = ~(redMask | greenMask | blueMask);
-
-        const redScan = h.FindLeastSignificantSetBit(redMask);
-        const greenScan = h.FindLeastSignificantSetBit(greenMask);
-        const blueScan = h.FindLeastSignificantSetBit(blueMask);
-        const alphaScan = h.FindLeastSignificantSetBit(alphaMask);
-
-        const redShiftDown = @as(u5, @intCast(redScan));
-        const greenShiftDown = @as(u5, @intCast(greenScan));
-        const blueShiftDown = @as(u5, @intCast(blueScan));
-        const alphaShiftDown = @as(u5, @intCast(alphaScan));
-
-        const sourceDest = @as([*]align(1) u32, @ptrCast(result.memory));
-
-        var index = @as(u32, 0);
-        while (index < @as(u32, @intCast(header.height * header.width))) : (index += 1) {
-            const c = sourceDest[index];
-
-            var texel = h.v4{
-                @as(f32, @floatFromInt((c & redMask) >> redShiftDown)),
-                @as(f32, @floatFromInt((c & greenMask) >> greenShiftDown)),
-                @as(f32, @floatFromInt((c & blueMask) >> blueShiftDown)),
-                @as(f32, @floatFromInt((c & alphaMask) >> alphaShiftDown)),
-            };
-
-            texel = h.SRGB255ToLinear1(texel);
-
-            if (NOT_IGNORE) {
-                // texel.rgb *= texel.a;
-                texel = h.ToV4(h.Scale(h.RGB(texel), h.A(texel)), h.A(texel));
-            }
-
-            texel = h.Linear1ToSRGB255(texel);
-
-            sourceDest[index] =
-                (@as(u32, @intFromFloat((h.A(texel) + 0.5))) << 24 |
-                @as(u32, @intFromFloat((h.R(texel) + 0.5))) << 16 |
-                @as(u32, @intFromFloat((h.G(texel) + 0.5))) << 8 |
-                @as(u32, @intFromFloat((h.B(texel) + 0.5))) << 0);
-        }
-    }
-
-    result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
-
-    if (!NOT_IGNORE) {
-        result.memory += @as(usize, @intCast(result.pitch * (result.height - 1)));
-        result.pitch = -result.width;
-    }
-
-    return result;
 }
 
 const add_low_entity_result = struct {
@@ -330,7 +219,7 @@ fn MakeNullCollision(gameState: *h.game_state) *h.sim_entity_collision_volume_gr
     return group;
 }
 
-fn BeginTaskWithMemory(tranState: *h.transient_state) ?*h.task_with_memory {
+pub fn BeginTaskWithMemory(tranState: *h.transient_state) ?*h.task_with_memory {
     var foundTask: ?*h.task_with_memory = null;
 
     var taskIndex: u32 = 0;
@@ -347,7 +236,7 @@ fn BeginTaskWithMemory(tranState: *h.transient_state) ?*h.task_with_memory {
     return foundTask;
 }
 
-inline fn EndTaskWithMemory(task: *h.task_with_memory) void {
+pub fn EndTaskWithMemory(task: *h.task_with_memory) void {
     h.EndTemporaryMemory(task.memoryFlush);
 
     @fence(.SeqCst);
@@ -374,30 +263,26 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     EndTaskWithMemory(work.task);
 }
 
-fn PickBest(infos: []h.asset_bitmap_info, tags: []h.asset_tag,  matchVector: []f32, weightVector: []f32) void {
-    var infoIndex: u32 = 0;
-    var bestDiff = platform.F32MAXIMUM;
-    var bestIndex: u32 = 0;
+// fn PickBest(infos: []h.asset_bitmap_info, tags: []h.asset_tag, matchVector: []f32, weightVector: []f32) void {
+//     var bestDiff = platform.F32MAXIMUM;
+//     var bestIndex: u32 = 0;
 
-    while (infoIndex < infos.ptr) : (infoIndex += 1) {
-        var info = infos[infoIndex];
-        var tagIndex: u32 = info.firstTagIndex;
+//     for (infos, 0..) |info, infoIndex| {
+//         var totalWeightedDiff: f32 = 0.0;
 
-        var totalWeightedDiff: f32 = 0.0;
+//         for (info.firstTagIndex..info.onePastLastTagIndex) |tagIndex| {
+//             var tag: h.asset_tag = tags[tagIndex];
+//             const difference = matchVector[tag.ID] - tag.value;
+//             const weightedDiff = weightVector[tag.ID] * h.AbsoluteValue(difference);
+//             totalWeightedDiff += weightedDiff;
+//         }
 
-        while (tagIndex < info.onePastLastTagIndex) : (tagIndex += 1) {
-            var tag: h.asset_tag = tags[tagIndex];
-            const difference = matchVector[tag.ID] - tag.value;
-            const weightedDiff = weightVector[tag.ID] * h.AbsoluteValue(difference);
-            totalWeightedDiff += weightedDiff;
-        }
-
-        if (bestDiff > totalWeightedDiff) {
-            bestDiff = totalWeightedDiff;
-            bestIndex = infoIndex;
-        }
-    }
-}
+//         if (bestDiff > totalWeightedDiff) {
+//             bestDiff = totalWeightedDiff;
+//             bestIndex = infoIndex;
+//         }
+//     }
+// }
 
 fn FillGroundChunk(
     tranState: *h.transient_state,
@@ -408,7 +293,6 @@ fn FillGroundChunk(
     if (BeginTaskWithMemory(tranState)) |task| {
         var work: *fill_ground_chunk_work = task.arena.PushStruct(fill_ground_chunk_work);
 
-
         var buffer = &groundBuffer.bitmap;
         buffer.alignPercentage = h.v2{ 0.5, 0.5 };
         buffer.widthOverHeight = 1.0;
@@ -418,7 +302,7 @@ fn FillGroundChunk(
         assert(width == height);
         const haldDim = h.Scale(.{ 0.5 * width, 0.5 * height }, 1);
 
-        const renderGroup = h.render_group.Allocate(&tranState.assets, &task.arena, 0);
+        const renderGroup = h.render_group.Allocate(tranState.assets, &task.arena, 0);
         renderGroup.Orthographic(
             @intCast(buffer.width),
             @intCast(buffer.height),
@@ -489,15 +373,11 @@ fn FillGroundChunk(
         if (renderGroup.AllResourcesPresent()) {
             groundBuffer.p = chunkP.*;
 
-        if (renderGroup.AllResourcesPresent()) {
-            groundBuffer.p = chunkP.*;
+            work.buffer = buffer;
+            work.renderGroup = renderGroup;
+            work.task = task;
 
-                work.buffer = buffer;
-                work.renderGroup = renderGroup;
-                work.task = task;
-
-                h.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
-        }
+            h.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
         }
     }
 }
@@ -668,105 +548,9 @@ pub inline fn ChunkPosFromTilePos(w: *h.world, absTileX: i32, absTileY: i32, abs
     return result;
 }
 
-inline fn TopDownAlign(bitmap: *const h.loaded_bitmap, alignment: h.v2) h.v2 {
-    const fixedAlignment = h.v2{
-        h.SafeRatiof0(h.X(alignment), @as(f32, @floatFromInt(bitmap.width))),
-        h.SafeRatiof0(@as(f32, @floatFromInt(bitmap.height - 1)) - h.Y(alignment), @as(f32, @floatFromInt(bitmap.height))),
-    };
-    return fixedAlignment;
-}
-
-fn SetTopDownAlignment(bitmaps: *h.hero_bitmaps, alignment: h.v2) void {
-    const fixedAlignment = TopDownAlign(&bitmaps.head, alignment);
-
-    bitmaps.head.alignPercentage = fixedAlignment;
-    bitmaps.torso.alignPercentage = fixedAlignment;
-    bitmaps.cape.alignPercentage = fixedAlignment;
-}
-
-const load_asset_work = struct {
-    assets: *h.game_assets,
-    fileName: [*:0]const u8,
-    ID: h.game_asset_id,
-    task: *h.task_with_memory,
-    bitmap: *h.loaded_bitmap,
-
-    hasAlignment: bool,
-    alignX: i32,
-    topDownAlignY: i32,
-
-    finalState: h.asset_state,
-};
-
-pub fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
-    comptime {
-        if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(FillGroundChunkWork)) {
-            @compileError("Function signature mismatch!");
-        }
-    }
-    const work: *load_asset_work = @alignCast(@ptrCast(data));
-    var thread: *platform.thread_context = undefined; // TODO: dangerous
-
-    if (work.hasAlignment) {
-        work.bitmap.* = DEBUGLoadBMP(thread, work.assets.ReadEntireFile, work.fileName, work.alignX, work.topDownAlignY);
-    } else {
-        work.bitmap.* = DEBUGLoadBMPDefaultAligned(thread, work.assets.ReadEntireFile, work.fileName);
-    }
-
-    @fence(.SeqCst);
-
-    work.assets.bitmaps[@intFromEnum(work.ID)].bitmap = work.bitmap;
-    work.assets.bitmaps[@intFromEnum(work.ID)].state = work.finalState;
-    work.assets.bitmaps[@intFromEnum(work.ID)].state = work.finalState;
-
-    EndTaskWithMemory(work.task);
-}
-
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
-pub fn LoadAsset(assets: *h.game_assets, ID: h.game_asset_id) void {
-    if (h.AtomicCompareExchange(h.asset_state, &assets.bitmaps[@intFromEnum(ID)].state, .AssetState_Unloaded, .AssetState_Queued)) |_| {
-        if (BeginTaskWithMemory(assets.tranState)) |task| {
-            var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
-
-            work.assets = assets;
-            work.fileName = "";
-            work.ID = ID;
-            work.task = task;
-            work.bitmap = assets.assetArena.PushStruct(h.loaded_bitmap);
-            work.hasAlignment = false;
-            work.finalState = .AssetState_Loaded;
-
-            switch (ID) {
-                .GAI_Backdrop => work.fileName = "test/test_background.bmp",
-                .GAI_Shadow => {
-                    work.fileName = "test/test_hero_shadow.bmp";
-                    work.alignX = 72;
-                    work.topDownAlignY = 182;
-                    work.hasAlignment = true;
-                },
-                .GAI_Tree => {
-                    work.fileName = "test2/tree00.bmp";
-                    work.alignX = 40;
-                    work.topDownAlignY = 80;
-                    work.hasAlignment = true;
-                },
-                .GAI_Stairwell => work.fileName = "test2/rock02.bmp",
-                .GAI_Sword => {
-                    work.fileName = "test2/rock03.bmp";
-                    work.alignX = 29;
-                    work.topDownAlignY = 10;
-                    work.hasAlignment = true;
-                },
-            }
-
-            h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
-        }
-    }
-}
-
 pub export fn UpdateAndRender(
-    thread: *platform.thread_context,
     gameMemory: *platform.memory,
     gameInput: *platform.input,
     buffer: *platform.offscreen_buffer,
@@ -780,6 +564,7 @@ pub export fn UpdateAndRender(
 
     h.PlatformAddEntry = gameMemory.PlatformAddEntry;
     h.PlatformCompleteAllWork = gameMemory.PlatformCompleteAllWork;
+    h.DEBUGPlatformReadEntireFile = gameMemory.DEBUGPlatformReadEntireFile;
 
     if (HANDMADE_INTERNAL) {
         handmade_internal.debugGlobalMemory = gameMemory;
@@ -795,7 +580,7 @@ pub export fn UpdateAndRender(
     const groundBufferHeight = 256.0;
     const pixelsToMeters = 1.0 / 42.0;
 
-    if (!gameMemory.isInitialized) {
+    if (!gameState.isInitialized) {
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
 
@@ -956,7 +741,7 @@ pub export fn UpdateAndRender(
             }
         }
 
-        gameMemory.isInitialized = true;
+        gameState.isInitialized = true;
     }
 
     assert(@sizeOf(h.transient_state) <= gameMemory.transientStorageSize);
@@ -967,20 +752,17 @@ pub export fn UpdateAndRender(
             gameMemory.transientStorage + @sizeOf(h.transient_state),
         );
 
-        tranState.assets.assetArena.SubArena(&tranState.tranArena, 16, platform.MegaBytes(64));
-        tranState.assets.ReadEntireFile = gameMemory.DEBUGPlatformReadEntireFile;
-        tranState.assets.tranState = tranState;
+        tranState.highPriorityQueue = gameMemory.highPriorityQueue;
+        tranState.lowPriorityQueue = gameMemory.lowPriorityQueue;
 
-        var taskIndex: u32 = 0;
-        while (taskIndex < tranState.tasks.len) : (taskIndex += 1) {
+        for (0..tranState.tasks.len) |taskIndex| {
             var task = &tranState.tasks[taskIndex];
 
             task.beingUsed = false;
             task.arena.SubArena(&tranState.tranArena, 16, platform.MegaBytes(1));
         }
 
-        tranState.highPriorityQueue = gameMemory.highPriorityQueue;
-        tranState.lowPriorityQueue = gameMemory.lowPriorityQueue;
+        tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(64), tranState);
 
         tranState.groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushArray(h.ground_buffer, tranState.groundBufferCount);
@@ -1010,38 +792,6 @@ pub export fn UpdateAndRender(
                 height >>= 1;
             }
         }
-
-        tranState.assets.grass[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass00.bmp");
-        tranState.assets.grass[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/grass01.bmp");
-
-        tranState.assets.tufts[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp");
-        tranState.assets.tufts[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft01.bmp");
-        tranState.assets.tufts[2] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/tuft00.bmp");
-
-        tranState.assets.stones[0] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground00.bmp");
-        tranState.assets.stones[1] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground01.bmp");
-        tranState.assets.stones[2] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground02.bmp");
-        tranState.assets.stones[3] = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test2/ground03.bmp");
-
-        tranState.assets.heroBitmaps[0].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_head.bmp");
-        tranState.assets.heroBitmaps[0].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_cape.bmp");
-        tranState.assets.heroBitmaps[0].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_right_torso.bmp");
-        SetTopDownAlignment(&tranState.assets.heroBitmaps[0], .{ 72, 182 });
-
-        tranState.assets.heroBitmaps[1].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_head.bmp");
-        tranState.assets.heroBitmaps[1].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_cape.bmp");
-        tranState.assets.heroBitmaps[1].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_back_torso.bmp");
-        SetTopDownAlignment(&tranState.assets.heroBitmaps[1], .{ 72, 182 });
-
-        tranState.assets.heroBitmaps[2].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_head.bmp");
-        tranState.assets.heroBitmaps[2].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_cape.bmp");
-        tranState.assets.heroBitmaps[2].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_left_torso.bmp");
-        SetTopDownAlignment(&tranState.assets.heroBitmaps[2], .{ 72, 182 });
-
-        tranState.assets.heroBitmaps[3].head = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_head.bmp");
-        tranState.assets.heroBitmaps[3].cape = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_cape.bmp");
-        tranState.assets.heroBitmaps[3].torso = DEBUGLoadBMPDefaultAligned(thread, gameMemory.DEBUGPlatformReadEntireFile, "test/test_hero_front_torso.bmp");
-        SetTopDownAlignment(&tranState.assets.heroBitmaps[3], .{ 72, 182 });
 
         tranState.initialized = true;
     }
@@ -1120,7 +870,7 @@ pub export fn UpdateAndRender(
     }
 
     const renderMemory = h.BeginTemporaryMemory(&tranState.tranArena);
-    const renderGroup = h.render_group.Allocate(&tranState.assets, &tranState.tranArena, platform.MegaBytes(4));
+    const renderGroup = h.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(4));
 
     const widthOfMonitorInMeters = 0.635;
     const metersToPixels = @as(f32, @floatFromInt(drawBuffer.width)) * widthOfMonitorInMeters;
@@ -1345,7 +1095,7 @@ pub export fn UpdateAndRender(
             switch (entity.entityType) {
                 .Hero => {
                     const heroSizeC = 2.5;
-                    renderGroup.PushBitmap2(.GAI_Shadow, heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
                     renderGroup.PushBitmap(&heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap(&heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap(&heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
@@ -1354,7 +1104,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Wall => {
-                    renderGroup.PushBitmap2(.GAI_Tree, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Tree), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Stairwell => {
@@ -1363,8 +1113,8 @@ pub export fn UpdateAndRender(
                 },
 
                 .Sword => {
-                    renderGroup.PushBitmap2(.GAI_Shadow, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap2(.GAI_Sword, 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Sword), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Familiar => {
@@ -1373,12 +1123,12 @@ pub export fn UpdateAndRender(
                         entity.tBob -= 2 * platform.PI32;
                     }
                     const bobSin = h.Sin(2 * entity.tBob);
-                    renderGroup.PushBitmap2(.GAI_Shadow, 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
                     renderGroup.PushBitmap(&heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
                 },
 
                 .Monstar => {
-                    renderGroup.PushBitmap2(.GAI_Shadow, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
                     renderGroup.PushBitmap(&heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     DrawHitpoints(entity, renderGroup);
@@ -1514,7 +1264,7 @@ pub export fn UpdateAndRender(
     tranState.tranArena.CheckArena();
 }
 
-pub export fn GetSoundSamples(_: *platform.thread_context, gameMemory: *platform.memory, soundBuffer: *platform.sound_output_buffer) void {
+pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platform.sound_output_buffer) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(platform.GetSoundSamplesFnPtrType).Pointer.child != @TypeOf(GetSoundSamples)) {

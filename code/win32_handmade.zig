@@ -190,11 +190,11 @@ fn Win32BuildEXEPathFileName(gameState: *win32_state, filename: []const u16, des
     CatStrings(gameState.exeFileName[0..gameState.onePastLastEXEFileNameSlashIndex], filename, dest);
 }
 
-fn DEBUGWin32FreeFileMemory(_: *platform.thread_context, memory: *anyopaque) void {
+fn DEBUGWin32FreeFileMemory(memory: *anyopaque) void {
     _ = win32.VirtualFree(memory, 0, win32.MEM_RELEASE);
 }
 
-fn DEBUGWin32ReadEntireFile(thread: *platform.thread_context, filename: [*:0]const u8) handmade_internal.debug_read_file_result {
+fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) handmade_internal.debug_read_file_result {
     var result = handmade_internal.debug_read_file_result{};
     var fileHandle = win32.CreateFileA(filename, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
 
@@ -208,7 +208,7 @@ fn DEBUGWin32ReadEntireFile(thread: *platform.thread_context, filename: [*:0]con
                     result.contents = @as([*]u8, @ptrCast(data));
                     result.contentSize = fileSize32;
                 } else {
-                    DEBUGWin32FreeFileMemory(thread, data);
+                    DEBUGWin32FreeFileMemory(data);
                 }
             } else {
                 // TODO: Logging
@@ -224,7 +224,7 @@ fn DEBUGWin32ReadEntireFile(thread: *platform.thread_context, filename: [*:0]con
     return result;
 }
 
-fn DEBUGWin32WriteEntireFile(_: *platform.thread_context, fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool {
+fn DEBUGWin32WriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool {
     var result = false;
     var fileHandle = win32.CreateFileA(fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_MODE.NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null);
 
@@ -1499,8 +1499,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 }
                             }
 
-                            var thread = platform.thread_context{};
-
                             var buffer = platform.offscreen_buffer{
                                 .memory = globalBackBuffer.memory,
                                 .width = globalBackBuffer.width,
@@ -1517,7 +1515,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             }
 
                             if (gameCode.UpdateAndRender) |UpdateAndRender| {
-                                UpdateAndRender(&thread, &gameMemory, newInput, &buffer);
+                                UpdateAndRender(&gameMemory, newInput, &buffer);
                                 HandleDebugCycleCounters(&gameMemory);
                             }
 
@@ -1574,7 +1572,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 };
 
                                 if (gameCode.GetSoundSamples) |GetSoundSamples| {
-                                    GetSoundSamples(&thread, &gameMemory, &soundBuffer);
+                                    GetSoundSamples(&gameMemory, &soundBuffer);
                                 }
 
                                 if (HANDMADE_INTERNAL) {

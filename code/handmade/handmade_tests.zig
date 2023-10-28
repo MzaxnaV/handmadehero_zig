@@ -1,10 +1,12 @@
 const std = @import("std");
 const testing = std.testing;
 
-const hi = @import("handmade_intrinsics.zig");
-const hd = @import("handmade_data.zig");
-const hm = @import("handmade_math.zig");
-const hr = @import("handmade_random.zig");
+const h = struct {
+    usingnamespace @import("handmade_intrinsics.zig");
+    usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_math.zig");
+    usingnamespace @import("handmade_random.zig");
+};
 
 const simd = @import("simd");
 
@@ -15,128 +17,128 @@ test "language" {
 }
 
 test "intrinsics" {
-    try testing.expectEqual(hi.AbsoluteValue(-0.2), 0.2);
-    try testing.expectEqual(hi.AbsoluteValue(0.2), 0.2);
+    try testing.expectEqual(h.AbsoluteValue(-0.2), 0.2);
+    try testing.expectEqual(h.AbsoluteValue(0.2), 0.2);
 
-    try testing.expectEqual(hi.RoundF32ToInt(u32, -0.2), 0);
-    try testing.expectEqual(hi.RoundF32ToInt(u32, 0.2), 0);
+    try testing.expectEqual(h.RoundF32ToInt(u32, -0.2), 0);
+    try testing.expectEqual(h.RoundF32ToInt(u32, 0.2), 0);
 
-    try testing.expectEqual(hi.CeilF32ToI32(2.34), 3);
-    try testing.expectEqual(hi.CeilF32ToI32(-2.34), -2);
+    try testing.expectEqual(h.CeilF32ToI32(2.34), 3);
+    try testing.expectEqual(h.CeilF32ToI32(-2.34), -2);
 
-    try testing.expectEqual(hi.TruncateF32ToI32(1.2), 1);
-    try testing.expectEqual(hi.TruncateF32ToI32(-0.2), 0);
-    try testing.expectEqual(hi.TruncateF32ToI32(-1.2), -1);
+    try testing.expectEqual(h.TruncateF32ToI32(1.2), 1);
+    try testing.expectEqual(h.TruncateF32ToI32(-0.2), 0);
+    try testing.expectEqual(h.TruncateF32ToI32(-1.2), -1);
 
-    try testing.expectEqual(hi.FloorF32ToI32(1.2), 1);
-    try testing.expectEqual(hi.FloorF32ToI32(0.2), 0);
-    try testing.expectEqual(hi.FloorF32ToI32(-0.2), -1);
+    try testing.expectEqual(h.FloorF32ToI32(1.2), 1);
+    try testing.expectEqual(h.FloorF32ToI32(0.2), 0);
+    try testing.expectEqual(h.FloorF32ToI32(-0.2), -1);
 
-    try testing.expectEqual(hi.FindLeastSignificantSetBit(0b00000010), 1);
-    try testing.expectEqual(hi.FindLeastSignificantSetBit(0b01000000), 6);
+    try testing.expectEqual(h.FindLeastSignificantSetBit(0b00000010), 1);
+    try testing.expectEqual(h.FindLeastSignificantSetBit(0b01000000), 6);
 
     // TODO (Manav): add RotateLeft tests when the issue is fixed
 
-    try testing.expectEqual(hi.SquareRoot(0.04), 0.2);
-    try testing.expectEqual(hi.SquareRoot(25.0), 5.0);
+    try testing.expectEqual(h.SquareRoot(0.04), 0.2);
+    try testing.expectEqual(h.SquareRoot(25.0), 5.0);
 }
 
 test "math" {
-    var vec1 = hm.v2{ 1, 2 };
-    const vec2 = hm.v2{ 5, 1 };
+    var vec1 = h.v2{ 1, 2 };
+    const vec2 = h.v2{ 5, 1 };
 
-    try testing.expectEqual(hm.V2(5.0, 1.0), vec2);
-    try testing.expectEqual(hm.V2(1, 2), vec1);
+    try testing.expectEqual(h.V2(5.0, 1.0), vec2);
+    try testing.expectEqual(h.V2(1, 2), vec1);
 
-    try testing.expectEqual(hm.Add(vec1, vec2), hm.v2{ 6, 3 });
-    try testing.expectEqual(hm.Sub(vec1, vec2), hm.v2{ -4, 1 });
-    try testing.expectEqual(hm.Scale(vec1, -1), hm.v2{ -1, -2 });
+    try testing.expectEqual(h.Add(vec1, vec2), h.v2{ 6, 3 });
+    try testing.expectEqual(h.Sub(vec1, vec2), h.v2{ -4, 1 });
+    try testing.expectEqual(h.Scale(vec1, -1), h.v2{ -1, -2 });
 
-    try testing.expectEqual(hm.Inner(vec1, vec2), 7);
-    try testing.expectEqual(hm.LengthSq(vec1), 5);
-    try testing.expectEqual(hm.Length(hm.v2{ 4, 3 }), 5);
+    try testing.expectEqual(h.Inner(vec1, vec2), 7);
+    try testing.expectEqual(h.LengthSq(vec1), 5);
+    try testing.expectEqual(h.Length(h.v2{ 4, 3 }), 5);
 
-    hm.AddTo(&vec1, vec2);
-    try testing.expectEqual(vec1, hm.v2{ 6, 3 });
-    hm.SubFrom(&vec1, vec2);
-    try testing.expectEqual(vec1, hm.v2{ 1, 2 });
+    h.AddTo(&vec1, vec2);
+    try testing.expectEqual(vec1, h.v2{ 6, 3 });
+    h.SubFrom(&vec1, vec2);
+    try testing.expectEqual(vec1, h.v2{ 1, 2 });
 
-    const c3 = hm.v3{ 3, 2, 1 };
-    try testing.expectEqual(hm.X(c3), c3[0]);
-    try testing.expectEqual(hm.Y(c3), c3[1]);
-    try testing.expectEqual(hm.Z(c3), c3[2]);
-    try testing.expectEqual(hm.R(c3), hm.X(c3));
-    try testing.expectEqual(hm.G(c3), hm.Y(c3));
-    try testing.expectEqual(hm.B(c3), hm.Z(c3));
+    const c3 = h.v3{ 3, 2, 1 };
+    try testing.expectEqual(h.X(c3), c3[0]);
+    try testing.expectEqual(h.Y(c3), c3[1]);
+    try testing.expectEqual(h.Z(c3), c3[2]);
+    try testing.expectEqual(h.R(c3), h.X(c3));
+    try testing.expectEqual(h.G(c3), h.Y(c3));
+    try testing.expectEqual(h.B(c3), h.Z(c3));
 
-    const c4 = hm.v4{ 4, 3, 2, 1 };
-    try testing.expectEqual(hm.X(c4), c4[0]);
-    try testing.expectEqual(hm.Y(c4), c4[1]);
-    try testing.expectEqual(hm.Z(c4), c4[2]);
-    try testing.expectEqual(hm.W(c4), c4[3]);
-    try testing.expectEqual(hm.R(c4), hm.X(c4));
-    try testing.expectEqual(hm.G(c4), hm.Y(c4));
-    try testing.expectEqual(hm.B(c4), hm.Z(c4));
-    try testing.expectEqual(hm.A(c4), hm.W(c4));
-    try testing.expectEqual(hm.XY(c4), hm.v2{ c4[0], c4[1] });
-    try testing.expectEqual(hm.XYZ(c4), hm.RGB(c4));
-    try testing.expectEqual(hm.Sub(hm.RGB(c4), hm.v3{ 1, 1, 1 }), c3);
+    const c4 = h.v4{ 4, 3, 2, 1 };
+    try testing.expectEqual(h.X(c4), c4[0]);
+    try testing.expectEqual(h.Y(c4), c4[1]);
+    try testing.expectEqual(h.Z(c4), c4[2]);
+    try testing.expectEqual(h.W(c4), c4[3]);
+    try testing.expectEqual(h.R(c4), h.X(c4));
+    try testing.expectEqual(h.G(c4), h.Y(c4));
+    try testing.expectEqual(h.B(c4), h.Z(c4));
+    try testing.expectEqual(h.A(c4), h.W(c4));
+    try testing.expectEqual(h.XY(c4), h.v2{ c4[0], c4[1] });
+    try testing.expectEqual(h.XYZ(c4), h.RGB(c4));
+    try testing.expectEqual(h.Sub(h.RGB(c4), h.v3{ 1, 1, 1 }), c3);
 
-    try testing.expectEqual(hm.Length(hm.Normalize(c4)), 1.0); // float precision problems
+    try testing.expectEqual(h.Length(h.Normalize(c4)), 1.0); // float precision problems
 
-    try testing.expectEqual(hm.rect2.InitMinDim(.{ 3, 2 }, .{ 4, 3 }), hm.rect2.InitMinDim(hm.XY(c3), hm.XY(c4)));
+    try testing.expectEqual(h.rect2.InitMinDim(.{ 3, 2 }, .{ 4, 3 }), h.rect2.InitMinDim(h.XY(c3), h.XY(c4)));
 
-    try testing.expectEqual(hm.AddI32ToU32(30, 2), 32);
-    try testing.expectEqual(hm.AddI32ToU32(32, -30), 2);
-    try testing.expectEqual(hm.AddI32ToU32(std.math.maxInt(u32), -2147483647), 2147483648);
+    try testing.expectEqual(h.AddI32ToU32(30, 2), 32);
+    try testing.expectEqual(h.AddI32ToU32(32, -30), 2);
+    try testing.expectEqual(h.AddI32ToU32(std.math.maxInt(u32), -2147483647), 2147483648);
 
     // NOTE (Manav): avoid empty array initialization of @Vector, it's the same as using undefined
-    const r = hm.rect2.InitMinDim(hm.v2{ 0, 0 }, hm.v2{ 3, 3 });
-    const r1 = hm.rect2.InitCenterDim(hm.v2{ 1.5, 1.5 }, hm.v2{ 3, 3 });
-    const r2 = hm.rect2.InitCenterHalfDim(hm.v2{ 1.5, 1.5 }, hm.v2{ 1.5, 1.5 });
+    const r = h.rect2.InitMinDim(h.v2{ 0, 0 }, h.v2{ 3, 3 });
+    const r1 = h.rect2.InitCenterDim(h.v2{ 1.5, 1.5 }, h.v2{ 3, 3 });
+    const r2 = h.rect2.InitCenterHalfDim(h.v2{ 1.5, 1.5 }, h.v2{ 1.5, 1.5 });
 
     try testing.expectEqual(r, r1);
     try testing.expectEqual(r, r2);
 
-    try testing.expectEqual(r1.GetMinCorner(), hm.v2{ 0, 0 });
-    try testing.expectEqual(r2.GetMaxCorner(), hm.v2{ 3, 3 });
-    try testing.expectEqual(r.GetCenter(), hm.v2{ 1.5, 1.5 });
+    try testing.expectEqual(r1.GetMinCorner(), h.v2{ 0, 0 });
+    try testing.expectEqual(r2.GetMaxCorner(), h.v2{ 3, 3 });
+    try testing.expectEqual(r.GetCenter(), h.v2{ 1.5, 1.5 });
 
-    try testing.expectEqual(r.IsInRect(hm.v2{ 3, 3 }), false);
-    try testing.expectEqual(r.IsInRect(hm.v2{ 1, 3 }), false);
-    try testing.expectEqual(r.IsInRect(hm.v2{ 0, 0 }), true);
-    try testing.expectEqual(r.IsInRect(hm.v2{ 2, 2 }), true);
+    try testing.expectEqual(r.IsInRect(h.v2{ 3, 3 }), false);
+    try testing.expectEqual(r.IsInRect(h.v2{ 1, 3 }), false);
+    try testing.expectEqual(r.IsInRect(h.v2{ 0, 0 }), true);
+    try testing.expectEqual(r.IsInRect(h.v2{ 2, 2 }), true);
 
-    try testing.expectEqual(r.AddRadius(hm.v2{ 1, 2 }), hm.rect2{ .min = hm.v2{ -1, -2 }, .max = hm.v2{ 4, 5 } });
+    try testing.expectEqual(r.AddRadius(h.v2{ 1, 2 }), h.rect2{ .min = h.v2{ -1, -2 }, .max = h.v2{ 4, 5 } });
 
-    const r3 = hm.rect3.InitMinDim(hm.v3{ 0, 0, 0 }, hm.v3{ 3, 3, 3 });
-    const r31 = hm.rect3.InitCenterDim(hm.v3{ 1.5, 1.5, 1.5 }, hm.v3{ 3, 3, 3 });
-    const r32 = hm.rect3.InitCenterHalfDim(hm.v3{ 1.5, 1.5, 1.5 }, hm.v3{ 1.5, 1.5, 1.5 });
+    const r3 = h.rect3.InitMinDim(h.v3{ 0, 0, 0 }, h.v3{ 3, 3, 3 });
+    const r31 = h.rect3.InitCenterDim(h.v3{ 1.5, 1.5, 1.5 }, h.v3{ 3, 3, 3 });
+    const r32 = h.rect3.InitCenterHalfDim(h.v3{ 1.5, 1.5, 1.5 }, h.v3{ 1.5, 1.5, 1.5 });
 
     try testing.expectEqual(r3, r31);
     try testing.expectEqual(r3, r32);
 
-    try testing.expectEqual(r31.GetMinCorner(), hm.v3{ 0, 0, 0 }); // should be hm.v3{ 0, 1, 0 }
-    try testing.expectEqual(r32.GetMaxCorner(), hm.v3{ 3, 3, 3 });
-    try testing.expectEqual(r3.GetCenter(), hm.v3{ 1.5, 1.5, 1.5 });
+    try testing.expectEqual(r31.GetMinCorner(), h.v3{ 0, 0, 0 }); // should be h.v3{ 0, 1, 0 }
+    try testing.expectEqual(r32.GetMaxCorner(), h.v3{ 3, 3, 3 });
+    try testing.expectEqual(r3.GetCenter(), h.v3{ 1.5, 1.5, 1.5 });
 
-    try testing.expectEqual(r3.IsInRect(hm.v3{ 3, 3, 3 }), false);
-    try testing.expectEqual(r3.IsInRect(hm.v3{ 1, 3, 3 }), false);
-    try testing.expectEqual(r3.IsInRect(hm.v3{ 0, 0, 0 }), true);
-    try testing.expectEqual(r3.IsInRect(hm.v3{ 2, 2, 2 }), true);
+    try testing.expectEqual(r3.IsInRect(h.v3{ 3, 3, 3 }), false);
+    try testing.expectEqual(r3.IsInRect(h.v3{ 1, 3, 3 }), false);
+    try testing.expectEqual(r3.IsInRect(h.v3{ 0, 0, 0 }), true);
+    try testing.expectEqual(r3.IsInRect(h.v3{ 2, 2, 2 }), true);
 
-    try testing.expectEqual(r3.AddRadius(.{ 1, 2, 3 }), hm.rect3{ .min = hm.v3{ -1, -2, -3 }, .max = hm.v3{ 4, 5, 6 } });
+    try testing.expectEqual(r3.AddRadius(.{ 1, 2, 3 }), h.rect3{ .min = h.v3{ -1, -2, -3 }, .max = h.v3{ 4, 5, 6 } });
 
-    try testing.expectEqual(r3.GetBarycentric(r3.GetCenter()), hm.v3{ 0.5, 0.5, 0.5 });
-    try testing.expectEqual(r3.GetBarycentric(r3.GetMinCorner()), hm.v3{ 0, 0, 0 });
-    try testing.expectEqual(r3.GetBarycentric(r3.GetMaxCorner()), hm.v3{ 1, 1, 1 });
+    try testing.expectEqual(r3.GetBarycentric(r3.GetCenter()), h.v3{ 0.5, 0.5, 0.5 });
+    try testing.expectEqual(r3.GetBarycentric(r3.GetMinCorner()), h.v3{ 0, 0, 0 });
+    try testing.expectEqual(r3.GetBarycentric(r3.GetMaxCorner()), h.v3{ 1, 1, 1 });
     try testing.expectEqual(r3.GetBarycentric(.{ 2, 2, 2 }), @as(@Vector(3, f32), @splat(@as(f32, 2.0 / 3.0))));
 
-    try testing.expectEqual(hm.ClampV301(.{ 0.2, -0.4, 1.2 }), hm.v3{ 0.2, 0, 1 });
+    try testing.expectEqual(h.ClampV301(.{ 0.2, -0.4, 1.2 }), h.v3{ 0.2, 0, 1 });
 }
 
 test "rand" {
-    var series = hr.RandomSeed(124);
+    var series = h.RandomSeed(124);
 
     try testing.expect(series.RandomChoice(2) < 2);
     try testing.expectEqual(series.index, 125);
@@ -145,7 +147,7 @@ test "rand" {
 test "handmade_misc" {
     var memRegion = [1]u8{0} ** 1024;
 
-    var mem: hd.memory_arena = undefined;
+    var mem: h.memory_arena = undefined;
     mem.Initialize(1024, &memRegion);
     try testing.expectEqual(mem.used, 0);
 
@@ -155,7 +157,7 @@ test "handmade_misc" {
     try testing.expectEqual(@intFromPtr(x), mem.base_addr);
     try testing.expectEqual(@as(usize, 1), mem.used);
 
-    var sub_mem: hd.memory_arena = undefined;
+    var sub_mem: h.memory_arena = undefined;
     sub_mem.SubArena(&mem, @alignOf(u8), 10);
     try testing.expectEqual(sub_mem.base_addr, mem.base_addr + @sizeOf(u8));
 
