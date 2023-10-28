@@ -117,6 +117,8 @@ pub const ground_buffer = struct {
 };
 
 pub const game_state = struct {
+    isInitialized: bool = false,
+
     worldArena: memory_arena,
     world: *h.world,
 

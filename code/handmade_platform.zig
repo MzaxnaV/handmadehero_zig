@@ -158,8 +158,6 @@ pub const add_entry = *const fn (queue: *work_queue, callback: work_queue_callba
 pub const complete_all_work = *const fn (queue: *work_queue) void;
 
 pub const memory = struct {
-    isInitialized: bool = false,
-
     permanentStorageSize: u64,
     permanentStorage: [*]u8,
 

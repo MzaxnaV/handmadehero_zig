@@ -580,7 +580,7 @@ pub export fn UpdateAndRender(
     const groundBufferHeight = 256.0;
     const pixelsToMeters = 1.0 / 42.0;
 
-    if (!gameMemory.isInitialized) {
+    if (!gameState.isInitialized) {
         const tilesPerWidth = 17;
         const tilesPerHeight = 9;
 
@@ -741,7 +741,7 @@ pub export fn UpdateAndRender(
             }
         }
 
-        gameMemory.isInitialized = true;
+        gameState.isInitialized = true;
     }
 
     assert(@sizeOf(h.transient_state) <= gameMemory.transientStorageSize);
