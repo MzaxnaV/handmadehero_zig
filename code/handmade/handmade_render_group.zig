@@ -4,6 +4,7 @@ const platform = @import("handmade_platform");
 const assert = platform.Assert;
 
 const h = struct {
+    usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_data.zig");
     usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_intrinsics.zig");
@@ -1093,17 +1094,18 @@ pub const render_group = struct {
 
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
-    pub inline fn PushBitmap2(self: *Self, ID: h.game_asset_id, height: f32, offset: h.v3, colour: h.v4) void {
-        if (self.assets.GetBitmap(ID)) |bitmap| {
-            self.PushBitmap(bitmap, height, offset, colour);
+    pub inline fn PushBitmap2(self: *Self, ID: h.bitmap_id, height: f32, offset: h.v3, colour: h.v4) void {
+        var bitmap = self.assets.GetBitmap(ID);
+        if (bitmap) |b| {
+            self.PushBitmap(b, height, offset, colour);
         } else {
-            @import("handmade.zig").LoadAsset(self.assets, ID);
+            h.LoadBitmap(self.assets, ID);
             self.missingResourceCount += 1;
         }
     }
 
     /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
-    pub inline fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: h.v3, colour: h.v4) void {
+    pub fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: h.v3, colour: h.v4) void {
         const size = h.V2(height * bitmap.widthOverHeight, height);
         const alignment: h.v2 = h.Hammard(bitmap.alignPercentage, size);
         const p = h.Sub(offset, h.ToV3(alignment, 0));

@@ -22,9 +22,9 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
         contents: [*]u8 = undefined,
     };
 
-    pub const debug_platform_free_file_memory = *const fn (*thread_context, *anyopaque) void;
-    pub const debug_platform_read_entire_file = *const fn (*thread_context, [*:0]const u8) debug_read_file_result;
-    pub const debug_platform_write_entire_file = *const fn (*thread_context, [*:0]const u8, u32, *anyopaque) bool;
+    pub const debug_platform_free_file_memory = *const fn (*anyopaque) void;
+    pub const debug_platform_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
+    pub const debug_platform_write_entire_file = *const fn ([*:0]const u8, u32, *anyopaque) bool;
 
     // move this to someplace proper
     inline fn __rdtsc() u64 {
@@ -85,10 +85,6 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
 // platform data types --------------------------------------------------------------------------------------------------------------------
 
 pub const memory_index = usize;
-
-pub const thread_context = struct {
-    placeHolder: u32 = 0,
-};
 
 pub const offscreen_buffer = struct {
     memory: ?*anyopaque,
@@ -212,7 +208,8 @@ pub const BEGIN_TIMED_BLOCK = handmade_internal.BeginTimedBlock; // TODO (Manav)
 pub const END_TIMED_BLOCK = handmade_internal.EndTimedBlock; // TODO (Manav): make it portable
 pub const END_TIMED_BLOCK_COUNTED = handmade_internal.EndTimedBlockCounted;
 
+
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 
-pub const GetSoundSamplesFnPtrType = *const fn (*thread_context, *memory, *sound_output_buffer) callconv(.C) void;
-pub const UpdateAndRenderFnPtrType = *const fn (*thread_context, *memory, *input, *offscreen_buffer) callconv(.C) void;
+pub const GetSoundSamplesFnPtrType = *const fn (*memory, *sound_output_buffer) callconv(.C) void;
+pub const UpdateAndRenderFnPtrType = *const fn (*memory, *input, *offscreen_buffer) callconv(.C) void;

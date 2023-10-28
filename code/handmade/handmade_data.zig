@@ -5,6 +5,7 @@ const h = struct {
     usingnamespace @import("handmade_world.zig");
     usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_render_group.zig");
+    usingnamespace @import("handmade_asset.zig");
 };
 
 const hi = platform.handmade_internal;
@@ -89,12 +90,6 @@ pub const temporary_memory = struct {
     used: platform.memory_index,
 };
 
-pub const hero_bitmaps = struct {
-    head: h.loaded_bitmap,
-    cape: h.loaded_bitmap,
-    torso: h.loaded_bitmap,
-};
-
 pub const low_entity = struct {
     p: h.world_position,
     sim: h.sim_entity,
@@ -119,72 +114,6 @@ pub const pairwise_collision_rule = struct {
 pub const ground_buffer = struct {
     p: h.world_position,
     bitmap: h.loaded_bitmap,
-};
-
-pub const asset_state = enum {
-    AssetState_Unloaded,
-    AssetState_Queued,
-    AssetState_Loaded,
-    AssetState_Locked,
-};
-
-pub const asset_slot = struct {
-    state: asset_state,
-    bitmap: ?*h.loaded_bitmap,
-};
-
-pub const game_asset_id = enum(u32) {
-    GAI_Backdrop = 0,
-    GAI_Shadow,
-    GAI_Tree,
-    GAI_Sword,
-    GAI_Stairwell,
-
-    fn len() comptime_int {
-        comptime {
-            return @typeInfo(game_asset_id).Enum.fields.len;
-        }
-    }
-};
-
-pub const asset_tag = struct {
-    ID: u32,
-    value: f32,
-};
-
-pub const asset_bitmap_info = struct {
-    alignPercentage: h.v2 = .{ 0, 0 },
-    widthOverHeight: f32 = 0,
-
-    width: i32 = 0,
-    height: i32 = 0,
-
-    firstTagIndex: u32,
-    onePastLastTagIndex: u32,
-};
-
-pub const asset_group = struct {
-    firstTagIndex: u32,
-    onePastLastTagIndex: u32,
-};
-
-pub const game_assets = struct {
-    tranState: *transient_state,
-    assetArena: memory_arena,
-    ReadEntireFile: hi.debug_platform_read_entire_file,
-
-    bitmaps: [game_asset_id.len()]asset_slot,
-
-    grass: [2]h.loaded_bitmap,
-    stones: [4]h.loaded_bitmap,
-    tufts: [3]h.loaded_bitmap,
-
-    heroBitmaps: [4]hero_bitmaps,
-
-    pub inline fn GetBitmap(self: *game_assets, comptime ID: game_asset_id) ?*h.loaded_bitmap {
-        var result = self.bitmaps[@intFromEnum(ID)].bitmap;
-        return result;
-    }
 };
 
 pub const game_state = struct {
@@ -231,6 +160,8 @@ pub const transient_state = struct {
 
     tasks: [4]task_with_memory,
 
+    assets: *h.game_assets,
+
     groundBufferCount: u32,
     groundBuffers: [*]ground_buffer,
 
@@ -240,8 +171,6 @@ pub const transient_state = struct {
     envMapWidth: u32,
     envMapHeight: u32,
     envMaps: [3]h.environment_map,
-
-    assets: game_assets,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------
@@ -357,3 +286,5 @@ pub fn AddCollisionRule(gameState: *game_state, unsortedStorageIndexA: u32, unso
 // TODO (Manav): this is weird, we already have a function pointer in gameMemory
 pub var PlatformAddEntry: platform.add_entry = undefined;
 pub var PlatformCompleteAllWork: platform.complete_all_work = undefined;
+
+pub var DEBUGPlatformReadEntireFile: ?hi.debug_platform_read_entire_file = null;
