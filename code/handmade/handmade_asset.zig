@@ -45,7 +45,8 @@ pub const asset_tag_id = enum {
 };
 
 pub const asset_type_id = enum(u32) {
-    Asset_Backdrop = 0,
+    Asset_NONE = 0,
+    Asset_Backdrop,
     Asset_Shadow,
     Asset_Tree,
     Asset_Sword,
@@ -71,7 +72,6 @@ pub const asset = struct {
 };
 
 pub const asset_type = struct {
-    count: u32,
     firstAssetIndex: u32,
     onePastLastAssetIndex: u32,
 };
@@ -99,6 +99,12 @@ pub const game_assets = struct {
     soundCount: u32,
     sounds: [*]asset_slot,
 
+    tagCount: u32,
+    tags: [*]asset_tag,
+
+    assetCount: u32,
+    assets: [*]asset,
+
     assetTypes: [asset_type_id.len()]asset_type,
 
     grass: [2]h.loaded_bitmap,
@@ -123,6 +129,23 @@ pub const game_assets = struct {
 
         assets.soundCount = 1;
         assets.sounds = arena.PushArray(asset_slot, assets.soundCount);
+
+        assets.tagCount = 0;
+        assets.tags = undefined;
+
+        assets.assetCount = assets.bitMapCount;
+        assets.assets = arena.PushArray(asset, assets.assetCount);
+
+        for (0..assets.assetCount) |assetID| {
+            var assetType: *asset_type = &assets.assetTypes[assetID];
+            assetType.firstAssetIndex = @intCast(assetID);
+            assetType.onePastLastAssetIndex = @as(u32, @intCast(assetID)) + 1;
+
+            var a: *asset = &assets.assets[assetType.firstAssetIndex];
+            a.firstTagIndex = 0;
+            a.onePastLastTagIndex = 0;
+            a.slotId = assetType.firstAssetIndex;
+        }
 
         assets.grass[0] = DEBUGLoadBMPDefaultAligned("test2/grass00.bmp");
         assets.grass[1] = DEBUGLoadBMPDefaultAligned("test2/grass01.bmp");
@@ -326,6 +349,8 @@ fn LoadBitmapWork(_: ?*platform.work_queue, data: *anyopaque) void {
 }
 
 pub fn LoadBitmap(assets: *game_assets, ID: bitmap_id) void {
+    if (ID.value == 0) return;
+
     if (h.AtomicCompareExchange(asset_state, &assets.bitmaps[ID.value].state, .AssetState_Unloaded, .AssetState_Queued)) |_| {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
             var work: *load_bitmap_work = task.arena.PushStruct(load_bitmap_work);
@@ -361,6 +386,7 @@ pub fn LoadBitmap(assets: *game_assets, ID: bitmap_id) void {
                 },
 
                 .Asset_Rock => {},
+                .Asset_NONE => unreachable,
             }
 
             h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadBitmapWork, work);
@@ -373,8 +399,15 @@ pub fn LoadSound(assets: *game_assets, ID: audio_id) void {
     _ = ID;
 }
 
-pub fn GetFirstBitmapID(_: *game_assets, typeID: asset_type_id) bitmap_id {
-    var result: bitmap_id = .{ .value = @intFromEnum(typeID) };
+pub fn GetFirstBitmapID(assets: *game_assets, typeID: asset_type_id) bitmap_id {
+    var result: bitmap_id = .{ .value = 0 };
+
+    var assetType = assets.assetTypes[@intFromEnum(typeID)];
+
+    if (assetType.firstAssetIndex != assetType.onePastLastAssetIndex) {
+        var a = assets.assets[assetType.firstAssetIndex];
+        result.value = a.slotId;
+    }
 
     return result;
 }

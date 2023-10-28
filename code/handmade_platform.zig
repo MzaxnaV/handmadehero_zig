@@ -208,7 +208,6 @@ pub const BEGIN_TIMED_BLOCK = handmade_internal.BeginTimedBlock; // TODO (Manav)
 pub const END_TIMED_BLOCK = handmade_internal.EndTimedBlock; // TODO (Manav): make it portable
 pub const END_TIMED_BLOCK_COUNTED = handmade_internal.EndTimedBlockCounted;
 
-
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 
 pub const GetSoundSamplesFnPtrType = *const fn (*memory, *sound_output_buffer) callconv(.C) void;
