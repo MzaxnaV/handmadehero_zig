@@ -16,6 +16,11 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
+pub const loaded_sound = struct {
+    sampleCount: i32 = 0,
+    memory: [*]u8 = undefined,
+};
+
 pub const asset_state = enum {
     AssetState_Unloaded,
     AssetState_Queued,
@@ -25,7 +30,10 @@ pub const asset_state = enum {
 
 pub const asset_slot = struct {
     state: asset_state,
-    bitmap: ?*h.loaded_bitmap,
+    data: union {
+        bitmap: ?*h.loaded_bitmap,
+        sound: ?*loaded_sound,
+    },
 };
 
 pub const asset_tag_id = enum {
@@ -89,6 +97,10 @@ pub const asset_bitmap_info = struct {
     alignPercentage: h.v2 = .{ 0, 0 },
 };
 
+pub const asset_sound_info = struct {
+    filename: [*:0]const u8,
+};
+
 pub const asset_group = struct {
     firstTagIndex: u32,
     onePastLastTagIndex: u32,
@@ -98,13 +110,14 @@ pub const game_assets = struct {
     tranState: *h.transient_state,
     assetArena: h.memory_arena,
 
-    tagRange : [asset_tag_id.len()]f32, 
+    tagRange: [asset_tag_id.len()]f32,
 
     bitmapCount: u32,
     bitmapInfos: [*]asset_bitmap_info,
     bitmaps: [*]asset_slot,
 
     soundCount: u32,
+    soundInfos: [*]asset_sound_info,
     sounds: [*]asset_slot,
 
     tagCount: u32,
@@ -124,7 +137,7 @@ pub const game_assets = struct {
     DEBUGAsset: ?*asset,
 
     pub inline fn GetBitmap(self: *game_assets, ID: bitmap_id) ?*h.loaded_bitmap {
-        var result = self.bitmaps[ID.value].bitmap;
+        var result = self.bitmaps[ID.value].data.bitmap;
         return result;
     }
 
@@ -189,7 +202,7 @@ pub const game_assets = struct {
         assets.assetArena.SubArena(arena, 16, size);
         assets.tranState = tranState;
 
-        for(0..asset_tag_id.len()) |tagType| {
+        for (0..asset_tag_id.len()) |tagType| {
             assets.tagRange[tagType] = 1000000.0;
         }
 
@@ -246,7 +259,7 @@ pub const game_assets = struct {
         const angleLeft = 0.5 * platform.Tau32;
         const angleFront = 0.75 * platform.Tau32;
 
-        const heroAlign = h.v2{0.5, 0.156682029 };
+        const heroAlign = h.v2{ 0.5, 0.156682029 };
 
         assets.BeginAssetType(.Asset_Head);
         assets.AddBitmapAsset("test/test_hero_right_head.bmp", heroAlign);
@@ -287,7 +300,7 @@ pub const game_assets = struct {
 
 pub const bitmap_id = struct { value: u32 };
 
-pub const audio_id = struct { value: u32 };
+pub const sound_id = struct { value: u32 };
 
 inline fn TopDownAlign(bitmap: *const h.loaded_bitmap, alignment: h.v2) h.v2 {
     const fixedAlignment = h.v2{
@@ -298,10 +311,7 @@ inline fn TopDownAlign(bitmap: *const h.loaded_bitmap, alignment: h.v2) h.v2 {
 }
 
 /// Defaults: ```alignPercentage = .{0.5, 0.5 }```
-fn DEBUGLoadBMP(
-    fileName: [*:0]const u8,
-    alignPercentage: h.v2,
-) h.loaded_bitmap {
+fn DEBUGLoadBMP(fileName: [*:0]const u8, alignPercentage: h.v2) h.loaded_bitmap {
     const bitmap_header = packed struct {
         fileType: u16,
         fileSize: u32,
@@ -329,7 +339,7 @@ fn DEBUGLoadBMP(
 
     const readResult = h.DEBUGPlatformReadEntireFile.?(fileName);
     if (readResult.contentSize != 0) {
-        const header = @as(*align(@alignOf(u8)) bitmap_header, @ptrCast(readResult.contents));
+        const header: *align(@alignOf(u8)) bitmap_header = @ptrCast(readResult.contents);
         const pixels = readResult.contents + header.bitmapOffset;
         result.width = header.width;
         result.height = header.height;
@@ -395,6 +405,58 @@ fn DEBUGLoadBMP(
     return result;
 }
 
+fn DEBUGLoadWAV(fileName: [*:0]const u8) loaded_sound {
+    var result = loaded_sound{};
+
+    const wave_header = packed struct {
+        riffID: u32,
+        size: u32,
+        waveID: u32,
+    };
+
+    const s = enum(u32) {
+        WAVE_ChunkID_fmt = riffCode('f', 'm', 't', ' '),
+        WAVE_ChunkID_RIFF = riffCode('R', 'I', 'F', 'F'),
+        WAVE_ChunkID_WAVE = riffCode('W', 'A', 'V', 'E'),
+
+        fn riffCode(a: u8, b: u8, c: u8, d: u8) u32 {
+            return @bitCast([4]u8{ d, c, b, a });
+            // return @bitCast(switch (platform.native_endian) {
+            //     .Big => [4]u8{ d, c, b, a },
+            //     .Little => [4]u8{ d, c, b, a },
+            // });
+        }
+    };
+
+    // const wave_chunk = packed struct {
+    //     ID: u32,
+    //     size: u32,
+    // };
+
+    // const wave_fmt = packed struct {
+    //     wFormatTag: u16,
+    //     nChannels: u16,
+    //     nSamplesPerSec: u32,
+    //     nAvgBytesPerSec: u32,
+    //     nBlockAlign: u32,
+    //     wBitsPerSample: u16,
+    //     cbSize: u16,
+    //     wValidBitsPerSample: u16,
+    //     dwChannelMask: u32,
+    //     subFormat: [16]u8,
+    // };
+
+    const readResult = h.DEBUGPlatformReadEntireFile.?(fileName);
+    if (readResult.contentSize != 0) {
+        const header: *align(@alignOf(u8)) wave_header = @ptrCast(readResult.contents);
+
+        assert(header.riffID == @intFromEnum(s.WAVE_ChunkID_RIFF));
+        assert(header.waveID == @intFromEnum(s.WAVE_ChunkID_WAVE));
+    }
+
+    return result;
+}
+
 const load_bitmap_work = struct {
     assets: *game_assets,
     ID: bitmap_id,
@@ -417,7 +479,7 @@ fn LoadBitmapWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
     @fence(.SeqCst);
 
-    work.assets.bitmaps[work.ID.value].bitmap = work.bitmap;
+    work.assets.bitmaps[work.ID.value].data.bitmap = work.bitmap;
     work.assets.bitmaps[work.ID.value].state = work.finalState;
 
     h.EndTaskWithMemory(work.task);
@@ -441,9 +503,50 @@ pub fn LoadBitmap(assets: *game_assets, ID: bitmap_id) void {
     }
 }
 
-pub fn LoadSound(assets: *game_assets, ID: audio_id) void {
-    _ = assets;
-    _ = ID;
+const load_sound_work = struct {
+    assets: *game_assets,
+    ID: sound_id,
+    task: *h.task_with_memory,
+    sound: *h.loaded_sound,
+
+    finalState: asset_state,
+};
+
+fn LoadSoundWork(_: ?*platform.work_queue, data: *anyopaque) void {
+    comptime {
+        if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(LoadSoundWork)) {
+            @compileError("Function signature mismatch!");
+        }
+    }
+    const work: *load_sound_work = @alignCast(@ptrCast(data));
+
+    const info: asset_sound_info = work.assets.soundInfos[work.ID.value];
+    work.sound.* = DEBUGLoadWAV(info.filename);
+
+    @fence(.SeqCst);
+
+    work.assets.sounds[work.ID.value].sound = work.sound;
+    work.assets.sounds[work.ID.value].state = work.finalState;
+
+    h.EndTaskWithMemory(work.task);
+}
+
+pub fn LoadSound(assets: *game_assets, ID: sound_id) void {
+    if (ID.value == 0) return;
+
+    if (h.AtomicCompareExchange(asset_state, &assets.sounds[ID.value].state, .AssetState_Unloaded, .AssetState_Queued)) |_| {
+        if (h.BeginTaskWithMemory(assets.tranState)) |task| {
+            var work: *load_sound_work = task.arena.PushStruct(load_sound_work);
+
+            work.assets = assets;
+            work.ID = ID;
+            work.task = task;
+            work.sound = assets.assetArena.PushStruct(loaded_sound);
+            work.finalState = .AssetState_Loaded;
+
+            h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadSoundWork, work);
+        }
+    }
 }
 
 pub fn BestMatchAsset(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) bitmap_id {
@@ -460,7 +563,7 @@ pub fn BestMatchAsset(assets: *game_assets, typeID: asset_type_id, matchVector: 
 
             for (a.firstTagIndex..a.onePastLastTagIndex) |tagIndex| {
                 var tag: asset_tag = assets.tags[tagIndex];
-                
+
                 const _a = matchVector.e[tag.ID];
                 const _b = tag.value;
                 const d0 = h.AbsoluteValue(_a - _b);
