@@ -2,8 +2,8 @@ const math = @import("std").math;
 
 // intrinsics -----------------------------------------------------------------------------------------------------------------------------
 
-pub inline fn SignOf(value: i32) i32 {
-    const result = if (value >= 0) @as(i32, 1) else @as(i32, -1);
+pub inline fn SignOf(comptime T: type, value: T) T {
+    const result = if (value >= 0) @as(T, 1) else @as(T, -1);
     return result;
 }
 

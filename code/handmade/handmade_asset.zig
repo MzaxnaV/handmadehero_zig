@@ -98,6 +98,8 @@ pub const game_assets = struct {
     tranState: *h.transient_state,
     assetArena: h.memory_arena,
 
+    tagRange : [asset_tag_id.len()]f32, 
+
     bitmapCount: u32,
     bitmapInfos: [*]asset_bitmap_info,
     bitmaps: [*]asset_slot,
@@ -187,6 +189,12 @@ pub const game_assets = struct {
         assets.assetArena.SubArena(arena, 16, size);
         assets.tranState = tranState;
 
+        for(0..asset_tag_id.len()) |tagType| {
+            assets.tagRange[tagType] = 1000000.0;
+        }
+
+        assets.tagRange[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
+
         assets.bitmapCount = 256 * asset_tag_id.len();
         assets.bitmapInfos = arena.PushArray(asset_bitmap_info, assets.bitmapCount);
         assets.bitmaps = arena.PushArray(asset_slot, assets.bitmapCount);
@@ -238,58 +246,40 @@ pub const game_assets = struct {
         const angleLeft = 0.5 * platform.Tau32;
         const angleFront = 0.75 * platform.Tau32;
 
+        const heroAlign = h.v2{0.5, 0.156682029 };
+
         assets.BeginAssetType(.Asset_Head);
-        assets.AddBitmapAsset("test/test_hero_right_head.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_right_head.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleRight);
-        assets.AddBitmapAsset("test/test_hero_back_head.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_back_head.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleBack);
-        assets.AddBitmapAsset("test/test_hero_left_head.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_left_head.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleLeft);
-        assets.AddBitmapAsset("test/test_hero_front_head.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_front_head.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleFront);
         assets.EndAssetType();
 
         assets.BeginAssetType(.Asset_Cape);
-        assets.AddBitmapAsset("test/test_hero_right_cape.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_right_cape.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleRight);
-        assets.AddBitmapAsset("test/test_hero_back_cape.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_back_cape.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleBack);
-        assets.AddBitmapAsset("test/test_hero_left_cape.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_left_cape.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleLeft);
-        assets.AddBitmapAsset("test/test_hero_front_cape.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_front_cape.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleFront);
         assets.EndAssetType();
 
         assets.BeginAssetType(.Asset_Torso);
-        assets.AddBitmapAsset("test/test_hero_right_torso.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_right_torso.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleRight);
-        assets.AddBitmapAsset("test/test_hero_back_torso.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_back_torso.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleBack);
-        assets.AddBitmapAsset("test/test_hero_left_torso.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_left_torso.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleLeft);
-        assets.AddBitmapAsset("test/test_hero_front_torso.bmp", .{ 0.5, 0.5 });
+        assets.AddBitmapAsset("test/test_hero_front_torso.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleFront);
         assets.EndAssetType();
-
-        // assets.heroBitmaps[0].head = DEBUGLoadBMP("test/test_hero_right_head.bmp", .{ 0.5, 0.5 });
-        // assets.heroBitmaps[0].cape = DEBUGLoadBMP("test/test_hero_right_cape.bmp", .{ 0.5, 0.5 });
-        // assets.heroBitmaps[0].torso = DEBUGLoadBMP("test/test_hero_right_torso.bmp", .{ 0.5, 0.5 });
-        // SetTopDownAlignment(&assets.heroBitmaps[0], .{ 72, 182 });
-
-        // assets.heroBitmaps[1].head = DEBUGLoadBMP("test/test_hero_back_head.bmp", .{ 0.5, 0.5 });
-        // assets.heroBitmaps[1].cape = DEBUGLoadBMP("test/test_hero_back_cape.bmp", .{ 0.5, 0.5 });
-        // assets.heroBitmaps[1].torso = DEBUGLoadBMP("test/test_hero_back_torso.bmp", .{ 0.5, 0.5 });
-        // SetTopDownAlignment(&assets.heroBitmaps[1], .{ 72, 182 });
-
-        // assets.heroBitmaps[2].head = DEBUGLoadBMP("test/test_hero_left_head.bmp", .{ 0.5, 0.5 });
-        // assets.heroBitmaps[2].cape = DEBUGLoadBMP("test/test_hero_left_cape.bmp", .{ 0.5, 0.5 });
-        // assets.heroBitmaps[2].torso = DEBUGLoadBMP("test/test_hero_left_torso.bmp", .{ 0.5, 0.5 });
-        // SetTopDownAlignment(&assets.heroBitmaps[2], .{ 72, 182 });
-
-        // assets.heroBitmaps[3].head = DEBUGLoadBMP("test/test_hero_front_head.bmp", .{ 0.5, 0.5 });
-        // assets.heroBitmaps[3].cape = DEBUGLoadBMP("test/test_hero_front_cape.bmp", .{ 0.5, 0.5 });
-        // assets.heroBitmaps[3].torso = DEBUGLoadBMP("test/test_hero_front_torso.bmp", .{ 0.5, 0.5 });
-        // SetTopDownAlignment(&assets.heroBitmaps[3], .{ 72, 182 });
 
         return assets;
     }
@@ -470,8 +460,14 @@ pub fn BestMatchAsset(assets: *game_assets, typeID: asset_type_id, matchVector: 
 
             for (a.firstTagIndex..a.onePastLastTagIndex) |tagIndex| {
                 var tag: asset_tag = assets.tags[tagIndex];
-                const difference = matchVector.e[tag.ID] - tag.value;
-                const weightedDiff = weightVector.e[tag.ID] * h.AbsoluteValue(difference);
+                
+                const _a = matchVector.e[tag.ID];
+                const _b = tag.value;
+                const d0 = h.AbsoluteValue(_a - _b);
+                const d1 = h.AbsoluteValue((_a - assets.tagRange[tag.ID] * h.SignOf(f32, _a)) - _b);
+                const difference = @min(d0, d1);
+
+                const weightedDiff = weightVector.e[tag.ID] * difference;
                 totalWeightedDiff += weightedDiff;
             }
 
