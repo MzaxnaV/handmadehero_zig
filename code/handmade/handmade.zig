@@ -41,9 +41,9 @@ fn OutputSound(_: *h.game_state, soundBuffer: *platform.sound_output_buffer, ton
         // sampleOut += 1;
 
         // !NOT_IGNORE:
-        // gameState.tSine += 2.0 * platform.PI32 * 1.0 / @intToFloat(f32, wavePeriod);
-        // if (gameState.tSine > 2.0 * platform.PI32) {
-        //     gameState.tSine -= 2.0 * platform.PI32;
+        // gameState.tSine += platform.Tau32 * 1.0 / @intToFloat(f32, wavePeriod);
+        // if (gameState.tSine > platform.Tau32) {
+        //     gameState.tSine -= platform.Tau32;
         // }
     }
 }
@@ -262,27 +262,6 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
     EndTaskWithMemory(work.task);
 }
-
-// fn PickBest(infos: []h.asset_bitmap_info, tags: []h.asset_tag, matchVector: []f32, weightVector: []f32) void {
-//     var bestDiff = platform.F32MAXIMUM;
-//     var bestIndex: u32 = 0;
-
-//     for (infos, 0..) |info, infoIndex| {
-//         var totalWeightedDiff: f32 = 0.0;
-
-//         for (info.firstTagIndex..info.onePastLastTagIndex) |tagIndex| {
-//             var tag: h.asset_tag = tags[tagIndex];
-//             const difference = matchVector[tag.ID] - tag.value;
-//             const weightedDiff = weightVector[tag.ID] * h.AbsoluteValue(difference);
-//             totalWeightedDiff += weightedDiff;
-//         }
-
-//         if (bestDiff > totalWeightedDiff) {
-//             bestDiff = totalWeightedDiff;
-//             bestIndex = infoIndex;
-//         }
-//     }
-// }
 
 fn FillGroundChunk(
     tranState: *h.transient_state,
@@ -995,8 +974,24 @@ pub export fn UpdateAndRender(
                 renderGroup.globalAlpha = h.ClampMapToRange(fadeBottomEndZ, h.Z(cameraRelativeGroundP), fadeBottomStartZ);
             }
 
+            var matchVector = h.asset_vector{};
+            matchVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] = entity.facingDirection;
+
+            var weightVector = h.asset_vector{};
+            weightVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] = 1.0;
+
+            // if (entity.facingDirection != 0) {
+            //     @import("std").debug.print("{}, {}, {}\n", .{ entity.facingDirection, h.asset_tag_id.Tag_FacingDirection, matchVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] });
+            //     @import("std").debug.print("{}, {}, {}\n", .{ entity.facingDirection, h.asset_tag_id.Tag_FacingDirection, weightVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] });
+            // }
+
             // Update (pre-physics entity)
-            const heroBitmaps = &tranState.assets.heroBitmaps[entity.facingDirection];
+            var heroBitmaps = h.hero_bitmap_ids{
+                .head = h.BestMatchAsset(tranState.assets, .Asset_Head, &matchVector, &weightVector),
+                .cape = h.BestMatchAsset(tranState.assets, .Asset_Cape, &matchVector, &weightVector),
+                .torso = h.BestMatchAsset(tranState.assets, .Asset_Torso, &matchVector, &weightVector),
+            };
+
             switch (entity.entityType) {
                 .Hero => {
                     for (gameState.controlledHeroes) |conHero| {
@@ -1095,9 +1090,9 @@ pub export fn UpdateAndRender(
                 .Hero => {
                     const heroSizeC = 2.5;
                     renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap(&heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                    renderGroup.PushBitmap(&heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                    renderGroup.PushBitmap(&heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     DrawHitpoints(entity, renderGroup);
                 },
@@ -1118,17 +1113,17 @@ pub export fn UpdateAndRender(
 
                 .Familiar => {
                     entity.tBob += dt;
-                    if (entity.tBob > 2 * platform.PI32) {
-                        entity.tBob -= 2 * platform.PI32;
+                    if (entity.tBob > platform.Tau32) {
+                        entity.tBob -= platform.Tau32;
                     }
                     const bobSin = h.Sin(2 * entity.tBob);
                     renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
-                    renderGroup.PushBitmap(&heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
                 },
 
                 .Monstar => {
                     renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap(&heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     DrawHitpoints(entity, renderGroup);
                 },

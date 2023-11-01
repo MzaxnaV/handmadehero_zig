@@ -53,7 +53,7 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 const WIN32_STATE_FILE_NAME_COUNT = win32.MAX_PATH;
 
-const allocationType = @as(win32.VIRTUAL_ALLOCATION_TYPE, @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT)));
+const allocationType: win32.VIRTUAL_ALLOCATION_TYPE = @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT));
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 

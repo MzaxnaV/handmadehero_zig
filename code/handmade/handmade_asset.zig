@@ -16,12 +16,6 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
-pub const hero_bitmaps = struct {
-    head: h.loaded_bitmap,
-    cape: h.loaded_bitmap,
-    torso: h.loaded_bitmap,
-};
-
 pub const asset_state = enum {
     AssetState_Unloaded,
     AssetState_Queued,
@@ -37,6 +31,7 @@ pub const asset_slot = struct {
 pub const asset_tag_id = enum {
     Tag_Smoothness,
     Tag_Flatness,
+    Tag_FacingDirection,
 
     fn len() comptime_int {
         comptime {
@@ -58,6 +53,10 @@ pub const asset_type_id = enum(u32) {
     Asset_Tuft,
     Asset_Stone,
 
+    Asset_Head,
+    Asset_Cape,
+    Asset_Torso,
+
     fn len() comptime_int {
         comptime {
             return @typeInfo(asset_type_id).Enum.fields.len;
@@ -74,6 +73,10 @@ pub const asset = struct {
     firstTagIndex: u32,
     onePastLastTagIndex: u32,
     slotId: u32,
+};
+
+pub const asset_vector = struct { // use @Vector(asset_tag_id.len(), f32) ??
+    e: [asset_tag_id.len()]f32 = [1]f32{0} ** asset_tag_id.len(),
 };
 
 pub const asset_type = struct {
@@ -110,11 +113,13 @@ pub const game_assets = struct {
 
     assetTypes: [asset_type_id.len()]asset_type,
 
-    heroBitmaps: [4]hero_bitmaps,
+    // heroBitmaps: [4]hero_bitmaps,
 
     DEBUGUsedBitmapCount: u32,
     DEBUGUsedAssetCount: u32,
+    DEBUGUsedTagCount: u32,
     DEBUGAssetType: ?*asset_type,
+    DEBUGAsset: ?*asset,
 
     pub inline fn GetBitmap(self: *game_assets, ID: bitmap_id) ?*h.loaded_bitmap {
         var result = self.bitmaps[ID.value].bitmap;
@@ -146,18 +151,34 @@ pub const game_assets = struct {
         assert(self.DEBUGAssetType != null);
         self.DEBUGUsedAssetCount = self.DEBUGAssetType.?.onePastLastAssetIndex;
         self.DEBUGAssetType = null;
+        self.DEBUGAsset = null;
     }
 
     /// Defaults: ```alignPercentage = .{0.5, 0.5 }```
     fn AddBitmapAsset(self: *game_assets, fileName: [*:0]const u8, alignPercentage: h.v2) void {
         assert(self.DEBUGAssetType != null);
+        assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assetCount);
 
         var a: *asset = &self.assets[self.DEBUGAssetType.?.onePastLastAssetIndex];
         self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
 
-        a.firstTagIndex = 0;
-        a.onePastLastTagIndex = 0;
+        a.firstTagIndex = self.DEBUGUsedTagCount;
+        a.onePastLastTagIndex = a.firstTagIndex;
         a.slotId = self.DEBUGAddBitmapInfo(fileName, alignPercentage).value;
+
+        self.DEBUGAsset = a;
+    }
+
+    fn AddTag(self: *game_assets, ID: asset_tag_id, value: f32) void {
+        assert(self.DEBUGAsset != null);
+
+        self.DEBUGAsset.?.onePastLastTagIndex += 1;
+
+        var tag: *asset_tag = &self.tags[self.DEBUGUsedTagCount];
+        self.DEBUGUsedTagCount += 1;
+
+        tag.ID = @intFromEnum(ID);
+        tag.value = value;
     }
 
     pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
@@ -175,6 +196,9 @@ pub const game_assets = struct {
 
         assets.assetCount = assets.soundCount + assets.bitmapCount;
         assets.assets = arena.PushArray(asset, assets.assetCount);
+
+        assets.tagCount = 1024 * asset_tag_id.len();
+        assets.tags = arena.PushArray(asset_tag, assets.tagCount);
 
         assets.DEBUGUsedBitmapCount = 1;
         assets.DEBUGUsedAssetCount = 1;
@@ -209,25 +233,63 @@ pub const game_assets = struct {
         assets.AddBitmapAsset("test2/ground03.bmp", .{ 0.5, 0.5 });
         assets.EndAssetType();
 
-        assets.heroBitmaps[0].head = DEBUGLoadBMP("test/test_hero_right_head.bmp", .{ 0.5, 0.5 });
-        assets.heroBitmaps[0].cape = DEBUGLoadBMP("test/test_hero_right_cape.bmp", .{ 0.5, 0.5 });
-        assets.heroBitmaps[0].torso = DEBUGLoadBMP("test/test_hero_right_torso.bmp", .{ 0.5, 0.5 });
-        SetTopDownAlignment(&assets.heroBitmaps[0], .{ 72, 182 });
+        const angleRight = 0.0 * platform.Tau32;
+        const angleBack = 0.25 * platform.Tau32;
+        const angleLeft = 0.5 * platform.Tau32;
+        const angleFront = 0.75 * platform.Tau32;
 
-        assets.heroBitmaps[1].head = DEBUGLoadBMP("test/test_hero_back_head.bmp", .{ 0.5, 0.5 });
-        assets.heroBitmaps[1].cape = DEBUGLoadBMP("test/test_hero_back_cape.bmp", .{ 0.5, 0.5 });
-        assets.heroBitmaps[1].torso = DEBUGLoadBMP("test/test_hero_back_torso.bmp", .{ 0.5, 0.5 });
-        SetTopDownAlignment(&assets.heroBitmaps[1], .{ 72, 182 });
+        assets.BeginAssetType(.Asset_Head);
+        assets.AddBitmapAsset("test/test_hero_right_head.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleRight);
+        assets.AddBitmapAsset("test/test_hero_back_head.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleBack);
+        assets.AddBitmapAsset("test/test_hero_left_head.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleLeft);
+        assets.AddBitmapAsset("test/test_hero_front_head.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleFront);
+        assets.EndAssetType();
 
-        assets.heroBitmaps[2].head = DEBUGLoadBMP("test/test_hero_left_head.bmp", .{ 0.5, 0.5 });
-        assets.heroBitmaps[2].cape = DEBUGLoadBMP("test/test_hero_left_cape.bmp", .{ 0.5, 0.5 });
-        assets.heroBitmaps[2].torso = DEBUGLoadBMP("test/test_hero_left_torso.bmp", .{ 0.5, 0.5 });
-        SetTopDownAlignment(&assets.heroBitmaps[2], .{ 72, 182 });
+        assets.BeginAssetType(.Asset_Cape);
+        assets.AddBitmapAsset("test/test_hero_right_cape.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleRight);
+        assets.AddBitmapAsset("test/test_hero_back_cape.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleBack);
+        assets.AddBitmapAsset("test/test_hero_left_cape.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleLeft);
+        assets.AddBitmapAsset("test/test_hero_front_cape.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleFront);
+        assets.EndAssetType();
 
-        assets.heroBitmaps[3].head = DEBUGLoadBMP("test/test_hero_front_head.bmp", .{ 0.5, 0.5 });
-        assets.heroBitmaps[3].cape = DEBUGLoadBMP("test/test_hero_front_cape.bmp", .{ 0.5, 0.5 });
-        assets.heroBitmaps[3].torso = DEBUGLoadBMP("test/test_hero_front_torso.bmp", .{ 0.5, 0.5 });
-        SetTopDownAlignment(&assets.heroBitmaps[3], .{ 72, 182 });
+        assets.BeginAssetType(.Asset_Torso);
+        assets.AddBitmapAsset("test/test_hero_right_torso.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleRight);
+        assets.AddBitmapAsset("test/test_hero_back_torso.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleBack);
+        assets.AddBitmapAsset("test/test_hero_left_torso.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleLeft);
+        assets.AddBitmapAsset("test/test_hero_front_torso.bmp", .{ 0.5, 0.5 });
+        assets.AddTag(.Tag_FacingDirection, angleFront);
+        assets.EndAssetType();
+
+        // assets.heroBitmaps[0].head = DEBUGLoadBMP("test/test_hero_right_head.bmp", .{ 0.5, 0.5 });
+        // assets.heroBitmaps[0].cape = DEBUGLoadBMP("test/test_hero_right_cape.bmp", .{ 0.5, 0.5 });
+        // assets.heroBitmaps[0].torso = DEBUGLoadBMP("test/test_hero_right_torso.bmp", .{ 0.5, 0.5 });
+        // SetTopDownAlignment(&assets.heroBitmaps[0], .{ 72, 182 });
+
+        // assets.heroBitmaps[1].head = DEBUGLoadBMP("test/test_hero_back_head.bmp", .{ 0.5, 0.5 });
+        // assets.heroBitmaps[1].cape = DEBUGLoadBMP("test/test_hero_back_cape.bmp", .{ 0.5, 0.5 });
+        // assets.heroBitmaps[1].torso = DEBUGLoadBMP("test/test_hero_back_torso.bmp", .{ 0.5, 0.5 });
+        // SetTopDownAlignment(&assets.heroBitmaps[1], .{ 72, 182 });
+
+        // assets.heroBitmaps[2].head = DEBUGLoadBMP("test/test_hero_left_head.bmp", .{ 0.5, 0.5 });
+        // assets.heroBitmaps[2].cape = DEBUGLoadBMP("test/test_hero_left_cape.bmp", .{ 0.5, 0.5 });
+        // assets.heroBitmaps[2].torso = DEBUGLoadBMP("test/test_hero_left_torso.bmp", .{ 0.5, 0.5 });
+        // SetTopDownAlignment(&assets.heroBitmaps[2], .{ 72, 182 });
+
+        // assets.heroBitmaps[3].head = DEBUGLoadBMP("test/test_hero_front_head.bmp", .{ 0.5, 0.5 });
+        // assets.heroBitmaps[3].cape = DEBUGLoadBMP("test/test_hero_front_cape.bmp", .{ 0.5, 0.5 });
+        // assets.heroBitmaps[3].torso = DEBUGLoadBMP("test/test_hero_front_torso.bmp", .{ 0.5, 0.5 });
+        // SetTopDownAlignment(&assets.heroBitmaps[3], .{ 72, 182 });
 
         return assets;
     }
@@ -243,14 +305,6 @@ inline fn TopDownAlign(bitmap: *const h.loaded_bitmap, alignment: h.v2) h.v2 {
         h.SafeRatiof0(@as(f32, @floatFromInt(bitmap.height - 1)) - h.Y(alignment), @as(f32, @floatFromInt(bitmap.height))),
     };
     return fixedAlignment;
-}
-
-fn SetTopDownAlignment(bitmaps: *hero_bitmaps, alignment: h.v2) void {
-    const fixedAlignment = TopDownAlign(&bitmaps.head, alignment);
-
-    bitmaps.head.alignPercentage = fixedAlignment;
-    bitmaps.torso.alignPercentage = fixedAlignment;
-    bitmaps.cape.alignPercentage = fixedAlignment;
 }
 
 /// Defaults: ```alignPercentage = .{0.5, 0.5 }```
@@ -400,6 +454,35 @@ pub fn LoadBitmap(assets: *game_assets, ID: bitmap_id) void {
 pub fn LoadSound(assets: *game_assets, ID: audio_id) void {
     _ = assets;
     _ = ID;
+}
+
+pub fn BestMatchAsset(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) bitmap_id {
+    var result: bitmap_id = .{ .value = 0 };
+
+    var bestDiff = platform.F32MAXIMUM;
+    var assetType = assets.assetTypes[@intFromEnum(typeID)];
+
+    if (assetType.firstAssetIndex != assetType.onePastLastAssetIndex) {
+        for (assetType.firstAssetIndex..assetType.onePastLastAssetIndex) |assetIndex| {
+            const a = &assets.assets[assetIndex];
+
+            var totalWeightedDiff: f32 = 0.0;
+
+            for (a.firstTagIndex..a.onePastLastTagIndex) |tagIndex| {
+                var tag: asset_tag = assets.tags[tagIndex];
+                const difference = matchVector.e[tag.ID] - tag.value;
+                const weightedDiff = weightVector.e[tag.ID] * h.AbsoluteValue(difference);
+                totalWeightedDiff += weightedDiff;
+            }
+
+            if (bestDiff > totalWeightedDiff) {
+                bestDiff = totalWeightedDiff;
+                result.value = a.slotId;
+            }
+        }
+    }
+
+    return result;
 }
 
 pub fn RandomAssetFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) bitmap_id {

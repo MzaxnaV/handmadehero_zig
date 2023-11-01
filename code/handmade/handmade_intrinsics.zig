@@ -78,7 +78,7 @@ pub inline fn Cos(angle: f32) f32 {
 }
 
 pub inline fn Atan2(y: f32, x: f32) f32 {
-    const result = math.atan2(y, x);
+    const result = math.atan2(f32, y, x);
     return result;
 }
 

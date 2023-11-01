@@ -116,6 +116,12 @@ pub const ground_buffer = struct {
     bitmap: h.loaded_bitmap,
 };
 
+pub const hero_bitmap_ids = struct {
+    head: h.bitmap_id,
+    cape: h.bitmap_id,
+    torso: h.bitmap_id,
+};
+
 pub const game_state = struct {
     isInitialized: bool = false,
 

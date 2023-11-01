@@ -1,4 +1,6 @@
-const assert = @import("handmade_platform").Assert;
+const platform = @import("handmade_platform");
+
+const assert = platform.Assert;
 
 const h = struct {
     usingnamespace @import("handmade_world.zig");
@@ -10,7 +12,7 @@ const h = struct {
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
-const NOT_IGNORE = @import("handmade_platform").NOT_IGNORE;
+const NOT_IGNORE = platform.NOT_IGNORE;
 
 pub const HIT_POINT_SUB_COUNT = 4;
 
@@ -85,7 +87,7 @@ pub const sim_entity = struct {
     distanceLimit: f32 = 0,
     collision: *sim_entity_collision_volume_group,
 
-    facingDirection: u32 = 0,
+    facingDirection: f32 = 0,
     tBob: f32 = 0,
 
     dAbsTileZ: i32 = 0,
@@ -687,17 +689,10 @@ pub fn MoveEntity(gameState: *h.game_state, simRegion: *sim_region, entity: *sim
 
     if ((h.X(entity.dP) == 0) and (h.Y(entity.dP) == 0)) {
         // NOTE(casey): Leave FacingDirection whatever it was
-    } else if (h.AbsoluteValue(h.X(entity.dP)) > h.AbsoluteValue(h.Y(entity.dP))) {
-        if (h.X(entity.dP) > 0) {
-            entity.facingDirection = 0;
-        } else {
-            entity.facingDirection = 2;
-        }
     } else {
-        if (h.Y(entity.dP) > 0) {
-            entity.facingDirection = 1;
-        } else {
-            entity.facingDirection = 3;
-        }
+        entity.facingDirection = h.Atan2(h.Y(entity.dP), h.X(entity.dP));
+        // if (entity.facingDirection < 0) {
+        //     entity.facingDirection += platform.Tau32;
+        // }
     }
 }

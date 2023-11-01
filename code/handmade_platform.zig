@@ -7,7 +7,9 @@ pub const HANDMADE_INTERNAL = true;
 
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
-pub const PI32 = 3.14159265359;
+pub const Pi32 = 3.14159265359; // TODO: these should be in handmade_math
+pub const Tau32 = 6.28318530718;
+
 pub const CONTROLLERS = 5;
 pub const BITMAP_BYTES_PER_PIXEL = 4;
 
