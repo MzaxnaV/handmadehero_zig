@@ -14,6 +14,9 @@ test "language" {
     try testing.expectEqual(@divTrunc(-10, 21), 0);
     try testing.expectEqual(@divTrunc(-11, 2), -5);
     try testing.expectEqual(@divTrunc(11, -2), -5);
+
+    // Little endian
+    try testing.expectEqual(@as(u32, 0xaabbccdd), @as(u32, @bitCast([4]u8{ 0xdd, 0xcc, 0xbb, 0xaa })));
 }
 
 test "intrinsics" {

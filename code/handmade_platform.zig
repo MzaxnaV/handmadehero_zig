@@ -5,6 +5,8 @@ pub const HANDMADE_SLOW = true;
 /// Debug: `False` - Build for public release, `True` - Build for developer only
 pub const HANDMADE_INTERNAL = true;
 
+pub const native_endian = @import("builtin").target.cpu.arch.endian();
+
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
 pub const Pi32 = 3.14159265359; // TODO: these should be in handmade_math
