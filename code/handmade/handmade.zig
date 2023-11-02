@@ -544,6 +544,9 @@ pub export fn UpdateAndRender(
     h.PlatformCompleteAllWork = gameMemory.PlatformCompleteAllWork;
     h.DEBUGPlatformReadEntireFile = gameMemory.DEBUGPlatformReadEntireFile;
 
+    var sound: h.loaded_sound = h.DEBUGLoadWAV("test3/bloop_00.wav");
+    _ = sound;
+
     if (HANDMADE_INTERNAL) {
         handmade_internal.debugGlobalMemory = gameMemory;
     }

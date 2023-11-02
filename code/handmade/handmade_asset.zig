@@ -312,34 +312,34 @@ inline fn TopDownAlign(bitmap: *const h.loaded_bitmap, alignment: h.v2) h.v2 {
 
 /// Defaults: ```alignPercentage = .{0.5, 0.5 }```
 fn DEBUGLoadBMP(fileName: [*:0]const u8, alignPercentage: h.v2) h.loaded_bitmap {
-    const bitmap_header = packed struct {
-        fileType: u16,
-        fileSize: u32,
-        reserved1: u16,
-        reserved2: u16,
-        bitmapOffset: u32,
-        size: u32,
-        width: i32,
-        height: i32,
-        planes: u16,
-        bitsPerPixel: u16,
-        compression: u32,
-        sizeOfBitmap: u32,
-        horzResolution: u32,
-        vertResolution: u32,
-        colorsUsed: u32,
-        colorsImportant: u32,
+    const bitmap_header = extern struct {
+        fileType: u16 align(1),
+        fileSize: u32 align(1),
+        reserved1: u16 align(1),
+        reserved2: u16 align(1),
+        bitmapOffset: u32 align(1),
+        size: u32 align(1),
+        width: i32 align(1),
+        height: i32 align(1),
+        planes: u16 align(1),
+        bitsPerPixel: u16 align(1),
+        compression: u32 align(1),
+        sizeOfBitmap: u32 align(1),
+        horzResolution: u32 align(1),
+        vertResolution: u32 align(1),
+        colorsUsed: u32 align(1),
+        colorsImportant: u32 align(1),
 
-        redMask: u32,
-        greenMask: u32,
-        blueMask: u32,
+        redMask: u32 align(1),
+        greenMask: u32 align(1),
+        blueMask: u32 align(1),
     };
 
     var result = h.loaded_bitmap{};
 
     const readResult = h.DEBUGPlatformReadEntireFile.?(fileName);
     if (readResult.contentSize != 0) {
-        const header: *align(@alignOf(u8)) bitmap_header = @ptrCast(readResult.contents);
+        const header: *bitmap_header = @ptrCast(readResult.contents);
         const pixels = readResult.contents + header.bitmapOffset;
         result.width = header.width;
         result.height = header.height;
@@ -405,53 +405,113 @@ fn DEBUGLoadBMP(fileName: [*:0]const u8, alignPercentage: h.v2) h.loaded_bitmap 
     return result;
 }
 
-fn DEBUGLoadWAV(fileName: [*:0]const u8) loaded_sound {
+const chunk_type = enum(u32) {
+    WAVE_ChunkID_fmt = riffCode('f', 'm', 't', ' '),
+    WAVE_ChunkID_data = riffCode('d', 'a', 't', 'a'),
+    WAVE_ChunkID_RIFF = riffCode('R', 'I', 'F', 'F'),
+    WAVE_ChunkID_WAVE = riffCode('W', 'A', 'V', 'E'),
+
+    fn riffCode(a: u8, b: u8, c: u8, d: u8) u32 {
+        return @bitCast(switch (platform.native_endian) {
+            .Big => [4]u8{ d, c, b, a },
+            .Little => [4]u8{ a, b, c, d },
+        });
+    }
+};
+
+const riff_iterator = struct {
+    at: [*]u8,
+    stop: [*]u8,
+
+    fn ParseChunk(at: [*]u8, stop: [*]u8) riff_iterator {
+        const result = riff_iterator{
+            .at = at,
+            .stop = stop,
+        };
+
+        return result;
+    }
+
+    fn IsValid(self: *riff_iterator) bool {
+        const result = @intFromPtr(self.at) < @intFromPtr(self.stop);
+        return result;
+    }
+
+    fn NextChunk(self: *riff_iterator) void {
+        const chunk: *wave_chunk = @ptrCast(self.at);
+
+        const size = (chunk.size + 1) & ~(@as(u32, 1));
+
+        self.at += @sizeOf(wave_chunk) + size;
+    }
+
+    fn GetType(self: *riff_iterator) chunk_type {
+        const chunk: *wave_chunk = @ptrCast(self.at);
+
+        const result: chunk_type = @enumFromInt(chunk.ID);
+        return result;
+    }
+
+    fn GetChunkData(self: *riff_iterator) [*]u8 {
+        const result: [*]u8 = self.at + @sizeOf(wave_chunk);
+
+        return result;
+    }
+};
+
+const wave_chunk = extern struct {
+    ID: u32 align(1),
+    size: u32 align(1),
+};
+
+const wave_header = extern struct {
+    riffID: u32 align(1),
+    size: u32 align(1),
+    waveID: u32 align(1),
+};
+
+const wave_fmt = extern struct {
+    wFormatTag: u16 align(1),
+    nChannels: u16 align(1),
+    nSamplesPerSec: u32 align(1),
+    nAvgBytesPerSec: u32 align(1),
+    nBlockAlign: u16 align(1),
+    wBitsPerSample: u16 align(1),
+    cbSize: u16 align(1),
+    wValidBitsPerSample: u16 align(1),
+    dwChannelMask: u32 align(1),
+    subFormat: [16]u8 align(1),
+};
+
+pub fn DEBUGLoadWAV(fileName: [*:0]const u8) loaded_sound {
     var result = loaded_sound{};
-
-    const wave_header = packed struct {
-        riffID: u32,
-        size: u32,
-        waveID: u32,
-    };
-
-    const s = enum(u32) {
-        WAVE_ChunkID_fmt = riffCode('f', 'm', 't', ' '),
-        WAVE_ChunkID_RIFF = riffCode('R', 'I', 'F', 'F'),
-        WAVE_ChunkID_WAVE = riffCode('W', 'A', 'V', 'E'),
-
-        fn riffCode(a: u8, b: u8, c: u8, d: u8) u32 {
-            return @bitCast([4]u8{ d, c, b, a });
-            // return @bitCast(switch (platform.native_endian) {
-            //     .Big => [4]u8{ d, c, b, a },
-            //     .Little => [4]u8{ d, c, b, a },
-            // });
-        }
-    };
-
-    // const wave_chunk = packed struct {
-    //     ID: u32,
-    //     size: u32,
-    // };
-
-    // const wave_fmt = packed struct {
-    //     wFormatTag: u16,
-    //     nChannels: u16,
-    //     nSamplesPerSec: u32,
-    //     nAvgBytesPerSec: u32,
-    //     nBlockAlign: u32,
-    //     wBitsPerSample: u16,
-    //     cbSize: u16,
-    //     wValidBitsPerSample: u16,
-    //     dwChannelMask: u32,
-    //     subFormat: [16]u8,
-    // };
 
     const readResult = h.DEBUGPlatformReadEntireFile.?(fileName);
     if (readResult.contentSize != 0) {
-        const header: *align(@alignOf(u8)) wave_header = @ptrCast(readResult.contents);
+        const header: *wave_header = @ptrCast(readResult.contents);
 
-        assert(header.riffID == @intFromEnum(s.WAVE_ChunkID_RIFF));
-        assert(header.waveID == @intFromEnum(s.WAVE_ChunkID_WAVE));
+        assert(header.riffID == @intFromEnum(chunk_type.WAVE_ChunkID_RIFF));
+        assert(header.waveID == @intFromEnum(chunk_type.WAVE_ChunkID_WAVE));
+
+        const at = @as([*]u8, @ptrCast(header)) + @sizeOf(wave_header);
+        const stop = @as([*]u8, @ptrCast(header)) + @sizeOf(wave_header) + (header.size - 4);
+
+        var iter = riff_iterator.ParseChunk(at, stop);
+
+        var sampleData: ?[*]u8 = null;
+        while (iter.IsValid()) : (iter.NextChunk()) {
+            switch (iter.GetType()) {
+                .WAVE_ChunkID_fmt => {
+                    const fmt: *wave_fmt = @ptrCast(iter.GetChunkData());
+                    _ = fmt;
+                },
+                .WAVE_ChunkID_data => {
+                    sampleData = iter.GetChunkData();
+                },
+
+                else => {},
+            }
+        }
     }
 
     return result;
