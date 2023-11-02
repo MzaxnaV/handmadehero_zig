@@ -18,7 +18,8 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 
 pub const loaded_sound = struct {
     sampleCount: i32 = 0,
-    memory: [*]u8 = undefined,
+    channelCount: u32 = 0,
+    samples: [2]?[*]i16 = undefined,
 };
 
 pub const asset_state = enum {
@@ -440,6 +441,7 @@ const riff_iterator = struct {
     fn NextChunk(self: *riff_iterator) void {
         const chunk: *wave_chunk = @ptrCast(self.at);
 
+        // align forward chunk.size when it's odd, https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
         const size = (chunk.size + 1) & ~(@as(u32, 1));
 
         self.at += @sizeOf(wave_chunk) + size;
@@ -455,6 +457,13 @@ const riff_iterator = struct {
     fn GetChunkData(self: *riff_iterator) [*]u8 {
         const result: [*]u8 = self.at + @sizeOf(wave_chunk);
 
+        return result;
+    }
+
+    fn GetChunkDataSize(self: *riff_iterator) u32 {
+        const chunk: *wave_chunk = @ptrCast(self.at);
+
+        const result: u32 = chunk.size;
         return result;
     }
 };
@@ -498,20 +507,59 @@ pub fn DEBUGLoadWAV(fileName: [*:0]const u8) loaded_sound {
 
         var iter = riff_iterator.ParseChunk(at, stop);
 
-        var sampleData: ?[*]u8 = null;
+        var sampleDataSize: u32 = 0;
+        var channelCount: u32 = 0;
+        var sampleData: ?[*]i16 = null;
         while (iter.IsValid()) : (iter.NextChunk()) {
             switch (iter.GetType()) {
                 .WAVE_ChunkID_fmt => {
                     const fmt: *wave_fmt = @ptrCast(iter.GetChunkData());
-                    _ = fmt;
+
+                    assert(fmt.wFormatTag == 1);
+                    assert(fmt.nSamplesPerSec == 48000);
+                    assert(fmt.wBitsPerSample == 16);
+                    assert(fmt.nBlockAlign == @sizeOf(u16) * fmt.nChannels);
+
+                    channelCount = fmt.nChannels;
                 },
                 .WAVE_ChunkID_data => {
-                    sampleData = iter.GetChunkData();
+                    sampleData = @alignCast(@ptrCast(iter.GetChunkData()));
+                    sampleDataSize = iter.GetChunkDataSize();
                 },
 
                 else => {},
             }
         }
+
+        assert(channelCount != 0 and sampleData != null);
+
+        result.sampleCount = @intCast(sampleDataSize / (channelCount * @sizeOf(u16)));
+
+        if (channelCount == 1) {
+            result.samples[0] = @ptrCast(sampleData);
+            result.samples[1] = null;
+        } else if (channelCount == 2) {
+            result.samples[0] = @ptrCast(sampleData);
+            result.samples[1] = sampleData.? + @as(u32, @intCast(result.sampleCount));
+
+            if (!NOT_IGNORE) {
+                for (0..@as(usize, @intCast(result.sampleCount))) |sampleIndex| {
+                    sampleData.?[2 * sampleIndex + 0] = @intCast(sampleIndex);
+                    sampleData.?[2 * sampleIndex + 1] = @intCast(sampleIndex);
+                }
+            }
+
+            for (0..@as(usize, @intCast(result.sampleCount))) |sampleIndex| {
+                var source: i16 = sampleData.?[2 * sampleIndex];
+                sampleData.?[2 * sampleIndex] = sampleData.?[sampleIndex];
+                sampleData.?[sampleIndex] = source;
+            }
+        } else {
+            unreachable;
+            // invalid channel count in wav file
+        }
+
+        result.channelCount = 1;
     }
 
     return result;

@@ -154,6 +154,10 @@ pub const game_state = struct {
 
     testDiffuse: h.loaded_bitmap,
     testNormal: h.loaded_bitmap,
+
+    testSound: h.loaded_sound,
+    tSine: f32,
+    testSampleIndex: u32,
 };
 
 pub const task_with_memory = struct {
