@@ -21,30 +21,33 @@ const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
 
-fn OutputSound(_: *h.game_state, soundBuffer: *platform.sound_output_buffer, toneHz: u32) void {
+fn OutputSound(gameState: *h.game_state, soundBuffer: *platform.sound_output_buffer, toneHz: u32) void {
     const toneVolume = 3000;
-    _ = toneVolume;
     const wavePeriod = @divTrunc(soundBuffer.samplesPerSecond, toneHz);
-    _ = wavePeriod;
 
     var sampleOut = soundBuffer.samples;
     var sampleIndex = @as(u32, 0);
     while (sampleIndex < 2 * soundBuffer.sampleCount) : (sampleIndex += 2) {
-        // !NOT_IGNORE:
-        // const sineValue = @sin(gameState.tSine);
-        // const sampleValue = @floatToInt(i16, sineValue * @intToFloat(f32, toneVolume);
+        var sineValue: f32 = 0;
+        var sampleValue: i16 = 0;
+        if (NOT_IGNORE) {
+            sineValue = h.Sin(gameState.tSine);
+            sampleValue = @intFromFloat(sineValue * toneVolume);
+        } else {
+            sampleValue = 0;
+        }
 
-        const sampleValue = 0;
         sampleOut[sampleIndex] = sampleValue;
         // sampleOut += 1;
         sampleOut[sampleIndex + 1] = sampleValue;
         // sampleOut += 1;
 
-        // !NOT_IGNORE:
-        // gameState.tSine += platform.Tau32 * 1.0 / @intToFloat(f32, wavePeriod);
-        // if (gameState.tSine > platform.Tau32) {
-        //     gameState.tSine -= platform.Tau32;
-        // }
+        if (NOT_IGNORE) {
+            gameState.tSine += platform.Tau32 * 1.0 / @as(f32, @floatFromInt(wavePeriod));
+            if (gameState.tSine > platform.Tau32) {
+                gameState.tSine -= platform.Tau32;
+            }
+        }
     }
 }
 
@@ -563,6 +566,8 @@ pub export fn UpdateAndRender(
         const tilesPerHeight = 9;
 
         gameState.typicalFloorHeight = 3.0;
+
+        gameState.testSound = h.DEBUGLoadWAV("test3/music_test.wav");
 
         const worldChunkDimInMeters = h.v3{
             pixelsToMeters * groundBufferWidth,
@@ -1266,6 +1271,20 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
         }
     }
 
-    const gameState = @as(*h.game_state, @alignCast(@ptrCast(gameMemory.permanentStorage)));
-    OutputSound(gameState, soundBuffer, 400);
+    const gameState: *h.game_state = @alignCast(@ptrCast(gameMemory.permanentStorage));
+    // OutputSound(gameState, soundBuffer, 400);
+
+    var sampleOut = soundBuffer.samples;
+    var sampleIndex: u32 = 0;
+    while (sampleIndex < soundBuffer.sampleCount) : (sampleIndex += 1) {
+        var testSoundSampleIndex: u32 = (gameState.testSampleIndex + sampleIndex) % @as(u32, @intCast(gameState.testSound.sampleCount));
+        var sampleValue: i16 = gameState.testSound.samples[0].?[testSoundSampleIndex];
+
+        // @import("std").debug.print("{} {}\n", .{ testSoundSampleIndex, sampleValue });
+
+        sampleOut[2 * sampleIndex] = sampleValue;
+        sampleOut[2 * sampleIndex + 1] = sampleValue;
+    }
+
+    gameState.testSampleIndex += soundBuffer.sampleCount;
 }

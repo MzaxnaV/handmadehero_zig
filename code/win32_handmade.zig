@@ -1235,8 +1235,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 monitorRefreshHz = @as(u32, @intCast(win32RefreshRate));
             }
 
-            // const gameUpdateHz = @divTrunc(monitorRefreshHz, 2);
-            const gameUpdateHz = monitorRefreshHz;
+            const gameUpdateHz = @divTrunc(monitorRefreshHz, 2);
+            // const gameUpdateHz = monitorRefreshHz;
             const targetSecondsPerFrame = 1.0 / @as(f32, @floatFromInt(gameUpdateHz));
 
             var soundOutput = win32_sound_output{

@@ -514,31 +514,31 @@ pub const loaded_bitmap = struct {
                         const pitchOffset3 = if (texturePitch > 0) texelPtr3 + @as(usize, @intCast(texturePitch)) else texelPtr3 - @as(usize, @intCast(-texturePitch));
 
                         var sampleA: simd.u32x4 = .{
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr0)).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr1)).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr2)).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr3)).*,
+                            @as(*align(1) u32, @ptrCast(texelPtr0)).*,
+                            @as(*align(1) u32, @ptrCast(texelPtr1)).*,
+                            @as(*align(1) u32, @ptrCast(texelPtr2)).*,
+                            @as(*align(1) u32, @ptrCast(texelPtr3)).*,
                         };
 
                         var sampleB: simd.u32x4 = .{
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr0 + @sizeOf(u32))).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr1 + @sizeOf(u32))).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr2 + @sizeOf(u32))).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr3 + @sizeOf(u32))).*,
+                            @as(*align(1) u32, @ptrCast(texelPtr0 + @sizeOf(u32))).*,
+                            @as(*align(1) u32, @ptrCast(texelPtr1 + @sizeOf(u32))).*,
+                            @as(*align(1) u32, @ptrCast(texelPtr2 + @sizeOf(u32))).*,
+                            @as(*align(1) u32, @ptrCast(texelPtr3 + @sizeOf(u32))).*,
                         };
 
                         var sampleC: simd.u32x4 = .{
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(pitchOffset0)).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(pitchOffset1)).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(pitchOffset2)).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(pitchOffset3)).*,
+                            @as(*align(1) u32, @ptrCast(pitchOffset0)).*,
+                            @as(*align(1) u32, @ptrCast(pitchOffset1)).*,
+                            @as(*align(1) u32, @ptrCast(pitchOffset2)).*,
+                            @as(*align(1) u32, @ptrCast(pitchOffset3)).*,
                         };
 
                         var sampleD: simd.u32x4 = .{
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(pitchOffset0 + @sizeOf(u32))).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(pitchOffset1 + @sizeOf(u32))).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(pitchOffset2 + @sizeOf(u32))).*,
-                            @as(*align(@alignOf(u8)) u32, @ptrCast(pitchOffset3 + @sizeOf(u32))).*,
+                            @as(*align(1) u32, @ptrCast(pitchOffset0 + @sizeOf(u32))).*,
+                            @as(*align(1) u32, @ptrCast(pitchOffset1 + @sizeOf(u32))).*,
+                            @as(*align(1) u32, @ptrCast(pitchOffset2 + @sizeOf(u32))).*,
+                            @as(*align(1) u32, @ptrCast(pitchOffset3 + @sizeOf(u32))).*,
                         };
 
                         const u5x4 = @Vector(4, u5);
@@ -680,7 +680,7 @@ pub const loaded_bitmap = struct {
 
                         const maskedOut: simd.u32x4 = @select(u32, @as(simd.bx4, @bitCast(writeMask)), @as(simd.u32x4, @bitCast(out)), originalDest);
 
-                        // @as(*align(@alignOf(u8)) simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
+                        // @as(*align(1) simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
                         @as(*simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
                     }
 
@@ -1069,9 +1069,9 @@ pub const render_group = struct {
         self.transform.orthographic = true;
     }
 
-    fn PushRenderElements(self: *Self, comptime t: render_group_entry_type) ?*align(@alignOf(u8)) t.Type() {
+    fn PushRenderElements(self: *Self, comptime t: render_group_entry_type) ?*align(1) t.Type() {
         const element_type = t.Type();
-        const element_ptr_type = ?*align(@alignOf(u8)) element_type;
+        const element_ptr_type = ?*align(1) element_type;
 
         var result: element_ptr_type = null;
 
@@ -1199,7 +1199,7 @@ pub const render_group = struct {
 
             switch (header.entryType) {
                 .Clear => {
-                    const entry = @as(*align(@alignOf(u8)) render_entry_clear, @ptrCast(data));
+                    const entry = @as(*align(1) render_entry_clear, @ptrCast(data));
                     var colour: h.v4 = entry.colour;
                     outputTarget.DrawRectangle(
                         .{ 0, 0 },
@@ -1213,7 +1213,7 @@ pub const render_group = struct {
                 },
 
                 .Bitmap => {
-                    const entry = @as(*align(@alignOf(u8)) render_entry_bitmap, @ptrCast(data));
+                    const entry = @as(*align(1) render_entry_bitmap, @ptrCast(data));
 
                     const xAxis = h.v2{ 1, 0 };
                     const yAxis = h.v2{ 0, 1 };
@@ -1249,14 +1249,14 @@ pub const render_group = struct {
                 },
 
                 .Rectangle => {
-                    const entry = @as(*align(@alignOf(u8)) render_entry_rectangle, @ptrCast(data));
+                    const entry = @as(*align(1) render_entry_rectangle, @ptrCast(data));
                     outputTarget.DrawRectangle(entry.p, h.Add(entry.p, entry.dim), entry.colour, clipRect, even);
 
                     baseAddress += @sizeOf(@TypeOf(entry.*));
                 },
 
                 .CoordinateSystem => {
-                    const entry = @as(*align(@alignOf(u8)) render_entry_coordinate_system, @ptrCast(data));
+                    const entry = @as(*align(1) render_entry_coordinate_system, @ptrCast(data));
                     if (!NOT_IGNORE) {
                         const vMax: h.v2 = h.Add(entry.origin, h.Add(entry.xAxis, entry.yAxis));
                         outputTarget.DrawRectangleSlowly(
@@ -1492,7 +1492,7 @@ fn SampleEnvironmentMap(screenSpaceUV: h.v2, sampleDirection: h.v3, roughness: f
     if (!NOT_IGNORE) {
         const ptrOffset = y * lod.pitch + x * @sizeOf(u32);
         const texelPtr = if (ptrOffset > 0) lod.memory + @as(usize, @intCast(ptrOffset)) else lod.memory - @as(usize, @intCast(-ptrOffset));
-        const ptr = @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr));
+        const ptr = @as(*align(1) u32, @ptrCast(texelPtr));
         ptr.* = 0xffffffff;
     }
 
@@ -1510,10 +1510,10 @@ inline fn BilinearSample(texture: *const loaded_bitmap, x: i32, y: i32) bilinear
     const pitchOffset = if (texture.pitch > 0) texelPtr + @as(usize, @intCast(texture.pitch)) else texelPtr - @as(usize, @intCast(-texture.pitch));
 
     const result = bilinear_sample{
-        .a = @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr)).*,
-        .b = @as(*align(@alignOf(u8)) u32, @ptrCast(texelPtr + @sizeOf(u32))).*,
-        .c = @as(*align(@alignOf(u8)) u32, @ptrCast(pitchOffset)).*,
-        .d = @as(*align(@alignOf(u8)) u32, @ptrCast(pitchOffset + @sizeOf(u32))).*,
+        .a = @as(*align(1) u32, @ptrCast(texelPtr)).*,
+        .b = @as(*align(1) u32, @ptrCast(texelPtr + @sizeOf(u32))).*,
+        .c = @as(*align(1) u32, @ptrCast(pitchOffset)).*,
+        .d = @as(*align(1) u32, @ptrCast(pitchOffset + @sizeOf(u32))).*,
     };
 
     return result;
