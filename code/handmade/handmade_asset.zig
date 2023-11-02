@@ -555,8 +555,7 @@ pub fn DEBUGLoadWAV(fileName: [*:0]const u8) loaded_sound {
                 sampleData.?[sampleIndex] = source;
             }
         } else {
-            unreachable;
-            // invalid channel count in wav file
+            platform.InvalidCodePath("invalid channel count in wav file");
         }
 
         result.channelCount = 1;

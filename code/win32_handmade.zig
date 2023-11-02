@@ -201,7 +201,7 @@ fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) handmade_internal.debug_rea
     if (fileHandle != win32.INVALID_HANDLE_VALUE) {
         var fileSize = win32.LARGE_INTEGER{ .QuadPart = 0 };
         if (win32.GetFileSizeEx(fileHandle, &fileSize) != 0) {
-            var fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @as(u32, @intCast(fileSize.QuadPart)) else unreachable;
+            var fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @as(u32, @intCast(fileSize.QuadPart)) else platform.InvalidCodePath("");
             if (win32.VirtualAlloc(null, fileSize32, allocationType, win32.PAGE_READWRITE)) |data| {
                 var bytesRead: DWORD = 0;
                 if (win32.ReadFile(fileHandle, data, fileSize32, &bytesRead, null) != 0 and fileSize32 == bytesRead) {
@@ -543,8 +543,7 @@ fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32
         win32.WM_DESTROY => globalRunning = false,
 
         win32.WM_KEYDOWN, win32.WM_KEYUP, win32.WM_SYSKEYDOWN, win32.WM_SYSKEYUP => {
-            std.debug.print("{s}", .{"Keyboard input came in through a non-dispatch message!"});
-            unreachable;
+            platform.InvalidCodePath("Keyboard input came in through a non-dispatch message!");
         },
         win32.WM_PAINT => {
             var paint: win32.PAINTSTRUCT = undefined;

@@ -1084,7 +1084,7 @@ pub const render_group = struct {
             result = @as(element_ptr_type, @ptrCast(ptr + @sizeOf(render_group_entry_header)));
             self.pushBufferSize += size;
         } else {
-            unreachable;
+            platform.InvalidCodePath("");
         }
 
         return result;

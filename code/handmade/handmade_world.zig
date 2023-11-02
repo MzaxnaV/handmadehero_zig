@@ -215,7 +215,7 @@ pub fn ChangeEntityLocationRaw(arena: *h.memory_arena, w: *world, lowEntityIndex
                     }
                 }
             } else {
-                unreachable;
+                platform.InvalidCodePath("");
             }
         }
 
@@ -239,7 +239,7 @@ pub fn ChangeEntityLocationRaw(arena: *h.memory_arena, w: *world, lowEntityIndex
                 block.lowEntityIndex[block.entityCount] = lowEntityIndex;
                 block.entityCount += 1;
             } else {
-                unreachable;
+                platform.InvalidCodePath("");
             }
         }
     }

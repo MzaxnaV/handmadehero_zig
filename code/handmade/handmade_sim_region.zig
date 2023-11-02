@@ -208,7 +208,7 @@ fn AddEntityRaw(gameState: *h.game_state, simRegion: *sim_region, storageIndex: 
             entity.?.storageIndex = storageIndex;
             entity.?.updatable = false;
         } else {
-            unreachable;
+            platform.InvalidCodePath("");
         }
     }
 

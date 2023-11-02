@@ -206,6 +206,10 @@ pub inline fn Assert(expression: bool) void {
     if (HANDMADE_SLOW and !expression) unreachable;
 }
 
+pub inline fn InvalidCodePath(comptime _: []const u8) noreturn {
+    unreachable;
+}
+
 pub const BEGIN_TIMED_BLOCK = handmade_internal.BeginTimedBlock; // TODO (Manav): make it portable
 pub const END_TIMED_BLOCK = handmade_internal.EndTimedBlock; // TODO (Manav): make it portable
 pub const END_TIMED_BLOCK_COUNTED = handmade_internal.EndTimedBlockCounted;

@@ -1022,7 +1022,7 @@ pub export fn UpdateAndRender(
                                     },
 
                                     .index => {
-                                        unreachable;
+                                        platform.InvalidCodePath("");
                                     },
                                 }
                             }
@@ -1076,7 +1076,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Null => {
-                    unreachable;
+                    platform.InvalidCodePath("");
                 },
 
                 else => {},
@@ -1144,7 +1144,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Null => {
-                    unreachable;
+                    platform.InvalidCodePath("");
                 },
             }
         }
@@ -1279,8 +1279,6 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
     while (sampleIndex < soundBuffer.sampleCount) : (sampleIndex += 1) {
         var testSoundSampleIndex: u32 = (gameState.testSampleIndex + sampleIndex) % @as(u32, @intCast(gameState.testSound.sampleCount));
         var sampleValue: i16 = gameState.testSound.samples[0].?[testSoundSampleIndex];
-
-        // @import("std").debug.print("{} {}\n", .{ testSoundSampleIndex, sampleValue });
 
         sampleOut[2 * sampleIndex] = sampleValue;
         sampleOut[2 * sampleIndex + 1] = sampleValue;
