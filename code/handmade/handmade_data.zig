@@ -185,8 +185,7 @@ pub const transient_state = struct {
 
     assets: *h.game_assets,
 
-    groundBufferCount: u32,
-    groundBuffers: [*]ground_buffer,
+    groundBuffers: []ground_buffer,
 
     highPriorityQueue: *platform.work_queue,
     lowPriorityQueue: *platform.work_queue,

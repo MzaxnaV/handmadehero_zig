@@ -202,8 +202,8 @@ fn DrawHitpoints(entity: *h.sim_entity, pieceGroup: *h.render_group) void {
 fn MakeSimpleGroundedCollision(gameState: *h.game_state, dimX: f32, dimY: f32, dimZ: f32) *h.sim_entity_collision_volume_group {
     const group: *h.sim_entity_collision_volume_group = gameState.worldArena.PushStruct(h.sim_entity_collision_volume_group);
 
-    group.volumeCount = 1;
-    group.volumes = gameState.worldArena.PushArray(h.sim_entity_collision_volume, group.volumeCount);
+    const volumeCount = 1;
+    group.volumes = gameState.worldArena.PushSlice(h.sim_entity_collision_volume, volumeCount);
     group.totalVolume.offsetP = h.v3{ 0, 0, 0.5 * dimZ };
     group.totalVolume.dim = h.v3{ dimX, dimY, dimZ };
     group.volumes[0] = group.totalVolume;
@@ -214,8 +214,9 @@ fn MakeSimpleGroundedCollision(gameState: *h.game_state, dimX: f32, dimY: f32, d
 fn MakeNullCollision(gameState: *h.game_state) *h.sim_entity_collision_volume_group {
     const group: *h.sim_entity_collision_volume_group = gameState.worldArena.PushStruct(h.sim_entity_collision_volume_group);
 
-    group.volumeCount = 0;
-    group.volumes = undefined; // TODO (Manav): change type from,  [*]sim_entity_collision_volume to ?[*]sim_entity_collision_volume
+    const volumeCount = 0;
+    group.volumes = undefined; // TODO (Manav): change type from,  []sim_entity_collision_volume to ?[]sim_entity_collision_volume
+    group.volumes.len = volumeCount;
     group.totalVolume.offsetP = h.v3{ 0, 0, 0 };
     group.totalVolume.dim = h.v3{ 0, 0, 0 };
 
@@ -787,13 +788,11 @@ pub export fn UpdateAndRender(
         tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(64), tranState);
 
         _ = PlaySound(gameState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
-        // TODO (Manav) URGENT: fix sounds!
-        // _ = PlaySound(gameState, h.GetFirstSoundFrom(tranState.assets, .Asset_test_stereo));
 
-        tranState.groundBufferCount = 256; // 64
-        tranState.groundBuffers = tranState.tranArena.PushArray(h.ground_buffer, tranState.groundBufferCount);
+        const groundBufferCount = 256; // 64
+        tranState.groundBuffers = tranState.tranArena.PushSlice(h.ground_buffer, groundBufferCount);
         var groundBufferIndex = @as(u32, 0);
-        while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
+        while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
             groundBuffer.bitmap = MakeEmptyBitmap(&tranState.tranArena, groundBufferWidth, groundBufferHeight, false);
             groundBuffer.p = h.NullPosition();
@@ -824,7 +823,7 @@ pub export fn UpdateAndRender(
 
     if (!NOT_IGNORE and gameInput.executableReloaded) {
         var groundBufferIndex = @as(u32, 0);
-        while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
+        while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
             groundBuffer.p = h.NullPosition();
         }
@@ -920,7 +919,7 @@ pub export fn UpdateAndRender(
 
     if (NOT_IGNORE) {
         var groundBufferIndex = @as(u32, 0);
-        while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
+        while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
             if (h.IsValid(groundBuffer.p)) {
                 const bitmap = &groundBuffer.bitmap;
@@ -955,7 +954,7 @@ pub export fn UpdateAndRender(
                             var furthestBufferLengthSq = @as(f32, 0);
                             var furthestBuffer: ?*h.ground_buffer = null;
                             var index = @as(u32, 0);
-                            while (index < tranState.groundBufferCount) : (index += 1) {
+                            while (index < tranState.groundBuffers.len) : (index += 1) {
                                 const groundBuffer = &tranState.groundBuffers[index];
                                 if (h.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
                                     furthestBuffer = null;
@@ -1234,7 +1233,7 @@ pub export fn UpdateAndRender(
         tranState.envMaps[1].pZ = 0;
         tranState.envMaps[2].pZ = 1.5;
 
-        h.DrawBitmap(&tranState.envMaps[0].lod[0], &tranState.groundBuffers[tranState.groundBufferCount - 1].bitmap, 125, 25, 1);
+        h.DrawBitmap(&tranState.envMaps[0].lod[0], &tranState.groundBuffers[tranState.groundBuffers.len - 1].bitmap, 125, 25, 1);
 
         // angle = 0;
 

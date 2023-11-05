@@ -130,19 +130,19 @@ pub const game_assets = struct {
 
     tagRange: [asset_tag_id.len()]f32,
 
-    bitmapCount: u32,
-    bitmapInfos: [*]asset_bitmap_info,
-    bitmaps: [*]asset_slot,
+    // bitmapCount: u32,
+    bitmapInfos: []asset_bitmap_info,
+    bitmaps: []asset_slot,
 
-    soundCount: u32,
-    soundInfos: [*]asset_sound_info,
-    sounds: [*]asset_slot,
+    // soundCount: u32,
+    soundInfos: []asset_sound_info,
+    sounds: []asset_slot,
 
-    tagCount: u32,
-    tags: [*]asset_tag,
+    // tagCount: u32,
+    tags: []asset_tag,
 
-    assetCount: u32,
-    assets: [*]asset,
+    // assetCount: u32,
+    assets: []asset,
 
     assetTypes: [asset_type_id.len()]asset_type,
 
@@ -166,7 +166,7 @@ pub const game_assets = struct {
     }
 
     fn DEBUGAddBitmapInfo(self: *game_assets, fileName: [*:0]const u8, alignPercentage: h.v2) bitmap_id {
-        assert(self.DEBUGUsedBitmapCount < self.bitmapCount);
+        assert(self.DEBUGUsedBitmapCount < self.bitmaps.len);
 
         const ID = bitmap_id{ .value = self.DEBUGUsedBitmapCount };
         self.DEBUGUsedBitmapCount += 1;
@@ -179,7 +179,7 @@ pub const game_assets = struct {
     }
 
     fn DEBUGAddSoundInfo(self: *game_assets, fileName: [*:0]const u8) sound_id {
-        assert(self.DEBUGUsedSoundCount < self.soundCount);
+        assert(self.DEBUGUsedSoundCount < self.sounds.len);
 
         const ID = sound_id{ .value = self.DEBUGUsedSoundCount };
         self.DEBUGUsedSoundCount += 1;
@@ -208,7 +208,7 @@ pub const game_assets = struct {
     /// Defaults: ```alignPercentage = .{0.5, 0.5 }```
     fn AddBitmapAsset(self: *game_assets, fileName: [*:0]const u8, alignPercentage: h.v2) void {
         assert(self.DEBUGAssetType != null);
-        assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assetCount);
+        assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
 
         var a: *asset = &self.assets[self.DEBUGAssetType.?.onePastLastAssetIndex];
         self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
@@ -222,7 +222,7 @@ pub const game_assets = struct {
 
     fn AddSoundAsset(self: *game_assets, fileName: [*:0]const u8) void {
         assert(self.DEBUGAssetType != null);
-        assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assetCount);
+        assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
 
         var a: *asset = &self.assets[self.DEBUGAssetType.?.onePastLastAssetIndex];
         self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
@@ -258,33 +258,33 @@ pub const game_assets = struct {
 
         assets.tagRange[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
 
-        assets.bitmapCount = 256 * asset_tag_id.len();
-        assets.bitmapInfos = arena.PushArray(asset_bitmap_info, assets.bitmapCount);
-        assets.bitmaps = arena.PushArray(asset_slot, assets.bitmapCount);
+        const bitmapCount = 256 * asset_tag_id.len();
+        assets.bitmapInfos = arena.PushSlice(asset_bitmap_info, bitmapCount);
+        assets.bitmaps = arena.PushSlice(asset_slot, bitmapCount);
 
         // setup bitmaps
         {
-            for (0..assets.bitmapCount) |index| {
+            for (0..assets.bitmaps.len) |index| {
                 assets.bitmaps[index].data = .{ .bitmap = null };
             }
         }
 
-        assets.soundCount = 256 * asset_tag_id.len();
-        assets.soundInfos = arena.PushArray(asset_sound_info, assets.soundCount);
-        assets.sounds = arena.PushArray(asset_slot, assets.soundCount);
+        const soundCount = 256 * asset_tag_id.len();
+        assets.soundInfos = arena.PushSlice(asset_sound_info, soundCount);
+        assets.sounds = arena.PushSlice(asset_slot, soundCount);
 
         // setup sounds
         {
-            for (0..assets.soundCount) |index| {
+            for (0..assets.sounds.len) |index| {
                 assets.sounds[index].data = .{ .sound = null };
             }
         }
 
-        assets.assetCount = assets.soundCount + assets.bitmapCount;
-        assets.assets = arena.PushArray(asset, assets.assetCount);
+        const assetCount = soundCount + bitmapCount;
+        assets.assets = arena.PushSlice(asset, assetCount);
 
-        assets.tagCount = 1024 * asset_tag_id.len();
-        assets.tags = arena.PushArray(asset_tag, assets.tagCount);
+        const tagCount = 1024 * asset_tag_id.len();
+        assets.tags = arena.PushSlice(asset_tag, tagCount);
 
         assets.DEBUGUsedBitmapCount = 1;
         assets.DEBUGUsedSoundCount = 1;
