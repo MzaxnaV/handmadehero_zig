@@ -4,6 +4,7 @@ const h = struct {
     usingnamespace @import("handmade_sim_region.zig");
     usingnamespace @import("handmade_world.zig");
     usingnamespace @import("handmade_math.zig");
+    usingnamespace @import("handmade_random.zig");
     usingnamespace @import("handmade_render_group.zig");
     usingnamespace @import("handmade_asset.zig");
 };
@@ -62,8 +63,8 @@ pub const memory_arena = struct {
         return @as(*T, @ptrCast(self.PushSizeAlign(@alignOf(T), @sizeOf(T))));
     }
 
-    pub inline fn PushSlice(self: *memory_arena, comptime T: type, comptime count: platform.memory_index) *[count]T {
-        return @as(*[count]T, @ptrCast(self.PushSizeAlign(@alignOf(T), count * @sizeOf(*[]T))));
+    pub inline fn PushSlice(self: *memory_arena, comptime T: type, count: platform.memory_index) []T {
+        return self.PushArray(T, count)[0..count];
     }
 
     pub inline fn PushArray(self: *memory_arena, comptime T: type, count: platform.memory_index) [*]T {
@@ -122,9 +123,17 @@ pub const hero_bitmap_ids = struct {
     torso: h.bitmap_id,
 };
 
+pub const playing_sound = struct {
+    volume: [2]f32,
+    ID: h.sound_id,
+    samplesPlayed: i32,
+    next: ?*playing_sound,
+};
+
 pub const game_state = struct {
     isInitialized: bool = false,
 
+    metaArena: memory_arena,
     worldArena: memory_arena,
     world: *h.world,
 
@@ -155,9 +164,11 @@ pub const game_state = struct {
     testDiffuse: h.loaded_bitmap,
     testNormal: h.loaded_bitmap,
 
-    testSound: h.loaded_sound,
+    generalEntropy: h.random_series,
     tSine: f32,
-    testSampleIndex: u32,
+
+    firstPlayingSound: ?*playing_sound,
+    firstFreePlayingSound: ?*playing_sound,
 };
 
 pub const task_with_memory = struct {
@@ -295,8 +306,8 @@ pub fn AddCollisionRule(gameState: *game_state, unsortedStorageIndexA: u32, unso
     }
 }
 
-// TODO (Manav): this is weird, we already have a function pointer in gameMemory
+pub var DEBUGPlatformReadEntireFile: ?hi.debug_platform_read_entire_file = null;
+
+// NOTE (Manav): the below two pointers are weird, we already have a function pointer in gameMemory
 pub var PlatformAddEntry: platform.add_entry = undefined;
 pub var PlatformCompleteAllWork: platform.complete_all_work = undefined;
-
-pub var DEBUGPlatformReadEntireFile: ?hi.debug_platform_read_entire_file = null;

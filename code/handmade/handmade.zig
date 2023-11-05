@@ -320,7 +320,7 @@ fn FillGroundChunk(
 
                     var grassIndex = @as(u32, 0);
                     while (grassIndex < 50) : (grassIndex += 1) {
-                        const stamp = h.RandomAssetFrom(tranState.assets, if (series.RandomChoice(2) == 1) .Asset_Grass else .Asset_Stone, &series);
+                        const stamp = h.GetRandomBitmapFrom(tranState.assets, if (series.RandomChoice(2) == 1) .Asset_Grass else .Asset_Stone, &series);
 
                         const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
                         renderGroup.PushBitmap2(stamp, 2.5, h.ToV3(p, 0), colour);
@@ -344,7 +344,7 @@ fn FillGroundChunk(
 
                     var grassIndex = @as(u32, 0);
                     while (grassIndex < 50) : (grassIndex += 1) {
-                        var stamp: h.bitmap_id = h.RandomAssetFrom(tranState.assets, .Asset_Tuft, &series);
+                        var stamp: h.bitmap_id = h.GetRandomBitmapFrom(tranState.assets, .Asset_Tuft, &series);
 
                         const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
                         renderGroup.PushBitmap2(stamp, 0.1, h.ToV3(p, 0), .{ 1, 1, 1, 1 });
@@ -529,6 +529,26 @@ pub inline fn ChunkPosFromTilePos(w: *h.world, absTileX: i32, absTileY: i32, abs
     return result;
 }
 
+fn PlaySound(gameState: *h.game_state, soundID: h.sound_id) *h.playing_sound {
+    if (gameState.firstFreePlayingSound) |_| {} else {
+        gameState.firstFreePlayingSound = gameState.worldArena.PushStruct(h.playing_sound);
+        gameState.firstFreePlayingSound.?.next = null;
+    }
+
+    var playingSound = gameState.firstFreePlayingSound.?;
+    gameState.firstFreePlayingSound = playingSound.next;
+
+    playingSound.samplesPlayed = 0;
+    playingSound.volume[0] = 1;
+    playingSound.volume[1] = 1;
+    playingSound.ID = soundID;
+
+    playingSound.next = gameState.firstPlayingSound;
+    gameState.firstPlayingSound = playingSound;
+
+    return playingSound;
+}
+
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(
@@ -555,7 +575,7 @@ pub export fn UpdateAndRender(
     defer platform.END_TIMED_BLOCK(.UpdateAndRender);
 
     assert(@sizeOf(h.game_state) <= gameMemory.permanentStorageSize);
-    const gameState = @as(*h.game_state, @alignCast(@ptrCast(gameMemory.permanentStorage)));
+    const gameState: *h.game_state = @alignCast(@ptrCast(gameMemory.permanentStorage));
 
     const groundBufferWidth = 256.0;
     const groundBufferHeight = 256.0;
@@ -566,8 +586,7 @@ pub export fn UpdateAndRender(
         const tilesPerHeight = 9;
 
         gameState.typicalFloorHeight = 3.0;
-
-        gameState.testSound = h.DEBUGLoadWAV("test3/music_test.wav");
+        gameState.generalEntropy = h.RandomSeed(1234);
 
         const worldChunkDimInMeters = h.v3{
             pixelsToMeters * groundBufferWidth,
@@ -575,7 +594,10 @@ pub export fn UpdateAndRender(
             gameState.typicalFloorHeight,
         };
 
-        gameState.worldArena.Initialize(gameMemory.permanentStorageSize - @sizeOf(h.game_state), gameMemory.permanentStorage + @sizeOf(h.game_state));
+        gameState.worldArena.Initialize(
+            gameMemory.permanentStorageSize - @sizeOf(h.game_state),
+            gameMemory.permanentStorage + @sizeOf(h.game_state),
+        );
 
         _ = AddLowEntity(gameState, .Null, h.NullPosition());
 
@@ -594,7 +616,12 @@ pub export fn UpdateAndRender(
         gameState.familiarCollision = MakeSimpleGroundedCollision(gameState, 1, 0.5, 0.5);
         gameState.wallCollision = MakeSimpleGroundedCollision(gameState, tileSideInMeters, tileSideInMeters, tileDepthInMeters);
 
-        gameState.standardRoomCollision = MakeSimpleGroundedCollision(gameState, tilesPerWidth * tileSideInMeters, tilesPerHeight * tileSideInMeters, 0.9 * tileDepthInMeters);
+        gameState.standardRoomCollision = MakeSimpleGroundedCollision(
+            gameState,
+            tilesPerWidth * tileSideInMeters,
+            tilesPerHeight * tileSideInMeters,
+            0.9 * tileDepthInMeters,
+        );
 
         var series = h.RandomSeed(1234);
 
@@ -636,7 +663,12 @@ pub export fn UpdateAndRender(
                 doorTop = true;
             }
 
-            _ = AddStandardRoom(gameState, screenX * tilesPerWidth + tilesPerWidth / 2, screenY * tilesPerHeight + tilesPerHeight / 2, absTileZ);
+            _ = AddStandardRoom(
+                gameState,
+                screenX * tilesPerWidth + tilesPerWidth / 2,
+                screenY * tilesPerHeight + tilesPerHeight / 2,
+                absTileZ,
+            );
 
             var tileY = @as(u32, 0);
             while (tileY < tilesPerHeight) : (tileY += 1) {
@@ -665,7 +697,9 @@ pub export fn UpdateAndRender(
                     if (shouldBeDoor) {
                         _ = AddWall(gameState, absTileX, absTileY, absTileZ);
                     } else if (createdZDoor) {
-                        if (((@rem(absTileZ, 2) != 0) and (tileX == 10) and (tileY == 5)) or ((@rem(absTileZ, 2) == 0) and (tileX == 4) and (tileY == 5))) {
+                        if (((@rem(absTileZ, 2) != 0) and (tileX == 10) and (tileY == 5)) or
+                            ((@rem(absTileZ, 2) == 0) and (tileX == 4) and (tileY == 5)))
+                        {
                             // TODO (Manav): absTileZ has integer overflow, tolerate it for now.
                             _ = AddStairs(gameState, absTileX, absTileY, if (doorDown) absTileZ - 1 else absTileZ);
                         }
@@ -720,7 +754,12 @@ pub export fn UpdateAndRender(
             const familiarOffsetY = series.RandomBetweenI32(-3, -1);
 
             if ((familiarOffsetX != 0) or (familiarOffsetY != 0)) {
-                _ = AddFamiliar(gameState, @as(u32, @intCast(@as(i32, @intCast(cameraTileX)) + familiarOffsetX)), @as(u32, @intCast(@as(i32, @intCast(cameraTileY)) + familiarOffsetY)), cameraTileZ);
+                _ = AddFamiliar(
+                    gameState,
+                    @intCast(@as(i32, @intCast(cameraTileX)) + familiarOffsetX),
+                    @intCast(@as(i32, @intCast(cameraTileY)) + familiarOffsetY),
+                    cameraTileZ,
+                );
             }
         }
 
@@ -746,6 +785,10 @@ pub export fn UpdateAndRender(
         }
 
         tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(64), tranState);
+
+        _ = PlaySound(gameState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
+        // TODO (Manav) URGENT: fix sounds!
+        _ = PlaySound(gameState, h.GetFirstSoundFrom(tranState.assets, .Asset_test_stereo));
 
         tranState.groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushArray(h.ground_buffer, tranState.groundBufferCount);
@@ -992,9 +1035,9 @@ pub export fn UpdateAndRender(
 
             // Update (pre-physics entity)
             var heroBitmaps = h.hero_bitmap_ids{
-                .head = h.BestMatchAsset(tranState.assets, .Asset_Head, &matchVector, &weightVector),
-                .cape = h.BestMatchAsset(tranState.assets, .Asset_Cape, &matchVector, &weightVector),
-                .torso = h.BestMatchAsset(tranState.assets, .Asset_Torso, &matchVector, &weightVector),
+                .head = h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Head, &matchVector, &weightVector),
+                .cape = h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Cape, &matchVector, &weightVector),
+                .torso = h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Torso, &matchVector, &weightVector),
             };
 
             switch (entity.entityType) {
@@ -1018,6 +1061,8 @@ pub export fn UpdateAndRender(
                                             const dSwordV3 = h.v3{ h.X(conHero.dSword), h.Y(conHero.dSword), 0 };
                                             h.MakeEntitySpatial(sword, entity.p, h.Add(entity.dP, (h.Scale(dSwordV3, 5))));
                                             h.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
+
+                                            _ = PlaySound(gameState, h.GetRandomSoundFrom(tranState.assets, .Asset_Bloop, &gameState.generalEntropy));
                                         }
                                     },
 
@@ -1094,7 +1139,7 @@ pub export fn UpdateAndRender(
             switch (entity.entityType) {
                 .Hero => {
                     const heroSizeC = 2.5;
-                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
                     renderGroup.PushBitmap2(heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
@@ -1103,7 +1148,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Wall => {
-                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Tree), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Tree), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Stairwell => {
@@ -1112,8 +1157,8 @@ pub export fn UpdateAndRender(
                 },
 
                 .Sword => {
-                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Sword), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Sword), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Familiar => {
@@ -1122,12 +1167,12 @@ pub export fn UpdateAndRender(
                         entity.tBob -= platform.Tau32;
                     }
                     const bobSin = h.Sin(2 * entity.tBob);
-                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
                     renderGroup.PushBitmap2(heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
                 },
 
                 .Monstar => {
-                    renderGroup.PushBitmap2(h.GetFirstBitmapID(tranState.assets, .Asset_Shadow), 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
                     renderGroup.PushBitmap2(heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     DrawHitpoints(entity, renderGroup);
@@ -1272,17 +1317,78 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
     }
 
     const gameState: *h.game_state = @alignCast(@ptrCast(gameMemory.permanentStorage));
+    const tranState: *h.transient_state = @alignCast(@ptrCast(gameMemory.transientStorage));
     // OutputSound(gameState, soundBuffer, 400);
 
-    var sampleOut = soundBuffer.samples;
-    var sampleIndex: u32 = 0;
-    while (sampleIndex < soundBuffer.sampleCount) : (sampleIndex += 1) {
-        var testSoundSampleIndex: u32 = (gameState.testSampleIndex + sampleIndex) % @as(u32, @intCast(gameState.testSound.sampleCount));
-        var sampleValue: i16 = gameState.testSound.samples[0].?[testSoundSampleIndex];
+    const mixerMemory = h.BeginTemporaryMemory(&tranState.tranArena);
 
-        sampleOut[2 * sampleIndex] = sampleValue;
-        sampleOut[2 * sampleIndex + 1] = sampleValue;
+    var realChannel0: [*]f32 = tranState.tranArena.PushArray(f32, soundBuffer.sampleCount);
+    var realChannel1: [*]f32 = tranState.tranArena.PushArray(f32, soundBuffer.sampleCount);
+
+    // clear out mixer channel
+    {
+        var dest0 = realChannel0;
+        var dest1 = realChannel1;
+
+        for (0..soundBuffer.sampleCount) |sampleIndex| {
+            dest0[sampleIndex] = 0;
+            dest1[sampleIndex] = 0;
+        }
     }
 
-    gameState.testSampleIndex += soundBuffer.sampleCount;
+    // sum all sounds
+    var playingSoundPtr = &gameState.firstPlayingSound;
+    while (playingSoundPtr.*) |playingSound| {
+        var soundFinished = false;
+        if (tranState.assets.GetSound(playingSound.ID)) |loadedSound| {
+            const volume0 = playingSound.volume[0];
+            const volume1 = playingSound.volume[1];
+            var dest0 = realChannel0;
+            var dest1 = realChannel1;
+
+            assert(playingSound.samplesPlayed >= 0);
+
+            var samplesToMix = soundBuffer.sampleCount;
+            const samplesRemainingInSound: u32 = loadedSound.sampleCount - @as(u32, @intCast(playingSound.samplesPlayed));
+            if (samplesToMix > samplesRemainingInSound) {
+                samplesToMix = samplesRemainingInSound;
+            }
+
+            var sampleIndex: u32 = @intCast(playingSound.samplesPlayed);
+            while (sampleIndex < @as(u32, @intCast(playingSound.samplesPlayed)) + samplesToMix) : (sampleIndex += 1) {
+                var sampleValue: i16 = loadedSound.samples[0].?[sampleIndex];
+
+                dest0[sampleIndex] += volume0 * @as(f32, @floatFromInt(sampleValue));
+                dest1[sampleIndex] += volume1 * @as(f32, @floatFromInt(sampleValue));
+            }
+
+            soundFinished = @as(u32, @intCast(playingSound.samplesPlayed)) == loadedSound.sampleCount;
+
+            playingSound.samplesPlayed += @intCast(samplesToMix);
+        } else {
+            h.LoadSound(tranState.assets, playingSound.ID);
+        }
+
+        if (soundFinished) {
+            playingSoundPtr.* = playingSound.next;
+            playingSound.next = gameState.firstFreePlayingSound;
+            gameState.firstFreePlayingSound = playingSound;
+        } else {
+            playingSoundPtr = &playingSound.next;
+        }
+    }
+
+    // convert to 16 bit
+    {
+        var source0 = realChannel0;
+        var source1 = realChannel1;
+
+        var sampleOut = soundBuffer.samples;
+        for (0..soundBuffer.sampleCount) |sampleIndex| {
+            sampleOut[2 * sampleIndex] = @intFromFloat(source0[sampleIndex] + 0.5);
+            sampleOut[2 * sampleIndex + 1] = @intFromFloat(source1[sampleIndex] + 0.5);
+        }
+    }
+
+    h.EndTemporaryMemory(mixerMemory);
 }

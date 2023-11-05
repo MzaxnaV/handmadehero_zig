@@ -17,7 +17,7 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
 pub const loaded_sound = struct {
-    sampleCount: i32 = 0,
+    sampleCount: u32 = 0,
     channelCount: u32 = 0,
     samples: [2]?[*]i16 = undefined,
 };
@@ -52,6 +52,10 @@ pub const asset_tag_id = enum {
 pub const asset_type_id = enum(u32) {
     Asset_NONE = 0,
 
+    //
+    // Bitmaps
+    //
+
     Asset_Shadow,
     Asset_Tree,
     Asset_Sword,
@@ -65,6 +69,19 @@ pub const asset_type_id = enum(u32) {
     Asset_Head,
     Asset_Cape,
     Asset_Torso,
+
+    //
+    // Sounds
+    //
+
+    Asset_Bloop,
+    Asset_Crack,
+    Asset_Drop,
+    Asset_Glide,
+    Asset_Music,
+    Asset_Puhp,
+
+    Asset_test_stereo,
 
     fn len() comptime_int {
         comptime {
@@ -132,6 +149,7 @@ pub const game_assets = struct {
     // heroBitmaps: [4]hero_bitmaps,
 
     DEBUGUsedBitmapCount: u32,
+    DEBUGUsedSoundCount: u32,
     DEBUGUsedAssetCount: u32,
     DEBUGUsedTagCount: u32,
     DEBUGAssetType: ?*asset_type,
@@ -139,6 +157,11 @@ pub const game_assets = struct {
 
     pub inline fn GetBitmap(self: *game_assets, ID: bitmap_id) ?*h.loaded_bitmap {
         var result = self.bitmaps[ID.value].data.bitmap;
+        return result;
+    }
+
+    pub inline fn GetSound(self: *game_assets, ID: sound_id) ?*loaded_sound {
+        var result = self.sounds[ID.value].data.sound;
         return result;
     }
 
@@ -151,6 +174,18 @@ pub const game_assets = struct {
         var info: *asset_bitmap_info = &self.bitmapInfos[ID.value];
         info.filename = fileName;
         info.alignPercentage = alignPercentage;
+
+        return ID;
+    }
+
+    fn DEBUGAddSoundInfo(self: *game_assets, fileName: [*:0]const u8) sound_id {
+        assert(self.DEBUGUsedSoundCount < self.soundCount);
+
+        const ID = sound_id{ .value = self.DEBUGUsedSoundCount };
+        self.DEBUGUsedSoundCount += 1;
+
+        var info: *asset_sound_info = &self.soundInfos[ID.value];
+        info.filename = fileName;
 
         return ID;
     }
@@ -185,6 +220,20 @@ pub const game_assets = struct {
         self.DEBUGAsset = a;
     }
 
+    fn AddSoundAsset(self: *game_assets, fileName: [*:0]const u8) void {
+        assert(self.DEBUGAssetType != null);
+        assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assetCount);
+
+        var a: *asset = &self.assets[self.DEBUGAssetType.?.onePastLastAssetIndex];
+        self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
+
+        a.firstTagIndex = self.DEBUGUsedTagCount;
+        a.onePastLastTagIndex = a.firstTagIndex;
+        a.slotId = self.DEBUGAddSoundInfo(fileName).value;
+
+        self.DEBUGAsset = a;
+    }
+
     fn AddTag(self: *game_assets, ID: asset_tag_id, value: f32) void {
         assert(self.DEBUGAsset != null);
 
@@ -213,8 +262,23 @@ pub const game_assets = struct {
         assets.bitmapInfos = arena.PushArray(asset_bitmap_info, assets.bitmapCount);
         assets.bitmaps = arena.PushArray(asset_slot, assets.bitmapCount);
 
-        assets.soundCount = 1;
+        // setup bitmaps
+        {
+            for (0..assets.bitmapCount) |index| {
+                assets.bitmaps[index].data = .{ .bitmap = null };
+            }
+        }
+
+        assets.soundCount = 256 * asset_tag_id.len();
+        assets.soundInfos = arena.PushArray(asset_sound_info, assets.soundCount);
         assets.sounds = arena.PushArray(asset_slot, assets.soundCount);
+
+        // setup sounds
+        {
+            for (0..assets.soundCount) |index| {
+                assets.sounds[index].data = .{ .sound = null };
+            }
+        }
 
         assets.assetCount = assets.soundCount + assets.bitmapCount;
         assets.assets = arena.PushArray(asset, assets.assetCount);
@@ -223,6 +287,7 @@ pub const game_assets = struct {
         assets.tags = arena.PushArray(asset_tag, assets.tagCount);
 
         assets.DEBUGUsedBitmapCount = 1;
+        assets.DEBUGUsedSoundCount = 1;
         assets.DEBUGUsedAssetCount = 1;
 
         assets.BeginAssetType(.Asset_Shadow);
@@ -293,6 +358,40 @@ pub const game_assets = struct {
         assets.AddTag(.Tag_FacingDirection, angleLeft);
         assets.AddBitmapAsset("test/test_hero_front_torso.bmp", heroAlign);
         assets.AddTag(.Tag_FacingDirection, angleFront);
+        assets.EndAssetType();
+
+        assets.BeginAssetType(.Asset_Bloop);
+        assets.AddSoundAsset("test3/bloop_00.wav");
+        assets.AddSoundAsset("test3/bloop_01.wav");
+        assets.AddSoundAsset("test3/bloop_02.wav");
+        assets.AddSoundAsset("test3/bloop_03.wav");
+        assets.AddSoundAsset("test3/bloop_04.wav");
+        assets.EndAssetType();
+
+        assets.BeginAssetType(.Asset_Crack);
+        assets.AddSoundAsset("test3/crack_00.wav");
+        assets.EndAssetType();
+
+        assets.BeginAssetType(.Asset_Drop);
+        assets.AddSoundAsset("test3/drop_00.wav");
+        assets.EndAssetType();
+
+        assets.BeginAssetType(.Asset_Glide);
+        assets.AddSoundAsset("test3/glide_00.wav");
+        assets.EndAssetType();
+
+        assets.BeginAssetType(.Asset_Music);
+        assets.AddSoundAsset("test3/music_test.wav");
+        assets.EndAssetType();
+
+        assets.BeginAssetType(.Asset_Puhp);
+        assets.AddSoundAsset("test3/puhp_00.wav");
+        assets.AddSoundAsset("test3/puhp_00.wav");
+        assets.EndAssetType();
+
+        assets.BeginAssetType(.Asset_test_stereo);
+        assets.AddSoundAsset("wave_stereo_test_1min.wav");
+        assets.AddSoundAsset("wave_stereo_test_1sec.wav");
         assets.EndAssetType();
 
         return assets;
@@ -411,6 +510,7 @@ const chunk_type = enum(u32) {
     WAVE_ChunkID_data = riffCode('d', 'a', 't', 'a'),
     WAVE_ChunkID_RIFF = riffCode('R', 'I', 'F', 'F'),
     WAVE_ChunkID_WAVE = riffCode('W', 'A', 'V', 'E'),
+    WAVE_ChunkID_LIST = riffCode('L', 'I', 'S', 'T'),
 
     fn riffCode(a: u8, b: u8, c: u8, d: u8) u32 {
         return @bitCast(switch (platform.native_endian) {
@@ -492,7 +592,7 @@ const wave_fmt = extern struct {
     subFormat: [16]u8 align(1),
 };
 
-pub fn DEBUGLoadWAV(fileName: [*:0]const u8) loaded_sound {
+fn DEBUGLoadWAV(fileName: [*:0]const u8) loaded_sound {
     var result = loaded_sound{};
 
     const readResult = h.DEBUGPlatformReadEntireFile.?(fileName);
@@ -586,7 +686,7 @@ fn LoadBitmapWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
     @fence(.SeqCst);
 
-    work.assets.bitmaps[work.ID.value].data.bitmap = work.bitmap;
+    work.assets.bitmaps[work.ID.value].data = .{ .bitmap = work.bitmap };
     work.assets.bitmaps[work.ID.value].state = work.finalState;
 
     h.EndTaskWithMemory(work.task);
@@ -595,7 +695,7 @@ fn LoadBitmapWork(_: ?*platform.work_queue, data: *anyopaque) void {
 pub fn LoadBitmap(assets: *game_assets, ID: bitmap_id) void {
     if (ID.value == 0) return;
 
-    if (h.AtomicCompareExchange(asset_state, &assets.bitmaps[ID.value].state, .AssetState_Unloaded, .AssetState_Queued)) |_| {
+    if (h.AtomicCompareExchange(asset_state, &assets.bitmaps[ID.value].state, .AssetState_Queued, .AssetState_Unloaded) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
             var work: *load_bitmap_work = task.arena.PushStruct(load_bitmap_work);
 
@@ -606,6 +706,8 @@ pub fn LoadBitmap(assets: *game_assets, ID: bitmap_id) void {
             work.finalState = .AssetState_Loaded;
 
             h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadBitmapWork, work);
+        } else {
+            assets.bitmaps[ID.value].state = .AssetState_Unloaded;
         }
     }
 }
@@ -614,7 +716,7 @@ const load_sound_work = struct {
     assets: *game_assets,
     ID: sound_id,
     task: *h.task_with_memory,
-    sound: *h.loaded_sound,
+    sound: *loaded_sound,
 
     finalState: asset_state,
 };
@@ -632,7 +734,7 @@ fn LoadSoundWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
     @fence(.SeqCst);
 
-    work.assets.sounds[work.ID.value].sound = work.sound;
+    work.assets.sounds[work.ID.value].data = .{ .sound = work.sound };
     work.assets.sounds[work.ID.value].state = work.finalState;
 
     h.EndTaskWithMemory(work.task);
@@ -641,7 +743,7 @@ fn LoadSoundWork(_: ?*platform.work_queue, data: *anyopaque) void {
 pub fn LoadSound(assets: *game_assets, ID: sound_id) void {
     if (ID.value == 0) return;
 
-    if (h.AtomicCompareExchange(asset_state, &assets.sounds[ID.value].state, .AssetState_Unloaded, .AssetState_Queued)) |_| {
+    if (h.AtomicCompareExchange(asset_state, &assets.sounds[ID.value].state, .AssetState_Queued, .AssetState_Unloaded) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
             var work: *load_sound_work = task.arena.PushStruct(load_sound_work);
 
@@ -653,14 +755,16 @@ pub fn LoadSound(assets: *game_assets, ID: sound_id) void {
 
             h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadSoundWork, work);
         }
+    } else {
+        assets.sounds[ID.value].state = .AssetState_Unloaded;
     }
 }
 
-pub fn BestMatchAsset(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) bitmap_id {
-    var result: bitmap_id = .{ .value = 0 };
+pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) u32 {
+    var result: u32 = 0;
 
     var bestDiff = platform.F32MAXIMUM;
-    var assetType = assets.assetTypes[@intFromEnum(typeID)];
+    const assetType = assets.assetTypes[@intFromEnum(typeID)];
 
     if (assetType.firstAssetIndex != assetType.onePastLastAssetIndex) {
         for (assetType.firstAssetIndex..assetType.onePastLastAssetIndex) |assetIndex| {
@@ -683,7 +787,7 @@ pub fn BestMatchAsset(assets: *game_assets, typeID: asset_type_id, matchVector: 
 
             if (bestDiff > totalWeightedDiff) {
                 bestDiff = totalWeightedDiff;
-                result.value = a.slotId;
+                result = a.slotId;
             }
         }
     }
@@ -691,31 +795,61 @@ pub fn BestMatchAsset(assets: *game_assets, typeID: asset_type_id, matchVector: 
     return result;
 }
 
-pub fn RandomAssetFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) bitmap_id {
-    var result: bitmap_id = .{ .value = 0 };
+fn GetRandomSlotFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) u32 {
+    var result: u32 = 0;
 
-    var assetType = assets.assetTypes[@intFromEnum(typeID)];
+    const assetType = assets.assetTypes[@intFromEnum(typeID)];
 
     if (assetType.firstAssetIndex != assetType.onePastLastAssetIndex) {
         const count = assetType.onePastLastAssetIndex - assetType.firstAssetIndex;
         const choice = series.RandomChoice(count);
 
         var a = assets.assets[choice + assetType.firstAssetIndex];
-        result.value = a.slotId;
+        result = a.slotId;
     }
 
     return result;
 }
 
-pub fn GetFirstBitmapID(assets: *game_assets, typeID: asset_type_id) bitmap_id {
-    var result: bitmap_id = .{ .value = 0 };
+fn GetFirstSlotFrom(assets: *game_assets, typeID: asset_type_id) u32 {
+    var result: u32 = 0;
 
-    var assetType = assets.assetTypes[@intFromEnum(typeID)];
+    const assetType = assets.assetTypes[@intFromEnum(typeID)];
 
     if (assetType.firstAssetIndex != assetType.onePastLastAssetIndex) {
         var a = assets.assets[assetType.firstAssetIndex];
-        result.value = a.slotId;
+        result = a.slotId;
     }
 
+    return result;
+}
+
+pub inline fn GetBestMatchBitmapFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) bitmap_id {
+    const result = bitmap_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
+    return result;
+}
+
+pub inline fn GetFirstBitmapFrom(assets: *game_assets, typeID: asset_type_id) bitmap_id {
+    const result = bitmap_id{ .value = GetFirstSlotFrom(assets, typeID) };
+    return result;
+}
+
+pub inline fn GetRandomBitmapFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) bitmap_id {
+    const result = bitmap_id{ .value = GetRandomSlotFrom(assets, typeID, series) };
+    return result;
+}
+
+pub inline fn GetBestMatchSoundFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) sound_id {
+    const result = sound_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
+    return result;
+}
+
+pub inline fn GetFirstSoundFrom(assets: *game_assets, typeID: asset_type_id) sound_id {
+    const result = sound_id{ .value = GetFirstSlotFrom(assets, typeID) };
+    return result;
+}
+
+pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) sound_id {
+    const result = sound_id{ .value = GetRandomSlotFrom(assets, typeID, series) };
     return result;
 }
