@@ -788,7 +788,7 @@ pub export fn UpdateAndRender(
 
         _ = PlaySound(gameState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
         // TODO (Manav) URGENT: fix sounds!
-        _ = PlaySound(gameState, h.GetFirstSoundFrom(tranState.assets, .Asset_test_stereo));
+        // _ = PlaySound(gameState, h.GetFirstSoundFrom(tranState.assets, .Asset_test_stereo));
 
         tranState.groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushArray(h.ground_buffer, tranState.groundBufferCount);
@@ -1322,8 +1322,8 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
 
     const mixerMemory = h.BeginTemporaryMemory(&tranState.tranArena);
 
-    var realChannel0: [*]f32 = tranState.tranArena.PushArray(f32, soundBuffer.sampleCount);
-    var realChannel1: [*]f32 = tranState.tranArena.PushArray(f32, soundBuffer.sampleCount);
+    var realChannel0: []f32 = tranState.tranArena.PushSlice(f32, soundBuffer.sampleCount);
+    var realChannel1: []f32 = tranState.tranArena.PushSlice(f32, soundBuffer.sampleCount);
 
     // clear out mixer channel
     {
@@ -1355,11 +1355,15 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
             }
 
             var sampleIndex: u32 = @intCast(playingSound.samplesPlayed);
-            while (sampleIndex < @as(u32, @intCast(playingSound.samplesPlayed)) + samplesToMix) : (sampleIndex += 1) {
+            var dataIndex: u32 = 0;
+            while (sampleIndex < @as(u32, @intCast(playingSound.samplesPlayed)) + samplesToMix) : ({
+                sampleIndex += 1;
+                dataIndex += 1;
+            }) {
                 var sampleValue: i16 = loadedSound.samples[0].?[sampleIndex];
 
-                dest0[sampleIndex] += volume0 * @as(f32, @floatFromInt(sampleValue));
-                dest1[sampleIndex] += volume1 * @as(f32, @floatFromInt(sampleValue));
+                dest0[dataIndex] += volume0 * @as(f32, @floatFromInt(sampleValue));
+                dest1[dataIndex] += volume1 * @as(f32, @floatFromInt(sampleValue));
             }
 
             soundFinished = @as(u32, @intCast(playingSound.samplesPlayed)) == loadedSound.sampleCount;
