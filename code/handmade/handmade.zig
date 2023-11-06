@@ -1340,6 +1340,10 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
     while (playingSoundPtr.*) |playingSound| {
         var soundFinished = false;
         if (tranState.assets.GetSound(playingSound.ID)) |loadedSound| {
+            var info: *h.asset_sound_info = tranState.assets.GetSoundInfo(playingSound.ID);
+
+            h.PrefetchSound(tranState.assets, info.nextIDToPlay);
+
             const volume0 = playingSound.volume[0];
             const volume1 = playingSound.volume[1];
             var dest0 = realChannel0;
@@ -1365,7 +1369,14 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
                 dest1[dataIndex] += volume1 * @as(f32, @floatFromInt(sampleValue));
             }
 
-            soundFinished = @as(u32, @intCast(playingSound.samplesPlayed)) == loadedSound.sampleCount;
+            if (@as(u32, @intCast(playingSound.samplesPlayed)) == loadedSound.sampleCount) {
+                if (info.nextIDToPlay.IsValid()) {
+                    playingSound.ID = info.nextIDToPlay;
+                    playingSound.samplesPlayed = 0;
+                } else {
+                    soundFinished = true;
+                }
+            }
 
             playingSound.samplesPlayed += @intCast(samplesToMix);
         } else {
