@@ -88,6 +88,11 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
 
 // platform data types --------------------------------------------------------------------------------------------------------------------
 
+pub const s8 = i8;
+pub const s16 = i16;
+pub const s32 = i32;
+pub const s64 = i64;
+
 pub const memory_index = usize;
 
 pub const offscreen_buffer = struct {

@@ -1,5 +1,6 @@
 const platform = @import("handmade_platform");
 const h = struct {
+    usingnamespace @import("handmade_audio.zig");
     usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_entity.zig");
     usingnamespace @import("handmade_intrinsics.zig");
@@ -20,36 +21,6 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
-
-fn OutputSound(gameState: *h.game_state, soundBuffer: *platform.sound_output_buffer, toneHz: u32) void {
-    const toneVolume = 3000;
-    const wavePeriod = @divTrunc(soundBuffer.samplesPerSecond, toneHz);
-
-    var sampleOut = soundBuffer.samples;
-    var sampleIndex = @as(u32, 0);
-    while (sampleIndex < 2 * soundBuffer.sampleCount) : (sampleIndex += 2) {
-        var sineValue: f32 = 0;
-        var sampleValue: i16 = 0;
-        if (NOT_IGNORE) {
-            sineValue = h.Sin(gameState.tSine);
-            sampleValue = @intFromFloat(sineValue * toneVolume);
-        } else {
-            sampleValue = 0;
-        }
-
-        sampleOut[sampleIndex] = sampleValue;
-        // sampleOut += 1;
-        sampleOut[sampleIndex + 1] = sampleValue;
-        // sampleOut += 1;
-
-        if (NOT_IGNORE) {
-            gameState.tSine += platform.Tau32 * 1.0 / @as(f32, @floatFromInt(wavePeriod));
-            if (gameState.tSine > platform.Tau32) {
-                gameState.tSine -= platform.Tau32;
-            }
-        }
-    }
-}
 
 const add_low_entity_result = struct {
     low: *h.low_entity,
@@ -202,8 +173,8 @@ fn DrawHitpoints(entity: *h.sim_entity, pieceGroup: *h.render_group) void {
 fn MakeSimpleGroundedCollision(gameState: *h.game_state, dimX: f32, dimY: f32, dimZ: f32) *h.sim_entity_collision_volume_group {
     const group: *h.sim_entity_collision_volume_group = gameState.worldArena.PushStruct(h.sim_entity_collision_volume_group);
 
-    group.volumeCount = 1;
-    group.volumes = gameState.worldArena.PushArray(h.sim_entity_collision_volume, group.volumeCount);
+    const volumeCount = 1;
+    group.volumes = gameState.worldArena.PushSlice(h.sim_entity_collision_volume, volumeCount);
     group.totalVolume.offsetP = h.v3{ 0, 0, 0.5 * dimZ };
     group.totalVolume.dim = h.v3{ dimX, dimY, dimZ };
     group.volumes[0] = group.totalVolume;
@@ -214,8 +185,9 @@ fn MakeSimpleGroundedCollision(gameState: *h.game_state, dimX: f32, dimY: f32, d
 fn MakeNullCollision(gameState: *h.game_state) *h.sim_entity_collision_volume_group {
     const group: *h.sim_entity_collision_volume_group = gameState.worldArena.PushStruct(h.sim_entity_collision_volume_group);
 
-    group.volumeCount = 0;
-    group.volumes = undefined; // TODO (Manav): change type from,  [*]sim_entity_collision_volume to ?[*]sim_entity_collision_volume
+    const volumeCount = 0;
+    group.volumes = undefined; // TODO (Manav): change type from,  []sim_entity_collision_volume to ?[]sim_entity_collision_volume
+    group.volumes.len = volumeCount;
     group.totalVolume.offsetP = h.v3{ 0, 0, 0 };
     group.totalVolume.dim = h.v3{ 0, 0, 0 };
 
@@ -529,26 +501,6 @@ pub inline fn ChunkPosFromTilePos(w: *h.world, absTileX: i32, absTileY: i32, abs
     return result;
 }
 
-fn PlaySound(gameState: *h.game_state, soundID: h.sound_id) *h.playing_sound {
-    if (gameState.firstFreePlayingSound) |_| {} else {
-        gameState.firstFreePlayingSound = gameState.worldArena.PushStruct(h.playing_sound);
-        gameState.firstFreePlayingSound.?.next = null;
-    }
-
-    var playingSound = gameState.firstFreePlayingSound.?;
-    gameState.firstFreePlayingSound = playingSound.next;
-
-    playingSound.samplesPlayed = 0;
-    playingSound.volume[0] = 1;
-    playingSound.volume[1] = 1;
-    playingSound.ID = soundID;
-
-    playingSound.next = gameState.firstPlayingSound;
-    gameState.firstPlayingSound = playingSound;
-
-    return playingSound;
-}
-
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(
@@ -598,6 +550,8 @@ pub export fn UpdateAndRender(
             gameMemory.permanentStorageSize - @sizeOf(h.game_state),
             gameMemory.permanentStorage + @sizeOf(h.game_state),
         );
+
+        h.InitializeAudioState(&gameState.audioState, &gameState.worldArena);
 
         _ = AddLowEntity(gameState, .Null, h.NullPosition());
 
@@ -786,14 +740,12 @@ pub export fn UpdateAndRender(
 
         tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(64), tranState);
 
-        _ = PlaySound(gameState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
-        // TODO (Manav) URGENT: fix sounds!
-        // _ = PlaySound(gameState, h.GetFirstSoundFrom(tranState.assets, .Asset_test_stereo));
+        _ = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
-        tranState.groundBufferCount = 256; // 64
-        tranState.groundBuffers = tranState.tranArena.PushArray(h.ground_buffer, tranState.groundBufferCount);
+        const groundBufferCount = 256; // 64
+        tranState.groundBuffers = tranState.tranArena.PushSlice(h.ground_buffer, groundBufferCount);
         var groundBufferIndex = @as(u32, 0);
-        while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
+        while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
             groundBuffer.bitmap = MakeEmptyBitmap(&tranState.tranArena, groundBufferWidth, groundBufferHeight, false);
             groundBuffer.p = h.NullPosition();
@@ -824,7 +776,7 @@ pub export fn UpdateAndRender(
 
     if (!NOT_IGNORE and gameInput.executableReloaded) {
         var groundBufferIndex = @as(u32, 0);
-        while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
+        while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
             groundBuffer.p = h.NullPosition();
         }
@@ -920,7 +872,7 @@ pub export fn UpdateAndRender(
 
     if (NOT_IGNORE) {
         var groundBufferIndex = @as(u32, 0);
-        while (groundBufferIndex < tranState.groundBufferCount) : (groundBufferIndex += 1) {
+        while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
             if (h.IsValid(groundBuffer.p)) {
                 const bitmap = &groundBuffer.bitmap;
@@ -955,7 +907,7 @@ pub export fn UpdateAndRender(
                             var furthestBufferLengthSq = @as(f32, 0);
                             var furthestBuffer: ?*h.ground_buffer = null;
                             var index = @as(u32, 0);
-                            while (index < tranState.groundBufferCount) : (index += 1) {
+                            while (index < tranState.groundBuffers.len) : (index += 1) {
                                 const groundBuffer = &tranState.groundBuffers[index];
                                 if (h.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
                                     furthestBuffer = null;
@@ -1062,7 +1014,7 @@ pub export fn UpdateAndRender(
                                             h.MakeEntitySpatial(sword, entity.p, h.Add(entity.dP, (h.Scale(dSwordV3, 5))));
                                             h.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
 
-                                            _ = PlaySound(gameState, h.GetRandomSoundFrom(tranState.assets, .Asset_Bloop, &gameState.generalEntropy));
+                                            _ = h.PlaySound(&gameState.audioState, h.GetRandomSoundFrom(tranState.assets, .Asset_Bloop, &gameState.generalEntropy));
                                         }
                                     },
 
@@ -1234,7 +1186,7 @@ pub export fn UpdateAndRender(
         tranState.envMaps[1].pZ = 0;
         tranState.envMaps[2].pZ = 1.5;
 
-        h.DrawBitmap(&tranState.envMaps[0].lod[0], &tranState.groundBuffers[tranState.groundBufferCount - 1].bitmap, 125, 25, 1);
+        h.DrawBitmap(&tranState.envMaps[0].lod[0], &tranState.groundBuffers[tranState.groundBuffers.len - 1].bitmap, 125, 25, 1);
 
         // angle = 0;
 
@@ -1318,81 +1270,8 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
 
     const gameState: *h.game_state = @alignCast(@ptrCast(gameMemory.permanentStorage));
     const tranState: *h.transient_state = @alignCast(@ptrCast(gameMemory.transientStorage));
+
+    h.OutputPlayingSounds(&gameState.audioState, soundBuffer, tranState.assets, &tranState.tranArena);
     // OutputSound(gameState, soundBuffer, 400);
 
-    const mixerMemory = h.BeginTemporaryMemory(&tranState.tranArena);
-
-    var realChannel0: []f32 = tranState.tranArena.PushSlice(f32, soundBuffer.sampleCount);
-    var realChannel1: []f32 = tranState.tranArena.PushSlice(f32, soundBuffer.sampleCount);
-
-    // clear out mixer channel
-    {
-        var dest0 = realChannel0;
-        var dest1 = realChannel1;
-
-        for (0..soundBuffer.sampleCount) |sampleIndex| {
-            dest0[sampleIndex] = 0;
-            dest1[sampleIndex] = 0;
-        }
-    }
-
-    // sum all sounds
-    var playingSoundPtr = &gameState.firstPlayingSound;
-    while (playingSoundPtr.*) |playingSound| {
-        var soundFinished = false;
-        if (tranState.assets.GetSound(playingSound.ID)) |loadedSound| {
-            const volume0 = playingSound.volume[0];
-            const volume1 = playingSound.volume[1];
-            var dest0 = realChannel0;
-            var dest1 = realChannel1;
-
-            assert(playingSound.samplesPlayed >= 0);
-
-            var samplesToMix = soundBuffer.sampleCount;
-            const samplesRemainingInSound: u32 = loadedSound.sampleCount - @as(u32, @intCast(playingSound.samplesPlayed));
-            if (samplesToMix > samplesRemainingInSound) {
-                samplesToMix = samplesRemainingInSound;
-            }
-
-            var sampleIndex: u32 = @intCast(playingSound.samplesPlayed);
-            var dataIndex: u32 = 0;
-            while (sampleIndex < @as(u32, @intCast(playingSound.samplesPlayed)) + samplesToMix) : ({
-                sampleIndex += 1;
-                dataIndex += 1;
-            }) {
-                var sampleValue: i16 = loadedSound.samples[0].?[sampleIndex];
-
-                dest0[dataIndex] += volume0 * @as(f32, @floatFromInt(sampleValue));
-                dest1[dataIndex] += volume1 * @as(f32, @floatFromInt(sampleValue));
-            }
-
-            soundFinished = @as(u32, @intCast(playingSound.samplesPlayed)) == loadedSound.sampleCount;
-
-            playingSound.samplesPlayed += @intCast(samplesToMix);
-        } else {
-            h.LoadSound(tranState.assets, playingSound.ID);
-        }
-
-        if (soundFinished) {
-            playingSoundPtr.* = playingSound.next;
-            playingSound.next = gameState.firstFreePlayingSound;
-            gameState.firstFreePlayingSound = playingSound;
-        } else {
-            playingSoundPtr = &playingSound.next;
-        }
-    }
-
-    // convert to 16 bit
-    {
-        var source0 = realChannel0;
-        var source1 = realChannel1;
-
-        var sampleOut = soundBuffer.samples;
-        for (0..soundBuffer.sampleCount) |sampleIndex| {
-            sampleOut[2 * sampleIndex] = @intFromFloat(source0[sampleIndex] + 0.5);
-            sampleOut[2 * sampleIndex + 1] = @intFromFloat(source1[sampleIndex] + 0.5);
-        }
-    }
-
-    h.EndTemporaryMemory(mixerMemory);
 }

@@ -70,8 +70,7 @@ pub const sim_entity_collision_volume = struct {
 pub const sim_entity_collision_volume_group = struct {
     totalVolume: sim_entity_collision_volume,
 
-    volumeCount: u32,
-    volumes: [*]sim_entity_collision_volume,
+    volumes: []sim_entity_collision_volume,
 };
 
 pub const sim_entity = struct {
@@ -470,11 +469,11 @@ pub fn SpeculativeCollide(mover: *sim_entity, region: *sim_entity, testP: h.v3) 
 pub fn EntitiesOverlap(entity: *sim_entity, testEntity: *sim_entity, epsilon: h.v3) bool {
     var result = false;
     var volumeIndex = @as(u32, 0);
-    while (!result and (volumeIndex < entity.collision.volumeCount)) : (volumeIndex += 1) {
+    while (!result and (volumeIndex < entity.collision.volumes.len)) : (volumeIndex += 1) {
         var volume = entity.collision.volumes[volumeIndex];
 
         var testVolumeIndex = @as(u32, 0);
-        while (!result and testVolumeIndex < (testEntity.collision.volumeCount)) : (testVolumeIndex += 1) {
+        while (!result and testVolumeIndex < (testEntity.collision.volumes.len)) : (testVolumeIndex += 1) {
             var testVolume = testEntity.collision.volumes[testVolumeIndex];
 
             const entityRect = h.rect3.InitCenterDim(h.Add(entity.p, volume.offsetP), h.Add(volume.dim, epsilon));
@@ -543,10 +542,10 @@ pub fn MoveEntity(gameState: *h.game_state, simRegion: *sim_region, entity: *sim
                         CanCollide(gameState, entity, testEntity)))
                     {
                         var volumeIndex = @as(u32, 0);
-                        while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
+                        while (volumeIndex < entity.collision.volumes.len) : (volumeIndex += 1) {
                             var volume = entity.collision.volumes[volumeIndex];
                             var testVolumeIndex = @as(u32, 0);
-                            while (testVolumeIndex < testEntity.collision.volumeCount) : (testVolumeIndex += 1) {
+                            while (testVolumeIndex < testEntity.collision.volumes.len) : (testVolumeIndex += 1) {
                                 var testVolume = testEntity.collision.volumes[testVolumeIndex];
                                 const minkowskiDiameter: h.v3 = .{
                                     h.X(testVolume.dim) + h.X(volume.dim),
