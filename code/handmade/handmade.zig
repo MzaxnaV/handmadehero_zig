@@ -1,5 +1,6 @@
 const platform = @import("handmade_platform");
 const h = struct {
+    usingnamespace @import("handmade_audio.zig");
     usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_entity.zig");
     usingnamespace @import("handmade_intrinsics.zig");
@@ -20,36 +21,6 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
-
-fn OutputSound(gameState: *h.game_state, soundBuffer: *platform.sound_output_buffer, toneHz: u32) void {
-    const toneVolume = 3000;
-    const wavePeriod = @divTrunc(soundBuffer.samplesPerSecond, toneHz);
-
-    var sampleOut = soundBuffer.samples;
-    var sampleIndex = @as(u32, 0);
-    while (sampleIndex < 2 * soundBuffer.sampleCount) : (sampleIndex += 2) {
-        var sineValue: f32 = 0;
-        var sampleValue: i16 = 0;
-        if (NOT_IGNORE) {
-            sineValue = h.Sin(gameState.tSine);
-            sampleValue = @intFromFloat(sineValue * toneVolume);
-        } else {
-            sampleValue = 0;
-        }
-
-        sampleOut[sampleIndex] = sampleValue;
-        // sampleOut += 1;
-        sampleOut[sampleIndex + 1] = sampleValue;
-        // sampleOut += 1;
-
-        if (NOT_IGNORE) {
-            gameState.tSine += platform.Tau32 * 1.0 / @as(f32, @floatFromInt(wavePeriod));
-            if (gameState.tSine > platform.Tau32) {
-                gameState.tSine -= platform.Tau32;
-            }
-        }
-    }
-}
 
 const add_low_entity_result = struct {
     low: *h.low_entity,
@@ -530,26 +501,6 @@ pub inline fn ChunkPosFromTilePos(w: *h.world, absTileX: i32, absTileY: i32, abs
     return result;
 }
 
-fn PlaySound(gameState: *h.game_state, soundID: h.sound_id) *h.playing_sound {
-    if (gameState.firstFreePlayingSound) |_| {} else {
-        gameState.firstFreePlayingSound = gameState.worldArena.PushStruct(h.playing_sound);
-        gameState.firstFreePlayingSound.?.next = null;
-    }
-
-    var playingSound = gameState.firstFreePlayingSound.?;
-    gameState.firstFreePlayingSound = playingSound.next;
-
-    playingSound.samplesPlayed = 0;
-    playingSound.volume[0] = 1;
-    playingSound.volume[1] = 1;
-    playingSound.ID = soundID;
-
-    playingSound.next = gameState.firstPlayingSound;
-    gameState.firstPlayingSound = playingSound;
-
-    return playingSound;
-}
-
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(
@@ -599,6 +550,8 @@ pub export fn UpdateAndRender(
             gameMemory.permanentStorageSize - @sizeOf(h.game_state),
             gameMemory.permanentStorage + @sizeOf(h.game_state),
         );
+
+        h.InitializeAudioState(&gameState.audioState, &gameState.worldArena);
 
         _ = AddLowEntity(gameState, .Null, h.NullPosition());
 
@@ -787,7 +740,7 @@ pub export fn UpdateAndRender(
 
         tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(64), tranState);
 
-        _ = PlaySound(gameState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
+        _ = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
         const groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushSlice(h.ground_buffer, groundBufferCount);
@@ -1061,7 +1014,7 @@ pub export fn UpdateAndRender(
                                             h.MakeEntitySpatial(sword, entity.p, h.Add(entity.dP, (h.Scale(dSwordV3, 5))));
                                             h.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
 
-                                            _ = PlaySound(gameState, h.GetRandomSoundFrom(tranState.assets, .Asset_Bloop, &gameState.generalEntropy));
+                                            _ = h.PlaySound(&gameState.audioState, h.GetRandomSoundFrom(tranState.assets, .Asset_Bloop, &gameState.generalEntropy));
                                         }
                                     },
 
@@ -1317,92 +1270,8 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
 
     const gameState: *h.game_state = @alignCast(@ptrCast(gameMemory.permanentStorage));
     const tranState: *h.transient_state = @alignCast(@ptrCast(gameMemory.transientStorage));
+
+    h.OutputPlayingSounds(&gameState.audioState, soundBuffer, tranState.assets, &tranState.tranArena);
     // OutputSound(gameState, soundBuffer, 400);
 
-    const mixerMemory = h.BeginTemporaryMemory(&tranState.tranArena);
-
-    var realChannel0: []f32 = tranState.tranArena.PushSlice(f32, soundBuffer.sampleCount);
-    var realChannel1: []f32 = tranState.tranArena.PushSlice(f32, soundBuffer.sampleCount);
-
-    // clear out mixer channel
-    {
-        var dest0 = realChannel0;
-        var dest1 = realChannel1;
-
-        for (0..soundBuffer.sampleCount) |sampleIndex| {
-            dest0[sampleIndex] = 0;
-            dest1[sampleIndex] = 0;
-        }
-    }
-
-    // sum all sounds
-    var playingSoundPtr = &gameState.firstPlayingSound;
-    while (playingSoundPtr.*) |playingSound| {
-        var soundFinished = false;
-        if (tranState.assets.GetSound(playingSound.ID)) |loadedSound| {
-            var info: *h.asset_sound_info = tranState.assets.GetSoundInfo(playingSound.ID);
-
-            h.PrefetchSound(tranState.assets, info.nextIDToPlay);
-
-            const volume0 = playingSound.volume[0];
-            const volume1 = playingSound.volume[1];
-            var dest0 = realChannel0;
-            var dest1 = realChannel1;
-
-            assert(playingSound.samplesPlayed >= 0);
-
-            var samplesToMix = soundBuffer.sampleCount;
-            const samplesRemainingInSound: u32 = loadedSound.sampleCount - @as(u32, @intCast(playingSound.samplesPlayed));
-            if (samplesToMix > samplesRemainingInSound) {
-                samplesToMix = samplesRemainingInSound;
-            }
-
-            var sampleIndex: u32 = @intCast(playingSound.samplesPlayed);
-            var dataIndex: u32 = 0;
-            while (sampleIndex < @as(u32, @intCast(playingSound.samplesPlayed)) + samplesToMix) : ({
-                sampleIndex += 1;
-                dataIndex += 1;
-            }) {
-                var sampleValue: i16 = loadedSound.samples[0].?[sampleIndex];
-
-                dest0[dataIndex] += volume0 * @as(f32, @floatFromInt(sampleValue));
-                dest1[dataIndex] += volume1 * @as(f32, @floatFromInt(sampleValue));
-            }
-
-            if (@as(u32, @intCast(playingSound.samplesPlayed)) == loadedSound.sampleCount) {
-                if (info.nextIDToPlay.IsValid()) {
-                    playingSound.ID = info.nextIDToPlay;
-                    playingSound.samplesPlayed = 0;
-                } else {
-                    soundFinished = true;
-                }
-            }
-
-            playingSound.samplesPlayed += @intCast(samplesToMix);
-        } else {
-            h.LoadSound(tranState.assets, playingSound.ID);
-        }
-
-        if (soundFinished) {
-            playingSoundPtr.* = playingSound.next;
-            playingSound.next = gameState.firstFreePlayingSound;
-            gameState.firstFreePlayingSound = playingSound;
-        } else {
-            playingSoundPtr = &playingSound.next;
-        }
-    }
-
-    // convert to 16 bit
-    {
-        var source0 = realChannel0;
-        var source1 = realChannel1;
-
-        var sampleOut = soundBuffer.samples;
-        for (0..soundBuffer.sampleCount) |sampleIndex| {
-            sampleOut[2 * sampleIndex] = @intFromFloat(source0[sampleIndex] + 0.5);
-            sampleOut[2 * sampleIndex + 1] = @intFromFloat(source1[sampleIndex] + 0.5);
-        }
-    }
-
-    h.EndTemporaryMemory(mixerMemory);
 }

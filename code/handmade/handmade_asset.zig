@@ -424,7 +424,7 @@ pub const game_assets = struct {
         while (firstSampleIndex < totalMusicSampleCount) : (firstSampleIndex += oneMusicChunk) {
             var sampleCount = totalMusicSampleCount - firstSampleIndex;
             if (sampleCount > oneMusicChunk) {
-                sampleCount = oneMusicChunk; 
+                sampleCount = oneMusicChunk;
             }
             const thisMusic = assets.AddSoundAsset("test3/music_test.wav", firstSampleIndex, sampleCount);
             if (lastMusic) |_| {

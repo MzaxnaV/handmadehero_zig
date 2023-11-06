@@ -1,6 +1,7 @@
 const platform = @import("handmade_platform");
 
 const h = struct {
+    usingnamespace @import("handmade_audio.zig");
     usingnamespace @import("handmade_sim_region.zig");
     usingnamespace @import("handmade_world.zig");
     usingnamespace @import("handmade_math.zig");
@@ -11,7 +12,7 @@ const h = struct {
 
 const hi = platform.handmade_internal;
 
-// game data types ------------------------------------------------------------------------------------------------------------------------
+// data types -----------------------------------------------------------------------------------------------------------------------------
 
 pub const memory_arena = struct {
     size: platform.memory_index,
@@ -123,13 +124,6 @@ pub const hero_bitmap_ids = struct {
     torso: h.bitmap_id,
 };
 
-pub const playing_sound = struct {
-    volume: [2]f32,
-    ID: h.sound_id,
-    samplesPlayed: i32,
-    next: ?*playing_sound,
-};
-
 pub const game_state = struct {
     isInitialized: bool = false,
 
@@ -167,8 +161,7 @@ pub const game_state = struct {
     generalEntropy: h.random_series,
     tSine: f32,
 
-    firstPlayingSound: ?*playing_sound,
-    firstFreePlayingSound: ?*playing_sound,
+    audioState: h.audio_state,
 };
 
 pub const task_with_memory = struct {
