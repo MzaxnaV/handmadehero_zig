@@ -198,7 +198,7 @@ pub const game_assets = struct {
         self.DEBUGUsedBitmapCount += 1;
 
         var info: *asset_bitmap_info = &self.bitmapInfos[ID.value];
-        info.filename = fileName;
+        info.filename = self.assetArena.PushString(fileName);
         info.alignPercentage = alignPercentage;
 
         return ID;
@@ -211,7 +211,7 @@ pub const game_assets = struct {
         self.DEBUGUsedSoundCount += 1;
 
         var info: *asset_sound_info = &self.soundInfos[ID.value];
-        info.filename = fileName;
+        info.filename = self.assetArena.PushString(fileName);
         info.firstSampleIndex = firstSampleIndex;
         info.sampleCount = sampleCount;
         info.nextIDToPlay.value = 0;

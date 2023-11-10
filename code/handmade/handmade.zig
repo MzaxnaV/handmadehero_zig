@@ -782,6 +782,14 @@ pub export fn UpdateAndRender(
         }
     }
 
+    {
+        var musicVolume: h.v2 = .{};
+        musicVolume[1] = h.SafeRatiof0(@floatFromInt(gameInput.mouseX), @floatFromInt(buffer.width));
+        musicVolume[0] = 1 - musicVolume[1];
+
+        h.ChangeVolume(&gameState.audioState, gameState.music, 0.01, musicVolume);
+    }
+
     const world = gameState.world;
 
     for (gameInput.controllers, 0..) |controller, controllerIndex| {

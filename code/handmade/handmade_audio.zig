@@ -3,6 +3,7 @@ const platform = @import("handmade_platform");
 const h = struct {
     usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_intrinsics.zig");
     usingnamespace @import("handmade_math.zig");
 };
 
@@ -18,8 +19,10 @@ pub const playing_sound = struct {
     dCurrentVolume: h.v2,
     targetVolume: h.v2,
 
+    dSample: f32,
+
     ID: h.sound_id,
-    samplesPlayed: i32,
+    samplesPlayed: f32,
     next: ?*playing_sound,
 };
 
@@ -77,6 +80,7 @@ pub fn PlaySound(audioState: *audio_state, soundID: h.sound_id) *playing_sound {
     playingSound.currentVolume = playingSound.targetVolume;
     playingSound.dCurrentVolume = .{ 0, 0 };
     playingSound.ID = soundID;
+    playingSound.dSample = 1;
 
     playingSound.next = audioState.firstPlayingSound;
     audioState.firstPlayingSound = playingSound;
@@ -84,8 +88,8 @@ pub fn PlaySound(audioState: *audio_state, soundID: h.sound_id) *playing_sound {
     return playingSound;
 }
 
-pub fn ChangeVolume(audioState: *audio_state, sound: *playing_sound, fadeDurationInSeconds: f32, volume: h.v2) void {
-    _ = audioState;
+pub fn ChangeVolume(_: *audio_state, sound: *playing_sound, fadeDurationInSeconds: f32, volume: h.v2) void {
+    // _ = audioState;
     if (fadeDurationInSeconds <= 0) {
         sound.targetVolume = volume;
         sound.currentVolume = sound.targetVolume;
@@ -94,6 +98,11 @@ pub fn ChangeVolume(audioState: *audio_state, sound: *playing_sound, fadeDuratio
         sound.targetVolume = volume;
         sound.dCurrentVolume = h.Scale(h.Sub(sound.targetVolume, sound.currentVolume), oneOverFade);
     }
+}
+
+pub fn ChangePitch(_: *audio_state, sound: *playing_sound, dSample: f32) void {
+    // _ = audioState;
+    sound.dSample = dSample;
 }
 
 pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.sound_output_buffer, assets: *h.game_assets, tempArena: *h.memory_arena) void {
@@ -133,11 +142,13 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
                 var volume = playingSound.currentVolume;
                 var dVolume = h.Scale(playingSound.dCurrentVolume, secondsPerSample);
+                const dSample = playingSound.dSample;
 
                 assert(playingSound.samplesPlayed >= 0);
 
                 var samplesToMix = totalSamplesToMix;
-                const samplesRemainingInSound: u32 = loadedSound.sampleCount - @as(u32, @intCast(playingSound.samplesPlayed));
+                const realSampleRemainingInSound: f32 = @as(f32, @floatFromInt(loadedSound.sampleCount - h.RoundF32ToInt(u32, playingSound.samplesPlayed))) / dSample;
+                const samplesRemainingInSound: u32 = h.RoundF32ToInt(u32, realSampleRemainingInSound);
                 if (samplesToMix > samplesRemainingInSound) {
                     samplesToMix = samplesRemainingInSound;
                 }
@@ -148,8 +159,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                     // NOTE (Manav): floating point issues raises it's head here (._.)
                     if (dVolume[channelIndex] != 0) {
                         const deltaVolume = playingSound.targetVolume[channelIndex] - volume[channelIndex];
-                        const volumeSampleCount: u32 = @intFromFloat((deltaVolume / dVolume[channelIndex]) + 0.5);
 
+                        const volumeSampleCount: u32 = @intFromFloat((deltaVolume / dVolume[channelIndex]) + 0.5);
                         if (samplesToMix > volumeSampleCount) {
                             samplesToMix = volumeSampleCount;
                             volumeEnded[channelIndex] = true;
@@ -157,22 +168,30 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                     }
                 }
 
-                var sampleIndex: u32 = @intCast(playingSound.samplesPlayed);
-                var dataIndex: u32 = 0;
-                while (sampleIndex < @as(u32, @intCast(playingSound.samplesPlayed)) + samplesToMix) : ({
-                    sampleIndex += 1;
-                    dataIndex += 1;
-                }) {
-                    var sampleValue: i16 = loadedSound.samples[0].?[sampleIndex];
+                var samplePosition: f32 = playingSound.samplesPlayed;
+                for (0..samplesToMix) |loopIndex| {
+                    var sampleValue: f32 = 0;
 
-                    dest0[dataIndex] += audioState.masterVolume[0] * volume[0] * @as(f32, @floatFromInt(sampleValue));
-                    dest1[dataIndex] += audioState.masterVolume[1] * volume[1] * @as(f32, @floatFromInt(sampleValue));
+                    if (NOT_IGNORE) {
+                        const sampleIndex: u32 = @intCast(h.FloorF32ToI32(samplePosition));
+                        const frac = samplePosition - @as(f32, @floatFromInt(sampleIndex));
+
+                        const sample0: f32 = @floatFromInt(loadedSound.samples[0].?[sampleIndex]);
+                        const sample1: f32 = @floatFromInt(loadedSound.samples[0].?[sampleIndex + 1]);
+                        sampleValue = h.Lerp(sample0, frac, sample1);
+                    } else {
+                        const sampleIndex: u32 = h.RoundF32ToInt(u32, samplePosition);
+                        sampleValue = @floatFromInt(loadedSound.samples[0].?[sampleIndex]);
+                    }
+
+                    dest0[loopIndex] += audioState.masterVolume[0] * volume[0] * sampleValue;
+                    dest1[loopIndex] += audioState.masterVolume[1] * volume[1] * sampleValue;
 
                     h.AddTo(&volume, dVolume);
+                    samplePosition += dSample;
                 }
 
                 playingSound.currentVolume = volume;
-
                 for (0..volumeEnded.len) |channelIndex| {
                     if (volumeEnded[channelIndex]) {
                         playingSound.currentVolume[channelIndex] = playingSound.targetVolume[channelIndex];
@@ -181,10 +200,10 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 }
 
                 assert(totalSamplesToMix >= samplesToMix);
-                playingSound.samplesPlayed += @intCast(samplesToMix);
+                playingSound.samplesPlayed = samplePosition;
                 totalSamplesToMix -= samplesToMix;
 
-                if (@as(u32, @intCast(playingSound.samplesPlayed)) == loadedSound.sampleCount) {
+                if (@as(u32, @intFromFloat(playingSound.samplesPlayed)) == loadedSound.sampleCount) {
                     if (info.nextIDToPlay.IsValid()) {
                         playingSound.ID = info.nextIDToPlay;
                         playingSound.samplesPlayed = 0;

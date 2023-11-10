@@ -168,6 +168,12 @@ test "handmade_misc" {
     y[0] = 35;
     try testing.expectEqual(y[0], @as([*]u8, @ptrFromInt(sub_mem.base_addr))[0]);
     try testing.expectEqual(sub_mem.used, sub_mem.size);
+
+    const str1 = "hello world";
+    const str2 = mem.PushString(str1);
+
+    try testing.expectEqualStrings(str1[0..12], str2[0..12]);
+    try testing.expectEqualSentinel(u8, 0, str1, str2[0..11 :0]);
 }
 
 test "simd" {

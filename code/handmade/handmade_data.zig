@@ -76,6 +76,22 @@ pub const memory_arena = struct {
         platform.Assert(self.tempCount == 0);
     }
 
+    pub fn PushString(self: *memory_arena, source: [*:0]const u8) [*:0]const u8 {
+        var size: platform.memory_index = 0;
+
+        while (source[size] != 0) : (size += 1) {}
+
+        var dest: [*]u8 = self.PushSize(size + 1);
+
+        for (0..size) |index| {
+            dest[index] = source[index];
+        }
+
+        dest[size] = 0;
+
+        return @ptrCast(dest);
+    }
+
     /// Initialize arena of given `size` from `parentArena`.
     ///
     /// Defaults: `alignment = 16`

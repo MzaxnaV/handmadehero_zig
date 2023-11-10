@@ -111,7 +111,7 @@ const win32_debug_time_marker = struct {
 };
 
 const win32_game_code = struct {
-    gameCodeDLL: ?win32.HINSTANCE = undefined,
+    gameCodeDLL: ?win32.HINSTANCE = null,
     dllLastWriteTime: win32.FILETIME = undefined,
     UpdateAndRender: ?platform.UpdateAndRenderFnPtrType = null,
     GetSoundSamples: ?platform.GetSoundSamplesFnPtrType = null,
@@ -263,7 +263,6 @@ fn Win32GetLastWriteTime(fileName: [*:0]const u16) win32.FILETIME {
 fn Win32LoadGameCode(sourceDLLName: [:0]const u16, tempDLLName: [:0]const u16, lockFileName: [:0]const u16) win32_game_code {
     var result = win32_game_code{};
 
-    // NOTE (Manav): no lock file, so this is useless for now :(
     var ignored = win32.WIN32_FILE_ATTRIBUTE_DATA{
         .dwFileAttributes = 0,
         .ftCreationTime = .{
@@ -288,20 +287,11 @@ fn Win32LoadGameCode(sourceDLLName: [:0]const u16, tempDLLName: [:0]const u16, l
         _ = win32.CopyFileW(sourceDLLName, tempDLLName, win32.FALSE);
 
         result.gameCodeDLL = win32.LoadLibraryW(tempDLLName);
-        if (result.gameCodeDLL) |HANDMADE_DLL| {
-            result.isValid = true;
+        if (result.gameCodeDLL != null) {
+            result.UpdateAndRender = @ptrCast(win32.GetProcAddress(result.gameCodeDLL, "UpdateAndRender"));
+            result.GetSoundSamples = @ptrCast(win32.GetProcAddress(result.gameCodeDLL, "GetSoundSamples"));
 
-            if (win32.GetProcAddress(HANDMADE_DLL, "UpdateAndRender")) |funcptr| {
-                result.UpdateAndRender = @as(@TypeOf(result.UpdateAndRender), @ptrCast(funcptr));
-            } else {
-                result.isValid = false;
-            }
-
-            if (win32.GetProcAddress(HANDMADE_DLL, "GetSoundSamples")) |funcptr| {
-                result.GetSoundSamples = @as(@TypeOf(result.GetSoundSamples), @ptrCast(funcptr));
-            } else {
-                result.isValid = false;
-            }
+            result.isValid = (result.UpdateAndRender != null and result.GetSoundSamples != null);
         }
     }
 
@@ -411,6 +401,10 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                         .lpwfxFormat = &waveFormat,
                         .guid3DAlgorithm = GUID_NULL,
                     };
+
+                    if (HANDMADE_INTERNAL) {
+                        bufferDescription.dwFlags |= win32.DSBCAPS_GLOBALFOCUS;
+                    }
 
                     var secondaryBuffer: ?*win32.IDirectSoundBuffer = undefined;
                     if (win32.SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &secondaryBuffer, null))) {
@@ -1113,11 +1107,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         .playBackHandle = undefined,
     };
 
-    var highQueue = win32_work_queue{};
-    var lowQueue = win32_work_queue{};
+    var highPriorityQueue = win32_work_queue{};
+    highPriorityQueue.MakeQueue(3);
 
-    highQueue.MakeQueue(3);
-    lowQueue.MakeQueue(1);
+    var lowPriorityQueue = win32_work_queue{};
+    lowPriorityQueue.MakeQueue(1);
 
     if (!NOT_IGNORE) {
         var a0 = "String A0".*;
@@ -1142,29 +1136,29 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
         var b8 = "String B8".*;
         var b9 = "String B9".*;
 
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &a0);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &a1);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &a2);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &a3);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &a4);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &a5);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &a6);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &a7);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &a8);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &a9);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &a0);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &a1);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &a2);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &a3);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &a4);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &a5);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &a6);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &a7);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &a8);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &a9);
 
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &b0);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &b1);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &b2);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &b3);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &b4);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &b5);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &b6);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &b7);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &b8);
-        Win32AddEntry(highQueue.to(), DoWorkerWork, &b9);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &b0);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &b1);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &b2);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &b3);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &b4);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &b5);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &b6);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &b7);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &b8);
+        Win32AddEntry(highPriorityQueue.to(), DoWorkerWork, &b9);
 
-        Win32CompleteAllWork(highQueue.to());
+        Win32CompleteAllWork(highPriorityQueue.to());
     }
 
     var perfCountFrequencyResult: win32.LARGE_INTEGER = undefined;
@@ -1273,8 +1267,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     .transientStorageSize = platform.GigaBytes(1),
                     .permanentStorage = undefined,
                     .transientStorage = undefined,
-                    .highPriorityQueue = highQueue.to(),
-                    .lowPriorityQueue = lowQueue.to(),
+                    .highPriorityQueue = highPriorityQueue.to(),
+                    .lowPriorityQueue = lowPriorityQueue.to(),
                     .PlatformAddEntry = Win32AddEntry,
                     .PlatformCompleteAllWork = Win32CompleteAllWork,
                     .DEBUGPlatformFreeFileMemory = DEBUGWin32FreeFileMemory,
@@ -1361,6 +1355,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         newInput.executableReloaded = false;
                         const newDLLWriteTime = Win32GetLastWriteTime(&sourceGameCodeDLLFullPath);
                         if (win32.CompareFileTime(&newDLLWriteTime, &gameCode.dllLastWriteTime) != 0) {
+                            Win32CompleteAllWork(@ptrCast(&highPriorityQueue));
+                            Win32CompleteAllWork(@ptrCast(&lowPriorityQueue));
+
                             Win32UnloadGameCode(&gameCode);
                             gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
                             newInput.executableReloaded = true;
