@@ -3,6 +3,7 @@ const platform = @import("handmade_platform");
 const h = struct {
     usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_math.zig");
 };
 
 // build constants ------------------------------------------------------------------------------------------------------------------------
@@ -13,7 +14,10 @@ const assert = platform.Assert;
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
 pub const playing_sound = struct {
-    volume: [2]f32,
+    currentVolume: h.v2,
+    dCurrentVolume: h.v2,
+    targetVolume: h.v2,
+
     ID: h.sound_id,
     samplesPlayed: i32,
     next: ?*playing_sound,
@@ -23,6 +27,8 @@ pub const audio_state = struct {
     permArena: *h.memory_arena,
     firstPlayingSound: ?*playing_sound,
     firstFreePlayingSound: ?*playing_sound,
+
+    masterVolume: h.v2,
 };
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
@@ -67,8 +73,9 @@ pub fn PlaySound(audioState: *audio_state, soundID: h.sound_id) *playing_sound {
     audioState.firstFreePlayingSound = playingSound.next;
 
     playingSound.samplesPlayed = 0;
-    playingSound.volume[0] = 1;
-    playingSound.volume[1] = 1;
+    playingSound.targetVolume = .{ 1, 1 };
+    playingSound.currentVolume = playingSound.targetVolume;
+    playingSound.dCurrentVolume = .{ 0, 0 };
     playingSound.ID = soundID;
 
     playingSound.next = audioState.firstPlayingSound;
@@ -77,12 +84,26 @@ pub fn PlaySound(audioState: *audio_state, soundID: h.sound_id) *playing_sound {
     return playingSound;
 }
 
+pub fn ChangeVolume(audioState: *audio_state, sound: *playing_sound, fadeDurationInSeconds: f32, volume: h.v2) void {
+    _ = audioState;
+    if (fadeDurationInSeconds <= 0) {
+        sound.targetVolume = volume;
+        sound.currentVolume = sound.targetVolume;
+    } else {
+        const oneOverFade = 1 / fadeDurationInSeconds;
+        sound.targetVolume = volume;
+        sound.dCurrentVolume = h.Scale(h.Sub(sound.targetVolume, sound.currentVolume), oneOverFade);
+    }
+}
+
 pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.sound_output_buffer, assets: *h.game_assets, tempArena: *h.memory_arena) void {
     const mixerMemory = h.BeginTemporaryMemory(tempArena);
     defer h.EndTemporaryMemory(mixerMemory);
 
     var realChannel0: []f32 = tempArena.PushSlice(f32, soundBuffer.sampleCount);
     var realChannel1: []f32 = tempArena.PushSlice(f32, soundBuffer.sampleCount);
+
+    const secondsPerSample = 1 / @as(f32, @floatFromInt(soundBuffer.samplesPerSecond));
 
     // clear out mixer channel
     {
@@ -97,20 +118,21 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
     // sum all sounds
     var playingSoundPtr = &audioState.firstPlayingSound;
-    var soundFinished = false;
-
     while (playingSoundPtr.*) |playingSound| {
+        var soundFinished = false;
+
         var totalSamplesToMix = soundBuffer.sampleCount;
         var dest0 = realChannel0;
         var dest1 = realChannel1;
+
         while (totalSamplesToMix != 0 and !soundFinished) {
             if (assets.GetSound(playingSound.ID)) |loadedSound| {
                 var info: *h.asset_sound_info = assets.GetSoundInfo(playingSound.ID);
 
                 h.PrefetchSound(assets, info.nextIDToPlay);
 
-                const volume0 = playingSound.volume[0];
-                const volume1 = playingSound.volume[1];
+                var volume = playingSound.currentVolume;
+                var dVolume = h.Scale(playingSound.dCurrentVolume, secondsPerSample);
 
                 assert(playingSound.samplesPlayed >= 0);
 
@@ -118,6 +140,21 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 const samplesRemainingInSound: u32 = loadedSound.sampleCount - @as(u32, @intCast(playingSound.samplesPlayed));
                 if (samplesToMix > samplesRemainingInSound) {
                     samplesToMix = samplesRemainingInSound;
+                }
+
+                const audioStateOutputChannelCount = 2;
+                var volumeEnded: [audioStateOutputChannelCount]bool = [1]bool{false} ** audioStateOutputChannelCount;
+                for (0..volumeEnded.len) |channelIndex| {
+                    // NOTE (Manav): floating point issues raises it's head here (._.)
+                    if (dVolume[channelIndex] != 0) {
+                        const deltaVolume = playingSound.targetVolume[channelIndex] - volume[channelIndex];
+                        const volumeSampleCount: u32 = @intFromFloat((deltaVolume / dVolume[channelIndex]) + 0.5);
+
+                        if (samplesToMix > volumeSampleCount) {
+                            samplesToMix = volumeSampleCount;
+                            volumeEnded[channelIndex] = true;
+                        }
+                    }
                 }
 
                 var sampleIndex: u32 = @intCast(playingSound.samplesPlayed);
@@ -128,8 +165,19 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 }) {
                     var sampleValue: i16 = loadedSound.samples[0].?[sampleIndex];
 
-                    dest0[dataIndex] += volume0 * @as(f32, @floatFromInt(sampleValue));
-                    dest1[dataIndex] += volume1 * @as(f32, @floatFromInt(sampleValue));
+                    dest0[dataIndex] += audioState.masterVolume[0] * volume[0] * @as(f32, @floatFromInt(sampleValue));
+                    dest1[dataIndex] += audioState.masterVolume[1] * volume[1] * @as(f32, @floatFromInt(sampleValue));
+
+                    h.AddTo(&volume, dVolume);
+                }
+
+                playingSound.currentVolume = volume;
+
+                for (0..volumeEnded.len) |channelIndex| {
+                    if (volumeEnded[channelIndex]) {
+                        playingSound.currentVolume[channelIndex] = playingSound.targetVolume[channelIndex];
+                        playingSound.dCurrentVolume[channelIndex] = 0;
+                    }
                 }
 
                 assert(totalSamplesToMix >= samplesToMix);
@@ -143,8 +191,6 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                     } else {
                         soundFinished = true;
                     }
-                } else {
-                    assert(totalSamplesToMix == 0);
                 }
             } else {
                 h.LoadSound(assets, playingSound.ID);
@@ -178,4 +224,6 @@ pub fn InitializeAudioState(audioState: *audio_state, arena: *h.memory_arena) vo
     audioState.permArena = arena;
     audioState.firstPlayingSound = null;
     audioState.firstFreePlayingSound = null;
+
+    audioState.masterVolume = .{ 1, 1 };
 }

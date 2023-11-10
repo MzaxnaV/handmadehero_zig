@@ -167,7 +167,7 @@ inline fn Rectangle(comptime n: comptime_int) type {
 }
 
 // functions (vector operations)-----------------------------------------------------------------------------------------------------------
-
+/// returns `a + b`
 pub inline fn Add(a: anytype, b: [a.len]f32) [a.len]f32 {
     var result = [1]f32{0} ** a.len;
 
@@ -178,6 +178,7 @@ pub inline fn Add(a: anytype, b: [a.len]f32) [a.len]f32 {
     return result;
 }
 
+/// returns `vec += other`
 pub inline fn AddTo(vec: anytype, other: [vec.len]f32) void {
     comptime {
         if (@TypeOf(vec) != *[vec.len]f32) {
@@ -190,6 +191,7 @@ pub inline fn AddTo(vec: anytype, other: [vec.len]f32) void {
     }
 }
 
+/// returns `a - b`
 pub inline fn Sub(a: anytype, b: [a.len]f32) [a.len]f32 {
     var result = [1]f32{0} ** a.len;
 
@@ -200,6 +202,7 @@ pub inline fn Sub(a: anytype, b: [a.len]f32) [a.len]f32 {
     return result;
 }
 
+/// returns `vec -= other`
 pub inline fn SubFrom(vec: anytype, other: [vec.len]f32) void {
     comptime {
         if (@TypeOf(vec) != *[vec.len]f32) {

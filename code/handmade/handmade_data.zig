@@ -162,6 +162,7 @@ pub const game_state = struct {
     tSine: f32,
 
     audioState: h.audio_state,
+    music: *h.playing_sound,
 };
 
 pub const task_with_memory = struct {

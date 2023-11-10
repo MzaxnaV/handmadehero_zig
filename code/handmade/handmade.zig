@@ -347,7 +347,7 @@ fn MakeEmptyBitmap(arena: *h.memory_arena, width: i32, height: i32, clearToZero:
     result.height = height;
     result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
     const totalBitmapSize = @as(usize, @intCast(result.width * result.height * platform.BITMAP_BYTES_PER_PIXEL));
-    result.memory = arena.PushSizeAlign(16, totalBitmapSize); // NOTE: force alignment by design, make aligned loaded bitmap ?
+    result.memory = arena.PushSizeAlign(16, totalBitmapSize); // NOTE (Manav): force alignment by design, make aligned loaded bitmap ?
     if (clearToZero) {
         ClearBitmap(&result);
     }
@@ -740,7 +740,7 @@ pub export fn UpdateAndRender(
 
         tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(64), tranState);
 
-        _ = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
+        gameState.music = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
         const groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushSlice(h.ground_buffer, groundBufferCount);
@@ -820,15 +820,21 @@ pub export fn UpdateAndRender(
             conHero.dSword = .{ 0, 0 };
 
             if (controller.buttons.mapped.actionUp.endedDown != 0) {
+                h.ChangeVolume(&gameState.audioState, gameState.music, 10, .{ 1, 1 });
                 conHero.dSword[1] = 1.0;
             }
             if (controller.buttons.mapped.actionDown.endedDown != 0) {
+                h.ChangeVolume(&gameState.audioState, gameState.music, 10, .{ 0, 0 });
                 conHero.dSword[1] = -1.0;
             }
             if (controller.buttons.mapped.actionLeft.endedDown != 0) {
+                h.ChangeVolume(&gameState.audioState, gameState.music, 5, .{ 1, 0 });
+
                 conHero.dSword[0] = -1.0;
             }
             if (controller.buttons.mapped.actionRight.endedDown != 0) {
+                h.ChangeVolume(&gameState.audioState, gameState.music, 5, .{ 0, 1 });
+
                 conHero.dSword[0] = 1.0;
             }
         }
