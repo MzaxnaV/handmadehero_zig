@@ -203,7 +203,7 @@ pub inline fn TeraBytes(comptime value: comptime_int) comptime_int {
 }
 
 pub inline fn Align(addr: usize, alignment: usize) usize {
-    // return std.mem.alignForward(usize, addr, alignment);
+    // return @import("std").mem.alignForward(usize, addr, alignment);
     return addr + (alignment - 1) & ~(alignment - 1);
 }
 

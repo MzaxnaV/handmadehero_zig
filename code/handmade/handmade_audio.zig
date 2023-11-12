@@ -7,6 +7,8 @@ const h = struct {
     usingnamespace @import("handmade_math.zig");
 };
 
+const simd = @import("simd");
+
 // build constants ------------------------------------------------------------------------------------------------------------------------
 
 const NOT_IGNORE = platform.NOT_IGNORE;
@@ -108,6 +110,8 @@ pub fn ChangePitch(_: *audio_state, sound: *playing_sound, dSample: f32) void {
 pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.sound_output_buffer, assets: *h.game_assets, tempArena: *h.memory_arena) void {
     const mixerMemory = h.BeginTemporaryMemory(tempArena);
     defer h.EndTemporaryMemory(mixerMemory);
+
+    simd.perf_analyzer.Start(.LLVM_MCA, "OutputPlayingSound");
 
     var realChannel0: []f32 = tempArena.PushSlice(f32, soundBuffer.sampleCount);
     var realChannel1: []f32 = tempArena.PushSlice(f32, soundBuffer.sampleCount);
@@ -237,6 +241,9 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
             sampleOut[2 * sampleIndex + 1] = @intFromFloat(source1[sampleIndex] + 0.5);
         }
     }
+
+    simd.perf_analyzer.End(.LLVM_MCA, "OutputPlayingSound");
+
 }
 
 pub fn InitializeAudioState(audioState: *audio_state, arena: *h.memory_arena) void {

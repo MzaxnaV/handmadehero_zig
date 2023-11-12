@@ -16,6 +16,25 @@ pub const u8x16 = @Vector(16, u8);
 pub const u1x4 = @Vector(4, u1);
 pub const bx4 = @Vector(4, bool);
 
+pub const perf_analyzer = struct {
+    /// DO NOT USE `defer` on `End()`.
+    const method = enum {
+        LLVM_MCA,
+    };
+
+    pub inline fn Start(comptime m: method, comptime region: []const u8) void {
+        switch (m) {
+            .LLVM_MCA => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: "memory"),
+        }
+    }
+
+    pub inline fn End(comptime m: method, comptime region: []const u8) void {
+        switch (m) {
+            .LLVM_MCA => asm volatile ("# LLVM-MCA-END " ++ region ::: "memory"),
+        }
+    }
+};
+
 /// simd intrinsics implemented using language features, use these when possible
 pub const z = struct {
     pub inline fn _mm_storeu_ps(ptr: [*]f32, vec: f32x4) void {

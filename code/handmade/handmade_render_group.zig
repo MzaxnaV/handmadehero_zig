@@ -15,24 +15,7 @@ const simd = @import("simd");
 /// build constant to dynamically remove code sections
 const NOT_IGNORE = platform.NOT_IGNORE;
 
-pub const perf_analyzer = struct {
-    /// DO NOT USE `defer` on `End()`.
-    const method = enum {
-        LLVM_MCA,
-    };
-
-    pub inline fn Start(comptime m: method, comptime region: []const u8) void {
-        switch (m) {
-            .LLVM_MCA => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: "memory"),
-        }
-    }
-
-    pub inline fn End(comptime m: method, comptime region: []const u8) void {
-        switch (m) {
-            .LLVM_MCA => asm volatile ("# LLVM-MCA-END " ++ region ::: "memory"),
-        }
-    }
-};
+const perf_analyzer = simd.perf_analyzer;
 
 // doc ------------------------------------------------------------------------------------------------------------------------------------
 
