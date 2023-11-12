@@ -6,7 +6,6 @@ const h = struct {
     usingnamespace @import("handmade_intrinsics.zig");
     usingnamespace @import("handmade_math.zig");
 };
-
 const simd = @import("simd");
 
 // build constants ------------------------------------------------------------------------------------------------------------------------
@@ -113,8 +112,13 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
     simd.perf_analyzer.Start(.LLVM_MCA, "OutputPlayingSound");
 
-    var realChannel0: []f32 = tempArena.PushSlice(f32, soundBuffer.sampleCount);
-    var realChannel1: []f32 = tempArena.PushSlice(f32, soundBuffer.sampleCount);
+    const sampleCountAlign4 = platform.Align(soundBuffer.sampleCount, 4);
+    const sampleCount4 = sampleCountAlign4 / 4;
+
+    var realChannel0: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, sampleCount4);
+    var realChannel1: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, sampleCount4);
+
+    const zero = simd.f32x4{ 0, 0, 0, 0 };
 
     const secondsPerSample = 1 / @as(f32, @floatFromInt(soundBuffer.samplesPerSecond));
 
@@ -123,9 +127,9 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
         var dest0 = realChannel0;
         var dest1 = realChannel1;
 
-        for (0..soundBuffer.sampleCount) |sampleIndex| {
-            dest0[sampleIndex] = 0;
-            dest1[sampleIndex] = 0;
+        for (0..sampleCount4) |sampleIndex| {
+            dest0[sampleIndex] = zero;
+            dest1[sampleIndex] = zero;
         }
     }
 
@@ -135,8 +139,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
         var soundFinished = false;
 
         var totalSamplesToMix = soundBuffer.sampleCount;
-        var dest0 = realChannel0;
-        var dest1 = realChannel1;
+        var dest0: [*]f32 = @ptrCast(realChannel0.ptr);
+        var dest1: [*]f32 = @ptrCast(realChannel1.ptr);
 
         while (totalSamplesToMix != 0 and !soundFinished) {
             if (assets.GetSound(playingSound.ID)) |loadedSound| {
@@ -232,8 +236,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
     // convert to 16 bit
     {
-        var source0 = realChannel0;
-        var source1 = realChannel1;
+        var source0: [*]f32 = @ptrCast(realChannel0.ptr);
+        var source1: [*]f32 = @ptrCast(realChannel1.ptr);
 
         var sampleOut = soundBuffer.samples;
         for (0..soundBuffer.sampleCount) |sampleIndex| {
