@@ -102,7 +102,6 @@ pub fn main() !void {
 
     dest.close();
     source.close();
-    try std.fs.cwd().deleteFile("llvm_mca_output.txt");
 }
 
 test "find substring" {
