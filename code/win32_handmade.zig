@@ -1254,12 +1254,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 }
             }
 
-            if (@as(?[*]i16, @alignCast(@ptrCast(win32.VirtualAlloc(
-                null,
-                soundOutput.secondaryBufferSize,
-                allocationType,
-                win32.PAGE_READWRITE,
-            ))))) |samples| {
+            const maxPossibleOverrun = 2 * 4 * @sizeOf(u16);
+
+            if (@as(?[*]i16, @alignCast(@ptrCast(win32.VirtualAlloc(null, soundOutput.secondaryBufferSize + maxPossibleOverrun, allocationType, win32.PAGE_READWRITE))))) |samples| {
                 // defer _ = win32.VirtualFree();
 
                 var gameMemory = platform.memory{

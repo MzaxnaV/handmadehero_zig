@@ -1,4 +1,3 @@
-
 pub const f64x2 = @Vector(2, f64);
 pub const i64x2 = @Vector(2, i64);
 pub const u64x2 = @Vector(2, u64);
@@ -150,7 +149,7 @@ pub const i = struct {
     /// Convert packed signed 32-bit integers from `a` and `b` to packed 16-bit integers using signed saturation, and returns the results.
     ///
     /// It uses `packssdw` SSE2 instruction
-    pub inline fn _mm_packs_epi32(a: i32x4, b: i32x4) i32x4 {
+    pub inline fn _mm_packs_epi32(a: i32x4, b: i32x4) i16x8 {
         var result: i16x8 = @splat(0);
         asm ("packssdw %[b], %[a]"
             : [result] "=x" (result),
@@ -158,7 +157,7 @@ pub const i = struct {
               [b] "x" (b),
         );
 
-        return @bitCast(result);
+        return result;
     }
 
     pub inline fn _mm_cvttps_epi32(v: f32x4) i32x4 {

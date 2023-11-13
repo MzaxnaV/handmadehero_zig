@@ -120,11 +120,6 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
     const zero = simd.f32x4{ 0, 0, 0, 0 };
 
-    const maxi16: simd.f32x4 = @splat(32767.0); // -0x8000
-    _ = maxi16;
-    const mini16: simd.f32x4 = @splat(-32768.0); // 0x7fff
-    _ = mini16;
-
     const secondsPerSample = 1 / @as(f32, @floatFromInt(soundBuffer.samplesPerSecond));
 
     // clear out mixer channel
@@ -239,25 +234,14 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
         }
     }
 
-    // convert to 16 bit
-    // {
-    //     var source0: [*]f32 = @ptrCast(realChannel0.ptr);
-    //     var source1: [*]f32 = @ptrCast(realChannel1.ptr);
-    //     var sampleOut = soundBuffer.samples;
-    //     for (0..soundBuffer.sampleCount) |sampleIndex| {
-    //         sampleOut[2 * sampleIndex] = @intFromFloat(source0[sampleIndex] + 0.5);
-    //         sampleOut[2 * sampleIndex + 1] = @intFromFloat(source1[sampleIndex] + 0.5);
-    //     }
-    // }
-
     {
-        var source0 = realChannel0;
-        var source1 = realChannel1;
+        const source0 = realChannel0;
+        const source1 = realChannel1;
 
-        var sampleOut: [*]simd.i32x4 = @ptrCast(soundBuffer.samples);
+        var sampleOut: [*]simd.i16x8 = @ptrCast(soundBuffer.samples);
         for (0..sampleCount4) |sampleIndex| {
-            var l = simd.i._mm_cvtps_epi32(source0[sampleIndex]);
-            var r = simd.i._mm_cvtps_epi32(source1[sampleIndex]);
+            const l = simd.i._mm_cvtps_epi32(source0[sampleIndex]);
+            const r = simd.i._mm_cvtps_epi32(source1[sampleIndex]);
 
             const lr0 = simd.z._mm_unpacklo_epi32(l, r);
             const lr1 = simd.z._mm_unpackhi_epi32(l, r);
@@ -266,7 +250,6 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
             sampleOut[sampleIndex] = s01;
         }
-
     }
     simd.perf_analyzer.End(.LLVM_MCA, "OutputPlayingSound");
 }

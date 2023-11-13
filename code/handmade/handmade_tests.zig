@@ -247,11 +247,15 @@ test "simd" {
         const v2 = simd.i32x4{ 0xc350, -0xc350, std.math.maxInt(i32), std.math.minInt(i32) };
 
         // ___mm_packs_epi32
-        try testing.expectEqual(simd.i32x4{
-            @as(i32, @bitCast(@as(u32, 0xff9c0064))), // 0x0064, -0x0064,
-            @as(i32, @bitCast(@as(u32, 0x80007fff))), // 0x7FFF, 0x8000,
-            @as(i32, @bitCast(@as(u32, 0x80007fff))),
-            @as(i32, @bitCast(@as(u32, 0x80007fff))),
+        try testing.expectEqual(simd.i16x8{
+            @as(i16, @bitCast(@as(u16, 0x0064))),
+            @as(i16, @bitCast(@as(u16, 0xff9c))), // -0x0064
+            @as(i16, @bitCast(@as(u16, 0x7fff))),
+            @as(i16, @bitCast(@as(u16, 0x8000))),
+            @as(i16, @bitCast(@as(u16, 0x7fff))),
+            @as(i16, @bitCast(@as(u16, 0x8000))),
+            @as(i16, @bitCast(@as(u16, 0x7fff))),
+            @as(i16, @bitCast(@as(u16, 0x8000))),
         }, simd.i._mm_packs_epi32(v1, v2));
     }
 
