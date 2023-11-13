@@ -240,11 +240,21 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     }
 
     // convert to 16 bit
+    // {
+    //     var source0: [*]f32 = @ptrCast(realChannel0.ptr);
+    //     var source1: [*]f32 = @ptrCast(realChannel1.ptr);
+    //     var sampleOut = soundBuffer.samples;
+    //     for (0..soundBuffer.sampleCount) |sampleIndex| {
+    //         sampleOut[2 * sampleIndex] = @intFromFloat(source0[sampleIndex] + 0.5);
+    //         sampleOut[2 * sampleIndex + 1] = @intFromFloat(source1[sampleIndex] + 0.5);
+    //     }
+    // }
+
     {
         var source0 = realChannel0;
         var source1 = realChannel1;
 
-        var sampleOut : [*]simd.i32x4 = @ptrCast(soundBuffer.samples);
+        var sampleOut: [*]simd.i32x4 = @ptrCast(soundBuffer.samples);
         for (0..sampleCount4) |sampleIndex| {
             var l = simd.i._mm_cvtps_epi32(source0[sampleIndex]);
             var r = simd.i._mm_cvtps_epi32(source1[sampleIndex]);
@@ -256,8 +266,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
             sampleOut[sampleIndex] = s01;
         }
-    }
 
+    }
     simd.perf_analyzer.End(.LLVM_MCA, "OutputPlayingSound");
 }
 
