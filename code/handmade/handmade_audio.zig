@@ -1,4 +1,5 @@
 const platform = @import("handmade_platform");
+const simd = @import("simd");
 
 const h = struct {
     usingnamespace @import("handmade_asset.zig");
@@ -6,7 +7,6 @@ const h = struct {
     usingnamespace @import("handmade_intrinsics.zig");
     usingnamespace @import("handmade_math.zig");
 };
-const simd = @import("simd");
 
 // build constants ------------------------------------------------------------------------------------------------------------------------
 
@@ -119,6 +119,11 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     var realChannel1: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, sampleCount4);
 
     const zero = simd.f32x4{ 0, 0, 0, 0 };
+
+    const maxi16: simd.f32x4 = @splat(32767.0); // -0x8000
+    _ = maxi16;
+    const mini16: simd.f32x4 = @splat(-32768.0); // 0x7fff
+    _ = mini16;
 
     const secondsPerSample = 1 / @as(f32, @floatFromInt(soundBuffer.samplesPerSecond));
 
@@ -236,18 +241,24 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
     // convert to 16 bit
     {
-        var source0: [*]f32 = @ptrCast(realChannel0.ptr);
-        var source1: [*]f32 = @ptrCast(realChannel1.ptr);
+        var source0 = realChannel0;
+        var source1 = realChannel1;
 
-        var sampleOut = soundBuffer.samples;
-        for (0..soundBuffer.sampleCount) |sampleIndex| {
-            sampleOut[2 * sampleIndex] = @intFromFloat(source0[sampleIndex] + 0.5);
-            sampleOut[2 * sampleIndex + 1] = @intFromFloat(source1[sampleIndex] + 0.5);
+        var sampleOut : [*]simd.i32x4 = @ptrCast(soundBuffer.samples);
+        for (0..sampleCount4) |sampleIndex| {
+            var l = simd.i._mm_cvtps_epi32(source0[sampleIndex]);
+            var r = simd.i._mm_cvtps_epi32(source1[sampleIndex]);
+
+            const lr0 = simd.z._mm_unpacklo_epi32(l, r);
+            const lr1 = simd.z._mm_unpackhi_epi32(l, r);
+
+            const s01 = simd.i._mm_packs_epi32(lr0, lr1);
+
+            sampleOut[sampleIndex] = s01;
         }
     }
 
     simd.perf_analyzer.End(.LLVM_MCA, "OutputPlayingSound");
-
 }
 
 pub fn InitializeAudioState(audioState: *audio_state, arena: *h.memory_arena) void {

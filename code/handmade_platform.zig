@@ -105,7 +105,7 @@ pub const offscreen_buffer = struct {
 pub const sound_output_buffer = struct {
     samplesPerSecond: u32,
     sampleCount: u32,
-    samples: [*]i16,
+    samples: [*]align(@alignOf(@Vector(4, i32))) i16, // NOTE (Manav): samples should be padded to a multiple of 4 samples
 };
 
 pub const button_state = extern struct {

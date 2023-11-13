@@ -1564,7 +1564,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 var soundBuffer = platform.sound_output_buffer{
                                     .samplesPerSecond = soundOutput.samplesPerSecond,
                                     .sampleCount = @divTrunc(bytesToWrite, soundOutput.bytesPerSample),
-                                    .samples = samples,
+                                    .samples = @alignCast(samples),
                                 };
 
                                 if (gameCode.GetSoundSamples) |GetSoundSamples| {
