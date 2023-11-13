@@ -177,67 +177,83 @@ test "handmade_misc" {
 }
 
 test "simd" {
-    const v1: simd.f32x4 = .{ 1.1, 2.2, 3.3, 4.4 };
-    const v2: simd.f32x4 = .{ -4.4, -5.5, -6.6, -7.7 };
+    {
+        const v1 = simd.f32x4{ 0.1, 1.4, 2.5, 3.6 };
+        const v2 = simd.f32x4{ -0.1, -1.4, -2.5, -3.6 };
 
-    const zc1: simd.i32x4 = simd.z._mm_cvtps_epi32(v1);
-    const zc2: simd.i32x4 = simd.z._mm_cvtps_epi32(v2);
-    const zc3: simd.i32x4 = simd.z._mm_cvttps_epi32(v2);
+        // _mm_cvtps_epi32
+        const ic1: simd.i32x4 = simd.i._mm_cvtps_epi32(v1);
+        const ic2: simd.i32x4 = simd.i._mm_cvtps_epi32(v2);
+        try testing.expectEqual(simd.i32x4{ 0, 1, 2, 4 }, ic1);
+        try testing.expectEqual(simd.i32x4{ 0, -1, -2, -4 }, ic2);
 
-    const ic1: simd.i32x4 = simd.i._mm_cvtps_epi32(v1);
-    const ic2: simd.i32x4 = simd.i._mm_cvtps_epi32(v2);
-    const ic3: simd.i32x4 = simd.i._mm_cvttps_epi32(v2);
+        // _mm_cvttps_epi32
+        const ic3: simd.i32x4 = simd.i._mm_cvttps_epi32(v1);
+        const ic4: simd.i32x4 = simd.i._mm_cvttps_epi32(v2);
+        try testing.expectEqual(simd.i32x4{ 0, 1, 2, 3 }, ic3);
+        try testing.expectEqual(simd.i32x4{ 0, -1, -2, -3 }, ic4);
 
-    try testing.expectEqual(zc1, ic1);
-    try testing.expectEqual(zc2, ic2);
-    try testing.expectEqual(zc3, ic3);
+        const zc3: simd.i32x4 = simd.z._mm_cvttps_epi32(v1);
+        const zc4: simd.i32x4 = simd.z._mm_cvttps_epi32(v2);
+        try testing.expectEqual(ic3, zc3);
+        try testing.expectEqual(ic4, zc4);
 
-    try testing.expectEqual(simd.i32x4{ 1, 2, 3, 4 }, zc1);
-    try testing.expectEqual(simd.i32x4{ -4, -6, -7, -8 }, ic2);
-    try testing.expectEqual(simd.i32x4{ -4, -5, -6, -7 }, ic3);
+        // _mm_cvtepi32_ps
+        const ic3i: simd.f32x4 = simd.i._mm_cvtepi32_ps(ic3);
+        const ic4i: simd.f32x4 = simd.i._mm_cvtepi32_ps(ic4);
+        try testing.expectEqual(simd.f32x4{ 0, 1, 2, 3 }, ic3i);
+        try testing.expectEqual(simd.f32x4{ 0, -1, -2, -3 }, ic4i);
 
-    const zc1i: simd.f32x4 = simd.z._mm_cvtepi32_ps(zc1);
-    const zc2i: simd.f32x4 = simd.z._mm_cvtepi32_ps(zc2);
-    const zc3i: simd.f32x4 = simd.z._mm_cvtepi32_ps(zc3);
+        const zc3i: simd.f32x4 = simd.z._mm_cvtepi32_ps(zc3);
+        const zc4i: simd.f32x4 = simd.z._mm_cvtepi32_ps(zc4);
+        try testing.expectEqual(ic3i, zc3i);
+        try testing.expectEqual(ic4i, zc4i);
 
-    const ic1i: simd.f32x4 = simd.i._mm_cvtepi32_ps(ic1);
-    const ic2i: simd.f32x4 = simd.i._mm_cvtepi32_ps(ic2);
-    const ic3i: simd.f32x4 = simd.i._mm_cvtepi32_ps(ic3);
+        // __mm_srli_epi32
+        try testing.expectEqual(simd.i._mm_srli_epi32(ic3, 2), simd.z._mm_srli_epi32(zc3, 2));
+        try testing.expectEqual(simd.i._mm_srli_epi32(ic4, 2), simd.z._mm_srli_epi32(zc4, 2));
+    }
 
-    try testing.expectEqual(zc1i, ic1i);
-    try testing.expectEqual(zc2i, ic2i);
-    try testing.expectEqual(zc3i, ic3i);
+    {
+        const v1 = simd.i32x4{ 0x01020304, 0x05060708, 0x090a0b0c, 0x0d0e0f00 };
+        const v2 = simd.i32x4{
+            @as(i32, @bitCast(@as(u32, 0xd0e0f000))),
+            @as(i32, @bitCast(@as(u32, 0x90a0b0c0))),
+            @as(i32, @bitCast(@as(u32, 0x50607080))),
+            @as(i32, @bitCast(@as(u32, 0x10203040))),
+        };
 
-    try testing.expectEqual(simd.f32x4{ 1, 2, 3, 4 }, zc1i);
-    try testing.expectEqual(simd.f32x4{ -4, -6, -7, -8 }, ic2i);
-    try testing.expectEqual(simd.f32x4{ -4, -5, -6, -7 }, ic3i);
+        // _mm_mullo_epi16
+        try testing.expectEqual(simd.i32x4{
+            @as(i32, @bitCast(@as(u32, 0x81c0c000))),
+            @as(i32, @bitCast(@as(u32, 0x83c0c600))),
+            @as(i32, @bitCast(@as(u32, 0x83c0c600))),
+            @as(i32, @bitCast(@as(u32, 0x81c0c000))),
+        }, simd.i._mm_mullo_epi16(v1, v2));
+        try testing.expectEqual(simd.i._mm_mullo_epi16(v1, v2), simd.z._mm_mullo_epi16(v1, v2));
 
-    const a1: simd.i32x4 = .{ 0x01020304, 0x05060708, 0x090a0b0c, 0x0d0e0f00 };
-    const a2: simd.i32x4 = .{
-        @as(i32, @bitCast(@as(u32, 0xd0e0f000))),
-        @as(i32, @bitCast(@as(u32, 0x90a0b0c0))),
-        @as(i32, @bitCast(@as(u32, 0x50607080))),
-        @as(i32, @bitCast(@as(u32, 0x10203040))),
-    };
+        // _mm_mulhi_epi16
+        try testing.expectEqual(simd.i32x4{
+            @as(i32, @bitCast(@as(u32, 0xffd0ffcf))),
+            @as(i32, @bitCast(@as(u32, 0xfdd0fdd2))),
+            @as(i32, @bitCast(@as(u32, 0x02d604da))),
+            @as(i32, @bitCast(@as(u32, 0x00d202d3))),
+        }, simd.i._mm_mulhi_epi16(v1, v2));
+        try testing.expectEqual(simd.i._mm_mulhi_epi16(v1, v2), simd.z._mm_mulhi_epi16(v1, v2));
+    }
 
-    try testing.expectEqual(simd.z._mm_mullo_epi16(a1, a2), simd.i32x4{
-        @as(i32, @bitCast(@as(u32, 0x81c0c000))),
-        @as(i32, @bitCast(@as(u32, 0x83c0c600))),
-        @as(i32, @bitCast(@as(u32, 0x83c0c600))),
-        @as(i32, @bitCast(@as(u32, 0x81c0c000))),
-    });
-    try testing.expectEqual(simd.z._mm_mulhi_epi16(a1, a2), simd.i32x4{
-        @as(i32, @bitCast(@as(u32, 0xffd0ffcf))),
-        @as(i32, @bitCast(@as(u32, 0xfdd0fdd2))),
-        @as(i32, @bitCast(@as(u32, 0x02d604da))),
-        @as(i32, @bitCast(@as(u32, 0x00d202d3))),
-    });
+    {
+        const v1 = simd.i32x4{ 0x64, -0x64, std.math.maxInt(i16), std.math.minInt(i16) };
+        const v2 = simd.i32x4{ 0xc350, -0xc350, std.math.maxInt(i32), std.math.minInt(i32) };
 
-    try testing.expectEqual(simd.i._mm_mullo_epi16(ic1, ic2), simd.z._mm_mullo_epi16(zc1, zc2));
-    try testing.expectEqual(simd.i._mm_mulhi_epi16(ic1, ic2), simd.z._mm_mulhi_epi16(zc1, zc2));
-
-    try testing.expectEqual(simd.i._mm_srli_epi32(ic1, 2), simd.z._mm_srli_epi32(zc1, 2));
-    try testing.expectEqual(simd.i._mm_srli_epi32(ic2, 2), simd.z._mm_srli_epi32(zc2, 2));
+        // ___mm_packs_epi32
+        try testing.expectEqual(simd.i32x4{
+            @as(i32, @bitCast(@as(u32, 0xff9c0064))), // 0x0064, -0x0064,
+            @as(i32, @bitCast(@as(u32, 0x80007fff))), // 0x7FFF, 0x8000,
+            @as(i32, @bitCast(@as(u32, 0x80007fff))),
+            @as(i32, @bitCast(@as(u32, 0x80007fff))),
+        }, simd.i._mm_packs_epi32(v1, v2));
+    }
 
     // const rsqrtv1 = simd.i._mm_rsqrt_ps(v1);
     // const rsqrtv2 = simd.i._mm_rsqrt_ps(v2);
