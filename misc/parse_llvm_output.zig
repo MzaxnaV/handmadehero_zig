@@ -45,17 +45,7 @@ const StringIterator = struct {
     }
 
     pub fn findSubStr(self: *const Self, sub_str: []const u8) ?usize {
-        if (sub_str.len > self.slice.len) {
-            return null;
-        }
-
-        for (0..(self.slice.len - sub_str.len + 1)) |i| {
-            if ((self.slice[i] == sub_str[0]) and std.mem.eql(u8, sub_str, self.slice[i .. i + sub_str.len])) {
-                return i;
-            }
-        }
-
-        return null;
+        return std.mem.indexOf(u8, self.slice, sub_str);
     }
 };
 
@@ -73,29 +63,37 @@ pub fn main() !void {
     defer allocator.free(input_buf);
 
     var found_heading = false;
+    var first_heading = true;
 
     while (try source.reader().readUntilDelimiterOrEof(input_buf, '\n')) |line| {
-        var f = false;
+        var found_subheading = false;
         const line_iterator = StringIterator.init(line);
 
         if (line_iterator.findSubStr(heading)) |_| {
-            try dest.writer().print("<details><summary>{s}</summary>\n\n```", .{line[0 .. line.len - 1]});
+            found_heading = true;
+            if (first_heading) {
+                try dest.writer().print("<details><summary>{s}</summary>\n\n```", .{line[0 .. line.len - 1]});
+                first_heading = false;
+            } else {
+                try dest.writer().print("\n```\n</details>\n\n</details>\n\n<details><summary>{s}</summary>\n\n```", .{line[0 .. line.len - 1]});
+            }
+
             continue;
         }
 
         for (sub_headings) |sub_heading| {
             if (line_iterator.findSubStr(sub_heading)) |_| {
-                f = true;
+                found_subheading = true;
                 if (found_heading) {
-                    break try dest.writer().print("```\n</details>\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0 .. line.len - 1]});
-                } else {
-                    found_heading = true;
+                    found_heading = false;
                     break try dest.writer().print("```\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0 .. line.len - 1]});
+                } else {
+                    break try dest.writer().print("```\n</details>\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0 .. line.len - 1]});
                 }
             }
         }
 
-        if (f) continue;
+        if (found_subheading) continue;
 
         try dest.writer().print("{s}", .{line});
     }
@@ -104,7 +102,6 @@ pub fn main() !void {
 
     dest.close();
     source.close();
-    try std.fs.cwd().deleteFile("llvm_mca_output.txt");
 }
 
 test "find substring" {

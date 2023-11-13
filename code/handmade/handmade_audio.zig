@@ -1,4 +1,5 @@
 const platform = @import("handmade_platform");
+const simd = @import("simd");
 
 const h = struct {
     usingnamespace @import("handmade_asset.zig");
@@ -109,8 +110,15 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     const mixerMemory = h.BeginTemporaryMemory(tempArena);
     defer h.EndTemporaryMemory(mixerMemory);
 
-    var realChannel0: []f32 = tempArena.PushSlice(f32, soundBuffer.sampleCount);
-    var realChannel1: []f32 = tempArena.PushSlice(f32, soundBuffer.sampleCount);
+    simd.perf_analyzer.Start(.LLVM_MCA, "OutputPlayingSound");
+
+    const sampleCountAlign4 = platform.Align(soundBuffer.sampleCount, 4);
+    const sampleCount4 = sampleCountAlign4 / 4;
+
+    var realChannel0: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, sampleCount4);
+    var realChannel1: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, sampleCount4);
+
+    const zero = simd.f32x4{ 0, 0, 0, 0 };
 
     const secondsPerSample = 1 / @as(f32, @floatFromInt(soundBuffer.samplesPerSecond));
 
@@ -119,9 +127,9 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
         var dest0 = realChannel0;
         var dest1 = realChannel1;
 
-        for (0..soundBuffer.sampleCount) |sampleIndex| {
-            dest0[sampleIndex] = 0;
-            dest1[sampleIndex] = 0;
+        for (0..sampleCount4) |sampleIndex| {
+            dest0[sampleIndex] = zero;
+            dest1[sampleIndex] = zero;
         }
     }
 
@@ -131,8 +139,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
         var soundFinished = false;
 
         var totalSamplesToMix = soundBuffer.sampleCount;
-        var dest0 = realChannel0;
-        var dest1 = realChannel1;
+        var dest0: [*]f32 = @ptrCast(realChannel0.ptr);
+        var dest1: [*]f32 = @ptrCast(realChannel1.ptr);
 
         while (totalSamplesToMix != 0 and !soundFinished) {
             if (assets.GetSound(playingSound.ID)) |loadedSound| {
@@ -226,17 +234,24 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
         }
     }
 
-    // convert to 16 bit
     {
-        var source0 = realChannel0;
-        var source1 = realChannel1;
+        const source0 = realChannel0;
+        const source1 = realChannel1;
 
-        var sampleOut = soundBuffer.samples;
-        for (0..soundBuffer.sampleCount) |sampleIndex| {
-            sampleOut[2 * sampleIndex] = @intFromFloat(source0[sampleIndex] + 0.5);
-            sampleOut[2 * sampleIndex + 1] = @intFromFloat(source1[sampleIndex] + 0.5);
+        var sampleOut: [*]simd.i16x8 = @ptrCast(soundBuffer.samples);
+        for (0..sampleCount4) |sampleIndex| {
+            const l = simd.i._mm_cvtps_epi32(source0[sampleIndex]);
+            const r = simd.i._mm_cvtps_epi32(source1[sampleIndex]);
+
+            const lr0 = simd.z._mm_unpacklo_epi32(l, r);
+            const lr1 = simd.z._mm_unpackhi_epi32(l, r);
+
+            const s01 = simd.i._mm_packs_epi32(lr0, lr1);
+
+            sampleOut[sampleIndex] = s01;
         }
     }
+    simd.perf_analyzer.End(.LLVM_MCA, "OutputPlayingSound");
 }
 
 pub fn InitializeAudioState(audioState: *audio_state, arena: *h.memory_arena) void {

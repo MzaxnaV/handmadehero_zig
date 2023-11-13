@@ -16,33 +16,45 @@ pub const u8x16 = @Vector(16, u8);
 pub const u1x4 = @Vector(4, u1);
 pub const bx4 = @Vector(4, bool);
 
+pub const perf_analyzer = struct {
+    /// DO NOT USE `defer` on `End()`.
+    const method = enum {
+        LLVM_MCA,
+    };
+
+    pub inline fn Start(comptime m: method, comptime region: []const u8) void {
+        switch (m) {
+            .LLVM_MCA => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: "memory"),
+        }
+    }
+
+    pub inline fn End(comptime m: method, comptime region: []const u8) void {
+        switch (m) {
+            .LLVM_MCA => asm volatile ("# LLVM-MCA-END " ++ region ::: "memory"),
+        }
+    }
+};
+
 /// simd intrinsics implemented using language features, use these when possible
 pub const z = struct {
+    // TODO (Manav): untested
     pub inline fn _mm_storeu_ps(ptr: [*]f32, vec: f32x4) void {
         @as(*align(1) f32x4, @alignCast(@ptrCast(ptr))).* = vec;
     }
 
+    // TODO (Manav): untested
     pub inline fn _mm_store_ps(ptr: [*]f32, vec: f32x4) void {
         @as(*f32x4, @alignCast(@ptrCast(ptr))).* = vec;
     }
 
+    // TODO (Manav): untested
     pub inline fn _mm_load_ps(ptr: [*]const f32) f32x4 {
         return @as(*const f32x4, @alignCast(@ptrCast(ptr))).*;
     }
 
+    // TODO (Manav): untested
     pub inline fn _mm_loadu_ps(ptr: [*]const f32) f32x4 {
         return @as(*align(1) const f32x4, @alignCast(@ptrCast(ptr))).*;
-    }
-
-    // TODO (Manav): doesn't generate a call to cvtps2dq, yet
-    pub inline fn _mm_cvtps_epi32(v: f32x4) i32x4 {
-        var result = i32x4{ 0, 0, 0, 0 };
-
-        inline for (0..4) |index| {
-            result[index] = @as(i32, @intFromFloat(@round(v[index])));
-        }
-
-        return result;
     }
 
     pub inline fn _mm_cvttps_epi32(v: f32x4) i32x4 {
@@ -66,13 +78,13 @@ pub const z = struct {
     }
 
     // TODO (Manav): untested
-    pub inline fn _mm_unpacklo_epi32(a: i64x2, b: i64x2) i64x2 {
-        return @as(i64x2, @bitCast(@shuffle(i32, @as(i32x4, @bitCast(a)), @as(i32x4, @bitCast(b)), i32x4{ 0, -1, 1, -2 })));
+    pub inline fn _mm_unpacklo_epi32(a: i32x4, b: i32x4) i32x4 {
+        return @shuffle(i32, a, b, i32x4{ 0, ~@as(i32, 0), 1, ~@as(i32, 1) });
     }
 
     // TODO (Manav): untested
-    pub inline fn _mm_unpackhi_epi32(a: i64x2, b: i64x2) i64x2 {
-        return @as(i64x2, @bitCast(@shuffle(i32, @as(i32x4, @bitCast(a)), @as(i32x4, @bitCast(b)), i32x4{ 2, -3, 3, -4 })));
+    pub inline fn _mm_unpackhi_epi32(a: i32x4, b: i32x4) i32x4 {
+        return @shuffle(i32, a, b, i32x4{ 2, ~@as(i32, 2), 3, ~@as(i32, 3) });
     }
 
     // TODO (Manav): untested
@@ -121,10 +133,28 @@ pub const z = struct {
 
 /// simd intrinsics implemented using inline assembly, not using contraints
 pub const i = struct {
+    /// Convert packed single-precision (32-bit) floating-point elements in `v` to packed 32-bit integers, and return the results.
+    ///
+    /// It uses the `cvtps2dq` SSE2 instruction.
     pub inline fn _mm_cvtps_epi32(v: f32x4) i32x4 {
-        const result = asm ("cvtps2dq %[v], %[v]"
-            : [ret] "=&{xmm0}" (-> i32x4),
-            : [v] "{xmm0}" (v),
+        var result: i32x4 = @splat(0);
+        asm ("cvtps2dq %[v], %[result]"
+            : [result] "=x" (result),
+            : [v] "x" (v),
+        );
+
+        return result;
+    }
+
+    /// Convert packed signed 32-bit integers from `a` and `b` to packed 16-bit integers using signed saturation, and returns the results.
+    ///
+    /// It uses `packssdw` SSE2 instruction
+    pub inline fn _mm_packs_epi32(a: i32x4, b: i32x4) i16x8 {
+        var result: i16x8 = @splat(0);
+        asm ("packssdw %[b], %[a]"
+            : [result] "=x" (result),
+            : [a] "x" (a),
+              [b] "x" (b),
         );
 
         return result;

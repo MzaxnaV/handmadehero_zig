@@ -39,6 +39,7 @@ Collection of references, not all are realted to Handmade Hero.
 ## P
 - [Physically Based Rendering, (Matt Pharr, Wenzel Jakob, and Greg Humphreys)](https://www.pbr-book.org/)
 - [Procedural Animation, David Rosen](http://blog.wolfire.com/2014/05/GDC-2014-Procedural-Animation-Video)
+- [Processor Affinity](https://en.wikipedia.org/wiki/Processor_affinity)
 
 ## U
 - [Unaligned Memory Access](https://www.kernel.org/doc/html/latest/core-api/unaligned-memory-access.html)

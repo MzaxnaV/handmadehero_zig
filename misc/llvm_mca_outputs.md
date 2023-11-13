@@ -4501,3 +4501,38 @@ Truncated display due to cycle limit
 ```
 </details>
 </details>
+
+
+### day 143 
+#### before any optimization
+
+<details><summary>[0] Code Region - OutputPlayingSound</summary>
+
+```
+Iterations:        100
+Instructions:      53200
+Total Cycles:      20819
+Total uOps:        63500
+
+Dispatch Width:    6
+uOps Per Cycle:    3.05
+IPC:               2.56
+Block RThroughput: 105.8
+
+
+Cycles with backend pressure increase [ 33.60% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 28.29% ]
+  - ICXPort0  [ 18.21% ]
+  - ICXPort1  [ 19.15% ]
+  - ICXPort2  [ 8.64% ]
+  - ICXPort3  [ 8.64% ]
+  - ICXPort4  [ 14.37% ]
+  - ICXPort5  [ 17.71% ]
+  - ICXPort6  [ 19.15% ]
+  - ICXPort7  [ 6.72% ]
+  Data Dependencies:      [ 22.58% ]
+  - Register Dependencies [ 22.58% ]
+  - Memory Dependencies   [ 0.00% ]
+
+```
