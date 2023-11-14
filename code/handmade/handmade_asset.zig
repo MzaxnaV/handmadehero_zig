@@ -17,6 +17,7 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
 pub const loaded_sound = struct {
+    /// it is `sampleCount` divided by `8`
     sampleCount: u32 = 0,
     channelCount: u32 = 0,
     samples: [2]?[*]i16 = undefined,
@@ -151,18 +152,14 @@ pub const game_assets = struct {
 
     tagRange: [asset_tag_id.len()]f32,
 
-    // bitmapCount: u32,
     bitmapInfos: []asset_bitmap_info,
     bitmaps: []asset_slot,
 
-    // soundCount: u32,
     soundInfos: []asset_sound_info,
     sounds: []asset_slot,
 
-    // tagCount: u32,
     tags: []asset_tag,
 
-    // assetCount: u32,
     assets: []asset,
 
     assetTypes: [asset_type_id.len()]asset_type,
@@ -679,23 +676,24 @@ fn DEBUGLoadWAV(fileName: [*:0]const u8, sectionFirstSampleIndex: u32, sectionSa
 
         assert(channelCount != 0 and sampleData != null);
 
-        result.sampleCount = @intCast(sampleDataSize / (channelCount * @sizeOf(u16)));
+        result.channelCount = channelCount;
+        var sampleCount: u32 = sampleDataSize / (channelCount * @sizeOf(u16));
 
         if (channelCount == 1) {
             result.samples[0] = @ptrCast(sampleData);
             result.samples[1] = null;
         } else if (channelCount == 2) {
             result.samples[0] = @ptrCast(sampleData);
-            result.samples[1] = sampleData.? + @as(u32, @intCast(result.sampleCount));
+            result.samples[1] = sampleData.? + sampleCount;
 
             if (!NOT_IGNORE) {
-                for (0..@as(usize, @intCast(result.sampleCount))) |sampleIndex| {
+                for (0..sampleCount) |sampleIndex| {
                     sampleData.?[2 * sampleIndex + 0] = @intCast(sampleIndex);
                     sampleData.?[2 * sampleIndex + 1] = @intCast(sampleIndex);
                 }
             }
 
-            for (0..@as(usize, @intCast(result.sampleCount))) |sampleIndex| {
+            for (0..sampleCount) |sampleIndex| {
                 var source: i16 = sampleData.?[2 * sampleIndex];
                 sampleData.?[2 * sampleIndex] = sampleData.?[sampleIndex];
                 sampleData.?[sampleIndex] = source;
@@ -704,16 +702,28 @@ fn DEBUGLoadWAV(fileName: [*:0]const u8, sectionFirstSampleIndex: u32, sectionSa
             platform.InvalidCodePath("invalid channel count in wav file");
         }
 
+        var atEnd = true;
         result.channelCount = 1;
-
         if (sectionSampleCount != 0) {
-            assert(sectionFirstSampleIndex + sectionSampleCount <= result.sampleCount);
-            result.sampleCount = sectionSampleCount;
+            assert(sectionFirstSampleIndex + sectionSampleCount <= sampleCount);
+            atEnd = (sectionFirstSampleIndex + sectionSampleCount == sampleCount);
+            sampleCount = sectionSampleCount;
 
             for (0..result.channelCount) |channelIndex| {
                 result.samples[channelIndex].? += sectionFirstSampleIndex;
             }
+        } 
+        
+        if (atEnd)
+        {
+            for (0..result.channelCount) |channelIndex| {
+                for(sampleCount..sampleCount + 8) |sampleIndex| {
+                    result.samples[channelIndex].?[sampleIndex] = 0;
+                }
+            }
         }
+
+        result.sampleCount = sampleCount;
     }
 
     return result;

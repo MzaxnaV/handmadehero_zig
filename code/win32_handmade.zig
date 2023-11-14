@@ -590,11 +590,10 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
     if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
         if (region1) |ptr| {
             const region1SampleCount = region1Size / soundOutput.bytesPerSample;
-            var destSample = @as([*]i16, @alignCast(@ptrCast(ptr)));
+            var destSample: [*]i16 = @alignCast(@ptrCast(ptr));
             var sourceSample = sourceBuffer.samples;
-            var sampleIndex: DWORD = 0;
 
-            while (sampleIndex < region1SampleCount) : (sampleIndex += 1) {
+            for (0..region1SampleCount) |sampleIndex| {
                 destSample[2 * sampleIndex] = sourceSample[2 * sampleIndex];
                 destSample[2 * sampleIndex + 1] = sourceSample[2 * sampleIndex + 1];
 
@@ -604,11 +603,10 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
 
         if (region2) |ptr| {
             const region2SampleCount = region2Size / soundOutput.bytesPerSample;
-            var destSample = @as([*]i16, @alignCast(@ptrCast(ptr)));
+            var destSample: [*]i16 = @alignCast(@ptrCast(ptr));
             var sourceSample = sourceBuffer.samples;
-            var sampleIndex: DWORD = 0;
 
-            while (sampleIndex < region2SampleCount) : (sampleIndex += 1) {
+            for (0..region2SampleCount) |sampleIndex| {
                 destSample[2 * sampleIndex] = sourceSample[2 * sampleIndex];
                 destSample[2 * sampleIndex + 1] = sourceSample[2 * sampleIndex + 1];
 
@@ -1254,7 +1252,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 }
             }
 
-            const maxPossibleOverrun = 2 * 4 * @sizeOf(u16);
+            const maxPossibleOverrun = 2 * 8 * @sizeOf(u16);
 
             if (@as(?[*]i16, @alignCast(@ptrCast(win32.VirtualAlloc(null, soundOutput.secondaryBufferSize + maxPossibleOverrun, allocationType, win32.PAGE_READWRITE))))) |samples| {
                 // defer _ = win32.VirtualFree();
@@ -1282,7 +1280,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     var replayIndex: u32 = 1;
 
                     win32State.gameMemoryBlock = memory;
-                    gameMemory.permanentStorage = @as([*]u8, @ptrCast(win32State.gameMemoryBlock));
+                    gameMemory.permanentStorage = @ptrCast(win32State.gameMemoryBlock);
                     gameMemory.transientStorage = gameMemory.permanentStorage + gameMemory.permanentStorageSize;
 
                     while (replayIndex < win32State.replayBuffers.len) : (replayIndex += 1) {
@@ -1560,9 +1558,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                                 var soundBuffer = platform.sound_output_buffer{
                                     .samplesPerSecond = soundOutput.samplesPerSecond,
-                                    .sampleCount = @divTrunc(bytesToWrite, soundOutput.bytesPerSample),
+                                    .sampleCount = @intCast(platform.Align(@divTrunc(bytesToWrite, soundOutput.bytesPerSample), 8)),
                                     .samples = @alignCast(samples),
                                 };
+
+                                bytesToWrite = soundBuffer.sampleCount * soundOutput.bytesPerSample;
 
                                 if (gameCode.GetSoundSamples) |GetSoundSamples| {
                                     GetSoundSamples(&gameMemory, &soundBuffer);

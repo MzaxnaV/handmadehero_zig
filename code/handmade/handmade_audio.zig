@@ -111,18 +111,19 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     defer h.EndTemporaryMemory(mixerMemory);
 
     simd.perf_analyzer.Start(.LLVM_MCA, "OutputPlayingSound");
+    defer simd.perf_analyzer.End(.LLVM_MCA, "OutputPlayingSound");
 
-    const sampleCountAlign4 = platform.Align(soundBuffer.sampleCount, 4);
-    const sampleCount4 = sampleCountAlign4 / 4;
+    assert((soundBuffer.sampleCount & 7) == 0);
+    const sampleCount8 = soundBuffer.sampleCount / 8;
+    const sampleCount4 = soundBuffer.sampleCount / 4;
 
     var realChannel0: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, sampleCount4);
     var realChannel1: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, sampleCount4);
 
-    const zero = simd.f32x4{ 0, 0, 0, 0 };
-
     const secondsPerSample = 1 / @as(f32, @floatFromInt(soundBuffer.samplesPerSecond));
 
     // clear out mixer channel
+    const zero = simd.f32x4{ 0, 0, 0, 0 };
     {
         var dest0 = realChannel0;
         var dest1 = realChannel1;
@@ -138,11 +139,11 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     while (playingSoundPtr.*) |playingSound| {
         var soundFinished = false;
 
-        var totalSamplesToMix = soundBuffer.sampleCount;
-        var dest0: [*]f32 = @ptrCast(realChannel0.ptr);
-        var dest1: [*]f32 = @ptrCast(realChannel1.ptr);
+        var totalSamplesToMix8 = sampleCount8;
+        var dest0 = realChannel0;
+        var dest1 = realChannel1;
 
-        while (totalSamplesToMix != 0 and !soundFinished) {
+        while (totalSamplesToMix8 != 0 and !soundFinished) {
             if (assets.GetSound(playingSound.ID)) |loadedSound| {
                 var info: *h.asset_sound_info = assets.GetSoundInfo(playingSound.ID);
 
@@ -150,53 +151,102 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
                 var volume = playingSound.currentVolume;
                 var dVolume = h.Scale(playingSound.dCurrentVolume, secondsPerSample);
+                var dVolume8 = h.Scale(dVolume, 8);
                 const dSample = playingSound.dSample;
+                const dSample8 = 8 * dSample;
+
+                const masterVolume4_0: simd.f32x4 = @splat(audioState.masterVolume[0]);
+                const masterVolume4_1: simd.f32x4 = @splat(audioState.masterVolume[1]);
+
+                var volume4_0: simd.f32x4 = .{
+                    volume[0] + 0 * dVolume[0],
+                    volume[0] + 1 * dVolume[0],
+                    volume[0] + 2 * dVolume[0],
+                    volume[0] + 3 * dVolume[0],
+                };
+                const dVolume4_0: simd.f32x4 = @splat(dVolume[0]);
+                const dVolume84_0: simd.f32x4 = @splat(dVolume8[0]);
+
+                var volume4_1: simd.f32x4 = .{
+                    volume[1] + 0 * dVolume[1],
+                    volume[1] + 1 * dVolume[1],
+                    volume[1] + 2 * dVolume[1],
+                    volume[1] + 3 * dVolume[1],
+                };
+                const dVolume4_1: simd.f32x4 = @splat(dVolume[1]);
+                const dVolume84_1: simd.f32x4 = @splat(dVolume8[1]);
 
                 assert(playingSound.samplesPlayed >= 0);
 
-                var samplesToMix = totalSamplesToMix;
-                const realSampleRemainingInSound: f32 = @as(f32, @floatFromInt(loadedSound.sampleCount - h.RoundF32ToInt(u32, playingSound.samplesPlayed))) / dSample;
-                const samplesRemainingInSound: u32 = h.RoundF32ToInt(u32, realSampleRemainingInSound);
-                if (samplesToMix > samplesRemainingInSound) {
-                    samplesToMix = samplesRemainingInSound;
+                var samplesToMix8 = totalSamplesToMix8;
+                const realSamplesRemainingInSound8: f32 = @as(f32, @floatFromInt(loadedSound.sampleCount - h.RoundF32ToInt(u32, playingSound.samplesPlayed))) / dSample8;
+                const samplesRemainingInSound8: u32 = h.RoundF32ToInt(u32, realSamplesRemainingInSound8);
+                if (samplesToMix8 > samplesRemainingInSound8) {
+                    samplesToMix8 = samplesRemainingInSound8;
                 }
 
                 const audioStateOutputChannelCount = 2;
                 var volumeEnded: [audioStateOutputChannelCount]bool = [1]bool{false} ** audioStateOutputChannelCount;
                 for (0..volumeEnded.len) |channelIndex| {
-                    // NOTE (Manav): floating point issues raises it's head here (._.)
-                    if (dVolume[channelIndex] != 0) {
-                        const deltaVolume = playingSound.targetVolume[channelIndex] - volume[channelIndex];
+                    if (dVolume8[channelIndex] != 0) {
+                        const deltaVolume: f32 = playingSound.targetVolume[channelIndex] - volume[channelIndex];
 
-                        const volumeSampleCount: u32 = @intFromFloat((deltaVolume / dVolume[channelIndex]) + 0.5);
-                        if (samplesToMix > volumeSampleCount) {
-                            samplesToMix = volumeSampleCount;
+                        const volumeSampleCount8: u32 = @intFromFloat((deltaVolume / dVolume8[channelIndex]) + 0.5);
+                        if (samplesToMix8 > volumeSampleCount8) {
+                            samplesToMix8 = volumeSampleCount8;
                             volumeEnded[channelIndex] = true;
                         }
                     }
                 }
 
                 var samplePosition: f32 = playingSound.samplesPlayed;
-                for (0..samplesToMix) |loopIndex| {
-                    var sampleValue: f32 = 0;
+                for (0..samplesToMix8) |loopIndex| {
 
-                    if (NOT_IGNORE) {
-                        const sampleIndex: u32 = @intCast(h.FloorF32ToI32(samplePosition));
-                        const frac = samplePosition - @as(f32, @floatFromInt(sampleIndex));
+                    // const sampleOffset:u32 = 0;
+                    // const offsetSamplePosition: f32 = samplePosition + @as(f32, @floatFromInt(sampleOffset)) * dSample;
+                    // var sampleIndex: u32 = @intCast(h.FloorF32ToI32(offsetSamplePosition));
+                    // const frac = offsetSamplePosition - @as(f32, @floatFromInt(sampleIndex));
 
-                        const sample0: f32 = @floatFromInt(loadedSound.samples[0].?[sampleIndex]);
-                        const sample1: f32 = @floatFromInt(loadedSound.samples[0].?[sampleIndex + 1]);
-                        sampleValue = h.Lerp(sample0, frac, sample1);
-                    } else {
-                        const sampleIndex: u32 = h.RoundF32ToInt(u32, samplePosition);
-                        sampleValue = @floatFromInt(loadedSound.samples[0].?[sampleIndex]);
-                    }
+                    // const sample0: f32 = @floatFromInt(loadedSound.samples[0].?[sampleIndex]);
+                    // const sample1: f32 = @floatFromInt(loadedSound.samples[0].?[sampleIndex + 1]);
+                    // const sampleValue = h.Lerp(sample0, frac, sample1);
 
-                    dest0[loopIndex] += audioState.masterVolume[0] * volume[0] * sampleValue;
-                    dest1[loopIndex] += audioState.masterVolume[1] * volume[1] * sampleValue;
+                    const sampleValue_0 = simd.f32x4{
+                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 0 * dSample)]),
+                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 1 * dSample)]),
+                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 2 * dSample)]),
+                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 3 * dSample)]),
+                    };
 
-                    h.AddTo(&volume, dVolume);
-                    samplePosition += dSample;
+                    const sampleValue_1 = simd.f32x4{
+                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 4 * dSample)]),
+                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 5 * dSample)]),
+                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 6 * dSample)]),
+                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 7 * dSample)]),
+                    };
+
+                    var d0_0 = dest0[2 * loopIndex];
+                    var d0_1 = dest0[2 * loopIndex + 1];
+
+                    var d1_0 = dest1[2 * loopIndex];
+                    var d1_1 = dest1[2 * loopIndex + 1];
+
+                    d0_0 += masterVolume4_0 * volume4_0 * sampleValue_0;
+                    d0_1 += masterVolume4_0 * (volume4_0 + dVolume4_0) * sampleValue_1;
+
+                    d1_0 += masterVolume4_1 * volume4_1 * sampleValue_1;
+                    d1_1 += masterVolume4_1 * (volume4_1 + dVolume4_1) * sampleValue_1;
+
+                    dest0[2 * loopIndex] = d0_0;
+                    dest0[2 * loopIndex + 1] = d0_1;
+                    dest1[2 * loopIndex] = d1_0;
+                    dest1[2 * loopIndex + 1] = d1_1;
+
+                    volume4_0 += dVolume84_0;
+                    volume4_1 += dVolume84_1;
+
+                    h.AddTo(&volume, dVolume8);
+                    samplePosition += dSample8;
                 }
 
                 playingSound.currentVolume = volume;
@@ -207,11 +257,11 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                     }
                 }
 
-                assert(totalSamplesToMix >= samplesToMix);
                 playingSound.samplesPlayed = samplePosition;
-                totalSamplesToMix -= samplesToMix;
+                assert(totalSamplesToMix8 >= samplesToMix8);
+                totalSamplesToMix8 -= samplesToMix8;
 
-                if (@as(u32, @intFromFloat(playingSound.samplesPlayed)) == loadedSound.sampleCount) {
+                if (@as(u32, @intFromFloat(playingSound.samplesPlayed)) >= loadedSound.sampleCount) {
                     if (info.nextIDToPlay.IsValid()) {
                         playingSound.ID = info.nextIDToPlay;
                         playingSound.samplesPlayed = 0;
@@ -251,7 +301,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
             sampleOut[sampleIndex] = s01;
         }
     }
-    simd.perf_analyzer.End(.LLVM_MCA, "OutputPlayingSound");
+
 }
 
 pub fn InitializeAudioState(audioState: *audio_state, arena: *h.memory_arena) void {
