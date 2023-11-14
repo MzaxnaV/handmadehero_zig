@@ -121,8 +121,10 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
     const secondsPerSample = 1 / @as(f32, @floatFromInt(soundBuffer.samplesPerSecond));
 
+    const zero: simd.f32x4 = @splat(0);
+    const one: simd.f32x4 = @splat(1);
+
     // clear out mixer channel
-    const zero = simd.f32x4{ 0, 0, 0, 0 };
     {
         var dest0 = realChannel0;
         var dest1 = realChannel1;
@@ -203,22 +205,41 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
                 var samplePosition: f32 = playingSound.samplesPlayed;
                 for (0..chunksToMix) |loopIndex| {
+                    var sampleValue: simd.f32x4 = .{ 0, 0, 0, 0 };
 
-                    // const sampleOffset:u32 = 0;
-                    // const offsetSamplePosition: f32 = samplePosition + @as(f32, @floatFromInt(sampleOffset)) * dSample;
-                    // var sampleIndex: u32 = @intCast(h.FloorF32ToI32(offsetSamplePosition));
-                    // const frac = offsetSamplePosition - @as(f32, @floatFromInt(sampleIndex));
+                    if (NOT_IGNORE) {
+                        const samplePos = simd.f32x4{
+                            samplePosition + 0 * dSample,
+                            samplePosition + 1 * dSample,
+                            samplePosition + 2 * dSample,
+                            samplePosition + 3 * dSample,
+                        };
 
-                    // const sample0: f32 = @floatFromInt(loadedSound.samples[0].?[sampleIndex]);
-                    // const sample1: f32 = @floatFromInt(loadedSound.samples[0].?[sampleIndex + 1]);
-                    // const sampleValue = h.Lerp(sample0, frac, sample1);
+                        const sampleIndex: simd.i32x4 = simd.z._mm_cvttps_epi32(samplePos);
+                        const frac: simd.f32x4 = samplePos - simd.z._mm_cvtepi32_ps(sampleIndex);
 
-                    const sampleValue = simd.f32x4{
-                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 0 * dSample)]),
-                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 1 * dSample)]),
-                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 2 * dSample)]),
-                        @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 3 * dSample)]),
-                    };
+                        const sampleValueF = simd.f32x4{
+                            @floatFromInt(loadedSound.samples[0].?[@intCast(sampleIndex[0])]),
+                            @floatFromInt(loadedSound.samples[0].?[@intCast(sampleIndex[0])]),
+                            @floatFromInt(loadedSound.samples[0].?[@intCast(sampleIndex[0])]),
+                            @floatFromInt(loadedSound.samples[0].?[@intCast(sampleIndex[0])]),
+                        };
+                        const sampleValueC = simd.f32x4{
+                            @floatFromInt(loadedSound.samples[0].?[@intCast(sampleIndex[0] + 1)]),
+                            @floatFromInt(loadedSound.samples[0].?[@intCast(sampleIndex[0] + 1)]),
+                            @floatFromInt(loadedSound.samples[0].?[@intCast(sampleIndex[0] + 1)]),
+                            @floatFromInt(loadedSound.samples[0].?[@intCast(sampleIndex[0] + 1)]),
+                        };
+
+                        sampleValue = (one - frac) * sampleValueF + frac * sampleValueC;
+                    } else {
+                        sampleValue = simd.f32x4{
+                            @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 0 * dSample)]),
+                            @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 1 * dSample)]),
+                            @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 2 * dSample)]),
+                            @floatFromInt(loadedSound.samples[0].?[h.RoundF32ToInt(u32, samplePosition + 3 * dSample)]),
+                        };
+                    }
 
                     var d0 = dest0[loopIndex];
                     var d1 = dest1[loopIndex];
@@ -231,12 +252,11 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
                     volume0 += dVolumeChunk0;
                     volume1 += dVolumeChunk1;
-
-                    h.AddTo(&volume, dVolumeChunk);
                     samplePosition += dSampleChunk;
                 }
 
-                playingSound.currentVolume = volume;
+                playingSound.currentVolume[0] = volume0[0];
+                playingSound.currentVolume[1] = volume1[1];
                 for (0..volumeEnded.len) |channelIndex| {
                     if (volumeEnded[channelIndex]) {
                         playingSound.currentVolume[channelIndex] = playingSound.targetVolume[channelIndex];
