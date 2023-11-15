@@ -114,7 +114,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     defer simd.perf_analyzer.End(.LLVM_MCA, "OutputPlayingSound");
 
     assert((soundBuffer.sampleCount & 3) == 0);
-    const chunkCount = soundBuffer.sampleCount / 4;
+    const chunkCount: u32 = soundBuffer.sampleCount / 4;
 
     var realChannel0: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, chunkCount);
     var realChannel1: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, chunkCount);
@@ -140,7 +140,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     while (playingSoundPtr.*) |playingSound| {
         var soundFinished = false;
 
-        var totalChunksToMix = chunkCount;
+        var totalChunksToMix: u32 = chunkCount;
         var dest0 = realChannel0;
         var dest1 = realChannel1;
 
@@ -153,16 +153,16 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 var volume: h.v2 = playingSound.currentVolume;
                 var dVolume: h.v2 = h.Scale(playingSound.dCurrentVolume, secondsPerSample);
                 var dVolumeChunk: h.v2 = h.Scale(dVolume, 4);
-                const dSample = playingSound.dSample;
-                const dSampleChunk: f32 = 4 * dSample;
+                const dSample: f32 = playingSound.dSample * 1.9;
+                const dSampleChunk: f32 = 4.0 * dSample;
 
                 // channel 0
                 const masterVolume0: simd.f32x4 = @splat(audioState.masterVolume[0]);
                 var volume0: simd.f32x4 = .{
-                    volume[0] + 0 * dVolume[0],
-                    volume[0] + 1 * dVolume[0],
-                    volume[0] + 2 * dVolume[0],
-                    volume[0] + 3 * dVolume[0],
+                    volume[0] + 0.0 * dVolume[0],
+                    volume[0] + 1.0 * dVolume[0],
+                    volume[0] + 2.0 * dVolume[0],
+                    volume[0] + 3.0 * dVolume[0],
                 };
                 const dVolume0: simd.f32x4 = @splat(dVolume[0]);
                 _ = dVolume0;
@@ -171,10 +171,10 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 // channel 1
                 const masterVolume1: simd.f32x4 = @splat(audioState.masterVolume[1]);
                 var volume1: simd.f32x4 = .{
-                    volume[1] + 0 * dVolume[1],
-                    volume[1] + 1 * dVolume[1],
-                    volume[1] + 2 * dVolume[1],
-                    volume[1] + 3 * dVolume[1],
+                    volume[1] + 0.0 * dVolume[1],
+                    volume[1] + 1.0 * dVolume[1],
+                    volume[1] + 2.0 * dVolume[1],
+                    volume[1] + 3.0 * dVolume[1],
                 };
                 const dVolume1: simd.f32x4 = @splat(dVolume[1]);
                 _ = dVolume1;
@@ -185,8 +185,11 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 var chunksToMix = totalChunksToMix;
                 const realChunksRemainingInSound: f32 = @as(f32, @floatFromInt(loadedSound.sampleCount - h.RoundF32ToInt(u32, playingSound.samplesPlayed))) / dSampleChunk;
                 const chunksRemainingInSound = h.RoundF32ToInt(u32, realChunksRemainingInSound);
+
+                var inputSamplesEnded = false;
                 if (chunksToMix > chunksRemainingInSound) {
                     chunksToMix = chunksRemainingInSound;
+                    inputSamplesEnded = true;
                 }
 
                 const audioStateOutputChannelCount = 2;
@@ -203,16 +206,20 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                     }
                 }
 
-                var samplePosition: f32 = playingSound.samplesPlayed;
+                const beginSamplePosition = playingSound.samplesPlayed;
+                const endSamplePosition = beginSamplePosition + @as(f32, @floatFromInt(chunksToMix)) * dSampleChunk;
+                const loopIndexC = (endSamplePosition - beginSamplePosition) / @as(f32, @floatFromInt(chunksToMix));
                 for (0..chunksToMix) |loopIndex| {
+                    var samplePosition: f32 = beginSamplePosition + loopIndexC * @as(f32, @floatFromInt(loopIndex));
+
                     var sampleValue: simd.f32x4 = .{ 0, 0, 0, 0 };
 
                     if (NOT_IGNORE) {
                         const samplePos = simd.f32x4{
-                            samplePosition + 0 * dSample,
-                            samplePosition + 1 * dSample,
-                            samplePosition + 2 * dSample,
-                            samplePosition + 3 * dSample,
+                            samplePosition + 0.0 * dSample,
+                            samplePosition + 1.0 * dSample,
+                            samplePosition + 2.0 * dSample,
+                            samplePosition + 3.0 * dSample,
                         };
 
                         const sampleIndex: simd.i32x4 = simd.z._mm_cvttps_epi32(samplePos);
@@ -252,7 +259,6 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
                     volume0 += dVolumeChunk0;
                     volume1 += dVolumeChunk1;
-                    samplePosition += dSampleChunk;
                 }
 
                 playingSound.currentVolume[0] = volume0[0];
@@ -264,14 +270,19 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                     }
                 }
 
-                playingSound.samplesPlayed = samplePosition;
+                playingSound.samplesPlayed = endSamplePosition;
                 assert(totalChunksToMix >= chunksToMix);
                 totalChunksToMix -= chunksToMix;
 
-                if (@as(u32, @intFromFloat(playingSound.samplesPlayed)) >= loadedSound.sampleCount) {
+                if (inputSamplesEnded) {
                     if (info.nextIDToPlay.IsValid()) {
                         playingSound.ID = info.nextIDToPlay;
+
+                        assert(playingSound.samplesPlayed >= @as(f32, @floatFromInt(loadedSound.sampleCount)));
                         playingSound.samplesPlayed -= @floatFromInt(loadedSound.sampleCount);
+                        if (playingSound.samplesPlayed < 0) {
+                            playingSound.samplesPlayed = 0;
+                        }
                     } else {
                         soundFinished = true;
                     }

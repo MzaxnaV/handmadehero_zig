@@ -1,3 +1,5 @@
+// TODO (Manav): move this to handmade_platform??
+
 pub const f64x2 = @Vector(2, f64);
 pub const i64x2 = @Vector(2, i64);
 pub const u64x2 = @Vector(2, u64);
