@@ -712,12 +712,11 @@ fn DEBUGLoadWAV(fileName: [*:0]const u8, sectionFirstSampleIndex: u32, sectionSa
             for (0..result.channelCount) |channelIndex| {
                 result.samples[channelIndex].? += sectionFirstSampleIndex;
             }
-        } 
-        
-        if (atEnd)
-        {
+        }
+
+        if (atEnd) {
             for (0..result.channelCount) |channelIndex| {
-                for(sampleCount..sampleCount + 8) |sampleIndex| {
+                for (sampleCount..sampleCount + 8) |sampleIndex| {
                     result.samples[channelIndex].?[sampleIndex] = 0;
                 }
             }
