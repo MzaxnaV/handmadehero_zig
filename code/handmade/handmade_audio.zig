@@ -39,7 +39,7 @@ pub const audio_state = struct {
 
 pub fn OutputTestSineWave(gameState: *h.game_state, soundBuffer: *platform.sound_output_buffer, toneHz: u32) void {
     const toneVolume = 3000;
-    const wavePeriod = @divTrunc(soundBuffer.samplesPerSecond, toneHz);
+    const wavePeriod = soundBuffer.samplesPerSecond / toneHz;
 
     var sampleOut = soundBuffer.samples;
     var sampleIndex = @as(u32, 0);

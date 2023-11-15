@@ -913,10 +913,10 @@ inline fn rdtsc() u64 {
 //         safeBottom = backBuffer.height;
 //     }
 //     if (x < backBuffer.width) {
-//         var pixel: [*]u8 = @ptrCast([*]u8, backBuffer.memory) + x * backBuffer.bytesPerPixel + safeTop * backBuffer.pitch;
+//         var pixel: [*]u8 = @as([*]u8, @ptrCast(backBuffer.memory)) + x * backBuffer.bytesPerPixel + safeTop * backBuffer.pitch;
 //         var y = safeTop;
 //         while (y < safeBottom) : (y += 1) {
-//             @ptrCast(*u32, @alignCast(@alignOf(u32), pixel)).* = colour;
+//             @as(*u32, @ptrCast(@alignCast(pixel))).* = colour;
 //             pixel += backBuffer.pitch;
 //         }
 //     }
@@ -930,7 +930,7 @@ inline fn rdtsc() u64 {
 
 //     const lineHeight = 64;
 
-//     const coeff = @intToFloat(f32, (backBuffer.width - 2 * padX)) / @intToFloat(f32, soundOutput.secondaryBufferSize);
+//     const coeff = @as(f32, @floatFromInt((backBuffer.width - 2 * padX))) / @as(f32, @floatFromInt(soundOutput.secondaryBufferSize));
 //     var markerIndex: u32 = 0;
 //     while (markerIndex < markerCount) : (markerIndex += 1) {
 //         const thisMarker = &markers[markerIndex];
@@ -945,6 +945,7 @@ inline fn rdtsc() u64 {
 //         const writeColour = 0xffff0000;
 //         const expectedFlipColour = 0xffffff00;
 //         const playWindowColour = 0xffff00ff;
+//         _ = playWindowColour;
 
 //         var top: u32 = padY;
 //         var bottom: u32 = lineHeight + padY;
@@ -960,8 +961,8 @@ inline fn rdtsc() u64 {
 //             top += lineHeight + padY;
 //             bottom += lineHeight + padY;
 
-//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputLocation, playColour);
-//             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputLocation + thisMarker.outputByteCount, writeColour);
+//             // Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputLocation, playColour);
+//             // Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.outputLocation + thisMarker.outputByteCount, writeColour);
 
 //             top += lineHeight + padY;
 //             bottom += lineHeight + padY;
@@ -969,16 +970,16 @@ inline fn rdtsc() u64 {
 //             Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, firstTop, bottom, thisMarker.expectedFlipPlayCursor, expectedFlipColour);
 //         }
 
-//         Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipPlayCursor, playColour);
-//         Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipPlayCursor + 480 * soundOutput.bytesPerSample, playWindowColour);
-//         Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipWriteCursor, writeColour);
+//         // Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipPlayCursor, playColour);
+//         // Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipPlayCursor + 480 * soundOutput.bytesPerSample, playWindowColour);
+//         // Win32DrawSoundBufferMarker(backBuffer, soundOutput, coeff, padX, top, bottom, thisMarker.flipWriteCursor, writeColour);
 //     }
 // }
 
 // inline fn Win32DrawSoundBufferMarker(backBuffer: *win32_offscreen_buffer, soundOutput: *win32_sound_output, coeff: f32, padX: u32, top: u32, bottom: u32, value: DWORD, colour: u32) void {
 //     _ = soundOutput;
-//     const xReal32 = coeff * @intToFloat(f32, value);
-//     const x = padX + @floatToInt(u32, xReal32);
+//     const xReal32 = coeff * @as(f32, @floatFromInt(value));
+//     const x = padX + @as(u32, @intFromFloat(xReal32));
 
 //     Win32DebugDrawVertical(backBuffer, x, top, bottom, colour);
 // }
@@ -1541,13 +1542,17 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 bytesToWrite = targetCursor - byteToLock;
                             }
 
+                            const extraBytes = 8*2;
+
                             var soundBuffer = platform.sound_output_buffer{
                                 .samplesPerSecond = soundOutput.samplesPerSecond,
-                                .sampleCount = @intCast(platform.Align(@divTrunc(bytesToWrite, soundOutput.bytesPerSample), 8)),
+                                .sampleCount = @intCast(extraBytes + platform.Align(bytesToWrite / soundOutput.bytesPerSample, 8)),
                                 .samples = @alignCast(@ptrCast(samples)),
                             };
 
                             bytesToWrite = soundBuffer.sampleCount * soundOutput.bytesPerSample;
+                            
+                            // Win32DebugSyncDisplay(&globalBackBuffer, 30, &debugTimeMarkers, debugTimeMarkerIndex, &soundOutput, targetSecondsPerFrame);
 
                             if (gameCode.GetSoundSamples) |GetSoundSamples| {
                                 GetSoundSamples(&gameMemory, &soundBuffer);
@@ -1642,9 +1647,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             const mcpf = @as(f64, @floatFromInt(cyclesElapsed)) / (1000 * 1000);
                             const fps: f64 = 1000 / msPerFrame;
                             var fpsBuffer = [1:0]u16{0} ** 256;
-                            _ = fpsBuffer;
-                            // _ = win32.extra.wsprintfW(@as([*:0]u16, @ptrCast(&fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), &msPerFrame, &fps, &mcpf);
-                            std.debug.print("{d:.2}ms/f, {d:.2}f/s, {d:.2}mc/f\n", .{ msPerFrame, fps, mcpf });
+                            _ = win32.extra.wsprintfW(@as([*:0]u16, @ptrCast(&fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), &msPerFrame, &fps, &mcpf);
+                            // std.debug.print("{d:.2}ms/f, {d:.2}f/s, {d:.2}mc/f\n", .{ msPerFrame, fps, mcpf });
                             // _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&fpsBuffer)));
                         }
 
