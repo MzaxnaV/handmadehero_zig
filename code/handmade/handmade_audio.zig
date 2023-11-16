@@ -116,6 +116,16 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     assert((soundBuffer.sampleCount & 3) == 0);
     const chunkCount: u32 = soundBuffer.sampleCount / 4;
 
+    // var c0: [12000]simd.f32x4 = [1]simd.f32x4{.{ 0, 0, 0, 0 }} ** 12000;
+    // var c1: [12000]simd.f32x4 = [1]simd.f32x4{.{ 0, 0, 0, 0 }} ** 12000;
+
+    // if (chunkCount > 12000) {
+    //     @import("std").log.err("{}", .{chunkCount});
+    // }
+
+    // var realChannel0: []simd.f32x4 = &c0;
+    // var realChannel1: []simd.f32x4 = &c1;
+
     var realChannel0: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, chunkCount);
     var realChannel1: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, chunkCount);
 
@@ -257,6 +267,10 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                     dest0[loopIndex] = d0;
                     dest1[loopIndex] = d1;
 
+                    if (assets.tranState.d.flag) {
+                        @import("std").log.err("{} : {}\n", .{ d0, d1 });
+                    }
+
                     volume0 += dVolumeChunk0;
                     volume1 += dVolumeChunk1;
                 }
@@ -308,13 +322,13 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
         var sampleOut: [*]simd.i16x8 = @ptrCast(soundBuffer.samples);
         for (0..chunkCount) |sampleIndex| {
-            const l = simd.i._mm_cvtps_epi32(source0[sampleIndex]);
-            const r = simd.i._mm_cvtps_epi32(source1[sampleIndex]);
+            var l = simd.i._mm_cvtps_epi32(source0[sampleIndex]);
+            var r = simd.i._mm_cvtps_epi32(source1[sampleIndex]);
 
-            const lr0 = simd.z._mm_unpacklo_epi32(l, r);
-            const lr1 = simd.z._mm_unpackhi_epi32(l, r);
+            var lr1 = simd.i._mm_unpackhi_epi32(l, r);
+            var lr0 = simd.i._mm_unpacklo_epi32(l, r);
 
-            const s01 = simd.i._mm_packs_epi32(lr0, lr1);
+            var s01 = simd.i._mm_packs_epi32(lr0, lr1);
 
             sampleOut[sampleIndex] = s01;
         }

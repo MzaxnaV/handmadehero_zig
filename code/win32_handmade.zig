@@ -141,6 +141,8 @@ const win32_state = struct {
     onePastLastEXEFileNameSlashIndex: usize = 0,
 };
 
+
+
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
 var globalRunning: bool = undefined;
@@ -157,6 +159,8 @@ var globalWindowPosition = win32.WINDOWPLACEMENT{
     .ptMaxPosition = undefined,
     .rcNormalPosition = undefined,
 };
+
+var globalDebug: platform.debug = .{};
 
 // library defs ---------------------------------------------------------------------------------------------------------------------------
 
@@ -818,6 +822,9 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platfor
                                 }
                             }
                         },
+                        win32.VK_N => {
+                            globalDebug.flag = isDown;
+                        },
                         else => {},
                     }
                 }
@@ -1261,6 +1268,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             var gameMemory = platform.memory{
                 .permanentStorageSize = platform.MegaBytes(256),
                 .transientStorageSize = platform.GigaBytes(1),
+                .d = &globalDebug,
                 .permanentStorage = undefined,
                 .transientStorage = undefined,
                 .highPriorityQueue = highPriorityQueue.to(),
@@ -1549,6 +1557,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 .sampleCount = @intCast(extraBytes + platform.Align(bytesToWrite / soundOutput.bytesPerSample, 8)),
                                 .samples = @alignCast(@ptrCast(samples)),
                             };
+
+                            globalDebug.someState = bytesToWrite;
 
                             bytesToWrite = soundBuffer.sampleCount * soundOutput.bytesPerSample;
                             

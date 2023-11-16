@@ -728,6 +728,8 @@ pub export fn UpdateAndRender(
             gameMemory.transientStorage + @sizeOf(h.transient_state),
         );
 
+        tranState.d = gameMemory.d;
+
         tranState.highPriorityQueue = gameMemory.highPriorityQueue;
         tranState.lowPriorityQueue = gameMemory.lowPriorityQueue;
 
@@ -782,13 +784,13 @@ pub export fn UpdateAndRender(
         }
     }
 
-    // {
-    //     var musicVolume: h.v2 = .{};
-    //     musicVolume[1] = h.SafeRatiof0(@floatFromInt(gameInput.mouseX), @floatFromInt(buffer.width));
-    //     musicVolume[0] = 1 - musicVolume[1];
+    {
+        var musicVolume: h.v2 = .{};
+        musicVolume[1] = h.SafeRatiof0(@floatFromInt(gameInput.mouseX), @floatFromInt(buffer.width));
+        musicVolume[0] = 1 - musicVolume[1];
 
-    //     h.ChangeVolume(&gameState.audioState, gameState.music, 0.01, musicVolume);
-    // }
+        h.ChangeVolume(&gameState.audioState, gameState.music, 0.001, musicVolume);
+    }
 
     const world = gameState.world;
 

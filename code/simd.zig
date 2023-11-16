@@ -140,7 +140,7 @@ pub const i = struct {
     /// It uses the `cvtps2dq` SSE2 instruction.
     pub inline fn _mm_cvtps_epi32(v: f32x4) i32x4 {
         var result: i32x4 = @splat(0);
-        asm ("cvtps2dq %[v], %[result]"
+        asm volatile ("cvtps2dq %[v], %[result]"
             : [result] "=x" (result),
             : [v] "x" (v),
         );
@@ -181,9 +181,9 @@ pub const i = struct {
     }
 
     // TODO (Manav): untested
-    pub inline fn _mm_unpacklo_epi32(a: f32x4, b: f32x4) f32x4 {
-        const result: f32x4 = asm volatile ("punpckldq %[arg1], %[arg0]"
-            : [ret] "={xmm0}" (-> f32x4),
+    pub inline fn _mm_unpacklo_epi32(a: i32x4, b: i32x4) i32x4 {
+        const result = asm ("punpckldq %[arg1], %[arg0]"
+            : [ret] "={xmm0}" (-> i32x4),
             : [arg0] "{xmm0}" (b),
               [arg1] "{xmm1}" (a),
         );
@@ -192,9 +192,9 @@ pub const i = struct {
     }
 
     // TODO (Manav): untested
-    pub inline fn _mm_unpackhi_epi32(a: f32x4, b: f32x4) f32x4 {
+    pub inline fn _mm_unpackhi_epi32(a: i32x4, b: i32x4) i32x4 {
         const result = asm ("punpckhdq %[arg1], %[arg0]"
-            : [ret] "={xmm0}" (-> @Vector(4, f32)),
+            : [ret] "={xmm0}" (-> i32x4),
             : [arg0] "{xmm0}" (a),
               [arg1] "{xmm1}" (b),
         );
