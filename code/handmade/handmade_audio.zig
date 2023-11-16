@@ -116,16 +116,6 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     assert((soundBuffer.sampleCount & 3) == 0);
     const chunkCount: u32 = soundBuffer.sampleCount / 4;
 
-    // var c0: [12000]simd.f32x4 = [1]simd.f32x4{.{ 0, 0, 0, 0 }} ** 12000;
-    // var c1: [12000]simd.f32x4 = [1]simd.f32x4{.{ 0, 0, 0, 0 }} ** 12000;
-
-    // if (chunkCount > 12000) {
-    //     @import("std").log.err("{}", .{chunkCount});
-    // }
-
-    // var realChannel0: []simd.f32x4 = &c0;
-    // var realChannel1: []simd.f32x4 = &c1;
-
     var realChannel0: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, chunkCount);
     var realChannel1: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, chunkCount);
 
@@ -232,8 +222,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                             samplePosition + 3.0 * dSample,
                         };
 
-                        const sampleIndex: simd.i32x4 = simd.z._mm_cvttps_epi32(samplePos);
-                        const frac: simd.f32x4 = samplePos - simd.z._mm_cvtepi32_ps(sampleIndex);
+                        var sampleIndex: simd.i32x4 = simd.i._mm_cvttps_epi32(samplePos);
+                        var frac: simd.f32x4 = samplePos - simd.i._mm_cvtepi32_ps(sampleIndex);
 
                         const sampleValueF = simd.f32x4{
                             @floatFromInt(loadedSound.samples[0].?[@intCast(sampleIndex[0])]),
@@ -266,10 +256,6 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
                     dest0[loopIndex] = d0;
                     dest1[loopIndex] = d1;
-
-                    if (assets.tranState.d.flag) {
-                        @import("std").log.err("{} : {}\n", .{ d0, d1 });
-                    }
 
                     volume0 += dVolumeChunk0;
                     volume1 += dVolumeChunk1;

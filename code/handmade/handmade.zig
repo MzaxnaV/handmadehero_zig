@@ -20,6 +20,8 @@ const handmade_internal = platform.handmade_internal;
 const NOT_IGNORE = platform.NOT_IGNORE;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
+const temp_debug = true;
+
 // local functions ------------------------------------------------------------------------------------------------------------------------
 
 const add_low_entity_result = struct {
@@ -784,12 +786,13 @@ pub export fn UpdateAndRender(
         }
     }
 
+    if (temp_debug)
     {
         var musicVolume: h.v2 = .{};
         musicVolume[1] = h.SafeRatiof0(@floatFromInt(gameInput.mouseX), @floatFromInt(buffer.width));
         musicVolume[0] = 1 - musicVolume[1];
 
-        h.ChangeVolume(&gameState.audioState, gameState.music, 0.001, musicVolume);
+        h.ChangeVolume(&gameState.audioState, gameState.music, 0.1, musicVolume);
     }
 
     const world = gameState.world;
