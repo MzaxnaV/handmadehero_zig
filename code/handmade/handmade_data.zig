@@ -191,8 +191,6 @@ pub const transient_state = struct {
     initialized: bool,
     tranArena: memory_arena,
 
-    d: *platform.debug,
-
     tasks: [4]task_with_memory,
 
     assets: *h.game_assets,

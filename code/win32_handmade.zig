@@ -45,8 +45,6 @@ const Atomic = std.atomic.Atomic;
 const platform = @import("handmade_platform");
 const handmade_internal = platform.handmade_internal;
 
-const DEBUG_RET = true;
-
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
 const NOT_IGNORE = platform.NOT_IGNORE;
@@ -141,8 +139,6 @@ const win32_state = struct {
     onePastLastEXEFileNameSlashIndex: usize = 0,
 };
 
-
-
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
 var globalRunning: bool = undefined;
@@ -159,8 +155,6 @@ var globalWindowPosition = win32.WINDOWPLACEMENT{
     .ptMaxPosition = undefined,
     .rcNormalPosition = undefined,
 };
-
-var globalDebug: platform.debug = .{};
 
 // library defs ---------------------------------------------------------------------------------------------------------------------------
 
@@ -822,9 +816,6 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platfor
                                 }
                             }
                         },
-                        win32.VK_N => {
-                            globalDebug.flag = isDown;
-                        },
                         else => {},
                     }
                 }
@@ -1268,7 +1259,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             var gameMemory = platform.memory{
                 .permanentStorageSize = platform.MegaBytes(256),
                 .transientStorageSize = platform.GigaBytes(1),
-                .d = &globalDebug,
                 .permanentStorage = undefined,
                 .transientStorage = undefined,
                 .highPriorityQueue = highPriorityQueue.to(),
@@ -1550,15 +1540,13 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 bytesToWrite = targetCursor - byteToLock;
                             }
 
-                            const extraBytes = 8*2;
+                            const extraSamples = 80; // TODO (Manav): changing to 80 fixes underflow but cuts the
 
                             var soundBuffer = platform.sound_output_buffer{
                                 .samplesPerSecond = soundOutput.samplesPerSecond,
-                                .sampleCount = @intCast(extraBytes + platform.Align(bytesToWrite / soundOutput.bytesPerSample, 8)),
+                                .sampleCount = @intCast(platform.Align(extraSamples + (bytesToWrite / soundOutput.bytesPerSample), 8)),
                                 .samples = @alignCast(@ptrCast(samples)),
                             };
-
-                            globalDebug.someState = bytesToWrite;
 
                             bytesToWrite = soundBuffer.sampleCount * soundOutput.bytesPerSample;
                             

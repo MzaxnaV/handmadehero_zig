@@ -110,11 +110,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     const mixerMemory = h.BeginTemporaryMemory(tempArena);
     defer h.EndTemporaryMemory(mixerMemory);
 
-    simd.perf_analyzer.Start(.LLVM_MCA, "OutputPlayingSound");
-    defer simd.perf_analyzer.End(.LLVM_MCA, "OutputPlayingSound");
-
     assert((soundBuffer.sampleCount & 3) == 0);
-    const chunkCount: u32 = soundBuffer.sampleCount / 4;
+    const chunkCount: u32 = (soundBuffer.sampleCount) / 4;
 
     var realChannel0: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, chunkCount);
     var realChannel1: []simd.f32x4 = tempArena.PushSlice(simd.f32x4, chunkCount);
@@ -126,6 +123,9 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
     // clear out mixer channel
     {
+        simd.perf_analyzer.Start(.LLVM_MCA, "OPS_ClearingChannel");
+        defer simd.perf_analyzer.End(.LLVM_MCA, "OPS_ClearingChannel");
+
         var dest0 = realChannel0;
         var dest1 = realChannel1;
 
@@ -133,7 +133,10 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
             dest0[sampleIndex] = zero;
             dest1[sampleIndex] = zero;
         }
+
     }
+
+    simd.perf_analyzer.Start(.LLVM_MCA, "OPS_Mixing");
 
     // sum all sounds
     var playingSoundPtr = &audioState.firstPlayingSound;
@@ -153,7 +156,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 var volume: h.v2 = playingSound.currentVolume;
                 var dVolume: h.v2 = h.Scale(playingSound.dCurrentVolume, secondsPerSample);
                 var dVolumeChunk: h.v2 = h.Scale(dVolume, 4);
-                const dSample: f32 = playingSound.dSample;
+                const dSample: f32 = playingSound.dSample * 1.9;
                 const dSampleChunk: f32 = 4.0 * dSample;
 
                 // channel 0
@@ -222,8 +225,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                             samplePosition + 3.0 * dSample,
                         };
 
-                        var sampleIndex: simd.i32x4 = simd.i._mm_cvttps_epi32(samplePos);
-                        var frac: simd.f32x4 = samplePos - simd.i._mm_cvtepi32_ps(sampleIndex);
+                        var sampleIndex: simd.i32x4 = simd.z._mm_cvttps_epi32(samplePos);
+                        var frac: simd.f32x4 = samplePos - simd.z._mm_cvtepi32_ps(sampleIndex);
 
                         const sampleValueF = simd.f32x4{
                             @floatFromInt(loadedSound.samples[0].?[@intCast(sampleIndex[0])]),
@@ -278,6 +281,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                     if (info.nextIDToPlay.IsValid()) {
                         playingSound.ID = info.nextIDToPlay;
 
+                        // assert fires
                         assert(playingSound.samplesPlayed >= @as(f32, @floatFromInt(loadedSound.sampleCount)));
                         playingSound.samplesPlayed -= @floatFromInt(loadedSound.sampleCount);
                         if (playingSound.samplesPlayed < 0) {
@@ -302,22 +306,28 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
         }
     }
 
+    simd.perf_analyzer.End(.LLVM_MCA, "OPS_Mixing");
+
     {
+        simd.perf_analyzer.Start(.LLVM_MCA, "OPS_FillSoundBuffer");
+        defer simd.perf_analyzer.End(.LLVM_MCA, "OPS_FillSoundBuffer");
+
         const source0 = realChannel0;
         const source1 = realChannel1;
 
         var sampleOut: [*]simd.i16x8 = @ptrCast(soundBuffer.samples);
         for (0..chunkCount) |sampleIndex| {
-            var l = simd.i._mm_cvtps_epi32(source0[sampleIndex]);
-            var r = simd.i._mm_cvtps_epi32(source1[sampleIndex]);
+            const l = simd.i._mm_cvtps_epi32(source0[sampleIndex]);
+            const r = simd.i._mm_cvtps_epi32(source1[sampleIndex]);
 
-            var lr1 = simd.i._mm_unpackhi_epi32(l, r);
-            var lr0 = simd.i._mm_unpacklo_epi32(l, r);
+            const lr1 = simd.z._mm_unpackhi_epi32(l, r);
+            const lr0 = simd.z._mm_unpacklo_epi32(l, r);
 
-            var s01 = simd.i._mm_packs_epi32(lr0, lr1);
+            const s01 = simd.z._mm_packs_epi32(lr0, lr1);
 
             sampleOut[sampleIndex] = s01;
         }
+
     }
 }
 
