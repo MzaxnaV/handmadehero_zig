@@ -175,7 +175,6 @@ pub const memory = struct {
     transientStorageSize: u64,
     transientStorage: [*]u8,
 
-
     highPriorityQueue: *work_queue,
     lowPriorityQueue: *work_queue,
 
@@ -188,14 +187,14 @@ pub const memory = struct {
 
     // TODO (Manav): make declaration dependent on HANDMADE_INTERNAL
     counters: [len]handmade_internal.debug_cycle_counter = [1]handmade_internal.debug_cycle_counter{.{}} ** len,
-    
-    // d: *debug,
+
+    d: *debug,
 };
 
-// pub const debug = struct {
-//     flag: bool = false,
-//     someState: u32 = 0,
-// };
+pub const debug = struct {
+    flag: bool = false,
+    state: u32 = 0,
+};
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
 

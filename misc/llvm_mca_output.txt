@@ -1440,3 +1440,990 @@ Average Wait times (based on the timeline view):
 19.    10    6.7    0.0    12.9      cmp	rcx, rdx
 20.    10    7.3    0.0    11.9      jne	.LBB3_23
        10    6.1    0.6    9.5       <total>
+
+[3] Code Region - ProcessPixel
+
+Iterations:        100
+Instructions:      19300
+Total Cycles:      10448
+Total uOps:        22200
+
+Dispatch Width:    6
+uOps Per Cycle:    2.12
+IPC:               1.85
+Block RThroughput: 63.5
+
+
+Cycles with backend pressure increase [ 93.68% ]
+Throughput Bottlenecks: 
+  Resource Pressure       [ 53.44% ]
+  - ICXPort0  [ 45.78% ]
+  - ICXPort1  [ 41.97% ]
+  - ICXPort2  [ 0.96% ]
+  - ICXPort3  [ 0.96% ]
+  - ICXPort5  [ 20.05% ]
+  - ICXPort6  [ 1.90% ]
+  Data Dependencies:      [ 57.46% ]
+  - Register Dependencies [ 57.46% ]
+  - Memory Dependencies   [ 0.00% ]
+
+Critical sequence based on the simulation:
+
+              Instruction                                 Dependency Information
+ +----< 141.  vmulps	xmm5, xmm0, xmmword ptr [rsp + 112]
+ |
+ |    < loop carried > 
+ |
+ |      0.    mov	edx, edi
+ |      1.    sub	edx, r11d
+ |      2.    jle	.LBB9_36
+ |      3.    vcvtsi2ss	xmm0, xmm8, r15d
+ |      4.    vsubss	xmm0, xmm0, dword ptr [rsp + 80]
+ |      5.    vmulss	xmm1, xmm0, dword ptr [rsp + 44]
+ |      6.    vbroadcastss	xmm12, xmm1
+ |      7.    vmulss	xmm0, xmm0, dword ptr [rsp + 40]
+ |      8.    vbroadcastss	xmm13, xmm0
+ |      9.    mov	r14d, r11d
+ |      10.   kmovq	k2, k0
+ |      11.   vmovaps	xmm14, xmmword ptr [rsp + 64]
+ |      12.   mov	r13, rbp
+ |      13.   jmp	.LBB9_33
+ |      14.   add	r13, 16
+ |      15.   add	r14d, 4
+ |      16.   cmp	r14d, edi
+ |      17.   jge	.LBB9_36
+ +----> 18.   vmulps	xmm0, xmm14, xmmword ptr [rsp + 96] ## RESOURCE interference:  ICXPort0 [ probability: 99% ]
+ +----> 19.   vaddps	xmm15, xmm12, xmm0                ## REGISTER dependency:  xmm0
+ |      20.   vmulps	xmm0, xmm22, xmm14
+ |      21.   vaddps	xmm4, xmm13, xmm0
+ +----> 22.   vmaxps	xmm0, xmm15, xmm6                 ## REGISTER dependency:  xmm15
+ +----> 23.   vminps	xmm0, xmm0, xmm28                 ## REGISTER dependency:  xmm0
+ +----> 24.   vmulps	xmm0, xmm24, xmm0                 ## REGISTER dependency:  xmm0
+ |      25.   vmaxps	xmm1, xmm4, xmm6
+ |      26.   vminps	xmm1, xmm1, xmm28
+ |      27.   vmulps	xmm1, xmm25, xmm1
+ +----> 28.   vaddps	xmm0, xmm0, xmm29                 ## REGISTER dependency:  xmm0
+ +----> 29.   vaddps	xmm1, xmm1, xmm29                 ## RESOURCE interference:  ICXPort1 [ probability: 99% ]
+ |      30.   vcvttps2dq	xmm2, xmm0
+ |      31.   vcvtdq2ps	xmm3, xmm2
+ |      32.   vsubps	xmm5, xmm0, xmm3
+ +----> 33.   vcvttps2dq	xmm0, xmm1                        ## REGISTER dependency:  xmm1
+ |      34.   vcvtdq2ps	xmm3, xmm0
+ |      35.   vsubps	xmm16, xmm1, xmm3
+ |      36.   vpslld	xmm1, xmm2, 2
+ +----> 37.   vpmulld	xmm0, xmm23, xmm0                 ## REGISTER dependency:  xmm0
+ +----> 38.   vpaddd	xmm3, xmm1, xmm0                  ## REGISTER dependency:  xmm0
+ |      39.   vpmovsxdq	ymm0, xmm3
+ |      40.   vpaddq	ymm0, ymm27, ymm0
+ |      41.   vmovq	r8, xmm0
+ |      42.   vpextrq	r10, xmm0, 1
+ |      43.   vextracti128	xmm0, ymm0, 1
+ |      44.   vmovq	rbx, xmm0
+ |      45.   vpextrq	rcx, xmm0, 1
+ |      46.   kxnorw	k3, k0, k0
+ |      47.   vmovd	xmm0, dword ptr [r8 + 4]
+ |      48.   vpinsrd	xmm0, xmm0, dword ptr [r10 + 4], 1
+ |      49.   vpinsrd	xmm0, xmm0, dword ptr [rbx + 4], 2
+ |      50.   vpinsrd	xmm0, xmm0, dword ptr [rcx + 4], 3
+ |      51.   vpxor	xmm2, xmm2, xmm2
+ |      52.   vmovd	xmm1, dword ptr [r8 + r12]
+ |      53.   vpinsrd	xmm1, xmm1, dword ptr [r10 + r12], 1
+ |      54.   vpinsrd	xmm1, xmm1, dword ptr [rbx + r12], 2
+ |      55.   vpinsrd	xmm1, xmm1, dword ptr [rcx + r12], 3
+ +----> 56.   vpgatherdd	xmm2 {k3}, xmmword ptr [rsi + xmm3] ## REGISTER dependency:  xmm3
+ |      57.   vmovd	xmm3, dword ptr [r8 + r12 + 4]
+ |      58.   vpinsrd	xmm3, xmm3, dword ptr [r10 + r12 + 4], 1
+ |      59.   vpinsrd	xmm3, xmm3, dword ptr [rbx + r12 + 4], 2
+ |      60.   vpinsrd	xmm3, xmm3, dword ptr [rcx + r12 + 4], 3
+ +----> 61.   vpandq	xmm7, xmm2, xmm30                 ## REGISTER dependency:  xmm2
+ +----> 62.   vpmullw	xmm7, xmm7, xmm7                  ## REGISTER dependency:  xmm7
+ +----> 63.   vpsrld	xmm26, xmm7, 16                   ## REGISTER dependency:  xmm7
+ +----> 64.   vcvtdq2ps	xmm26, xmm26                      ## REGISTER dependency:  xmm26
+ |      65.   vsubps	xmm8, xmm28, xmm5
+ |      66.   vsubps	xmm17, xmm28, xmm16
+ |      67.   vmulps	xmm18, xmm17, xmm8
+ |      68.   vmulps	xmm17, xmm5, xmm17
+ |      69.   vmulps	xmm8, xmm16, xmm8
+ |      70.   vmulps	xmm5, xmm16, xmm5
+ +----> 71.   vmulps	xmm16, xmm18, xmm26               ## REGISTER dependency:  xmm26
+ |      72.   vmulps	xmm19, xmm17, xmm26
+ |      73.   vaddps	xmm16, xmm16, xmm19
+ +----> 74.   vmulps	xmm19, xmm8, xmm26                ## RESOURCE interference:  ICXPort1 [ probability: 100% ]
+ |      75.   vaddps	xmm16, xmm19, xmm16
+ |      76.   vpsrlw	xmm19, xmm2, 8
+ |      77.   vpmullw	xmm10, xmm19, xmm19
+ +----> 78.   vmulps	xmm19, xmm5, xmm26                ## RESOURCE interference:  ICXPort1 [ probability: 100% ]
+ |      79.   vaddps	xmm16, xmm19, xmm16
+ |      80.   vpsrlw	xmm19, xmm0, 8
+ |      81.   vpmullw	xmm11, xmm19, xmm19
+ |      82.   vpblendw	xmm10, xmm10, xmm6, 170
+ |      83.   vcvtdq2ps	xmm19, xmm10
+ |      84.   vpblendw	xmm10, xmm11, xmm6, 170
+ |      85.   vcvtdq2ps	xmm26, xmm10
+ +----> 86.   vmulps	xmm19, xmm18, xmm19               ## RESOURCE interference:  ICXPort0 [ probability: 100% ]
+ |      87.   vmulps	xmm26, xmm17, xmm26
+ |      88.   vaddps	xmm19, xmm19, xmm26
+ |      89.   vpsrlw	xmm26, xmm1, 8
+ |      90.   vpmullw	xmm10, xmm26, xmm26
+ |      91.   vpblendw	xmm10, xmm10, xmm6, 170
+ |      92.   vcvtdq2ps	xmm26, xmm10
+ |      93.   vmulps	xmm26, xmm8, xmm26
+ |      94.   vaddps	xmm19, xmm19, xmm26
+ |      95.   vpsrlw	xmm26, xmm3, 8
+ |      96.   vpmullw	xmm10, xmm26, xmm26
+ |      97.   vpblendw	xmm10, xmm10, xmm6, 170
+ +----> 98.   vcvtdq2ps	xmm26, xmm10                      ## RESOURCE interference:  ICXPort1 [ probability: 100% ]
+ |      99.   vmulps	xmm26, xmm5, xmm26
+ |      100.  vaddps	xmm19, xmm19, xmm26
+ |      101.  vpandq	xmm26, xmm0, xmm30
+ |      102.  vpmullw	xmm10, xmm26, xmm26
+ |      103.  vpblendw	xmm7, xmm7, xmm6, 170
+ |      104.  vcvtdq2ps	xmm26, xmm7
+ |      105.  vpblendw	xmm7, xmm10, xmm6, 170
+ |      106.  vcvtdq2ps	xmm7, xmm7
+ +----> 107.  vmulps	xmm26, xmm18, xmm26               ## RESOURCE interference:  ICXPort1 [ probability: 100% ]
+ |      108.  vmulps	xmm7, xmm17, xmm7
+ |      109.  vaddps	xmm26, xmm26, xmm7
+ |      110.  vpandq	xmm7, xmm1, xmm30
+ |      111.  vpmullw	xmm7, xmm7, xmm7
+ |      112.  vpblendw	xmm7, xmm7, xmm6, 170
+ |      113.  vcvtdq2ps	xmm7, xmm7
+ +----> 114.  vmulps	xmm7, xmm8, xmm7                  ## RESOURCE interference:  ICXPort0 [ probability: 100% ]
+ |      115.  vaddps	xmm26, xmm26, xmm7
+ |      116.  vpandq	xmm7, xmm3, xmm30
+ |      117.  vpmullw	xmm7, xmm7, xmm7
+ |      118.  vpblendw	xmm7, xmm7, xmm6, 170
+ +----> 119.  vcvtdq2ps	xmm7, xmm7                        ## RESOURCE interference:  ICXPort0 [ probability: 100% ]
+ |      120.  vmulps	xmm7, xmm5, xmm7
+ |      121.  vaddps	xmm26, xmm26, xmm7
+ |      122.  vpsrld	xmm2, xmm2, 24
+ |      123.  vcvtdq2ps	xmm2, xmm2
+ +----> 124.  vmulps	xmm2, xmm18, xmm2                 ## RESOURCE interference:  ICXPort1 [ probability: 100% ]
+ +----> 125.  vpsrld	xmm0, xmm0, 24                    ## RESOURCE interference:  ICXPort0 [ probability: 100% ]
+ +----> 126.  vcvtdq2ps	xmm0, xmm0                        ## REGISTER dependency:  xmm0
+ |      127.  vmulps	xmm0, xmm17, xmm0
+ |      128.  vaddps	xmm0, xmm2, xmm0
+ +----> 129.  vpsrld	xmm1, xmm1, 24                    ## RESOURCE interference:  ICXPort0 [ probability: 100% ]
+ +----> 130.  vcvtdq2ps	xmm1, xmm1                        ## REGISTER dependency:  xmm1
+ |      131.  vmulps	xmm1, xmm8, xmm1
+ |      132.  vaddps	xmm0, xmm0, xmm1
+ |      133.  vmovdqu64	xmm17, xmmword ptr [r13]
+ +----> 134.  vpsrld	xmm1, xmm3, 24                    ## RESOURCE interference:  ICXPort0 [ probability: 100% ]
+ +----> 135.  vcvtdq2ps	xmm1, xmm1                        ## REGISTER dependency:  xmm1
+ |      136.  vmulps	xmm1, xmm5, xmm1
+ |      137.  vpshufb	xmm2, xmm17, xmmword ptr [rip + .LCPI9_9]
+ +----> 138.  vcvtdq2ps	xmm2, xmm2                        ## RESOURCE interference:  ICXPort1 [ probability: 100% ]
+ |      139.  vmulps	xmm3, xmm16, xmmword ptr [rsp + 160]
+ |      140.  vaddps	xmm0, xmm0, xmm1
+ |      141.  vmulps	xmm5, xmm0, xmmword ptr [rsp + 112]
+ |      142.  vmaxps	xmm0, xmm3, xmm6
+ |      143.  vminps	xmm0, xmm0, xmm9
+ +----> 144.  vmulps	xmm1, xmm2, xmm2                  ## REGISTER dependency:  xmm2
+ |      145.  vmulps	xmm2, xmm5, xmm20
+ |      146.  vaddps	xmm16, xmm2, xmm28
+ |      147.  vmulps	xmm1, xmm1, xmm16
+ |      148.  vaddps	xmm1, xmm0, xmm1
+ |      149.  vpshufb	xmm0, xmm17, xmmword ptr [rip + .LCPI9_8]
+ |      150.  vcvtdq2ps	xmm0, xmm0
+ +----> 151.  vmulps	xmm2, xmm19, xmmword ptr [rsp + 144] ## RESOURCE interference:  ICXPort0 [ probability: 100% ]
+ |      152.  vmaxps	xmm2, xmm2, xmm6
+ |      153.  vminps	xmm2, xmm2, xmm9
+ |      154.  vmulps	xmm0, xmm0, xmm0
+ |      155.  vmulps	xmm0, xmm0, xmm16
+ |      156.  vaddps	xmm2, xmm0, xmm2
+ |      157.  vpandd	xmm0, xmm17, xmm31
+ +----> 158.  vcvtdq2ps	xmm0, xmm0                        ## RESOURCE interference:  ICXPort1 [ probability: 100% ]
+ +----> 159.  vmulps	xmm3, xmm26, xmmword ptr [rsp + 128] ## RESOURCE interference:  ICXPort0 [ probability: 100% ]
+ |      160.  vmaxps	xmm3, xmm3, xmm6
+ |      161.  vminps	xmm3, xmm3, xmm9
+ |      162.  vmulps	xmm0, xmm0, xmm0
+ |      163.  vmulps	xmm0, xmm0, xmm16
+ |      164.  vaddps	xmm3, xmm0, xmm3
+ |      165.  vmovaps	xmm0, xmm1
+ |      166.  rsqrtps	xmm0, xmm0
+ |      167.  vmulps	xmm1, xmm0, xmm1
+ |      168.  vmovaps	xmm0, xmm2
+ |      169.  rsqrtps	xmm0, xmm0
+ |      170.  vmulps	xmm2, xmm0, xmm2
+ |      171.  vmovaps	xmm0, xmm3
+ |      172.  rsqrtps	xmm0, xmm0
+ |      173.  vmulps	xmm0, xmm0, xmm3
+ |      174.  cvtps2dq	xmm1, xmm1
+ |      175.  cvtps2dq	xmm2, xmm2
+ |      176.  cvtps2dq	xmm0, xmm0
+ |      177.  vpslld	xmm1, xmm1, 16
+ |      178.  vpslld	xmm2, xmm2, 8
+ |      179.  vpternlogd	xmm2, xmm0, xmm1, 254
+ |      180.  vcmpleps	k2 {k2}, xmm15, xmm28
+ |      181.  vcmpleps	k2 {k2}, xmm6, xmm15
+ |      182.  vcmpleps	k2 {k2}, xmm6, xmm4
+ |      183.  vcmpleps	k2 {k2}, xmm4, xmm28
+ +----> 184.  vpsrld	xmm0, xmm17, 24                   ## RESOURCE interference:  ICXPort1 [ probability: 100% ]
+ +----> 185.  vcvtdq2ps	xmm0, xmm0                        ## REGISTER dependency:  xmm0
+ +----> 186.  vmulps	xmm0, xmm16, xmm0                 ## REGISTER dependency:  xmm0
+ +----> 187.  vaddps	xmm0, xmm5, xmm0                  ## REGISTER dependency:  xmm0
+ +----> 188.  cvtps2dq	xmm0, xmm0                        ## REGISTER dependency:  xmm0
+ +----> 189.  vpslld	xmm0, xmm0, 24                    ## REGISTER dependency:  xmm0
+ +----> 190.  vpord	xmm17 {k2}, xmm2, xmm0            ## REGISTER dependency:  xmm0
+ +----> 191.  vmovdqa64	xmmword ptr [r13], xmm17          ## REGISTER dependency:  xmm17
+        192.  kxnorw	k2, k0, k0
+
+
+Instruction Info:
+[1]: #uOps
+[2]: Latency
+[3]: RThroughput
+[4]: MayLoad
+[5]: MayStore
+[6]: HasSideEffects (U)
+
+[1]    [2]    [3]    [4]    [5]    [6]    Instructions:
+ 1      1     0.25                        mov	edx, edi
+ 1      1     0.25                        sub	edx, r11d
+ 1      1     0.50                        jle	.LBB9_36
+ 2      5     1.00                        vcvtsi2ss	xmm0, xmm8, r15d
+ 2      9     0.50    *                   vsubss	xmm0, xmm0, dword ptr [rsp + 80]
+ 2      9     0.50    *                   vmulss	xmm1, xmm0, dword ptr [rsp + 44]
+ 1      1     0.50                        vbroadcastss	xmm12, xmm1
+ 2      9     0.50    *                   vmulss	xmm0, xmm0, dword ptr [rsp + 40]
+ 1      1     0.50                        vbroadcastss	xmm13, xmm0
+ 1      1     0.25                        mov	r14d, r11d
+ 1      1     1.00                        kmovq	k2, k0
+ 1      6     0.50    *                   vmovaps	xmm14, xmmword ptr [rsp + 64]
+ 1      1     0.25                        mov	r13, rbp
+ 1      1     0.50                        jmp	.LBB9_33
+ 1      1     0.25                        add	r13, 16
+ 1      1     0.25                        add	r14d, 4
+ 1      1     0.25                        cmp	r14d, edi
+ 1      1     0.50                        jge	.LBB9_36
+ 2      10    0.50    *                   vmulps	xmm0, xmm14, xmmword ptr [rsp + 96]
+ 1      4     0.50                        vaddps	xmm15, xmm12, xmm0
+ 1      4     0.50                        vmulps	xmm0, xmm22, xmm14
+ 1      4     0.50                        vaddps	xmm4, xmm13, xmm0
+ 1      4     0.50                        vmaxps	xmm0, xmm15, xmm6
+ 1      4     0.50                        vminps	xmm0, xmm0, xmm28
+ 1      4     0.50                        vmulps	xmm0, xmm24, xmm0
+ 1      4     0.50                        vmaxps	xmm1, xmm4, xmm6
+ 1      4     0.50                        vminps	xmm1, xmm1, xmm28
+ 1      4     0.50                        vmulps	xmm1, xmm25, xmm1
+ 1      4     0.50                        vaddps	xmm0, xmm0, xmm29
+ 1      4     0.50                        vaddps	xmm1, xmm1, xmm29
+ 1      4     0.50                        vcvttps2dq	xmm2, xmm0
+ 1      4     0.50                        vcvtdq2ps	xmm3, xmm2
+ 1      4     0.50                        vsubps	xmm5, xmm0, xmm3
+ 1      4     0.50                        vcvttps2dq	xmm0, xmm1
+ 1      4     0.50                        vcvtdq2ps	xmm3, xmm0
+ 1      4     0.50                        vsubps	xmm16, xmm1, xmm3
+ 1      1     0.50                        vpslld	xmm1, xmm2, 2
+ 2      10    1.00                        vpmulld	xmm0, xmm23, xmm0
+ 1      1     0.33                        vpaddd	xmm3, xmm1, xmm0
+ 1      3     1.00                        vpmovsxdq	ymm0, xmm3
+ 1      1     0.33                        vpaddq	ymm0, ymm27, ymm0
+ 1      2     1.00                        vmovq	r8, xmm0
+ 2      3     1.00                        vpextrq	r10, xmm0, 1
+ 1      3     1.00                        vextracti128	xmm0, ymm0, 1
+ 1      2     1.00                        vmovq	rbx, xmm0
+ 2      3     1.00                        vpextrq	rcx, xmm0, 1
+ 1      1     1.00                        kxnorw	k3, k0, k0
+ 1      5     0.50    *                   vmovd	xmm0, dword ptr [r8 + 4]
+ 2      6     1.00    *                   vpinsrd	xmm0, xmm0, dword ptr [r10 + 4], 1
+ 2      6     1.00    *                   vpinsrd	xmm0, xmm0, dword ptr [rbx + 4], 2
+ 2      6     1.00    *                   vpinsrd	xmm0, xmm0, dword ptr [rcx + 4], 3
+ 1      0     0.17                        vpxor	xmm2, xmm2, xmm2
+ 1      5     0.50    *                   vmovd	xmm1, dword ptr [r8 + r12]
+ 2      6     1.00    *                   vpinsrd	xmm1, xmm1, dword ptr [r10 + r12], 1
+ 2      6     1.00    *                   vpinsrd	xmm1, xmm1, dword ptr [rbx + r12], 2
+ 2      6     1.00    *                   vpinsrd	xmm1, xmm1, dword ptr [rcx + r12], 3
+ 5      19    2.00    *                   vpgatherdd	xmm2 {k3}, xmmword ptr [rsi + xmm3]
+ 1      5     0.50    *                   vmovd	xmm3, dword ptr [r8 + r12 + 4]
+ 2      6     1.00    *                   vpinsrd	xmm3, xmm3, dword ptr [r10 + r12 + 4], 1
+ 2      6     1.00    *                   vpinsrd	xmm3, xmm3, dword ptr [rbx + r12 + 4], 2
+ 2      6     1.00    *                   vpinsrd	xmm3, xmm3, dword ptr [rcx + r12 + 4], 3
+ 1      1     0.33                        vpandq	xmm7, xmm2, xmm30
+ 1      5     0.50                        vpmullw	xmm7, xmm7, xmm7
+ 1      1     0.50                        vpsrld	xmm26, xmm7, 16
+ 1      4     0.50                        vcvtdq2ps	xmm26, xmm26
+ 1      4     0.50                        vsubps	xmm8, xmm28, xmm5
+ 1      4     0.50                        vsubps	xmm17, xmm28, xmm16
+ 1      4     0.50                        vmulps	xmm18, xmm17, xmm8
+ 1      4     0.50                        vmulps	xmm17, xmm5, xmm17
+ 1      4     0.50                        vmulps	xmm8, xmm16, xmm8
+ 1      4     0.50                        vmulps	xmm5, xmm16, xmm5
+ 1      4     0.50                        vmulps	xmm16, xmm18, xmm26
+ 1      4     0.50                        vmulps	xmm19, xmm17, xmm26
+ 1      4     0.50                        vaddps	xmm16, xmm16, xmm19
+ 1      4     0.50                        vmulps	xmm19, xmm8, xmm26
+ 1      4     0.50                        vaddps	xmm16, xmm19, xmm16
+ 1      1     0.50                        vpsrlw	xmm19, xmm2, 8
+ 1      5     0.50                        vpmullw	xmm10, xmm19, xmm19
+ 1      4     0.50                        vmulps	xmm19, xmm5, xmm26
+ 1      4     0.50                        vaddps	xmm16, xmm19, xmm16
+ 1      1     0.50                        vpsrlw	xmm19, xmm0, 8
+ 1      5     0.50                        vpmullw	xmm11, xmm19, xmm19
+ 1      1     1.00                        vpblendw	xmm10, xmm10, xmm6, 170
+ 1      4     0.50                        vcvtdq2ps	xmm19, xmm10
+ 1      1     1.00                        vpblendw	xmm10, xmm11, xmm6, 170
+ 1      4     0.50                        vcvtdq2ps	xmm26, xmm10
+ 1      4     0.50                        vmulps	xmm19, xmm18, xmm19
+ 1      4     0.50                        vmulps	xmm26, xmm17, xmm26
+ 1      4     0.50                        vaddps	xmm19, xmm19, xmm26
+ 1      1     0.50                        vpsrlw	xmm26, xmm1, 8
+ 1      5     0.50                        vpmullw	xmm10, xmm26, xmm26
+ 1      1     1.00                        vpblendw	xmm10, xmm10, xmm6, 170
+ 1      4     0.50                        vcvtdq2ps	xmm26, xmm10
+ 1      4     0.50                        vmulps	xmm26, xmm8, xmm26
+ 1      4     0.50                        vaddps	xmm19, xmm19, xmm26
+ 1      1     0.50                        vpsrlw	xmm26, xmm3, 8
+ 1      5     0.50                        vpmullw	xmm10, xmm26, xmm26
+ 1      1     1.00                        vpblendw	xmm10, xmm10, xmm6, 170
+ 1      4     0.50                        vcvtdq2ps	xmm26, xmm10
+ 1      4     0.50                        vmulps	xmm26, xmm5, xmm26
+ 1      4     0.50                        vaddps	xmm19, xmm19, xmm26
+ 1      1     0.33                        vpandq	xmm26, xmm0, xmm30
+ 1      5     0.50                        vpmullw	xmm10, xmm26, xmm26
+ 1      1     1.00                        vpblendw	xmm7, xmm7, xmm6, 170
+ 1      4     0.50                        vcvtdq2ps	xmm26, xmm7
+ 1      1     1.00                        vpblendw	xmm7, xmm10, xmm6, 170
+ 1      4     0.50                        vcvtdq2ps	xmm7, xmm7
+ 1      4     0.50                        vmulps	xmm26, xmm18, xmm26
+ 1      4     0.50                        vmulps	xmm7, xmm17, xmm7
+ 1      4     0.50                        vaddps	xmm26, xmm26, xmm7
+ 1      1     0.33                        vpandq	xmm7, xmm1, xmm30
+ 1      5     0.50                        vpmullw	xmm7, xmm7, xmm7
+ 1      1     1.00                        vpblendw	xmm7, xmm7, xmm6, 170
+ 1      4     0.50                        vcvtdq2ps	xmm7, xmm7
+ 1      4     0.50                        vmulps	xmm7, xmm8, xmm7
+ 1      4     0.50                        vaddps	xmm26, xmm26, xmm7
+ 1      1     0.33                        vpandq	xmm7, xmm3, xmm30
+ 1      5     0.50                        vpmullw	xmm7, xmm7, xmm7
+ 1      1     1.00                        vpblendw	xmm7, xmm7, xmm6, 170
+ 1      4     0.50                        vcvtdq2ps	xmm7, xmm7
+ 1      4     0.50                        vmulps	xmm7, xmm5, xmm7
+ 1      4     0.50                        vaddps	xmm26, xmm26, xmm7
+ 1      1     0.50                        vpsrld	xmm2, xmm2, 24
+ 1      4     0.50                        vcvtdq2ps	xmm2, xmm2
+ 1      4     0.50                        vmulps	xmm2, xmm18, xmm2
+ 1      1     0.50                        vpsrld	xmm0, xmm0, 24
+ 1      4     0.50                        vcvtdq2ps	xmm0, xmm0
+ 1      4     0.50                        vmulps	xmm0, xmm17, xmm0
+ 1      4     0.50                        vaddps	xmm0, xmm2, xmm0
+ 1      1     0.50                        vpsrld	xmm1, xmm1, 24
+ 1      4     0.50                        vcvtdq2ps	xmm1, xmm1
+ 1      4     0.50                        vmulps	xmm1, xmm8, xmm1
+ 1      4     0.50                        vaddps	xmm0, xmm0, xmm1
+ 2      7     0.50    *                   vmovdqu64	xmm17, xmmword ptr [r13]
+ 1      1     0.50                        vpsrld	xmm1, xmm3, 24
+ 1      4     0.50                        vcvtdq2ps	xmm1, xmm1
+ 1      4     0.50                        vmulps	xmm1, xmm5, xmm1
+ 2      7     0.50    *                   vpshufb	xmm2, xmm17, xmmword ptr [rip + .LCPI9_9]
+ 1      4     0.50                        vcvtdq2ps	xmm2, xmm2
+ 2      10    0.50    *                   vmulps	xmm3, xmm16, xmmword ptr [rsp + 160]
+ 1      4     0.50                        vaddps	xmm0, xmm0, xmm1
+ 2      10    0.50    *                   vmulps	xmm5, xmm0, xmmword ptr [rsp + 112]
+ 1      4     0.50                        vmaxps	xmm0, xmm3, xmm6
+ 1      4     0.50                        vminps	xmm0, xmm0, xmm9
+ 1      4     0.50                        vmulps	xmm1, xmm2, xmm2
+ 1      4     0.50                        vmulps	xmm2, xmm5, xmm20
+ 1      4     0.50                        vaddps	xmm16, xmm2, xmm28
+ 1      4     0.50                        vmulps	xmm1, xmm1, xmm16
+ 1      4     0.50                        vaddps	xmm1, xmm0, xmm1
+ 2      7     0.50    *                   vpshufb	xmm0, xmm17, xmmword ptr [rip + .LCPI9_8]
+ 1      4     0.50                        vcvtdq2ps	xmm0, xmm0
+ 2      10    0.50    *                   vmulps	xmm2, xmm19, xmmword ptr [rsp + 144]
+ 1      4     0.50                        vmaxps	xmm2, xmm2, xmm6
+ 1      4     0.50                        vminps	xmm2, xmm2, xmm9
+ 1      4     0.50                        vmulps	xmm0, xmm0, xmm0
+ 1      4     0.50                        vmulps	xmm0, xmm0, xmm16
+ 1      4     0.50                        vaddps	xmm2, xmm0, xmm2
+ 1      1     0.33                        vpandd	xmm0, xmm17, xmm31
+ 1      4     0.50                        vcvtdq2ps	xmm0, xmm0
+ 2      10    0.50    *                   vmulps	xmm3, xmm26, xmmword ptr [rsp + 128]
+ 1      4     0.50                        vmaxps	xmm3, xmm3, xmm6
+ 1      4     0.50                        vminps	xmm3, xmm3, xmm9
+ 1      4     0.50                        vmulps	xmm0, xmm0, xmm0
+ 1      4     0.50                        vmulps	xmm0, xmm0, xmm16
+ 1      4     0.50                        vaddps	xmm3, xmm0, xmm3
+ 1      1     0.33                        vmovaps	xmm0, xmm1
+ 1      4     1.00                        rsqrtps	xmm0, xmm0
+ 1      4     0.50                        vmulps	xmm1, xmm0, xmm1
+ 1      1     0.33                        vmovaps	xmm0, xmm2
+ 1      4     1.00                        rsqrtps	xmm0, xmm0
+ 1      4     0.50                        vmulps	xmm2, xmm0, xmm2
+ 1      1     0.33                        vmovaps	xmm0, xmm3
+ 1      4     1.00                        rsqrtps	xmm0, xmm0
+ 1      4     0.50                        vmulps	xmm0, xmm0, xmm3
+ 1      4     0.50                        cvtps2dq	xmm1, xmm1
+ 1      4     0.50                        cvtps2dq	xmm2, xmm2
+ 1      4     0.50                        cvtps2dq	xmm0, xmm0
+ 1      1     0.50                        vpslld	xmm1, xmm1, 16
+ 1      1     0.50                        vpslld	xmm2, xmm2, 8
+ 1      1     0.33                        vpternlogd	xmm2, xmm0, xmm1, 254
+ 1      4     1.00                        vcmpleps	k2 {k2}, xmm15, xmm28
+ 1      4     1.00                        vcmpleps	k2 {k2}, xmm6, xmm15
+ 1      4     1.00                        vcmpleps	k2 {k2}, xmm6, xmm4
+ 1      4     1.00                        vcmpleps	k2 {k2}, xmm4, xmm28
+ 1      1     0.50                        vpsrld	xmm0, xmm17, 24
+ 1      4     0.50                        vcvtdq2ps	xmm0, xmm0
+ 1      4     0.50                        vmulps	xmm0, xmm16, xmm0
+ 1      4     0.50                        vaddps	xmm0, xmm5, xmm0
+ 1      4     0.50                        cvtps2dq	xmm0, xmm0
+ 1      1     0.50                        vpslld	xmm0, xmm0, 24
+ 1      1     0.33                        vpord	xmm17 {k2}, xmm2, xmm0
+ 2      1     1.00           *            vmovdqa64	xmmword ptr [r13], xmm17
+ 1      1     1.00                        kxnorw	k2, k0, k0
+
+
+Dynamic Dispatch Stall Cycles:
+RAT     - Register unavailable:                      0
+RCU     - Retire tokens unavailable:                 0
+SCHEDQ  - Scheduler full:                            10174  (97.4%)
+LQ      - Load queue full:                           0
+SQ      - Store queue full:                          0
+GROUP   - Static restrictions on the dispatch group: 0
+USH     - Uncategorised Structural Hazard:           0
+
+
+Dispatch Logic - number of cycles where we saw N micro opcodes dispatched:
+[# dispatched], [# cycles]
+ 0,              1071  (10.3%)
+ 1,              2291  (21.9%)
+ 2,              3586  (34.3%)
+ 3,              1892  (18.1%)
+ 4,              994  (9.5%)
+ 5,              599  (5.7%)
+ 6,              15  (0.1%)
+
+
+Schedulers - number of cycles where we saw N micro opcodes issued:
+[# issued], [# cycles]
+ 0,          1041  (10.0%)
+ 1,          1508  (14.4%)
+ 2,          4602  (44.0%)
+ 3,          2198  (21.0%)
+ 4,          701  (6.7%)
+ 5,          298  (2.9%)
+ 6,          100  (1.0%)
+
+Scheduler's queue usage:
+[1] Resource name.
+[2] Average number of used buffer entries.
+[3] Maximum number of used buffer entries.
+[4] Total number of buffer entries.
+
+ [1]            [2]        [3]        [4]
+ICXPortAny       59         60         60
+
+
+Retire Control Unit - number of cycles where we saw N instructions retired:
+[# retired], [# cycles]
+ 0,           5635  (53.9%)
+ 1,           2410  (23.1%)
+ 2,           601  (5.8%)
+ 3,           700  (6.7%)
+ 4,           301  (2.9%)
+ 5,           1  (0.0%)
+ 7,           300  (2.9%)
+ 11,          100  (1.0%)
+ 13,          1  (0.0%)
+ 16,          100  (1.0%)
+ 21,          200  (1.9%)
+ 34,          99  (0.9%)
+
+Total ROB Entries:                224
+Max Used ROB Entries:             143  ( 63.8% )
+Average Used ROB Entries per cy:  111  ( 49.6% )
+
+
+Register File statistics:
+Total number of mappings created:    19200
+Max number of mappings used:         130
+
+
+Resources:
+[0]   - ICXDivider
+[1]   - ICXFPDivider
+[2]   - ICXPort0
+[3]   - ICXPort1
+[4]   - ICXPort2
+[5]   - ICXPort3
+[6]   - ICXPort4
+[7]   - ICXPort5
+[8]   - ICXPort6
+[9]   - ICXPort7
+[10]  - ICXPort8
+[11]  - ICXPort9
+
+
+Resource pressure per iteration:
+[0]    [1]    [2]    [3]    [4]    [5]    [6]    [7]    [8]    [9]    [10]   [11]   
+ -      -     73.01  70.02  14.00  14.00  1.00   41.99  7.98   1.00    -      -     
+
+Resource pressure by instruction:
+[0]    [1]    [2]    [3]    [4]    [5]    [6]    [7]    [8]    [9]    [10]   [11]   Instructions:
+ -      -      -      -      -      -      -      -     1.00    -      -      -     mov	edx, edi
+ -      -     0.01    -      -      -      -      -     0.99    -      -      -     sub	edx, r11d
+ -      -      -      -      -      -      -      -     1.00    -      -      -     jle	.LBB9_36
+ -      -     0.99   0.01    -      -      -     1.00    -      -      -      -     vcvtsi2ss	xmm0, xmm8, r15d
+ -      -      -     1.00   0.50   0.50    -      -      -      -      -      -     vsubss	xmm0, xmm0, dword ptr [rsp + 80]
+ -      -     0.99   0.01   0.50   0.50    -      -      -      -      -      -     vmulss	xmm1, xmm0, dword ptr [rsp + 44]
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vbroadcastss	xmm12, xmm1
+ -      -     0.01   0.99   0.50   0.50    -      -      -      -      -      -     vmulss	xmm0, xmm0, dword ptr [rsp + 40]
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vbroadcastss	xmm13, xmm0
+ -      -      -      -      -      -      -     1.00    -      -      -      -     mov	r14d, r11d
+ -      -     1.00    -      -      -      -      -      -      -      -      -     kmovq	k2, k0
+ -      -      -      -     0.50   0.50    -      -      -      -      -      -     vmovaps	xmm14, xmmword ptr [rsp + 64]
+ -      -      -      -      -      -      -      -     1.00    -      -      -     mov	r13, rbp
+ -      -     0.01    -      -      -      -      -     0.99    -      -      -     jmp	.LBB9_33
+ -      -      -     0.01    -      -      -     0.99    -      -      -      -     add	r13, 16
+ -      -      -      -      -      -      -     1.00    -      -      -      -     add	r14d, 4
+ -      -      -      -      -      -      -      -     1.00    -      -      -     cmp	r14d, edi
+ -      -      -      -      -      -      -      -     1.00    -      -      -     jge	.LBB9_36
+ -      -     1.00    -     0.50   0.50    -      -      -      -      -      -     vmulps	xmm0, xmm14, xmmword ptr [rsp + 96]
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vaddps	xmm15, xmm12, xmm0
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm22, xmm14
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm4, xmm13, xmm0
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmaxps	xmm0, xmm15, xmm6
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vminps	xmm0, xmm0, xmm28
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm24, xmm0
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmaxps	xmm1, xmm4, xmm6
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vminps	xmm1, xmm1, xmm28
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmulps	xmm1, xmm25, xmm1
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vaddps	xmm0, xmm0, xmm29
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm1, xmm1, xmm29
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvttps2dq	xmm2, xmm0
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm3, xmm2
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vsubps	xmm5, xmm0, xmm3
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vcvttps2dq	xmm0, xmm1
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm3, xmm0
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vsubps	xmm16, xmm1, xmm3
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vpslld	xmm1, xmm2, 2
+ -      -      -     2.00    -      -      -      -      -      -      -      -     vpmulld	xmm0, xmm23, xmm0
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpaddd	xmm3, xmm1, xmm0
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpmovsxdq	ymm0, xmm3
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpaddq	ymm0, ymm27, ymm0
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmovq	r8, xmm0
+ -      -     1.00    -      -      -      -     1.00    -      -      -      -     vpextrq	r10, xmm0, 1
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vextracti128	xmm0, ymm0, 1
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmovq	rbx, xmm0
+ -      -     1.00    -      -      -      -     1.00    -      -      -      -     vpextrq	rcx, xmm0, 1
+ -      -     1.00    -      -      -      -      -      -      -      -      -     kxnorw	k3, k0, k0
+ -      -      -      -     0.50   0.50    -      -      -      -      -      -     vmovd	xmm0, dword ptr [r8 + 4]
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpinsrd	xmm0, xmm0, dword ptr [r10 + 4], 1
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpinsrd	xmm0, xmm0, dword ptr [rbx + 4], 2
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpinsrd	xmm0, xmm0, dword ptr [rcx + 4], 3
+ -      -      -      -      -      -      -      -      -      -      -      -     vpxor	xmm2, xmm2, xmm2
+ -      -      -      -     0.50   0.50    -      -      -      -      -      -     vmovd	xmm1, dword ptr [r8 + r12]
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpinsrd	xmm1, xmm1, dword ptr [r10 + r12], 1
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpinsrd	xmm1, xmm1, dword ptr [rbx + r12], 2
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpinsrd	xmm1, xmm1, dword ptr [rcx + r12], 3
+ -      -     1.00   1.00   2.00   2.00    -      -     1.00    -      -      -     vpgatherdd	xmm2 {k3}, xmmword ptr [rsi + xmm3]
+ -      -      -      -     0.50   0.50    -      -      -      -      -      -     vmovd	xmm3, dword ptr [r8 + r12 + 4]
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpinsrd	xmm3, xmm3, dword ptr [r10 + r12 + 4], 1
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpinsrd	xmm3, xmm3, dword ptr [rbx + r12 + 4], 2
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpinsrd	xmm3, xmm3, dword ptr [rcx + r12 + 4], 3
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpandq	xmm7, xmm2, xmm30
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vpmullw	xmm7, xmm7, xmm7
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vpsrld	xmm26, xmm7, 16
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm26, xmm26
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vsubps	xmm8, xmm28, xmm5
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vsubps	xmm17, xmm28, xmm16
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm18, xmm17, xmm8
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm17, xmm5, xmm17
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmulps	xmm8, xmm16, xmm8
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmulps	xmm5, xmm16, xmm5
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm16, xmm18, xmm26
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm19, xmm17, xmm26
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm16, xmm16, xmm19
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm19, xmm8, xmm26
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm16, xmm19, xmm16
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vpsrlw	xmm19, xmm2, 8
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpmullw	xmm10, xmm19, xmm19
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm19, xmm5, xmm26
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm16, xmm19, xmm16
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vpsrlw	xmm19, xmm0, 8
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vpmullw	xmm11, xmm19, xmm19
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpblendw	xmm10, xmm10, xmm6, 170
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm19, xmm10
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpblendw	xmm10, xmm11, xmm6, 170
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm26, xmm10
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm19, xmm18, xmm19
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm26, xmm17, xmm26
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm19, xmm19, xmm26
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vpsrlw	xmm26, xmm1, 8
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vpmullw	xmm10, xmm26, xmm26
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpblendw	xmm10, xmm10, xmm6, 170
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm26, xmm10
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm26, xmm8, xmm26
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm19, xmm19, xmm26
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vpsrlw	xmm26, xmm3, 8
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpmullw	xmm10, xmm26, xmm26
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpblendw	xmm10, xmm10, xmm6, 170
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm26, xmm10
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm26, xmm5, xmm26
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm19, xmm19, xmm26
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpandq	xmm26, xmm0, xmm30
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpmullw	xmm10, xmm26, xmm26
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpblendw	xmm7, xmm7, xmm6, 170
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm26, xmm7
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpblendw	xmm7, xmm10, xmm6, 170
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm7, xmm7
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm26, xmm18, xmm26
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm7, xmm17, xmm7
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vaddps	xmm26, xmm26, xmm7
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpandq	xmm7, xmm1, xmm30
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpmullw	xmm7, xmm7, xmm7
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpblendw	xmm7, xmm7, xmm6, 170
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm7, xmm7
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm7, xmm8, xmm7
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm26, xmm26, xmm7
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpandq	xmm7, xmm3, xmm30
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpmullw	xmm7, xmm7, xmm7
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpblendw	xmm7, xmm7, xmm6, 170
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm7, xmm7
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm7, xmm5, xmm7
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm26, xmm26, xmm7
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpsrld	xmm2, xmm2, 24
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm2, xmm2
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm2, xmm18, xmm2
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpsrld	xmm0, xmm0, 24
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm0, xmm0
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm0, xmm17, xmm0
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm0, xmm2, xmm0
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpsrld	xmm1, xmm1, 24
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm1, xmm1
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm1, xmm8, xmm1
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm0, xmm0, xmm1
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vmovdqu64	xmm17, xmmword ptr [r13]
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpsrld	xmm1, xmm3, 24
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm1, xmm1
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm1, xmm5, xmm1
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpshufb	xmm2, xmm17, xmmword ptr [rip + .LCPI9_9]
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm2, xmm2
+ -      -     1.00    -     0.50   0.50    -      -      -      -      -      -     vmulps	xmm3, xmm16, xmmword ptr [rsp + 160]
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vaddps	xmm0, xmm0, xmm1
+ -      -     0.99   0.01   0.50   0.50    -      -      -      -      -      -     vmulps	xmm5, xmm0, xmmword ptr [rsp + 112]
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmaxps	xmm0, xmm3, xmm6
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vminps	xmm0, xmm0, xmm9
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm1, xmm2, xmm2
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm2, xmm5, xmm20
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vaddps	xmm16, xmm2, xmm28
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmulps	xmm1, xmm1, xmm16
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vaddps	xmm1, xmm0, xmm1
+ -      -      -      -     0.50   0.50    -     1.00    -      -      -      -     vpshufb	xmm0, xmm17, xmmword ptr [rip + .LCPI9_8]
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm0, xmm0
+ -      -      -     1.00   0.51   0.49    -      -      -      -      -      -     vmulps	xmm2, xmm19, xmmword ptr [rsp + 144]
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmaxps	xmm2, xmm2, xmm6
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vminps	xmm2, xmm2, xmm9
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm0
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm16
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vaddps	xmm2, xmm0, xmm2
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpandd	xmm0, xmm17, xmm31
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm0, xmm0
+ -      -      -     1.00   0.49   0.51    -      -      -      -      -      -     vmulps	xmm3, xmm26, xmmword ptr [rsp + 128]
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmaxps	xmm3, xmm3, xmm6
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vminps	xmm3, xmm3, xmm9
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm0
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm16
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vaddps	xmm3, xmm0, xmm3
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vmovaps	xmm0, xmm1
+ -      -     1.00    -      -      -      -      -      -      -      -      -     rsqrtps	xmm0, xmm0
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmulps	xmm1, xmm0, xmm1
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmovaps	xmm0, xmm2
+ -      -     1.00    -      -      -      -      -      -      -      -      -     rsqrtps	xmm0, xmm0
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmulps	xmm2, xmm0, xmm2
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vmovaps	xmm0, xmm3
+ -      -     1.00    -      -      -      -      -      -      -      -      -     rsqrtps	xmm0, xmm0
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm3
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     cvtps2dq	xmm1, xmm1
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     cvtps2dq	xmm2, xmm2
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     cvtps2dq	xmm0, xmm0
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpslld	xmm1, xmm1, 16
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vpslld	xmm2, xmm2, 8
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpternlogd	xmm2, xmm0, xmm1, 254
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vcmpleps	k2 {k2}, xmm15, xmm28
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vcmpleps	k2 {k2}, xmm6, xmm15
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vcmpleps	k2 {k2}, xmm6, xmm4
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vcmpleps	k2 {k2}, xmm4, xmm28
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vpsrld	xmm0, xmm17, 24
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm0, xmm0
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm16, xmm0
+ -      -     0.99   0.01    -      -      -      -      -      -      -      -     vaddps	xmm0, xmm5, xmm0
+ -      -      -     1.00    -      -      -      -      -      -      -      -     cvtps2dq	xmm0, xmm0
+ -      -     0.01   0.99    -      -      -      -      -      -      -      -     vpslld	xmm0, xmm0, 24
+ -      -      -      -      -      -      -     1.00    -      -      -      -     vpord	xmm17 {k2}, xmm2, xmm0
+ -      -      -      -      -      -     1.00    -      -     1.00    -      -     vmovdqa64	xmmword ptr [r13], xmm17
+ -      -     1.00    -      -      -      -      -      -      -      -      -     kxnorw	k2, k0, k0
+
+
+Timeline view:
+                    0123456789          0123456789          0123456789          0123456789
+Index     0123456789          0123456789          0123456789          0123456789          
+
+[0,0]     DeER .    .    .    .    .    .    .    .    .    .    .    .    .    .    .   .   mov	edx, edi
+[0,1]     D=eER.    .    .    .    .    .    .    .    .    .    .    .    .    .    .   .   sub	edx, r11d
+[0,2]     D==eER    .    .    .    .    .    .    .    .    .    .    .    .    .    .   .   jle	.LBB9_36
+[0,3]     DeeeeeER  .    .    .    .    .    .    .    .    .    .    .    .    .    .   .   vcvtsi2ss	xmm0, xmm8, r15d
+[0,4]     .DeeeeeeeeeER  .    .    .    .    .    .    .    .    .    .    .    .    .   .   vsubss	xmm0, xmm0, dword ptr [rsp + 80]
+[0,5]     .D====eeeeeeeeeER   .    .    .    .    .    .    .    .    .    .    .    .   .   vmulss	xmm1, xmm0, dword ptr [rsp + 44]
+[0,6]     .D=============eER  .    .    .    .    .    .    .    .    .    .    .    .   .   vbroadcastss	xmm12, xmm1
+[0,7]     . D===eeeeeeeeeE-R  .    .    .    .    .    .    .    .    .    .    .    .   .   vmulss	xmm0, xmm0, dword ptr [rsp + 40]
+[0,8]     . D============eER  .    .    .    .    .    .    .    .    .    .    .    .   .   vbroadcastss	xmm13, xmm0
+[0,9]     . DeE------------R  .    .    .    .    .    .    .    .    .    .    .    .   .   mov	r14d, r11d
+[0,10]    . DeE------------R  .    .    .    .    .    .    .    .    .    .    .    .   .   kmovq	k2, k0
+[0,11]    . DeeeeeeE-------R  .    .    .    .    .    .    .    .    .    .    .    .   .   vmovaps	xmm14, xmmword ptr [rsp + 64]
+[0,12]    .  DeE-----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   mov	r13, rbp
+[0,13]    .  DeE-----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   jmp	.LBB9_33
+[0,14]    .  D=eE----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   add	r13, 16
+[0,15]    .  DeE-----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   add	r14d, 4
+[0,16]    .  D=eE----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   cmp	r14d, edi
+[0,17]    .  D==eE---------R  .    .    .    .    .    .    .    .    .    .    .    .   .   jge	.LBB9_36
+[0,18]    .   DeeeeeeeeeeE-R  .    .    .    .    .    .    .    .    .    .    .    .   .   vmulps	xmm0, xmm14, xmmword ptr [rsp + 96]
+[0,19]    .   D===========eeeeER   .    .    .    .    .    .    .    .    .    .    .   .   vaddps	xmm15, xmm12, xmm0
+[0,20]    .   D====eeeeE-------R   .    .    .    .    .    .    .    .    .    .    .   .   vmulps	xmm0, xmm22, xmm14
+[0,21]    .   D===========eeeeER   .    .    .    .    .    .    .    .    .    .    .   .   vaddps	xmm4, xmm13, xmm0
+[0,22]    .   D===============eeeeER    .    .    .    .    .    .    .    .    .    .   .   vmaxps	xmm0, xmm15, xmm6
+[0,23]    .    D==================eeeeER.    .    .    .    .    .    .    .    .    .   .   vminps	xmm0, xmm0, xmm28
+[0,24]    .    D======================eeeeER .    .    .    .    .    .    .    .    .   .   vmulps	xmm0, xmm24, xmm0
+[0,25]    .    D==============eeeeE--------R .    .    .    .    .    .    .    .    .   .   vmaxps	xmm1, xmm4, xmm6
+[0,26]    .    D==================eeeeE----R .    .    .    .    .    .    .    .    .   .   vminps	xmm1, xmm1, xmm28
+[0,27]    .    D======================eeeeER .    .    .    .    .    .    .    .    .   .   vmulps	xmm1, xmm25, xmm1
+[0,28]    .    D==========================eeeeER  .    .    .    .    .    .    .    .   .   vaddps	xmm0, xmm0, xmm29
+[0,29]    .    .D=========================eeeeER  .    .    .    .    .    .    .    .   .   vaddps	xmm1, xmm1, xmm29
+[0,30]    .    .D=============================eeeeER   .    .    .    .    .    .    .   .   vcvttps2dq	xmm2, xmm0
+[0,31]    .    .D=================================eeeeER    .    .    .    .    .    .   .   vcvtdq2ps	xmm3, xmm2
+[0,32]    .    .D=====================================eeeeER.    .    .    .    .    .   .   vsubps	xmm5, xmm0, xmm3
+[0,33]    .    .D=============================eeeeE--------R.    .    .    .    .    .   .   vcvttps2dq	xmm0, xmm1
+[0,34]    .    .D=================================eeeeE----R.    .    .    .    .    .   .   vcvtdq2ps	xmm3, xmm0
+[0,35]    .    . D====================================eeeeER.    .    .    .    .    .   .   vsubps	xmm16, xmm1, xmm3
+[0,36]    .    . D=================================eE------R.    .    .    .    .    .   .   vpslld	xmm1, xmm2, 2
+[0,37]    .    . D=================================eeeeeeeeeeER  .    .    .    .    .   .   vpmulld	xmm0, xmm23, xmm0
+[0,38]    .    . D===========================================eER .    .    .    .    .   .   vpaddd	xmm3, xmm1, xmm0
+[0,39]    .    . D============================================eeeER   .    .    .    .   .   vpmovsxdq	ymm0, xmm3
+[0,40]    .    .  D==============================================eER  .    .    .    .   .   vpaddq	ymm0, ymm27, ymm0
+[0,41]    .    .  D===============================================eeER.    .    .    .   .   vmovq	r8, xmm0
+[0,42]    .    .  D================================================eeeER   .    .    .   .   vpextrq	r10, xmm0, 1
+[0,43]    .    .  D===============================================eeeE-R   .    .    .   .   vextracti128	xmm0, ymm0, 1
+[0,44]    .    .  D==================================================eeER  .    .    .   .   vmovq	rbx, xmm0
+[0,45]    .    .   D==================================================eeeER.    .    .   .   vpextrq	rcx, xmm0, 1
+[0,46]    .    .   DeE----------------------------------------------------R.    .    .   .   kxnorw	k3, k0, k0
+[0,47]    .    .   D================================================eeeeeER.    .    .   .   vmovd	xmm0, dword ptr [r8 + 4]
+[0,48]    .    .   D===================================================eeeeeeER .    .   .   vpinsrd	xmm0, xmm0, dword ptr [r10 + 4], 1
+[0,49]    .    .    D===================================================eeeeeeER.    .   .   vpinsrd	xmm0, xmm0, dword ptr [rbx + 4], 2
+[0,50]    .    .    D====================================================eeeeeeER    .   .   vpinsrd	xmm0, xmm0, dword ptr [rcx + 4], 3
+[0,51]    .    .    D-----------------------------------------------------------R    .   .   vpxor	xmm2, xmm2, xmm2
+[0,52]    .    .    D===============================================eeeeeE------R    .   .   vmovd	xmm1, dword ptr [r8 + r12]
+[0,53]    .    .    .D====================================================eeeeeeER   .   .   vpinsrd	xmm1, xmm1, dword ptr [r10 + r12], 1
+[0,54]    .    .    .D=====================================================eeeeeeER  .   .   vpinsrd	xmm1, xmm1, dword ptr [rbx + r12], 2
+[0,55]    .    .    .D======================================================eeeeeeER .   .   vpinsrd	xmm1, xmm1, dword ptr [rcx + r12], 3
+[0,56]    .    .    . D=======================================eeeeeeeeeeeeeeeeeeeE-R .   .   vpgatherdd	xmm2 {k3}, xmmword ptr [rsi + xmm3]
+[0,57]    .    .    . D==============================================eeeeeE--------R .   .   vmovd	xmm3, dword ptr [r8 + r12 + 4]
+[0,58]    .    .    .  D=====================================================eeeeeeER.   .   vpinsrd	xmm3, xmm3, dword ptr [r10 + r12 + 4], 1
+[0,59]    .    .    .  D======================================================eeeeeeER   .   vpinsrd	xmm3, xmm3, dword ptr [rbx + r12 + 4], 2
+[0,60]    .    .    .  D=======================================================eeeeeeER  .   vpinsrd	xmm3, xmm3, dword ptr [rcx + r12 + 4], 3
+[0,61]    .    .    .   D========================================================eE---R  .   vpandq	xmm7, xmm2, xmm30
+[0,62]    .    .    .   D=========================================================eeeeeER.   vpmullw	xmm7, xmm7, xmm7
+[0,63]    .    .    .   D==============================================================eER   vpsrld	xmm26, xmm7, 16
+Truncated display due to cycle limit
+
+
+Average Wait times (based on the timeline view):
+[0]: Executions
+[1]: Average time spent waiting in a scheduler's queue
+[2]: Average time spent waiting in a scheduler's queue while ready
+[3]: Average time elapsed from WB until retire stage
+
+      [0]    [1]    [2]    [3]
+0.     10    1.0    1.0    48.6      mov	edx, edi
+1.     10    2.0    0.0    47.7      sub	edx, r11d
+2.     10    2.1    0.0    46.8      jle	.LBB9_36
+3.     10    8.2    8.2    36.9      vcvtsi2ss	xmm0, xmm8, r15d
+4.     10    9.1    1.0    32.4      vsubss	xmm0, xmm0, dword ptr [rsp + 80]
+5.     10    12.2   0.0    28.8      vmulss	xmm1, xmm0, dword ptr [rsp + 44]
+6.     10    21.2   0.0    27.9      vbroadcastss	xmm12, xmm1
+7.     10    12.1   0.0    28.9      vmulss	xmm0, xmm0, dword ptr [rsp + 40]
+8.     10    20.2   0.0    27.9      vbroadcastss	xmm13, xmm0
+9.     10    1.0    1.0    47.1      mov	r14d, r11d
+10.    10    7.3    7.3    40.8      kmovq	k2, k0
+11.    10    1.0    1.0    42.1      vmovaps	xmm14, xmmword ptr [rsp + 64]
+12.    10    1.0    1.0    46.1      mov	r13, rbp
+13.    10    1.9    1.9    45.2      jmp	.LBB9_33
+14.    10    2.0    0.0    45.1      add	r13, 16
+15.    10    1.0    0.0    46.1      add	r14d, 4
+16.    10    2.0    0.9    44.2      cmp	r14d, edi
+17.    10    3.0    0.0    43.2      jge	.LBB9_36
+18.    10    7.3    7.3    29.8      vmulps	xmm0, xmm14, xmmword ptr [rsp + 96]
+19.    10    19.2   0.0    24.3      vaddps	xmm15, xmm12, xmm0
+20.    10    7.7    3.6    34.9      vmulps	xmm0, xmm22, xmm14
+21.    10    18.3   0.0    24.3      vaddps	xmm4, xmm13, xmm0
+22.    10    22.3   0.0    20.7      vmaxps	xmm0, xmm15, xmm6
+23.    10    26.2   0.0    17.1      vminps	xmm0, xmm0, xmm28
+24.    10    29.3   0.0    13.5      vmulps	xmm0, xmm24, xmm0
+25.    10    21.3   0.0    21.5      vmaxps	xmm1, xmm4, xmm6
+26.    10    25.3   0.0    17.5      vminps	xmm1, xmm1, xmm28
+27.    10    29.3   0.0    13.5      vmulps	xmm1, xmm25, xmm1
+28.    10    32.4   0.0    9.9       vaddps	xmm0, xmm0, xmm29
+29.    10    33.2   0.9    9.0       vaddps	xmm1, xmm1, xmm29
+30.    10    36.3   0.0    6.3       vcvttps2dq	xmm2, xmm0
+31.    10    39.4   0.0    2.7       vcvtdq2ps	xmm3, xmm2
+32.    10    43.4   0.0    0.0       vsubps	xmm5, xmm0, xmm3
+33.    10    35.4   0.0    7.1       vcvttps2dq	xmm0, xmm1
+34.    10    39.4   0.0    3.1       vcvtdq2ps	xmm3, xmm0
+35.    10    42.4   0.0    0.0       vsubps	xmm16, xmm1, xmm3
+36.    10    38.5   1.0    6.9       vpslld	xmm1, xmm2, 2
+37.    10    38.5   1.0    0.0       vpmulld	xmm0, xmm23, xmm0
+38.    10    48.5   0.0    0.0       vpaddd	xmm3, xmm1, xmm0
+39.    10    48.6   0.0    0.0       vpmovsxdq	ymm0, xmm3
+40.    10    51.5   0.0    0.0       vpaddq	ymm0, ymm27, ymm0
+41.    10    51.6   0.0    0.0       vmovq	r8, xmm0
+42.    10    51.7   1.0    0.0       vpextrq	r10, xmm0, 1
+43.    10    50.7   0.0    1.0       vextracti128	xmm0, ymm0, 1
+44.    10    52.8   0.0    0.0       vmovq	rbx, xmm0
+45.    10    52.8   1.0    0.0       vpextrq	rcx, xmm0, 1
+46.    10    1.0    1.0    53.8      kxnorw	k3, k0, k0
+47.    10    49.9   0.0    0.0       vmovd	xmm0, dword ptr [r8 + 4]
+48.    10    51.1   1.0    0.0       vpinsrd	xmm0, xmm0, dword ptr [r10 + 4], 1
+49.    10    51.1   0.0    0.0       vpinsrd	xmm0, xmm0, dword ptr [rbx + 4], 2
+50.    10    51.2   0.0    0.0       vpinsrd	xmm0, xmm0, dword ptr [rcx + 4], 3
+51.    10    0.0    0.0    57.2      vpxor	xmm2, xmm2, xmm2
+52.    10    44.4   0.0    6.0       vmovd	xmm1, dword ptr [r8 + r12]
+53.    10    50.3   4.0    0.0       vpinsrd	xmm1, xmm1, dword ptr [r10 + r12], 1
+54.    10    50.4   0.0    0.0       vpinsrd	xmm1, xmm1, dword ptr [rbx + r12], 2
+55.    10    51.4   0.0    0.0       vpinsrd	xmm1, xmm1, dword ptr [rcx + r12], 3
+56.    10    36.4   0.0    1.0       vpgatherdd	xmm2 {k3}, xmmword ptr [rsi + xmm3]
+57.    10    40.7   1.0    8.0       vmovd	xmm3, dword ptr [r8 + r12 + 4]
+58.    10    48.6   7.0    0.0       vpinsrd	xmm3, xmm3, dword ptr [r10 + r12 + 4], 1
+59.    10    48.7   0.0    0.0       vpinsrd	xmm3, xmm3, dword ptr [rbx + r12 + 4], 2
+60.    10    49.7   0.0    0.0       vpinsrd	xmm3, xmm3, dword ptr [rcx + r12 + 4], 3
+61.    10    50.7   0.0    3.0       vpandq	xmm7, xmm2, xmm30
+62.    10    51.7   0.0    0.0       vpmullw	xmm7, xmm7, xmm7
+63.    10    54.9   0.0    0.0       vpsrld	xmm26, xmm7, 16
+64.    10    55.9   0.0    0.0       vcvtdq2ps	xmm26, xmm26
+65.    10    24.1   0.0    30.9      vsubps	xmm8, xmm28, xmm5
+66.    10    25.0   0.0    30.0      vsubps	xmm17, xmm28, xmm16
+67.    10    29.0   1.0    25.0      vmulps	xmm18, xmm17, xmm8
+68.    10    29.0   1.0    25.0      vmulps	xmm17, xmm5, xmm17
+69.    10    25.5   0.2    26.7      vmulps	xmm8, xmm16, xmm8
+70.    10    22.3   0.1    29.9      vmulps	xmm5, xmm16, xmm5
+71.    10    55.3   0.0    0.0       vmulps	xmm16, xmm18, xmm26
+72.    10    55.3   0.0    0.0       vmulps	xmm19, xmm17, xmm26
+73.    10    58.3   0.0    0.0       vaddps	xmm16, xmm16, xmm19
+74.    10    55.3   1.0    3.0       vmulps	xmm19, xmm8, xmm26
+75.    10    62.3   0.0    0.0       vaddps	xmm16, xmm19, xmm16
+76.    10    42.4   0.0    22.0      vpsrlw	xmm19, xmm2, 8
+77.    10    42.5   0.0    17.0      vpmullw	xmm10, xmm19, xmm19
+78.    10    53.5   1.0    7.0       vmulps	xmm19, xmm5, xmm26
+79.    10    63.5   0.0    0.0       vaddps	xmm16, xmm19, xmm16
+80.    10    37.6   0.0    28.0      vpsrlw	xmm19, xmm0, 8
+81.    10    38.6   0.0    23.0      vpmullw	xmm11, xmm19, xmm19
+82.    10    44.7   0.0    20.0      vpblendw	xmm10, xmm10, xmm6, 170
+83.    10    44.8   0.0    16.0      vcvtdq2ps	xmm19, xmm10
+84.    10    41.5   0.0    22.0      vpblendw	xmm10, xmm11, xmm6, 170
+85.    10    41.6   0.0    18.0      vcvtdq2ps	xmm26, xmm10
+86.    10    48.3   2.0    10.0      vmulps	xmm19, xmm18, xmm19
+87.    10    43.4   0.0    14.0      vmulps	xmm26, xmm17, xmm26
+88.    10    50.1   0.0    6.0       vaddps	xmm19, xmm19, xmm26
+89.    10    35.1   1.0    24.0      vpsrlw	xmm26, xmm1, 8
+90.    10    34.8   0.0    19.0      vpmullw	xmm10, xmm26, xmm26
+91.    10    39.8   0.0    18.0      vpblendw	xmm10, xmm10, xmm6, 170
+92.    10    39.5   0.0    14.0      vcvtdq2ps	xmm26, xmm10
+93.    10    43.5   0.0    10.0      vmulps	xmm26, xmm8, xmm26
+94.    10    50.2   0.0    2.0       vaddps	xmm19, xmm19, xmm26
+95.    10    32.3   0.0    22.0      vpsrlw	xmm26, xmm3, 8
+96.    10    33.2   0.0    17.0      vpmullw	xmm10, xmm26, xmm26
+97.    10    37.3   0.0    16.0      vpblendw	xmm10, xmm10, xmm6, 170
+98.    10    41.0   3.0    9.0       vcvtdq2ps	xmm26, xmm10
+99.    10    44.1   0.0    5.0       vmulps	xmm26, xmm5, xmm26
+100.   10    48.9   0.0    0.0       vaddps	xmm19, xmm19, xmm26
+101.   10    21.0   0.0    30.0      vpandq	xmm26, xmm0, xmm30
+102.   10    21.9   0.0    25.0      vpmullw	xmm10, xmm26, xmm26
+103.   10    27.0   1.0    21.0      vpblendw	xmm7, xmm7, xmm6, 170
+104.   10    27.9   0.0    17.0      vcvtdq2ps	xmm26, xmm7
+105.   10    24.0   1.0    23.0      vpblendw	xmm7, xmm10, xmm6, 170
+106.   10    24.9   0.0    19.0      vcvtdq2ps	xmm7, xmm7
+107.   10    32.0   2.0    11.0      vmulps	xmm26, xmm18, xmm26
+108.   10    27.9   0.0    15.0      vmulps	xmm7, xmm17, xmm7
+109.   10    34.0   0.0    7.0       vaddps	xmm26, xmm26, xmm7
+110.   10    16.0   0.0    27.0      vpandq	xmm7, xmm1, xmm30
+111.   10    17.0   0.0    22.0      vpmullw	xmm7, xmm7, xmm7
+112.   10    23.0   2.0    19.0      vpblendw	xmm7, xmm7, xmm6, 170
+113.   10    23.0   0.0    15.0      vcvtdq2ps	xmm7, xmm7
+114.   10    28.0   1.0    10.0      vmulps	xmm7, xmm8, xmm7
+115.   10    34.0   0.0    3.0       vaddps	xmm26, xmm26, xmm7
+116.   10    16.0   0.0    24.0      vpandq	xmm7, xmm3, xmm30
+117.   10    19.0   3.0    16.0      vpmullw	xmm7, xmm7, xmm7
+118.   10    23.0   0.0    15.0      vpblendw	xmm7, xmm7, xmm6, 170
+119.   10    25.0   2.0    9.0       vcvtdq2ps	xmm7, xmm7
+120.   10    28.0   0.0    5.0       vmulps	xmm7, xmm5, xmm7
+121.   10    33.0   0.0    0.0       vaddps	xmm26, xmm26, xmm7
+122.   10    6.0    0.0    29.0      vpsrld	xmm2, xmm2, 24
+123.   10    8.0    2.0    23.0      vcvtdq2ps	xmm2, xmm2
+124.   10    20.0   9.0    10.0      vmulps	xmm2, xmm18, xmm2
+125.   10    20.0   19.0   12.0      vpsrld	xmm0, xmm0, 24
+126.   10    21.0   1.0    7.0       vcvtdq2ps	xmm0, xmm0
+127.   10    25.0   0.0    3.0       vmulps	xmm0, xmm17, xmm0
+128.   10    29.0   0.0    0.0       vaddps	xmm0, xmm2, xmm0
+129.   10    21.0   19.0   10.0      vpsrld	xmm1, xmm1, 24
+130.   10    22.0   0.0    6.0       vcvtdq2ps	xmm1, xmm1
+131.   10    25.0   0.0    2.0       vmulps	xmm1, xmm8, xmm1
+132.   10    31.0   0.0    0.0       vaddps	xmm0, xmm0, xmm1
+133.   10    2.0    2.0    26.0      vmovdqu64	xmm17, xmmword ptr [r13]
+134.   10    21.0   18.0   12.0      vpsrld	xmm1, xmm3, 24
+135.   10    23.0   1.0    7.0       vcvtdq2ps	xmm1, xmm1
+136.   10    27.0   0.0    3.0       vmulps	xmm1, xmm5, xmm1
+137.   10    1.0    0.0    25.0      vpshufb	xmm2, xmm17, xmmword ptr [rip + .LCPI9_9]
+138.   10    22.0   14.0   7.0       vcvtdq2ps	xmm2, xmm2
+139.   10    24.0   3.0    0.0       vmulps	xmm3, xmm16, xmmword ptr [rsp + 160]
+140.   10    32.0   0.0    0.0       vaddps	xmm0, xmm0, xmm1
+141.   10    32.0   0.0    0.0       vmulps	xmm5, xmm0, xmmword ptr [rsp + 112]
+142.   10    33.0   0.0    5.0       vmaxps	xmm0, xmm3, xmm6
+143.   10    36.0   0.0    1.0       vminps	xmm0, xmm0, xmm9
+144.   10    24.0   0.0    13.0      vmulps	xmm1, xmm2, xmm2
+145.   10    41.0   0.0    0.0       vmulps	xmm2, xmm5, xmm20
+146.   10    44.0   0.0    0.0       vaddps	xmm16, xmm2, xmm28
+147.   10    48.0   0.0    0.0       vmulps	xmm1, xmm1, xmm16
+148.   10    52.0   0.0    0.0       vaddps	xmm1, xmm0, xmm1
+149.   10    5.0    5.0    43.0      vpshufb	xmm0, xmm17, xmmword ptr [rip + .LCPI9_8]
+150.   10    21.0   9.0    30.0      vcvtdq2ps	xmm0, xmm0
+151.   10    23.0   4.0    22.0      vmulps	xmm2, xmm19, xmmword ptr [rsp + 144]
+152.   10    32.0   0.0    18.0      vmaxps	xmm2, xmm2, xmm6
+153.   10    36.0   0.0    14.0      vminps	xmm2, xmm2, xmm9
+154.   10    24.0   0.0    26.0      vmulps	xmm0, xmm0, xmm0
+155.   10    45.0   0.0    4.0       vmulps	xmm0, xmm0, xmm16
+156.   10    49.0   0.0    0.0       vaddps	xmm2, xmm0, xmm2
+157.   10    4.0    3.0    48.0      vpandd	xmm0, xmm17, xmm31
+158.   10    20.0   16.0   28.0      vcvtdq2ps	xmm0, xmm0
+159.   10    21.0   4.0    21.0      vmulps	xmm3, xmm26, xmmword ptr [rsp + 128]
+160.   10    31.0   0.0    17.0      vmaxps	xmm3, xmm3, xmm6
+161.   10    34.0   0.0    13.0      vminps	xmm3, xmm3, xmm9
+162.   10    23.0   0.0    24.0      vmulps	xmm0, xmm0, xmm0
+163.   10    44.0   1.0    3.0       vmulps	xmm0, xmm0, xmm16
+164.   10    47.0   0.0    0.0       vaddps	xmm3, xmm0, xmm3
+165.   10    50.0   0.0    0.0       vmovaps	xmm0, xmm1
+166.   10    51.0   0.0    0.0       rsqrtps	xmm0, xmm0
+167.   10    54.0   0.0    0.0       vmulps	xmm1, xmm0, xmm1
+168.   10    49.0   0.0    8.0       vmovaps	xmm0, xmm2
+169.   10    51.0   1.0    3.0       rsqrtps	xmm0, xmm0
+170.   10    54.0   0.0    0.0       vmulps	xmm2, xmm0, xmm2
+171.   10    49.0   0.0    8.0       vmovaps	xmm0, xmm3
+172.   10    51.0   1.0    3.0       rsqrtps	xmm0, xmm0
+173.   10    54.0   0.0    0.0       vmulps	xmm0, xmm0, xmm3
+174.   10    56.0   0.0    0.0       cvtps2dq	xmm1, xmm1
+175.   10    56.0   0.0    0.0       cvtps2dq	xmm2, xmm2
+176.   10    57.0   0.0    0.0       cvtps2dq	xmm0, xmm0
+177.   10    58.0   0.0    1.0       vpslld	xmm1, xmm1, 16
+178.   10    59.0   0.0    0.0       vpslld	xmm2, xmm2, 8
+179.   10    59.0   0.0    0.0       vpternlogd	xmm2, xmm0, xmm1, 254
+180.   10    1.0    1.0    55.0      vcmpleps	k2 {k2}, xmm15, xmm28
+181.   10    4.0    0.0    51.0      vcmpleps	k2 {k2}, xmm6, xmm15
+182.   10    8.0    0.0    47.0      vcmpleps	k2 {k2}, xmm6, xmm4
+183.   10    12.0   0.0    43.0      vcmpleps	k2 {k2}, xmm4, xmm28
+184.   10    11.0   11.0   46.0      vpsrld	xmm0, xmm17, 24
+185.   10    13.0   1.0    41.0      vcvtdq2ps	xmm0, xmm0
+186.   10    34.0   1.0    19.0      vmulps	xmm0, xmm16, xmm0
+187.   10    38.0   0.0    15.0      vaddps	xmm0, xmm5, xmm0
+188.   10    41.0   0.0    11.0      cvtps2dq	xmm0, xmm0
+189.   10    45.0   0.0    10.0      vpslld	xmm0, xmm0, 24
+190.   10    55.0   0.0    0.0       vpord	xmm17 {k2}, xmm2, xmm0
+191.   10    56.0   0.0    0.0       vmovdqa64	xmmword ptr [r13], xmm17
+192.   10    10.0   10.0   46.0      kxnorw	k2, k0, k0
+       10    32.5   1.2    15.0      <total>

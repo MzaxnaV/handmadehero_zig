@@ -37,7 +37,7 @@ pub const audio_state = struct {
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
 
-pub fn OutputTestSineWave(gameState: *h.game_state, soundBuffer: *platform.sound_output_buffer, toneHz: u32) void {
+fn OutputTestSineWave(gameState: *h.game_state, soundBuffer: *platform.sound_output_buffer, toneHz: u32) void {
     const toneVolume = 3000;
     const wavePeriod = soundBuffer.samplesPerSecond / toneHz;
 
@@ -133,7 +133,6 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
             dest0[sampleIndex] = zero;
             dest1[sampleIndex] = zero;
         }
-
     }
 
     simd.perf_analyzer.Start(.LLVM_MCA, "OPS_Mixing");
@@ -327,7 +326,6 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
             sampleOut[sampleIndex] = s01;
         }
-
     }
 }
 

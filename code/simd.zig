@@ -1,3 +1,5 @@
+const math = @import("std").math;
+
 // TODO (Manav): move this to handmade_platform??
 
 pub const f64x2 = @Vector(2, f64);
@@ -18,19 +20,17 @@ pub const u8x16 = @Vector(16, u8);
 pub const u1x4 = @Vector(4, u1);
 pub const bx4 = @Vector(4, bool);
 
-const math = @import("std").math;
 
 const maxInt = math.maxInt(i16);
 const minInt = math.minInt(i16);
 
 pub const perf_analyzer = struct {
-    /// DO NOT USE `defer` on `End()`.
     const method = enum {
         LLVM_MCA,
     };
 
     pub fn Start(comptime m: method, comptime region: []const u8) void {
-        // @fence(.SeqCst);
+        @fence(.SeqCst);
         switch (m) {
             .LLVM_MCA => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: "memory"),
         }
@@ -40,7 +40,7 @@ pub const perf_analyzer = struct {
         switch (m) {
             .LLVM_MCA => asm volatile ("# LLVM-MCA-END " ++ region ::: "memory"),
         }
-        // @fence(.SeqCst);
+        @fence(.SeqCst);
     }
 };
 
@@ -184,6 +184,7 @@ pub const i = struct {
         return result;
     }
 
+    // TODO (Manav): untested
     pub inline fn _mm_cvttps_epi32(v: f32x4) i32x4 {
         var result: i32x4 = @splat(0);
         asm volatile ("cvttps2dq %[vec], %[ret]"
@@ -202,6 +203,7 @@ pub const i = struct {
     //     return result;
     // }
 
+    // TODO (Manav): untested
     pub inline fn _mm_cvtepi32_ps(v: i32x4) f32x4 {
         const result = asm ("cvtdq2ps %[v], %[v]"
             : [ret] "=&{xmm0}" (-> f32x4),
@@ -211,6 +213,7 @@ pub const i = struct {
         return result;
     }
 
+    // TODO (Manav): untested
     pub inline fn _mm_unpacklo_epi32(a: i32x4, b: i32x4) i32x4 {
         var result: i32x4 = @splat(0);
         asm volatile ("punpckldq %[b], %[a]"
@@ -221,6 +224,7 @@ pub const i = struct {
         return result;
     }
 
+    // TODO (Manav): untested
     pub inline fn _mm_unpackhi_epi32(a: i32x4, b: i32x4) i32x4 {
         var result: i32x4 = @splat(0);
         asm volatile ("punpckhdq %[b], %[a]"

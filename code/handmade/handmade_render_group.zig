@@ -447,12 +447,13 @@ pub const loaded_bitmap = struct {
 
                 var clipMask: simd.u1x4 = startClipMask;
 
+                perf_analyzer.Start(.LLVM_MCA, "ProcessPixel");
+
                 var xi = xMin;
                 while (xi < xMax) : (xi += 4) {
                     var u: simd.f32x4 = pixelPX * nXAxisx_4x + pynX;
                     var v: simd.f32x4 = pixelPX * nYAxisx_4x + pynY;
 
-                    // perf_analyzer.Start(.LLVM_MCA, "ProcessPixel");
                     var writeMask: simd.u1x4 = @as(simd.u1x4, @bitCast((u >= zero))) & @as(simd.u1x4, @bitCast((u <= one))) &
                         @as(simd.u1x4, @bitCast((v >= zero))) & @as(simd.u1x4, @bitCast((v <= one)));
 
@@ -476,6 +477,7 @@ pub const loaded_bitmap = struct {
 
                         fetchX_4x = fetchX_4x << @splat(2);
                         fetchY_4x *= texturePitch_4x;
+
                         // TODO (Manav): Investigate why below doesn't work
                         // fetchX_4x = simd.z._mm_mullo_epi16(fetchX_4x, texturePitch_4x) | (simd.z._mm_mulhi_epi16(fetchX_4x, texturePitch_4x) << @splat(4, @as(u5, 16)));
 
@@ -667,7 +669,7 @@ pub const loaded_bitmap = struct {
                         @as(*simd.u32x4, @alignCast(@ptrCast(pixel))).* = maskedOut;
                     }
 
-                    // perf_analyzer.End(.LLVM_MCA, "ProcessPixel");
+                    perf_analyzer.End(.LLVM_MCA, "ProcessPixel");
 
                     pixelPX += four_4x;
                     pixel += 4;

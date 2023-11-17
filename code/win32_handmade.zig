@@ -156,6 +156,8 @@ var globalWindowPosition = win32.WINDOWPLACEMENT{
     .rcNormalPosition = undefined,
 };
 
+var globalDebug: platform.debug = .{};
+
 // library defs ---------------------------------------------------------------------------------------------------------------------------
 
 var XInputGetState: *const fn (u32, ?*win32.XINPUT_STATE) callconv(WINAPI) isize = undefined;
@@ -1268,6 +1270,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 .DEBUGPlatformFreeFileMemory = DEBUGWin32FreeFileMemory,
                 .DEBUGPlatformReadEntireFile = DEBUGWin32ReadEntireFile,
                 .DEBUGPlatformWriteEntireFile = DEBUGWin32WriteEntireFile,
+
+                .d = &globalDebug,
             };
 
             win32State.totalSize = gameMemory.permanentStorageSize + gameMemory.transientStorageSize;
@@ -1549,7 +1553,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             };
 
                             bytesToWrite = soundBuffer.sampleCount * soundOutput.bytesPerSample;
-                            
+
                             // Win32DebugSyncDisplay(&globalBackBuffer, 30, &debugTimeMarkers, debugTimeMarkerIndex, &soundOutput, targetSecondsPerFrame);
 
                             if (gameCode.GetSoundSamples) |GetSoundSamples| {
