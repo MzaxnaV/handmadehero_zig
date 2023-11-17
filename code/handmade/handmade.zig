@@ -783,11 +783,12 @@ pub export fn UpdateAndRender(
     }
 
     {
+        // TODO (Manav): investigate volume change issue
         var musicVolume: h.v2 = .{};
         musicVolume[1] = h.SafeRatiof0(@floatFromInt(gameInput.mouseX), @floatFromInt(buffer.width));
         musicVolume[0] = 1 - musicVolume[1];
 
-        h.ChangeVolume(&gameState.audioState, gameState.music, 0.01, musicVolume);
+        h.ChangeVolume(&gameState.audioState, gameState.music, 0.1, musicVolume);
     }
 
     const world = gameState.world;
@@ -1286,6 +1287,5 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
     const tranState: *h.transient_state = @alignCast(@ptrCast(gameMemory.transientStorage));
 
     h.OutputPlayingSounds(&gameState.audioState, soundBuffer, tranState.assets, &tranState.tranArena);
-    // OutputSound(gameState, soundBuffer, 400);
-
+    // h.OutputTestSineWave(gameState, soundBuffer, 400);
 }
