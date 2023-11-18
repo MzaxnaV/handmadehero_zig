@@ -14,6 +14,8 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "./code/simd.zig" },
     });
 
+    const asset_type_id = b.createModule(.{ .source_file = .{ .path = "./code/handmade_asset_type_id.zig" } });
+
     const win32 = b.createModule(.{
         .source_file = .{ .path = "./code/zwin32/win32.zig" },
     });
@@ -27,6 +29,7 @@ pub fn build(b: *std.Build) void {
     });
 
     lib.addModule("handmade_platform", platform);
+    lib.addModule("handmade_asset_type_id", asset_type_id);
     lib.addModule("simd", simd);
 
     const exe = b.addExecutable(.{
@@ -47,6 +50,9 @@ pub fn build(b: *std.Build) void {
     lib_tests.addModule("handmade_platform", platform);
     lib_tests.addModule("simd", simd);
 
+    const asset_builder = b.addExecutable(.{ .name = "asset_builder", .root_source_file = .{ .path = "./code/asset_builder.zig" }, .target = target, .optimize = .ReleaseSafe });
+    asset_builder.addModule("handmade_asset_type_id", asset_type_id);
+
     const run_test = b.addRunArtifact(lib_tests);
 
     const test_step = b.step("test", "Run handmade tests");
@@ -54,6 +60,11 @@ pub fn build(b: *std.Build) void {
 
     const build_step = b.step("lib", "Build the handmade lib");
     build_step.dependOn(&lib.step);
+
+    const run_asset_builder = b.addRunArtifact(asset_builder);
+
+    const run_step = b.step("run", "Run the asset builder");
+    run_step.dependOn(&run_asset_builder.step);
 
     const exe_install_step = b.addInstallArtifact(exe, .{
         .dest_dir = .{ .override = .{ .custom = "../build" } }, // TODO: change prefix to build instead

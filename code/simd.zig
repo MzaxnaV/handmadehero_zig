@@ -20,7 +20,6 @@ pub const u8x16 = @Vector(16, u8);
 pub const u1x4 = @Vector(4, u1);
 pub const bx4 = @Vector(4, bool);
 
-
 const maxInt = math.maxInt(i16);
 const minInt = math.minInt(i16);
 

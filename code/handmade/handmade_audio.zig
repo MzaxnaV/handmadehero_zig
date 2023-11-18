@@ -200,6 +200,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                     if (dVolumeChunk[channelIndex] != 0) {
                         const deltaVolume: f32 = playingSound.targetVolume[channelIndex] - volume[channelIndex];
 
+                        // TODO (Manav): this one also triggers
                         const volumeChunkCount: u32 = @intFromFloat((deltaVolume / dVolumeChunk[channelIndex]) + 0.5);
                         if (chunksToMix > volumeChunkCount) {
                             chunksToMix = volumeChunkCount;

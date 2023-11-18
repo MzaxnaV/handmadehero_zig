@@ -1544,11 +1544,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 bytesToWrite = targetCursor - byteToLock;
                             }
 
-                            const extraSamples = 80; // TODO (Manav): changing to 80 fixes underflow but cuts the
-
                             var soundBuffer = platform.sound_output_buffer{
                                 .samplesPerSecond = soundOutput.samplesPerSecond,
-                                .sampleCount = @intCast(platform.Align(extraSamples + (bytesToWrite / soundOutput.bytesPerSample), 8)),
+                                .sampleCount = @intCast(platform.Align(bytesToWrite / soundOutput.bytesPerSample, 8)),
                                 .samples = @alignCast(@ptrCast(samples)),
                             };
 
