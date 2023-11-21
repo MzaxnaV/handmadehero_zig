@@ -58,6 +58,15 @@
             "command": "zig build --verbose test"
         },
         {
+            "label": "Build Assets",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "zig build --verbose asset"
+        },
+        {
             "label": "Run llvm-mca",
             "type": "shell",
             "command": "${workspaceFolder}/misc/llvm_mca_output.bat",

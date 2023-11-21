@@ -16,6 +16,9 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
+const asset_tag_id = @import("handmade_asset_type_id").asset_tag_id;
+const asset_type_id = @import("handmade_asset_type_id").asset_type_id;
+
 pub const loaded_sound = struct {
     /// it is `sampleCount` divided by `8`
     sampleCount: u32 = 0,
@@ -37,20 +40,6 @@ pub const asset_slot = struct {
         sound: ?*loaded_sound,
     },
 };
-
-pub const asset_tag_id = enum {
-    Tag_Smoothness,
-    Tag_Flatness,
-    Tag_FacingDirection,
-
-    fn len() comptime_int {
-        comptime {
-            return @typeInfo(asset_type_id).Enum.fields.len;
-        }
-    }
-};
-
-pub const asset_type_id = @import("handmade_asset_type_id").asset_type_id;
 
 pub const asset_tag = struct {
     ID: u32,
@@ -126,8 +115,6 @@ pub const game_assets = struct {
 
     // heroBitmaps: [4]hero_bitmaps,
 
-    DEBUGUsedBitmapCount: u32,
-    DEBUGUsedSoundCount: u32,
     DEBUGUsedAssetCount: u32,
     DEBUGUsedTagCount: u32,
     DEBUGAssetType: ?*asset_type,
@@ -146,35 +133,6 @@ pub const game_assets = struct {
     pub inline fn GetSoundInfo(self: *game_assets, ID: sound_id) *asset_sound_info {
         const result = &self.assets[ID.value].info.sound;
         return result;
-    }
-
-    fn DEBUGAddBitmapInfo(self: *game_assets, fileName: [*:0]const u8, alignPercentage: h.v2) bitmap_id {
-        assert(self.DEBUGUsedBitmapCount < self.assets.len);
-
-        const ID = bitmap_id{ .value = self.DEBUGUsedBitmapCount };
-        self.DEBUGUsedBitmapCount += 1;
-
-        var info: *asset_bitmap_info = &self.assets[ID.value].info.bitmap;
-        info.filename = self.assetArena.PushString(fileName);
-        info.alignPercentage = alignPercentage;
-
-        return ID;
-    }
-
-    fn DEBUGAddSoundInfo(self: *game_assets, fileName: [*:0]const u8, firstSampleIndex: u32, sampleCount: u32) sound_id {
-        assert(self.DEBUGUsedSoundCount < self.assets.len);
-
-        const ID = sound_id{ .value = self.DEBUGUsedSoundCount };
-        self.DEBUGUsedSoundCount += 1;
-
-        self.assets[ID.value].info = .{ .sound = asset_sound_info{
-            .filename = self.assetArena.PushString(fileName),
-            .firstSampleIndex = firstSampleIndex,
-            .sampleCount = sampleCount,
-            .nextIDToPlay = .{ .value = 0 },
-        } };
-
-        return ID;
     }
 
     fn BeginAssetType(self: *game_assets, typeID: asset_type_id) void {
@@ -270,8 +228,6 @@ pub const game_assets = struct {
         const tagCount = 1024 * asset_tag_id.len();
         assets.tags = arena.PushSlice(asset_tag, tagCount);
 
-        assets.DEBUGUsedBitmapCount = 1;
-        assets.DEBUGUsedSoundCount = 1;
         assets.DEBUGUsedAssetCount = 1;
 
         assets.BeginAssetType(.Asset_Shadow);
@@ -500,94 +456,96 @@ fn DEBUGLoadBMP(fileName: [*:0]const u8, alignPercentage: h.v2) h.loaded_bitmap 
     return result;
 }
 
-const chunk_type = enum(u32) {
-    WAVE_ChunkID_fmt = riffCode('f', 'm', 't', ' '),
-    WAVE_ChunkID_data = riffCode('d', 'a', 't', 'a'),
-    WAVE_ChunkID_RIFF = riffCode('R', 'I', 'F', 'F'),
-    WAVE_ChunkID_WAVE = riffCode('W', 'A', 'V', 'E'),
-    WAVE_ChunkID_LIST = riffCode('L', 'I', 'S', 'T'),
+fn DEBUGLoadWAV(fileName: [*:0]const u8, sectionFirstSampleIndex: u32, sectionSampleCount: u32) loaded_sound {
+    const wave_header = extern struct {
+        riffID: u32 align(1),
+        size: u32 align(1),
+        waveID: u32 align(1),
+    };
 
-    fn riffCode(a: u8, b: u8, c: u8, d: u8) u32 {
-        return @bitCast(switch (platform.native_endian) {
-            .Big => [4]u8{ d, c, b, a },
-            .Little => [4]u8{ a, b, c, d },
-        });
-    }
-};
+    const wave_fmt = extern struct {
+        wFormatTag: u16 align(1),
+        nChannels: u16 align(1),
+        nSamplesPerSec: u32 align(1),
+        nAvgBytesPerSec: u32 align(1),
+        nBlockAlign: u16 align(1),
+        wBitsPerSample: u16 align(1),
+        cbSize: u16 align(1),
+        wValidBitsPerSample: u16 align(1),
+        dwChannelMask: u32 align(1),
+        subFormat: [16]u8 align(1),
+    };
 
-const riff_iterator = struct {
-    at: [*]u8,
-    stop: [*]u8,
+    const chunk_type = enum(u32) {
+        WAVE_ChunkID_fmt = riffCode('f', 'm', 't', ' '),
+        WAVE_ChunkID_data = riffCode('d', 'a', 't', 'a'),
+        WAVE_ChunkID_RIFF = riffCode('R', 'I', 'F', 'F'),
+        WAVE_ChunkID_WAVE = riffCode('W', 'A', 'V', 'E'),
+        WAVE_ChunkID_LIST = riffCode('L', 'I', 'S', 'T'),
 
-    fn ParseChunk(at: [*]u8, stop: [*]u8) riff_iterator {
-        const result = riff_iterator{
-            .at = at,
-            .stop = stop,
+        fn riffCode(a: u8, b: u8, c: u8, d: u8) u32 {
+            return @bitCast(switch (platform.native_endian) {
+                .Big => [4]u8{ d, c, b, a },
+                .Little => [4]u8{ a, b, c, d },
+            });
+        }
+    };
+
+    const riff_iterator = struct {
+        const Self = @This();
+
+        const wave_chunk = extern struct {
+            ID: u32 align(1),
+            size: u32 align(1),
         };
 
-        return result;
-    }
+        at: [*]u8,
+        stop: [*]u8,
 
-    fn IsValid(self: *riff_iterator) bool {
-        const result = @intFromPtr(self.at) < @intFromPtr(self.stop);
-        return result;
-    }
+        fn ParseChunk(at: [*]u8, stop: [*]u8) Self {
+            const result = Self{
+                .at = at,
+                .stop = stop,
+            };
 
-    fn NextChunk(self: *riff_iterator) void {
-        const chunk: *wave_chunk = @ptrCast(self.at);
+            return result;
+        }
 
-        // align forward chunk.size when it's odd, https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
-        const size = (chunk.size + 1) & ~(@as(u32, 1));
+        fn IsValid(self: *Self) bool {
+            const result = @intFromPtr(self.at) < @intFromPtr(self.stop);
+            return result;
+        }
 
-        self.at += @sizeOf(wave_chunk) + size;
-    }
+        fn NextChunk(self: *Self) void {
+            const chunk: *wave_chunk = @ptrCast(self.at);
 
-    fn GetType(self: *riff_iterator) chunk_type {
-        const chunk: *wave_chunk = @ptrCast(self.at);
+            // align forward chunk.size when it's odd, https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
+            const size = (chunk.size + 1) & ~(@as(u32, 1));
 
-        const result: chunk_type = @enumFromInt(chunk.ID);
-        return result;
-    }
+            self.at += @sizeOf(wave_chunk) + size;
+        }
 
-    fn GetChunkData(self: *riff_iterator) [*]u8 {
-        const result: [*]u8 = self.at + @sizeOf(wave_chunk);
+        fn GetType(self: *Self) chunk_type {
+            const chunk: *wave_chunk = @ptrCast(self.at);
 
-        return result;
-    }
+            const result: chunk_type = @enumFromInt(chunk.ID);
+            return result;
+        }
 
-    fn GetChunkDataSize(self: *riff_iterator) u32 {
-        const chunk: *wave_chunk = @ptrCast(self.at);
+        fn GetChunkData(self: *Self) [*]u8 {
+            const result: [*]u8 = self.at + @sizeOf(wave_chunk);
 
-        const result: u32 = chunk.size;
-        return result;
-    }
-};
+            return result;
+        }
 
-const wave_chunk = extern struct {
-    ID: u32 align(1),
-    size: u32 align(1),
-};
+        fn GetChunkDataSize(self: *Self) u32 {
+            const chunk: *wave_chunk = @ptrCast(self.at);
 
-const wave_header = extern struct {
-    riffID: u32 align(1),
-    size: u32 align(1),
-    waveID: u32 align(1),
-};
+            const result: u32 = chunk.size;
+            return result;
+        }
+    };
 
-const wave_fmt = extern struct {
-    wFormatTag: u16 align(1),
-    nChannels: u16 align(1),
-    nSamplesPerSec: u32 align(1),
-    nAvgBytesPerSec: u32 align(1),
-    nBlockAlign: u16 align(1),
-    wBitsPerSample: u16 align(1),
-    cbSize: u16 align(1),
-    wValidBitsPerSample: u16 align(1),
-    dwChannelMask: u32 align(1),
-    subFormat: [16]u8 align(1),
-};
-
-fn DEBUGLoadWAV(fileName: [*:0]const u8, sectionFirstSampleIndex: u32, sectionSampleCount: u32) loaded_sound {
     var result = loaded_sound{};
 
     const readResult = h.DEBUGPlatformReadEntireFile.?(fileName);

@@ -14,7 +14,9 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "./code/simd.zig" },
     });
 
-    const asset_type_id = b.createModule(.{ .source_file = .{ .path = "./code/handmade_asset_type_id.zig" } });
+    const asset_type_id = b.createModule(.{
+        .source_file = .{ .path = "./code/handmade_asset_type_id.zig" },
+    });
 
     const win32 = b.createModule(.{
         .source_file = .{ .path = "./code/zwin32/win32.zig" },
@@ -50,7 +52,12 @@ pub fn build(b: *std.Build) void {
     lib_tests.addModule("handmade_platform", platform);
     lib_tests.addModule("simd", simd);
 
-    const asset_builder = b.addExecutable(.{ .name = "asset_builder", .root_source_file = .{ .path = "./code/asset_builder.zig" }, .target = target, .optimize = .ReleaseSafe });
+    const asset_builder = b.addExecutable(.{
+        .name = "asset_builder",
+        .root_source_file = .{ .path = "./code/asset_builder.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
     asset_builder.addModule("handmade_asset_type_id", asset_type_id);
 
     const run_test = b.addRunArtifact(lib_tests);
@@ -61,10 +68,8 @@ pub fn build(b: *std.Build) void {
     const build_step = b.step("lib", "Build the handmade lib");
     build_step.dependOn(&lib.step);
 
-    const run_asset_builder = b.addRunArtifact(asset_builder);
-
-    const run_step = b.step("run", "Run the asset builder");
-    run_step.dependOn(&run_asset_builder.step);
+    const run_step = b.step("asset", "Build the asset builder");
+    run_step.dependOn(&asset_builder.step);
 
     const exe_install_step = b.addInstallArtifact(exe, .{
         .dest_dir = .{ .override = .{ .custom = "../build" } }, // TODO: change prefix to build instead
@@ -76,9 +81,15 @@ pub fn build(b: *std.Build) void {
         .pdb_dir = .{ .override = .{ .custom = "../build" } },
     });
 
+    const asset_builder_install_step = b.addInstallArtifact(asset_builder, .{
+        .dest_dir = .{ .override = .{ .custom = "../build" } },
+        .pdb_dir = .{ .override = .{ .custom = "../build" } },
+    });
+
     const asm_install_step = b.addInstallFile(lib.getEmittedAsm(), "../misc/handmade.s");
 
     b.getInstallStep().dependOn(&exe_install_step.step);
     b.getInstallStep().dependOn(&lib_install_step.step);
+    b.getInstallStep().dependOn(&asset_builder_install_step.step);
     b.getInstallStep().dependOn(&asm_install_step.step);
 }

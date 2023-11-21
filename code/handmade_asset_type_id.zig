@@ -38,3 +38,15 @@ pub const asset_type_id = enum(u32) {
         }
     }
 };
+
+pub const asset_tag_id = enum {
+    Tag_Smoothness,
+    Tag_Flatness,
+    Tag_FacingDirection,
+
+    pub fn len() comptime_int {
+        comptime {
+            return @typeInfo(asset_type_id).Enum.fields.len;
+        }
+    }
+};

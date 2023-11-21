@@ -10,6 +10,8 @@ const h = struct {
     usingnamespace @import("handmade_sim_region.zig");
     usingnamespace @import("handmade_render_group.zig");
     usingnamespace @import("handmade_world.zig");
+
+    usingnamespace @import("handmade_asset_type_id");
 };
 
 const assert = platform.Assert;
@@ -783,12 +785,11 @@ pub export fn UpdateAndRender(
     }
 
     {
-        // TODO (Manav): investigate volume change issue
         var musicVolume: h.v2 = .{};
         musicVolume[1] = h.SafeRatiof0(@floatFromInt(gameInput.mouseX), @floatFromInt(buffer.width));
         musicVolume[0] = 1 - musicVolume[1];
 
-        h.ChangeVolume(&gameState.audioState, gameState.music, 0.1, musicVolume);
+        h.ChangeVolume(&gameState.audioState, gameState.music, 0.01, musicVolume);
     }
 
     const world = gameState.world;

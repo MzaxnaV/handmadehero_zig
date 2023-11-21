@@ -38,6 +38,18 @@
             "cwd": "${workspaceFolder}/data",
             "environment": [],
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Zig Assets Run",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/asset_builder.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build",
+            // "preLaunchTask": "Build Assets",
+            "environment": [],
+            "console": "integratedTerminal"
         }
     ]
 }

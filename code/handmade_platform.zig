@@ -9,7 +9,7 @@ pub const native_endian = @import("builtin").target.cpu.arch.endian();
 
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
-pub const Pi32 = 3.14159265359; // TODO: these should be in handmade_math
+pub const Pi32 = 3.14159265359;
 pub const Tau32 = 6.28318530718;
 
 pub const CONTROLLERS = 5;

@@ -188,23 +188,20 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 const realChunksRemainingInSound: f32 = @as(f32, @floatFromInt(loadedSound.sampleCount - h.RoundF32ToInt(u32, playingSound.samplesPlayed))) / dSampleChunk;
                 const chunksRemainingInSound = h.RoundF32ToInt(u32, realChunksRemainingInSound);
 
-                var inputSamplesEnded = false;
                 if (chunksToMix > chunksRemainingInSound) {
                     chunksToMix = chunksRemainingInSound;
-                    inputSamplesEnded = true;
                 }
 
                 const audioStateOutputChannelCount = 2;
-                var volumeEnded: [audioStateOutputChannelCount]bool = [1]bool{false} ** audioStateOutputChannelCount;
-                for (0..volumeEnded.len) |channelIndex| {
+                var volumeEndsAt: [audioStateOutputChannelCount]u32 = [1]u32{0} ** audioStateOutputChannelCount;
+                for (0..volumeEndsAt.len) |channelIndex| {
                     if (dVolumeChunk[channelIndex] != 0) {
                         const deltaVolume: f32 = playingSound.targetVolume[channelIndex] - volume[channelIndex];
 
-                        // TODO (Manav): this one also triggers
                         const volumeChunkCount: u32 = @intFromFloat((deltaVolume / dVolumeChunk[channelIndex]) + 0.5);
                         if (chunksToMix > volumeChunkCount) {
                             chunksToMix = volumeChunkCount;
-                            volumeEnded[channelIndex] = true;
+                            volumeEndsAt[channelIndex] = volumeChunkCount;
                         }
                     }
                 }
@@ -266,8 +263,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
                 playingSound.currentVolume[0] = volume0[0];
                 playingSound.currentVolume[1] = volume1[1];
-                for (0..volumeEnded.len) |channelIndex| {
-                    if (volumeEnded[channelIndex]) {
+                for (0..volumeEndsAt.len) |channelIndex| {
+                    if (volumeEndsAt[channelIndex] == chunksToMix) {
                         playingSound.currentVolume[channelIndex] = playingSound.targetVolume[channelIndex];
                         playingSound.dCurrentVolume[channelIndex] = 0;
                     }
@@ -277,11 +274,11 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 assert(totalChunksToMix >= chunksToMix);
                 totalChunksToMix -= chunksToMix;
 
-                if (inputSamplesEnded) {
+                if (chunksToMix == chunksRemainingInSound) {
                     if (info.nextIDToPlay.IsValid()) {
                         playingSound.ID = info.nextIDToPlay;
 
-                        // assert fires
+                        // TODO (Manav): assert still fires
                         assert(playingSound.samplesPlayed >= @as(f32, @floatFromInt(loadedSound.sampleCount)));
                         playingSound.samplesPlayed -= @floatFromInt(loadedSound.sampleCount);
                         if (playingSound.samplesPlayed < 0) {
