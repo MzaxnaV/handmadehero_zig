@@ -7,6 +7,8 @@ const h = struct {
     usingnamespace @import("handmade_random.zig");
     usingnamespace @import("handmade_render_group.zig");
     usingnamespace @import("handmade.zig");
+
+    usingnamespace @import("handmade_file_formats.zig");
 };
 
 const hi = platform.handmade_internal;
@@ -221,133 +223,151 @@ pub const game_assets = struct {
 
         assets.tagRange[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
 
-        const assetCount = 2 * 256 * asset_tag_id.len();
-        assets.assets = arena.PushSlice(asset, assetCount);
-        assets.slots = arena.PushSlice(asset_slot, assetCount);
+        const readResult = h.DEBUGPlatformReadEntireFile.?("../build/test.hha");
+        if (readResult.contentSize != 0) {
+            const header: *h.hha_header = @ptrCast(readResult.contents);
 
-        const tagCount = 1024 * asset_tag_id.len();
-        assets.tags = arena.PushSlice(asset_tag, tagCount);
+            assert(header.magicValue == h.HHA_MAGIC_VALUE);
+            assert(header.version == h.HHA_VERSION);
 
-    //     assets.DEBUGUsedAssetCount = 1;
+            const assetCount = header.assetCount;
+            assets.assets = arena.PushSlice(asset, assetCount);
+            assets.slots = arena.PushSlice(asset_slot, assetCount);
 
-    //     assets.BeginAssetType(.Asset_Shadow);
-    //     _ = assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
-    //     assets.EndAssetType();
+            const tagCount = header.tagCount;
+            assets.tags = arena.PushSlice(asset_tag, tagCount);
 
-    //     assets.BeginAssetType(.Asset_Tree);
-    //     _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
-    //     assets.EndAssetType();
+            const hhaTags: [*]h.hha_tag = @ptrCast(@as([*]u8, @ptrCast(header)) + header.tags);
 
-    //     assets.BeginAssetType(.Asset_Sword);
-    //     _ = assets.AddBitmapAsset("test2/rock03.bmp", .{ 0.5, 0.65625 });
-    //     assets.EndAssetType();
+            for (0..tagCount) |tagIndex| {
+                const source: h.hha_tag = hhaTags[tagIndex];
+                var dest: *asset_tag = &assets.tags[tagIndex];
 
-    //     assets.BeginAssetType(.Asset_Grass);
-    //     _ = assets.AddBitmapAsset("test2/grass00.bmp", .{ 0.5, 0.5 });
-    //     _ = assets.AddBitmapAsset("test2/grass01.bmp", .{ 0.5, 0.5 });
-    //     assets.EndAssetType();
+                dest.ID = source.ID;
+                dest.value = source.value;
+            }
+        }
 
-    //     assets.BeginAssetType(.Asset_Tuft);
-    //     _ = assets.AddBitmapAsset("test2/tuft00.bmp", .{ 0.5, 0.5 });
-    //     _ = assets.AddBitmapAsset("test2/tuft01.bmp", .{ 0.5, 0.5 });
-    //     _ = assets.AddBitmapAsset("test2/tuft02.bmp", .{ 0.5, 0.5 });
-    //     assets.EndAssetType();
+        //     assets.DEBUGUsedAssetCount = 1;
 
-    //     assets.BeginAssetType(.Asset_Stone);
-    //     _ = assets.AddBitmapAsset("test2/ground00.bmp", .{ 0.5, 0.5 });
-    //     _ = assets.AddBitmapAsset("test2/ground01.bmp", .{ 0.5, 0.5 });
-    //     _ = assets.AddBitmapAsset("test2/ground02.bmp", .{ 0.5, 0.5 });
-    //     _ = assets.AddBitmapAsset("test2/ground03.bmp", .{ 0.5, 0.5 });
-    //     assets.EndAssetType();
+        //     assets.BeginAssetType(.Asset_Shadow);
+        //     _ = assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
+        //     assets.EndAssetType();
 
-    //     const angleRight = 0.0 * platform.Tau32;
-    //     const angleBack = 0.25 * platform.Tau32;
-    //     const angleLeft = 0.5 * platform.Tau32;
-    //     const angleFront = 0.75 * platform.Tau32;
+        //     assets.BeginAssetType(.Asset_Tree);
+        //     _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
+        //     assets.EndAssetType();
 
-    //     const heroAlign = h.v2{ 0.5, 0.156682029 };
+        //     assets.BeginAssetType(.Asset_Sword);
+        //     _ = assets.AddBitmapAsset("test2/rock03.bmp", .{ 0.5, 0.65625 });
+        //     assets.EndAssetType();
 
-    //     assets.BeginAssetType(.Asset_Head);
-    //     _ = assets.AddBitmapAsset("test/test_hero_right_head.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleRight);
-    //     _ = assets.AddBitmapAsset("test/test_hero_back_head.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleBack);
-    //     _ = assets.AddBitmapAsset("test/test_hero_left_head.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleLeft);
-    //     _ = assets.AddBitmapAsset("test/test_hero_front_head.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleFront);
-    //     assets.EndAssetType();
+        //     assets.BeginAssetType(.Asset_Grass);
+        //     _ = assets.AddBitmapAsset("test2/grass00.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/grass01.bmp", .{ 0.5, 0.5 });
+        //     assets.EndAssetType();
 
-    //     assets.BeginAssetType(.Asset_Cape);
-    //     _ = assets.AddBitmapAsset("test/test_hero_right_cape.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleRight);
-    //     _ = assets.AddBitmapAsset("test/test_hero_back_cape.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleBack);
-    //     _ = assets.AddBitmapAsset("test/test_hero_left_cape.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleLeft);
-    //     _ = assets.AddBitmapAsset("test/test_hero_front_cape.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleFront);
-    //     assets.EndAssetType();
+        //     assets.BeginAssetType(.Asset_Tuft);
+        //     _ = assets.AddBitmapAsset("test2/tuft00.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/tuft01.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/tuft02.bmp", .{ 0.5, 0.5 });
+        //     assets.EndAssetType();
 
-    //     assets.BeginAssetType(.Asset_Torso);
-    //     _ = assets.AddBitmapAsset("test/test_hero_right_torso.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleRight);
-    //     _ = assets.AddBitmapAsset("test/test_hero_back_torso.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleBack);
-    //     _ = assets.AddBitmapAsset("test/test_hero_left_torso.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleLeft);
-    //     _ = assets.AddBitmapAsset("test/test_hero_front_torso.bmp", heroAlign);
-    //     assets.AddTag(.Tag_FacingDirection, angleFront);
-    //     assets.EndAssetType();
+        //     assets.BeginAssetType(.Asset_Stone);
+        //     _ = assets.AddBitmapAsset("test2/ground00.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/ground01.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/ground02.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/ground03.bmp", .{ 0.5, 0.5 });
+        //     assets.EndAssetType();
 
-    //     assets.BeginAssetType(.Asset_Bloop);
-    //     _ = assets.AddDefaultSoundAsset("test3/bloop_00.wav");
-    //     _ = assets.AddDefaultSoundAsset("test3/bloop_01.wav");
-    //     _ = assets.AddDefaultSoundAsset("test3/bloop_02.wav");
-    //     _ = assets.AddDefaultSoundAsset("test3/bloop_03.wav");
-    //     _ = assets.AddDefaultSoundAsset("test3/bloop_04.wav");
-    //     assets.EndAssetType();
+        //     const angleRight = 0.0 * platform.Tau32;
+        //     const angleBack = 0.25 * platform.Tau32;
+        //     const angleLeft = 0.5 * platform.Tau32;
+        //     const angleFront = 0.75 * platform.Tau32;
 
-    //     assets.BeginAssetType(.Asset_Crack);
-    //     _ = assets.AddDefaultSoundAsset("test3/crack_00.wav");
-    //     assets.EndAssetType();
+        //     const heroAlign = h.v2{ 0.5, 0.156682029 };
 
-    //     assets.BeginAssetType(.Asset_Drop);
-    //     _ = assets.AddDefaultSoundAsset("test3/drop_00.wav");
-    //     assets.EndAssetType();
+        //     assets.BeginAssetType(.Asset_Head);
+        //     _ = assets.AddBitmapAsset("test/test_hero_right_head.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleRight);
+        //     _ = assets.AddBitmapAsset("test/test_hero_back_head.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleBack);
+        //     _ = assets.AddBitmapAsset("test/test_hero_left_head.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleLeft);
+        //     _ = assets.AddBitmapAsset("test/test_hero_front_head.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleFront);
+        //     assets.EndAssetType();
 
-    //     assets.BeginAssetType(.Asset_Glide);
-    //     _ = assets.AddDefaultSoundAsset("test3/glide_00.wav");
-    //     assets.EndAssetType();
+        //     assets.BeginAssetType(.Asset_Cape);
+        //     _ = assets.AddBitmapAsset("test/test_hero_right_cape.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleRight);
+        //     _ = assets.AddBitmapAsset("test/test_hero_back_cape.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleBack);
+        //     _ = assets.AddBitmapAsset("test/test_hero_left_cape.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleLeft);
+        //     _ = assets.AddBitmapAsset("test/test_hero_front_cape.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleFront);
+        //     assets.EndAssetType();
 
-    //     const oneMusicChunk = 48000 * 10;
-    //     // const totalMusicSampleCount = 48000 * 20;
-    //     const totalMusicSampleCount = 7468095;
-    //     assets.BeginAssetType(.Asset_Music);
-    //     var lastMusic: sound_id = .{};
-    //     var firstSampleIndex: u32 = 0;
-    //     while (firstSampleIndex < totalMusicSampleCount) : (firstSampleIndex += oneMusicChunk) {
-    //         var sampleCount = totalMusicSampleCount - firstSampleIndex;
-    //         if (sampleCount > oneMusicChunk) {
-    //             sampleCount = oneMusicChunk;
-    //         }
-    //         const thisMusic = assets.AddSoundAsset("test3/music_test.wav", firstSampleIndex, sampleCount);
-    //         if (lastMusic.IsValid()) {
-    //             assets.assets[lastMusic.value].info.sound.nextIDToPlay = thisMusic;
-    //         }
-    //         lastMusic = thisMusic;
-    //     }
-    //     assets.EndAssetType();
+        //     assets.BeginAssetType(.Asset_Torso);
+        //     _ = assets.AddBitmapAsset("test/test_hero_right_torso.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleRight);
+        //     _ = assets.AddBitmapAsset("test/test_hero_back_torso.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleBack);
+        //     _ = assets.AddBitmapAsset("test/test_hero_left_torso.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleLeft);
+        //     _ = assets.AddBitmapAsset("test/test_hero_front_torso.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleFront);
+        //     assets.EndAssetType();
 
-    //     assets.BeginAssetType(.Asset_Puhp);
-    //     _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
-    //     _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
-    //     assets.EndAssetType();
+        //     assets.BeginAssetType(.Asset_Bloop);
+        //     _ = assets.AddDefaultSoundAsset("test3/bloop_00.wav");
+        //     _ = assets.AddDefaultSoundAsset("test3/bloop_01.wav");
+        //     _ = assets.AddDefaultSoundAsset("test3/bloop_02.wav");
+        //     _ = assets.AddDefaultSoundAsset("test3/bloop_03.wav");
+        //     _ = assets.AddDefaultSoundAsset("test3/bloop_04.wav");
+        //     assets.EndAssetType();
 
-    //     assets.BeginAssetType(.Asset_test_stereo);
-    //     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1min.wav");
-    //     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1sec.wav");
-    //     assets.EndAssetType();
+        //     assets.BeginAssetType(.Asset_Crack);
+        //     _ = assets.AddDefaultSoundAsset("test3/crack_00.wav");
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Drop);
+        //     _ = assets.AddDefaultSoundAsset("test3/drop_00.wav");
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Glide);
+        //     _ = assets.AddDefaultSoundAsset("test3/glide_00.wav");
+        //     assets.EndAssetType();
+
+        //     const oneMusicChunk = 48000 * 10;
+        //     // const totalMusicSampleCount = 48000 * 20;
+        //     const totalMusicSampleCount = 7468095;
+        //     assets.BeginAssetType(.Asset_Music);
+        //     var lastMusic: sound_id = .{};
+        //     var firstSampleIndex: u32 = 0;
+        //     while (firstSampleIndex < totalMusicSampleCount) : (firstSampleIndex += oneMusicChunk) {
+        //         var sampleCount = totalMusicSampleCount - firstSampleIndex;
+        //         if (sampleCount > oneMusicChunk) {
+        //             sampleCount = oneMusicChunk;
+        //         }
+        //         const thisMusic = assets.AddSoundAsset("test3/music_test.wav", firstSampleIndex, sampleCount);
+        //         if (lastMusic.IsValid()) {
+        //             assets.assets[lastMusic.value].info.sound.nextIDToPlay = thisMusic;
+        //         }
+        //         lastMusic = thisMusic;
+        //     }
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Puhp);
+        //     _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
+        //     _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_test_stereo);
+        //     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1min.wav");
+        //     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1sec.wav");
+        //     assets.EndAssetType();
 
         return assets;
     }
