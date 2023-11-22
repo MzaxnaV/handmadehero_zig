@@ -46,8 +46,8 @@
             "program": "${workspaceFolder}/build/asset_builder.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build",
-            // "preLaunchTask": "Build Assets",
+            "cwd": "${workspaceFolder}/data",
+            "preLaunchTask": "Build Assets",
             "environment": [],
             "console": "integratedTerminal"
         }

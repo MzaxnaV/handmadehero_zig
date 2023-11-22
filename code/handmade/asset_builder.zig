@@ -115,7 +115,7 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !h.loaded_bitmap 
     var result = h.loaded_bitmap{};
 
     const readResult = ReadEntireFile(fileName, allocator) catch |err| {
-        std.log.err("{}\nFilename: {s}", .{err, fileName});
+        std.log.err("{}\nFilename: {s}", .{ err, fileName });
         return err;
     };
 
@@ -276,8 +276,8 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
 
     var result = h.loaded_sound{};
 
-    const readResult: entire_file = ReadEntireFile(fileName, allocator)  catch |err| {
-        std.log.err("{}\nFilename: {s}", .{err, fileName});
+    const readResult: entire_file = ReadEntireFile(fileName, allocator) catch |err| {
+        std.log.err("{}\nFilename: {s}", .{ err, fileName });
         return err;
     };
 

@@ -223,7 +223,7 @@ pub const game_assets = struct {
 
         assets.tagRange[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
 
-        const readResult = h.DEBUGPlatformReadEntireFile.?("../build/test.hha");
+        const readResult = h.DEBUGPlatformReadEntireFile.?("test.hha");
         if (readResult.contentSize != 0) {
             const header: *h.hha_header = @ptrCast(readResult.contents);
 
