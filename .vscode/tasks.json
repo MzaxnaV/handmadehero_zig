@@ -58,7 +58,7 @@
             "command": "zig build --verbose test"
         },
         {
-            "label": "Build Assets",
+            "label": "Build Assets Debug",
             "type": "shell",
             "group": {
                 "kind": "build",

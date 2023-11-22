@@ -468,3 +468,27 @@ pub inline fn SafeRatiof1(num: f32, div: f32) f32 {
     var result = SafeRatioN(num, div, 1);
     return result;
 }
+
+pub inline fn SRGB255ToLinear1(c: v4) v4 {
+    const inv255 = 1.0 / 255.0;
+    const result = v4{
+        Square(inv255 * R(c)),
+        Square(inv255 * G(c)),
+        Square(inv255 * B(c)),
+        inv255 * A(c),
+    };
+
+    return result;
+}
+
+pub inline fn Linear1ToSRGB255(c: v4) v4 {
+    const one255 = 255;
+    const result = v4{
+        one255 * h.SquareRoot(R(c)),
+        one255 * h.SquareRoot(G(c)),
+        one255 * h.SquareRoot(B(c)),
+        one255 * A(c),
+    };
+
+    return result;
+}

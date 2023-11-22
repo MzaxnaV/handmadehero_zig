@@ -7,6 +7,8 @@ const h = struct {
     usingnamespace @import("handmade_random.zig");
     usingnamespace @import("handmade_render_group.zig");
     usingnamespace @import("handmade.zig");
+
+    usingnamespace @import("handmade_file_formats.zig");
 };
 
 const hi = platform.handmade_internal;
@@ -115,10 +117,10 @@ pub const game_assets = struct {
 
     // heroBitmaps: [4]hero_bitmaps,
 
-    DEBUGUsedAssetCount: u32,
-    DEBUGUsedTagCount: u32,
-    DEBUGAssetType: ?*asset_type,
-    DEBUGAsset: ?*asset,
+    // DEBUGUsedAssetCount: u32,
+    // DEBUGUsedTagCount: u32,
+    // DEBUGAssetType: ?*asset_type,
+    // DEBUGAsset: ?*asset,
 
     pub inline fn GetBitmap(self: *game_assets, ID: bitmap_id) ?*h.loaded_bitmap {
         const result = self.slots[ID.value].data.bitmap;
@@ -135,79 +137,79 @@ pub const game_assets = struct {
         return result;
     }
 
-    fn BeginAssetType(self: *game_assets, typeID: asset_type_id) void {
-        assert(self.DEBUGAssetType == null);
+    // fn BeginAssetType(self: *game_assets, typeID: asset_type_id) void {
+    //     assert(self.DEBUGAssetType == null);
 
-        self.DEBUGAssetType = &self.assetTypes[@intFromEnum(typeID)];
-        self.DEBUGAssetType.?.firstAssetIndex = self.DEBUGUsedAssetCount;
-        self.DEBUGAssetType.?.onePastLastAssetIndex = self.DEBUGAssetType.?.firstAssetIndex;
-    }
+    //     self.DEBUGAssetType = &self.assetTypes[@intFromEnum(typeID)];
+    //     self.DEBUGAssetType.?.firstAssetIndex = self.DEBUGUsedAssetCount;
+    //     self.DEBUGAssetType.?.onePastLastAssetIndex = self.DEBUGAssetType.?.firstAssetIndex;
+    // }
 
-    fn EndAssetType(self: *game_assets) void {
-        assert(self.DEBUGAssetType != null);
-        self.DEBUGUsedAssetCount = self.DEBUGAssetType.?.onePastLastAssetIndex;
-        self.DEBUGAssetType = null;
-        self.DEBUGAsset = null;
-    }
+    // fn EndAssetType(self: *game_assets) void {
+    //     assert(self.DEBUGAssetType != null);
+    //     self.DEBUGUsedAssetCount = self.DEBUGAssetType.?.onePastLastAssetIndex;
+    //     self.DEBUGAssetType = null;
+    //     self.DEBUGAsset = null;
+    // }
 
-    /// Defaults: ```alignPercentage = .{0.5, 0.5 }```
-    fn AddBitmapAsset(self: *game_assets, fileName: [*:0]const u8, alignPercentage: h.v2) bitmap_id {
-        assert(self.DEBUGAssetType != null);
-        assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
+    // /// Defaults: ```alignPercentage = .{0.5, 0.5 }```
+    // fn AddBitmapAsset(self: *game_assets, fileName: [*:0]const u8, alignPercentage: h.v2) bitmap_id {
+    //     assert(self.DEBUGAssetType != null);
+    //     assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
 
-        var result: bitmap_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
-        self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
+    //     var result: bitmap_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
+    //     self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
 
-        var a: *asset = &self.assets[result.value];
-        a.firstTagIndex = self.DEBUGUsedTagCount;
-        a.onePastLastTagIndex = a.firstTagIndex;
-        a.info = .{ .bitmap = asset_bitmap_info{
-            .filename = self.assetArena.PushString(fileName),
-            .alignPercentage = alignPercentage,
-        } };
+    //     var a: *asset = &self.assets[result.value];
+    //     a.firstTagIndex = self.DEBUGUsedTagCount;
+    //     a.onePastLastTagIndex = a.firstTagIndex;
+    //     a.info = .{ .bitmap = asset_bitmap_info{
+    //         .filename = self.assetArena.PushString(fileName),
+    //         .alignPercentage = alignPercentage,
+    //     } };
 
-        self.DEBUGAsset = a;
+    //     self.DEBUGAsset = a;
 
-        return result;
-    }
+    //     return result;
+    // }
 
-    inline fn AddDefaultSoundAsset(self: *game_assets, fileName: [*:0]const u8) sound_id {
-        return self.AddSoundAsset(fileName, 0, 0);
-    }
+    // inline fn AddDefaultSoundAsset(self: *game_assets, fileName: [*:0]const u8) sound_id {
+    //     return self.AddSoundAsset(fileName, 0, 0);
+    // }
 
-    fn AddSoundAsset(self: *game_assets, fileName: [*:0]const u8, firstSampleIndex: u32, sampleCount: u32) sound_id {
-        assert(self.DEBUGAssetType != null);
-        assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
+    // fn AddSoundAsset(self: *game_assets, fileName: [*:0]const u8, firstSampleIndex: u32, sampleCount: u32) sound_id {
+    //     assert(self.DEBUGAssetType != null);
+    //     assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
 
-        var result: sound_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
-        self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
+    //     var result: sound_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
+    //     self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
 
-        var a: *asset = &self.assets[result.value];
-        a.firstTagIndex = self.DEBUGUsedTagCount;
-        a.onePastLastTagIndex = a.firstTagIndex;
-        a.info = .{ .sound = asset_sound_info{
-            .filename = self.assetArena.PushString(fileName),
-            .firstSampleIndex = firstSampleIndex,
-            .sampleCount = sampleCount,
-            .nextIDToPlay = .{ .value = 0 },
-        } };
+    //     var a: *asset = &self.assets[result.value];
+    //     a.firstTagIndex = self.DEBUGUsedTagCount;
+    //     a.onePastLastTagIndex = a.firstTagIndex;
+    //     a.info = .{ .sound = asset_sound_info{
+    //         .filename = self.assetArena.PushString(fileName),
+    //         .firstSampleIndex = firstSampleIndex,
+    //         .sampleCount = sampleCount,
+    //         .nextIDToPlay = .{ .value = 0 },
+    //     } };
 
-        self.DEBUGAsset = a;
+    //     self.DEBUGAsset = a;
 
-        return result;
-    }
+    //     return result;
+    // }
 
-    fn AddTag(self: *game_assets, ID: asset_tag_id, value: f32) void {
-        assert(self.DEBUGAsset != null);
+    // fn AddTag(self: *game_assets, ID: asset_tag_id, value: f32) void {
+    //     assert(self.DEBUGAsset != null);
 
-        self.DEBUGAsset.?.onePastLastTagIndex += 1;
+    //     self.DEBUGAsset.?.onePastLastTagIndex += 1;
 
-        var tag: *asset_tag = &self.tags[self.DEBUGUsedTagCount];
-        self.DEBUGUsedTagCount += 1;
+    //     var tag: *asset_tag = &self.tags[self.DEBUGUsedTagCount];
+    //     self.DEBUGUsedTagCount += 1;
 
-        tag.ID = @intFromEnum(ID);
-        tag.value = value;
-    }
+    //     tag.ID = @intFromEnum(ID);
+    //     tag.value = value;
+    // }
 
     pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
         var assets: *game_assets = arena.PushStruct(game_assets);
@@ -221,420 +223,444 @@ pub const game_assets = struct {
 
         assets.tagRange[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
 
-        const assetCount = 2 * 256 * asset_tag_id.len();
-        assets.assets = arena.PushSlice(asset, assetCount);
-        assets.slots = arena.PushSlice(asset_slot, assetCount);
+        const readResult = h.DEBUGPlatformReadEntireFile.?("test.hha");
+        if (readResult.contentSize != 0) {
+            const header: *h.hha_header = @ptrCast(readResult.contents);
 
-        const tagCount = 1024 * asset_tag_id.len();
-        assets.tags = arena.PushSlice(asset_tag, tagCount);
+            assert(header.magicValue == h.HHA_MAGIC_VALUE);
+            assert(header.version == h.HHA_VERSION);
 
-        assets.DEBUGUsedAssetCount = 1;
+            const assetCount = header.assetCount;
+            assets.assets = arena.PushSlice(asset, assetCount);
+            assets.slots = arena.PushSlice(asset_slot, assetCount);
 
-        assets.BeginAssetType(.Asset_Shadow);
-        _ = assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
-        assets.EndAssetType();
+            const tagCount = header.tagCount;
+            assets.tags = arena.PushSlice(asset_tag, tagCount);
 
-        assets.BeginAssetType(.Asset_Tree);
-        _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
-        assets.EndAssetType();
+            const hhaTags: [*]h.hha_tag = @ptrCast(@as([*]u8, @ptrCast(header)) + header.tags);
 
-        assets.BeginAssetType(.Asset_Sword);
-        _ = assets.AddBitmapAsset("test2/rock03.bmp", .{ 0.5, 0.65625 });
-        assets.EndAssetType();
+            for (0..tagCount) |tagIndex| {
+                const source: h.hha_tag = hhaTags[tagIndex];
+                var dest: *asset_tag = &assets.tags[tagIndex];
 
-        assets.BeginAssetType(.Asset_Grass);
-        _ = assets.AddBitmapAsset("test2/grass00.bmp", .{ 0.5, 0.5 });
-        _ = assets.AddBitmapAsset("test2/grass01.bmp", .{ 0.5, 0.5 });
-        assets.EndAssetType();
-
-        assets.BeginAssetType(.Asset_Tuft);
-        _ = assets.AddBitmapAsset("test2/tuft00.bmp", .{ 0.5, 0.5 });
-        _ = assets.AddBitmapAsset("test2/tuft01.bmp", .{ 0.5, 0.5 });
-        _ = assets.AddBitmapAsset("test2/tuft02.bmp", .{ 0.5, 0.5 });
-        assets.EndAssetType();
-
-        assets.BeginAssetType(.Asset_Stone);
-        _ = assets.AddBitmapAsset("test2/ground00.bmp", .{ 0.5, 0.5 });
-        _ = assets.AddBitmapAsset("test2/ground01.bmp", .{ 0.5, 0.5 });
-        _ = assets.AddBitmapAsset("test2/ground02.bmp", .{ 0.5, 0.5 });
-        _ = assets.AddBitmapAsset("test2/ground03.bmp", .{ 0.5, 0.5 });
-        assets.EndAssetType();
-
-        const angleRight = 0.0 * platform.Tau32;
-        const angleBack = 0.25 * platform.Tau32;
-        const angleLeft = 0.5 * platform.Tau32;
-        const angleFront = 0.75 * platform.Tau32;
-
-        const heroAlign = h.v2{ 0.5, 0.156682029 };
-
-        assets.BeginAssetType(.Asset_Head);
-        _ = assets.AddBitmapAsset("test/test_hero_right_head.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleRight);
-        _ = assets.AddBitmapAsset("test/test_hero_back_head.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleBack);
-        _ = assets.AddBitmapAsset("test/test_hero_left_head.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleLeft);
-        _ = assets.AddBitmapAsset("test/test_hero_front_head.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleFront);
-        assets.EndAssetType();
-
-        assets.BeginAssetType(.Asset_Cape);
-        _ = assets.AddBitmapAsset("test/test_hero_right_cape.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleRight);
-        _ = assets.AddBitmapAsset("test/test_hero_back_cape.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleBack);
-        _ = assets.AddBitmapAsset("test/test_hero_left_cape.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleLeft);
-        _ = assets.AddBitmapAsset("test/test_hero_front_cape.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleFront);
-        assets.EndAssetType();
-
-        assets.BeginAssetType(.Asset_Torso);
-        _ = assets.AddBitmapAsset("test/test_hero_right_torso.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleRight);
-        _ = assets.AddBitmapAsset("test/test_hero_back_torso.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleBack);
-        _ = assets.AddBitmapAsset("test/test_hero_left_torso.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleLeft);
-        _ = assets.AddBitmapAsset("test/test_hero_front_torso.bmp", heroAlign);
-        assets.AddTag(.Tag_FacingDirection, angleFront);
-        assets.EndAssetType();
-
-        assets.BeginAssetType(.Asset_Bloop);
-        _ = assets.AddDefaultSoundAsset("test3/bloop_00.wav");
-        _ = assets.AddDefaultSoundAsset("test3/bloop_01.wav");
-        _ = assets.AddDefaultSoundAsset("test3/bloop_02.wav");
-        _ = assets.AddDefaultSoundAsset("test3/bloop_03.wav");
-        _ = assets.AddDefaultSoundAsset("test3/bloop_04.wav");
-        assets.EndAssetType();
-
-        assets.BeginAssetType(.Asset_Crack);
-        _ = assets.AddDefaultSoundAsset("test3/crack_00.wav");
-        assets.EndAssetType();
-
-        assets.BeginAssetType(.Asset_Drop);
-        _ = assets.AddDefaultSoundAsset("test3/drop_00.wav");
-        assets.EndAssetType();
-
-        assets.BeginAssetType(.Asset_Glide);
-        _ = assets.AddDefaultSoundAsset("test3/glide_00.wav");
-        assets.EndAssetType();
-
-        const oneMusicChunk = 48000 * 10;
-        // const totalMusicSampleCount = 48000 * 20;
-        const totalMusicSampleCount = 7468095;
-        assets.BeginAssetType(.Asset_Music);
-        var lastMusic: sound_id = .{};
-        var firstSampleIndex: u32 = 0;
-        while (firstSampleIndex < totalMusicSampleCount) : (firstSampleIndex += oneMusicChunk) {
-            var sampleCount = totalMusicSampleCount - firstSampleIndex;
-            if (sampleCount > oneMusicChunk) {
-                sampleCount = oneMusicChunk;
+                dest.ID = source.ID;
+                dest.value = source.value;
             }
-            const thisMusic = assets.AddSoundAsset("test3/music_test.wav", firstSampleIndex, sampleCount);
-            if (lastMusic.IsValid()) {
-                assets.assets[lastMusic.value].info.sound.nextIDToPlay = thisMusic;
-            }
-            lastMusic = thisMusic;
         }
-        assets.EndAssetType();
 
-        assets.BeginAssetType(.Asset_Puhp);
-        _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
-        _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
-        assets.EndAssetType();
+        //     assets.DEBUGUsedAssetCount = 1;
 
-        assets.BeginAssetType(.Asset_test_stereo);
-        _ = assets.AddDefaultSoundAsset("wave_stereo_test_1min.wav");
-        _ = assets.AddDefaultSoundAsset("wave_stereo_test_1sec.wav");
-        assets.EndAssetType();
+        //     assets.BeginAssetType(.Asset_Shadow);
+        //     _ = assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Tree);
+        //     _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Sword);
+        //     _ = assets.AddBitmapAsset("test2/rock03.bmp", .{ 0.5, 0.65625 });
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Grass);
+        //     _ = assets.AddBitmapAsset("test2/grass00.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/grass01.bmp", .{ 0.5, 0.5 });
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Tuft);
+        //     _ = assets.AddBitmapAsset("test2/tuft00.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/tuft01.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/tuft02.bmp", .{ 0.5, 0.5 });
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Stone);
+        //     _ = assets.AddBitmapAsset("test2/ground00.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/ground01.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/ground02.bmp", .{ 0.5, 0.5 });
+        //     _ = assets.AddBitmapAsset("test2/ground03.bmp", .{ 0.5, 0.5 });
+        //     assets.EndAssetType();
+
+        //     const angleRight = 0.0 * platform.Tau32;
+        //     const angleBack = 0.25 * platform.Tau32;
+        //     const angleLeft = 0.5 * platform.Tau32;
+        //     const angleFront = 0.75 * platform.Tau32;
+
+        //     const heroAlign = h.v2{ 0.5, 0.156682029 };
+
+        //     assets.BeginAssetType(.Asset_Head);
+        //     _ = assets.AddBitmapAsset("test/test_hero_right_head.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleRight);
+        //     _ = assets.AddBitmapAsset("test/test_hero_back_head.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleBack);
+        //     _ = assets.AddBitmapAsset("test/test_hero_left_head.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleLeft);
+        //     _ = assets.AddBitmapAsset("test/test_hero_front_head.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleFront);
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Cape);
+        //     _ = assets.AddBitmapAsset("test/test_hero_right_cape.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleRight);
+        //     _ = assets.AddBitmapAsset("test/test_hero_back_cape.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleBack);
+        //     _ = assets.AddBitmapAsset("test/test_hero_left_cape.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleLeft);
+        //     _ = assets.AddBitmapAsset("test/test_hero_front_cape.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleFront);
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Torso);
+        //     _ = assets.AddBitmapAsset("test/test_hero_right_torso.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleRight);
+        //     _ = assets.AddBitmapAsset("test/test_hero_back_torso.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleBack);
+        //     _ = assets.AddBitmapAsset("test/test_hero_left_torso.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleLeft);
+        //     _ = assets.AddBitmapAsset("test/test_hero_front_torso.bmp", heroAlign);
+        //     assets.AddTag(.Tag_FacingDirection, angleFront);
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Bloop);
+        //     _ = assets.AddDefaultSoundAsset("test3/bloop_00.wav");
+        //     _ = assets.AddDefaultSoundAsset("test3/bloop_01.wav");
+        //     _ = assets.AddDefaultSoundAsset("test3/bloop_02.wav");
+        //     _ = assets.AddDefaultSoundAsset("test3/bloop_03.wav");
+        //     _ = assets.AddDefaultSoundAsset("test3/bloop_04.wav");
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Crack);
+        //     _ = assets.AddDefaultSoundAsset("test3/crack_00.wav");
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Drop);
+        //     _ = assets.AddDefaultSoundAsset("test3/drop_00.wav");
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Glide);
+        //     _ = assets.AddDefaultSoundAsset("test3/glide_00.wav");
+        //     assets.EndAssetType();
+
+        //     const oneMusicChunk = 48000 * 10;
+        //     // const totalMusicSampleCount = 48000 * 20;
+        //     const totalMusicSampleCount = 7468095;
+        //     assets.BeginAssetType(.Asset_Music);
+        //     var lastMusic: sound_id = .{};
+        //     var firstSampleIndex: u32 = 0;
+        //     while (firstSampleIndex < totalMusicSampleCount) : (firstSampleIndex += oneMusicChunk) {
+        //         var sampleCount = totalMusicSampleCount - firstSampleIndex;
+        //         if (sampleCount > oneMusicChunk) {
+        //             sampleCount = oneMusicChunk;
+        //         }
+        //         const thisMusic = assets.AddSoundAsset("test3/music_test.wav", firstSampleIndex, sampleCount);
+        //         if (lastMusic.IsValid()) {
+        //             assets.assets[lastMusic.value].info.sound.nextIDToPlay = thisMusic;
+        //         }
+        //         lastMusic = thisMusic;
+        //     }
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_Puhp);
+        //     _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
+        //     _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
+        //     assets.EndAssetType();
+
+        //     assets.BeginAssetType(.Asset_test_stereo);
+        //     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1min.wav");
+        //     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1sec.wav");
+        //     assets.EndAssetType();
 
         return assets;
     }
 };
 
-inline fn TopDownAlign(bitmap: *const h.loaded_bitmap, alignment: h.v2) h.v2 {
-    const fixedAlignment = h.v2{
-        h.SafeRatiof0(h.X(alignment), @as(f32, @floatFromInt(bitmap.width))),
-        h.SafeRatiof0(@as(f32, @floatFromInt(bitmap.height - 1)) - h.Y(alignment), @as(f32, @floatFromInt(bitmap.height))),
-    };
-    return fixedAlignment;
-}
-
 /// Defaults: ```alignPercentage = .{0.5, 0.5 }```
-fn DEBUGLoadBMP(fileName: [*:0]const u8, alignPercentage: h.v2) h.loaded_bitmap {
-    const bitmap_header = extern struct {
-        fileType: u16 align(1),
-        fileSize: u32 align(1),
-        reserved1: u16 align(1),
-        reserved2: u16 align(1),
-        bitmapOffset: u32 align(1),
-        size: u32 align(1),
-        width: i32 align(1),
-        height: i32 align(1),
-        planes: u16 align(1),
-        bitsPerPixel: u16 align(1),
-        compression: u32 align(1),
-        sizeOfBitmap: u32 align(1),
-        horzResolution: u32 align(1),
-        vertResolution: u32 align(1),
-        colorsUsed: u32 align(1),
-        colorsImportant: u32 align(1),
+// fn DEBUGLoadBMP(fileName: [*:0]const u8, alignPercentage: h.v2) h.loaded_bitmap {
+//     const bitmap_header = extern struct {
+//         fileType: u16 align(1),
+//         fileSize: u32 align(1),
+//         reserved1: u16 align(1),
+//         reserved2: u16 align(1),
+//         bitmapOffset: u32 align(1),
+//         size: u32 align(1),
+//         width: i32 align(1),
+//         height: i32 align(1),
+//         planes: u16 align(1),
+//         bitsPerPixel: u16 align(1),
+//         compression: u32 align(1),
+//         sizeOfBitmap: u32 align(1),
+//         horzResolution: u32 align(1),
+//         vertResolution: u32 align(1),
+//         colorsUsed: u32 align(1),
+//         colorsImportant: u32 align(1),
 
-        redMask: u32 align(1),
-        greenMask: u32 align(1),
-        blueMask: u32 align(1),
-    };
+//         redMask: u32 align(1),
+//         greenMask: u32 align(1),
+//         blueMask: u32 align(1),
+//     };
 
-    var result = h.loaded_bitmap{};
+//     var result = h.loaded_bitmap{};
 
-    const readResult = h.DEBUGPlatformReadEntireFile.?(fileName);
-    if (readResult.contentSize != 0) {
-        const header: *bitmap_header = @ptrCast(readResult.contents);
-        const pixels = readResult.contents + header.bitmapOffset;
-        result.width = header.width;
-        result.height = header.height;
-        result.memory = pixels;
-        result.alignPercentage = alignPercentage;
-        result.widthOverHeight = h.SafeRatiof0(@as(f32, @floatFromInt(result.width)), @as(f32, @floatFromInt(result.height)));
+//     const readResult = h.DEBUGPlatformReadEntireFile.?(fileName);
+//     if (readResult.contentSize != 0) {
+//         const header: *bitmap_header = @ptrCast(readResult.contents);
+//         const pixels = readResult.contents + header.bitmapOffset;
+//         result.width = header.width;
+//         result.height = header.height;
+//         result.memory = pixels;
+//         result.alignPercentage = alignPercentage;
+//         result.widthOverHeight = h.SafeRatiof0(@as(f32, @floatFromInt(result.width)), @as(f32, @floatFromInt(result.height)));
 
-        assert(header.height >= 0);
-        assert(header.compression == 3);
+//         assert(header.height >= 0);
+//         assert(header.compression == 3);
 
-        const redMask = header.redMask;
-        const greenMask = header.greenMask;
-        const blueMask = header.blueMask;
-        const alphaMask = ~(redMask | greenMask | blueMask);
+//         const redMask = header.redMask;
+//         const greenMask = header.greenMask;
+//         const blueMask = header.blueMask;
+//         const alphaMask = ~(redMask | greenMask | blueMask);
 
-        const redScan = h.FindLeastSignificantSetBit(redMask);
-        const greenScan = h.FindLeastSignificantSetBit(greenMask);
-        const blueScan = h.FindLeastSignificantSetBit(blueMask);
-        const alphaScan = h.FindLeastSignificantSetBit(alphaMask);
+//         const redScan = h.FindLeastSignificantSetBit(redMask);
+//         const greenScan = h.FindLeastSignificantSetBit(greenMask);
+//         const blueScan = h.FindLeastSignificantSetBit(blueMask);
+//         const alphaScan = h.FindLeastSignificantSetBit(alphaMask);
 
-        const redShiftDown = @as(u5, @intCast(redScan));
-        const greenShiftDown = @as(u5, @intCast(greenScan));
-        const blueShiftDown = @as(u5, @intCast(blueScan));
-        const alphaShiftDown = @as(u5, @intCast(alphaScan));
+//         const redShiftDown = @as(u5, @intCast(redScan));
+//         const greenShiftDown = @as(u5, @intCast(greenScan));
+//         const blueShiftDown = @as(u5, @intCast(blueScan));
+//         const alphaShiftDown = @as(u5, @intCast(alphaScan));
 
-        const sourceDest = @as([*]align(1) u32, @ptrCast(result.memory));
+//         const sourceDest = @as([*]align(1) u32, @ptrCast(result.memory));
 
-        var index = @as(u32, 0);
-        while (index < @as(u32, @intCast(header.height * header.width))) : (index += 1) {
-            const c = sourceDest[index];
+//         var index = @as(u32, 0);
+//         while (index < @as(u32, @intCast(header.height * header.width))) : (index += 1) {
+//             const c = sourceDest[index];
 
-            var texel = h.v4{
-                @as(f32, @floatFromInt((c & redMask) >> redShiftDown)),
-                @as(f32, @floatFromInt((c & greenMask) >> greenShiftDown)),
-                @as(f32, @floatFromInt((c & blueMask) >> blueShiftDown)),
-                @as(f32, @floatFromInt((c & alphaMask) >> alphaShiftDown)),
-            };
+//             var texel = h.v4{
+//                 @as(f32, @floatFromInt((c & redMask) >> redShiftDown)),
+//                 @as(f32, @floatFromInt((c & greenMask) >> greenShiftDown)),
+//                 @as(f32, @floatFromInt((c & blueMask) >> blueShiftDown)),
+//                 @as(f32, @floatFromInt((c & alphaMask) >> alphaShiftDown)),
+//             };
 
-            texel = h.SRGB255ToLinear1(texel);
+//             texel = h.SRGB255ToLinear1(texel);
 
-            if (NOT_IGNORE) {
-                // texel.rgb *= texel.a;
-                texel = h.ToV4(h.Scale(h.RGB(texel), h.A(texel)), h.A(texel));
-            }
+//             if (NOT_IGNORE) {
+//                 // texel.rgb *= texel.a;
+//                 texel = h.ToV4(h.Scale(h.RGB(texel), h.A(texel)), h.A(texel));
+//             }
 
-            texel = h.Linear1ToSRGB255(texel);
+//             texel = h.Linear1ToSRGB255(texel);
 
-            sourceDest[index] =
-                (@as(u32, @intFromFloat((h.A(texel) + 0.5))) << 24 |
-                @as(u32, @intFromFloat((h.R(texel) + 0.5))) << 16 |
-                @as(u32, @intFromFloat((h.G(texel) + 0.5))) << 8 |
-                @as(u32, @intFromFloat((h.B(texel) + 0.5))) << 0);
-        }
-    }
+//             sourceDest[index] =
+//                 (@as(u32, @intFromFloat((h.A(texel) + 0.5))) << 24 |
+//                 @as(u32, @intFromFloat((h.R(texel) + 0.5))) << 16 |
+//                 @as(u32, @intFromFloat((h.G(texel) + 0.5))) << 8 |
+//                 @as(u32, @intFromFloat((h.B(texel) + 0.5))) << 0);
+//         }
+//     }
 
-    result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
+//     result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
 
-    if (!NOT_IGNORE) {
-        result.memory += @as(usize, @intCast(result.pitch * (result.height - 1)));
-        result.pitch = -result.width;
-    }
+//     if (!NOT_IGNORE) {
+//         result.memory += @as(usize, @intCast(result.pitch * (result.height - 1)));
+//         result.pitch = -result.width;
+//     }
 
+//     return result;
+// }
+
+// fn DEBUGLoadWAV(fileName: [*:0]const u8, sectionFirstSampleIndex: u32, sectionSampleCount: u32) loaded_sound {
+//     const wave_header = extern struct {
+//         riffID: u32 align(1),
+//         size: u32 align(1),
+//         waveID: u32 align(1),
+//     };
+
+//     const wave_fmt = extern struct {
+//         wFormatTag: u16 align(1),
+//         nChannels: u16 align(1),
+//         nSamplesPerSec: u32 align(1),
+//         nAvgBytesPerSec: u32 align(1),
+//         nBlockAlign: u16 align(1),
+//         wBitsPerSample: u16 align(1),
+//         cbSize: u16 align(1),
+//         wValidBitsPerSample: u16 align(1),
+//         dwChannelMask: u32 align(1),
+//         subFormat: [16]u8 align(1),
+//     };
+
+//     const chunk_type = enum(u32) {
+//         WAVE_ChunkID_fmt = riffCode('f', 'm', 't', ' '),
+//         WAVE_ChunkID_data = riffCode('d', 'a', 't', 'a'),
+//         WAVE_ChunkID_RIFF = riffCode('R', 'I', 'F', 'F'),
+//         WAVE_ChunkID_WAVE = riffCode('W', 'A', 'V', 'E'),
+//         WAVE_ChunkID_LIST = riffCode('L', 'I', 'S', 'T'),
+
+//         fn riffCode(a: u8, b: u8, c: u8, d: u8) u32 {
+//             return @bitCast(switch (platform.native_endian) {
+//                 .Big => [4]u8{ d, c, b, a },
+//                 .Little => [4]u8{ a, b, c, d },
+//             });
+//         }
+//     };
+
+//     const riff_iterator = struct {
+//         const Self = @This();
+
+//         const wave_chunk = extern struct {
+//             ID: u32 align(1),
+//             size: u32 align(1),
+//         };
+
+//         at: [*]u8,
+//         stop: [*]u8,
+
+//         fn ParseChunk(at: [*]u8, stop: [*]u8) Self {
+//             const result = Self{
+//                 .at = at,
+//                 .stop = stop,
+//             };
+
+//             return result;
+//         }
+
+//         fn IsValid(self: *Self) bool {
+//             const result = @intFromPtr(self.at) < @intFromPtr(self.stop);
+//             return result;
+//         }
+
+//         fn NextChunk(self: *Self) void {
+//             const chunk: *wave_chunk = @ptrCast(self.at);
+
+//             // align forward chunk.size when it's odd, https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
+//             const size = (chunk.size + 1) & ~(@as(u32, 1));
+
+//             self.at += @sizeOf(wave_chunk) + size;
+//         }
+
+//         fn GetType(self: *Self) chunk_type {
+//             const chunk: *wave_chunk = @ptrCast(self.at);
+
+//             const result: chunk_type = @enumFromInt(chunk.ID);
+//             return result;
+//         }
+
+//         fn GetChunkData(self: *Self) [*]u8 {
+//             const result: [*]u8 = self.at + @sizeOf(wave_chunk);
+
+//             return result;
+//         }
+
+//         fn GetChunkDataSize(self: *Self) u32 {
+//             const chunk: *wave_chunk = @ptrCast(self.at);
+
+//             const result: u32 = chunk.size;
+//             return result;
+//         }
+//     };
+
+//     var result = loaded_sound{};
+
+//     const readResult = h.DEBUGPlatformReadEntireFile.?(fileName);
+//     if (readResult.contentSize != 0) {
+//         const header: *wave_header = @ptrCast(readResult.contents);
+
+//         assert(header.riffID == @intFromEnum(chunk_type.WAVE_ChunkID_RIFF));
+//         assert(header.waveID == @intFromEnum(chunk_type.WAVE_ChunkID_WAVE));
+
+//         const at = @as([*]u8, @ptrCast(header)) + @sizeOf(wave_header);
+//         const stop = @as([*]u8, @ptrCast(header)) + @sizeOf(wave_header) + (header.size - 4);
+
+//         var iter = riff_iterator.ParseChunk(at, stop);
+
+//         var sampleDataSize: u32 = 0;
+//         var channelCount: u32 = 0;
+//         var sampleData: ?[*]i16 = null;
+//         while (iter.IsValid()) : (iter.NextChunk()) {
+//             switch (iter.GetType()) {
+//                 .WAVE_ChunkID_fmt => {
+//                     const fmt: *wave_fmt = @ptrCast(iter.GetChunkData());
+
+//                     assert(fmt.wFormatTag == 1);
+//                     assert(fmt.nSamplesPerSec == 48000);
+//                     assert(fmt.wBitsPerSample == 16);
+//                     assert(fmt.nBlockAlign == @sizeOf(u16) * fmt.nChannels);
+
+//                     channelCount = fmt.nChannels;
+//                 },
+//                 .WAVE_ChunkID_data => {
+//                     sampleData = @alignCast(@ptrCast(iter.GetChunkData()));
+//                     sampleDataSize = iter.GetChunkDataSize();
+//                 },
+
+//                 else => {},
+//             }
+//         }
+
+//         assert(channelCount != 0 and sampleData != null);
+
+//         result.channelCount = channelCount;
+//         var sampleCount: u32 = sampleDataSize / (channelCount * @sizeOf(u16));
+
+//         if (channelCount == 1) {
+//             result.samples[0] = @ptrCast(sampleData);
+//             result.samples[1] = null;
+//         } else if (channelCount == 2) {
+//             result.samples[0] = @ptrCast(sampleData);
+//             result.samples[1] = sampleData.? + sampleCount;
+
+//             if (!NOT_IGNORE) {
+//                 for (0..sampleCount) |sampleIndex| {
+//                     sampleData.?[2 * sampleIndex + 0] = @intCast(sampleIndex);
+//                     sampleData.?[2 * sampleIndex + 1] = @intCast(sampleIndex);
+//                 }
+//             }
+
+//             for (0..sampleCount) |sampleIndex| {
+//                 var source: i16 = sampleData.?[2 * sampleIndex];
+//                 sampleData.?[2 * sampleIndex] = sampleData.?[sampleIndex];
+//                 sampleData.?[sampleIndex] = source;
+//             }
+//         } else {
+//             platform.InvalidCodePath("invalid channel count in wav file");
+//         }
+
+//         var atEnd = true;
+//         result.channelCount = 1;
+//         if (sectionSampleCount != 0) {
+//             assert(sectionFirstSampleIndex + sectionSampleCount <= sampleCount);
+//             atEnd = (sectionFirstSampleIndex + sectionSampleCount == sampleCount);
+//             sampleCount = sectionSampleCount;
+
+//             for (0..result.channelCount) |channelIndex| {
+//                 result.samples[channelIndex].? += sectionFirstSampleIndex;
+//             }
+//         }
+
+//         if (atEnd) {
+//             for (0..result.channelCount) |channelIndex| {
+//                 for (sampleCount..sampleCount + 8) |sampleIndex| {
+//                     result.samples[channelIndex].?[sampleIndex] = 0;
+//                 }
+//             }
+//         }
+
+//         result.sampleCount = sampleCount;
+//     }
+
+//     return result;
+// }
+
+fn DEBUGLoadBMP(_: [*:0]const u8, _: h.v2) h.loaded_bitmap {
+    platform.Assert(false);
+
+    const result = h.loaded_bitmap{};
     return result;
 }
 
-fn DEBUGLoadWAV(fileName: [*:0]const u8, sectionFirstSampleIndex: u32, sectionSampleCount: u32) loaded_sound {
-    const wave_header = extern struct {
-        riffID: u32 align(1),
-        size: u32 align(1),
-        waveID: u32 align(1),
-    };
+fn DEBUGLoadWAV(_: [*:0]const u8, _: u32, _: u32) loaded_sound {
+    platform.Assert(false);
 
-    const wave_fmt = extern struct {
-        wFormatTag: u16 align(1),
-        nChannels: u16 align(1),
-        nSamplesPerSec: u32 align(1),
-        nAvgBytesPerSec: u32 align(1),
-        nBlockAlign: u16 align(1),
-        wBitsPerSample: u16 align(1),
-        cbSize: u16 align(1),
-        wValidBitsPerSample: u16 align(1),
-        dwChannelMask: u32 align(1),
-        subFormat: [16]u8 align(1),
-    };
-
-    const chunk_type = enum(u32) {
-        WAVE_ChunkID_fmt = riffCode('f', 'm', 't', ' '),
-        WAVE_ChunkID_data = riffCode('d', 'a', 't', 'a'),
-        WAVE_ChunkID_RIFF = riffCode('R', 'I', 'F', 'F'),
-        WAVE_ChunkID_WAVE = riffCode('W', 'A', 'V', 'E'),
-        WAVE_ChunkID_LIST = riffCode('L', 'I', 'S', 'T'),
-
-        fn riffCode(a: u8, b: u8, c: u8, d: u8) u32 {
-            return @bitCast(switch (platform.native_endian) {
-                .Big => [4]u8{ d, c, b, a },
-                .Little => [4]u8{ a, b, c, d },
-            });
-        }
-    };
-
-    const riff_iterator = struct {
-        const Self = @This();
-
-        const wave_chunk = extern struct {
-            ID: u32 align(1),
-            size: u32 align(1),
-        };
-
-        at: [*]u8,
-        stop: [*]u8,
-
-        fn ParseChunk(at: [*]u8, stop: [*]u8) Self {
-            const result = Self{
-                .at = at,
-                .stop = stop,
-            };
-
-            return result;
-        }
-
-        fn IsValid(self: *Self) bool {
-            const result = @intFromPtr(self.at) < @intFromPtr(self.stop);
-            return result;
-        }
-
-        fn NextChunk(self: *Self) void {
-            const chunk: *wave_chunk = @ptrCast(self.at);
-
-            // align forward chunk.size when it's odd, https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
-            const size = (chunk.size + 1) & ~(@as(u32, 1));
-
-            self.at += @sizeOf(wave_chunk) + size;
-        }
-
-        fn GetType(self: *Self) chunk_type {
-            const chunk: *wave_chunk = @ptrCast(self.at);
-
-            const result: chunk_type = @enumFromInt(chunk.ID);
-            return result;
-        }
-
-        fn GetChunkData(self: *Self) [*]u8 {
-            const result: [*]u8 = self.at + @sizeOf(wave_chunk);
-
-            return result;
-        }
-
-        fn GetChunkDataSize(self: *Self) u32 {
-            const chunk: *wave_chunk = @ptrCast(self.at);
-
-            const result: u32 = chunk.size;
-            return result;
-        }
-    };
-
-    var result = loaded_sound{};
-
-    const readResult = h.DEBUGPlatformReadEntireFile.?(fileName);
-    if (readResult.contentSize != 0) {
-        const header: *wave_header = @ptrCast(readResult.contents);
-
-        assert(header.riffID == @intFromEnum(chunk_type.WAVE_ChunkID_RIFF));
-        assert(header.waveID == @intFromEnum(chunk_type.WAVE_ChunkID_WAVE));
-
-        const at = @as([*]u8, @ptrCast(header)) + @sizeOf(wave_header);
-        const stop = @as([*]u8, @ptrCast(header)) + @sizeOf(wave_header) + (header.size - 4);
-
-        var iter = riff_iterator.ParseChunk(at, stop);
-
-        var sampleDataSize: u32 = 0;
-        var channelCount: u32 = 0;
-        var sampleData: ?[*]i16 = null;
-        while (iter.IsValid()) : (iter.NextChunk()) {
-            switch (iter.GetType()) {
-                .WAVE_ChunkID_fmt => {
-                    const fmt: *wave_fmt = @ptrCast(iter.GetChunkData());
-
-                    assert(fmt.wFormatTag == 1);
-                    assert(fmt.nSamplesPerSec == 48000);
-                    assert(fmt.wBitsPerSample == 16);
-                    assert(fmt.nBlockAlign == @sizeOf(u16) * fmt.nChannels);
-
-                    channelCount = fmt.nChannels;
-                },
-                .WAVE_ChunkID_data => {
-                    sampleData = @alignCast(@ptrCast(iter.GetChunkData()));
-                    sampleDataSize = iter.GetChunkDataSize();
-                },
-
-                else => {},
-            }
-        }
-
-        assert(channelCount != 0 and sampleData != null);
-
-        result.channelCount = channelCount;
-        var sampleCount: u32 = sampleDataSize / (channelCount * @sizeOf(u16));
-
-        if (channelCount == 1) {
-            result.samples[0] = @ptrCast(sampleData);
-            result.samples[1] = null;
-        } else if (channelCount == 2) {
-            result.samples[0] = @ptrCast(sampleData);
-            result.samples[1] = sampleData.? + sampleCount;
-
-            if (!NOT_IGNORE) {
-                for (0..sampleCount) |sampleIndex| {
-                    sampleData.?[2 * sampleIndex + 0] = @intCast(sampleIndex);
-                    sampleData.?[2 * sampleIndex + 1] = @intCast(sampleIndex);
-                }
-            }
-
-            for (0..sampleCount) |sampleIndex| {
-                var source: i16 = sampleData.?[2 * sampleIndex];
-                sampleData.?[2 * sampleIndex] = sampleData.?[sampleIndex];
-                sampleData.?[sampleIndex] = source;
-            }
-        } else {
-            platform.InvalidCodePath("invalid channel count in wav file");
-        }
-
-        var atEnd = true;
-        result.channelCount = 1;
-        if (sectionSampleCount != 0) {
-            assert(sectionFirstSampleIndex + sectionSampleCount <= sampleCount);
-            atEnd = (sectionFirstSampleIndex + sectionSampleCount == sampleCount);
-            sampleCount = sectionSampleCount;
-
-            for (0..result.channelCount) |channelIndex| {
-                result.samples[channelIndex].? += sectionFirstSampleIndex;
-            }
-        }
-
-        if (atEnd) {
-            for (0..result.channelCount) |channelIndex| {
-                for (sampleCount..sampleCount + 8) |sampleIndex| {
-                    result.samples[channelIndex].?[sampleIndex] = 0;
-                }
-            }
-        }
-
-        result.sampleCount = sampleCount;
-    }
-
+    const result = loaded_sound{};
     return result;
 }
 

@@ -54,11 +54,12 @@ pub fn build(b: *std.Build) void {
 
     const asset_builder = b.addExecutable(.{
         .name = "asset_builder",
-        .root_source_file = .{ .path = "./code/asset_builder.zig" },
+        .root_source_file = .{ .path = "./code/handmade/asset_builder.zig" },
         .target = target,
         .optimize = optimize,
     });
     asset_builder.addModule("handmade_asset_type_id", asset_type_id);
+    asset_builder.addModule("handmade_platform", platform);
 
     const run_test = b.addRunArtifact(lib_tests);
 
