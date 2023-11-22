@@ -273,11 +273,11 @@ pub const loaded_bitmap = struct {
                             @as(f32, @floatFromInt(((pixel[0] >> 24) & 0xff))),
                         };
 
-                        dest = SRGB255ToLinear1(dest);
+                        dest = h.SRGB255ToLinear1(dest);
 
                         const blended: h.v4 = h.Add(h.Scale(dest, 1 - h.A(texel)), texel);
 
-                        var blended255 = Linear1ToSRGB255(blended);
+                        var blended255 = h.Linear1ToSRGB255(blended);
 
                         pixel[index] = (@as(u32, @intFromFloat(h.A(blended255) + 0.5)) << 24) |
                             (@as(u32, @intFromFloat(h.R(blended255) + 0.5)) << 16) |
@@ -703,14 +703,14 @@ pub const loaded_bitmap = struct {
                     @as(f32, @floatFromInt(((dest[index] >> 24) & 0xff))),
                 };
 
-                d = SRGB255ToLinear1(d);
+                d = h.SRGB255ToLinear1(d);
 
                 const avg = (h.R(d) + h.G(d) + h.B(d)) * (1.0 / 3.0);
                 const delta = h.v3{ h.R(d) - avg, h.G(d) - avg, h.B(d) - avg };
 
                 var result = h.ToV4(h.Add(h.v3{ avg, avg, avg }, h.Scale(delta, level)), h.A(d));
 
-                result = Linear1ToSRGB255(result);
+                result = h.Linear1ToSRGB255(result);
 
                 dest[index] =
                     (@as(u32, @intFromFloat(h.A(result) + 0.5)) << 24) |
@@ -769,7 +769,7 @@ pub const loaded_bitmap = struct {
                     @as(f32, @floatFromInt(((source[index] >> 24) & 0xff))),
                 };
 
-                texel = SRGB255ToLinear1(texel);
+                texel = h.SRGB255ToLinear1(texel);
                 texel = h.Scale(texel, cAlpha);
 
                 var d: h.v4 = .{
@@ -779,11 +779,11 @@ pub const loaded_bitmap = struct {
                     @as(f32, @floatFromInt(((dest[index] >> 24) & 0xff))),
                 };
 
-                d = SRGB255ToLinear1(d);
+                d = h.SRGB255ToLinear1(d);
 
                 var result: h.v4 = h.Add(h.Scale(d, 1 - h.A(texel)), texel);
 
-                result = Linear1ToSRGB255(result);
+                result = h.Linear1ToSRGB255(result);
 
                 dest[index] =
                     (@as(u32, @intFromFloat(h.A(result) + 0.5)) << 24) |
@@ -1377,30 +1377,6 @@ pub const render_group = struct {
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
 
-pub inline fn SRGB255ToLinear1(c: h.v4) h.v4 {
-    const inv255 = 1.0 / 255.0;
-    const result = h.v4{
-        h.Square(inv255 * h.R(c)),
-        h.Square(inv255 * h.G(c)),
-        h.Square(inv255 * h.B(c)),
-        inv255 * h.A(c),
-    };
-
-    return result;
-}
-
-pub inline fn Linear1ToSRGB255(c: h.v4) h.v4 {
-    const one255 = 255;
-    const result = h.v4{
-        one255 * h.SquareRoot(h.R(c)),
-        one255 * h.SquareRoot(h.G(c)),
-        one255 * h.SquareRoot(h.B(c)),
-        one255 * h.A(c),
-    };
-
-    return result;
-}
-
 pub inline fn UnScaleAndBiasNormal(normal: h.v4) h.v4 {
     const inv255 = 1.0 / 255.0;
     const result: h.v4 = .{
@@ -1430,10 +1406,10 @@ inline fn SRGBBilinearBlend(texelSample: bilinear_sample, fX: f32, fY: f32) h.v4
     var texelC: h.v4 = Unpack4x8(texelSample.c);
     var texelD: h.v4 = Unpack4x8(texelSample.d);
 
-    texelA = SRGB255ToLinear1(texelA);
-    texelB = SRGB255ToLinear1(texelB);
-    texelC = SRGB255ToLinear1(texelC);
-    texelD = SRGB255ToLinear1(texelD);
+    texelA = h.SRGB255ToLinear1(texelA);
+    texelB = h.SRGB255ToLinear1(texelB);
+    texelC = h.SRGB255ToLinear1(texelC);
+    texelD = h.SRGB255ToLinear1(texelD);
 
     const result = h.LerpV(
         h.LerpV(texelA, fX, texelB),

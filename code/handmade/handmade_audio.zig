@@ -155,7 +155,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 var volume: h.v2 = playingSound.currentVolume;
                 var dVolume: h.v2 = h.Scale(playingSound.dCurrentVolume, secondsPerSample);
                 var dVolumeChunk: h.v2 = h.Scale(dVolume, 4);
-                const dSample: f32 = playingSound.dSample * 1.9;
+                const dSample: f32 = playingSound.dSample;
                 const dSampleChunk: f32 = 4.0 * dSample;
 
                 // channel 0

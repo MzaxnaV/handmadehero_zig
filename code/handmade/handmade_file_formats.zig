@@ -47,8 +47,8 @@ pub const hha_bitmap = extern struct {
 };
 
 pub const hha_sound = extern struct {
-    firstSampleIndex: u32 align(1),
     sampleCount: u32 align(1),
+    channelCount: u32 align(1),
     nextIDToPlay: u32 align(1),
 };
 

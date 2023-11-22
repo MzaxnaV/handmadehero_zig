@@ -353,14 +353,6 @@ pub const game_assets = struct {
     }
 };
 
-inline fn TopDownAlign(bitmap: *const h.loaded_bitmap, alignment: h.v2) h.v2 {
-    const fixedAlignment = h.v2{
-        h.SafeRatiof0(h.X(alignment), @as(f32, @floatFromInt(bitmap.width))),
-        h.SafeRatiof0(@as(f32, @floatFromInt(bitmap.height - 1)) - h.Y(alignment), @as(f32, @floatFromInt(bitmap.height))),
-    };
-    return fixedAlignment;
-}
-
 /// Defaults: ```alignPercentage = .{0.5, 0.5 }```
 fn DEBUGLoadBMP(fileName: [*:0]const u8, alignPercentage: h.v2) h.loaded_bitmap {
     const bitmap_header = extern struct {

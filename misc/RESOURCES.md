@@ -1,5 +1,5 @@
 # References:
-Collection of references, not all are realted to Handmade Hero.
+Collection of resources, not all are related to Handmade Hero.
 
 ## A
 - [Architecture Manuals, AMD64](https://developer.amd.com/resources/developer-guides-manuals/)
