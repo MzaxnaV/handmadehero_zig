@@ -4,6 +4,7 @@ const simd = @import("simd");
 const h = struct {
     usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_file_formats.zig");
     usingnamespace @import("handmade_intrinsics.zig");
     usingnamespace @import("handmade_math.zig");
 };
@@ -148,7 +149,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
         while (totalChunksToMix != 0 and !soundFinished) {
             if (assets.GetSound(playingSound.ID)) |loadedSound| {
-                var info: *h.asset_sound_info = assets.GetSoundInfo(playingSound.ID);
+                var info = assets.GetSoundInfo(playingSound.ID);
 
                 h.PrefetchSound(assets, info.nextIDToPlay);
 

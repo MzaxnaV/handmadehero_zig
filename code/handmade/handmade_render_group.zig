@@ -6,8 +6,9 @@ const assert = platform.Assert;
 const h = struct {
     usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_data.zig");
-    usingnamespace @import("handmade_math.zig");
+    usingnamespace @import("handmade_file_formats.zig");
     usingnamespace @import("handmade_intrinsics.zig");
+    usingnamespace @import("handmade_math.zig");
 };
 
 const simd = @import("simd");
