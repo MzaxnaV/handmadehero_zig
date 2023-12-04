@@ -24,6 +24,7 @@ Collection of resources, not all are related to Handmade Hero.
 - [Inline Assembly, Brennan's Guide to Inline Assembly](http://www.delorie.com/djgpp/doc/brennan/brennan_att_inline_djgpp.html)
 - [Integer Hash Function, Thomas Wang](http://web.archive.org/web/20071223173210/http://www.concentric.net/~Ttwang/tech/inthash.htm)
 - [Intrinsics Guide, Intel](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
+- [ImHex, hex editor](https://imhex.werwolv.net/)
 
 ## M
 - [MegaTextures](https://silverspaceship.com/src/svt/)
