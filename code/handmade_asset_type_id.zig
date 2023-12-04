@@ -1,6 +1,8 @@
 pub const asset_type_id = enum(u32) {
     Asset_NONE = 0,
 
+    Asset_Test_Bitmap,
+
     //
     // Bitmaps
     //

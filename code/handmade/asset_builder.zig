@@ -455,11 +455,11 @@ const game_assets = struct {
     }
 };
 
-// fn print_debug(comptime str: []const u8, pos: *u64, prev: *u64, calculatedSize: usize, bytesSize: usize, out: std.fs.File) !void {
-//     pos.* = try out.getPos();
-//     std.debug.print("({s}, {}): pos: {}, prev: {}, diff: {}, size: {}\n", .{ str, bytesSize, pos.*, prev.*, pos.* - prev.*, calculatedSize });
-//     prev.* = pos.*;
-// }
+fn print_debug(comptime str: []const u8, pos: *u64, prev: *u64, calculatedSize: usize, bytesSize: usize, out: std.fs.File) !void {
+    pos.* = try out.getPos();
+    std.debug.print("({s}, {}): pos: {}, prev: {}, diff: {}, size: {}\n", .{ str, bytesSize, pos.*, prev.*, pos.* - prev.*, calculatedSize });
+    prev.* = pos.*;
+}
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .verbose_log = true }){};
@@ -475,6 +475,11 @@ pub fn main() !void {
         .tagCount = 1,
         .assetIndex = 0,
     };
+
+    assets.BeginAssetType(.Asset_Test_Bitmap);
+    _ = assets.AddBitmapAsset("structured_art.bmp", .{0, 0});
+    assets.EndAssetType();
+
     assets.BeginAssetType(.Asset_Shadow);
     _ = assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
     assets.EndAssetType();
@@ -616,26 +621,26 @@ pub fn main() !void {
         header.assetTypes = header.tags + tagArraySize;
         header.assets = header.assetTypes + assetTypeArraySize;
 
-        // var pos: u64 = 0;
-        // var prev: u64 = 0;
+        var pos: u64 = 0;
+        var prev: u64 = 0;
 
         try out.writer().writeStruct(header);
-        // try print_debug("header", &pos, &prev, @sizeOf(@TypeOf(header)), @sizeOf(@TypeOf(header)), out);
+        try print_debug("header", &pos, &prev, @sizeOf(@TypeOf(header)), @sizeOf(@TypeOf(header)), out);
 
         var tagBytes = std.mem.sliceAsBytes(assets.tags[0..header.tagCount]);
-        // std.debug.print("tags at: {}\n", .{header.tags});
+        std.debug.print("tags at: {}\n", .{header.tags});
         try out.writer().writeAll(tagBytes);
-        // try print_debug("tags", &pos, &prev, tagArraySize, tagBytes.len, out);
+        try print_debug("tags", &pos, &prev, tagArraySize, tagBytes.len, out);
 
         var assetTypesBytes = std.mem.sliceAsBytes(&assets.assetTypes);
-        // std.debug.print("assetTypes at: {}\n", .{header.assetTypes});
+        std.debug.print("assetTypes at: {}\n", .{header.assetTypes});
         try out.writer().writeAll(assetTypesBytes);
-        // try print_debug("assetTypes", &pos, &prev, assetTypeArraySize, assetTypesBytes.len, out);
+        try print_debug("assetTypes", &pos, &prev, assetTypeArraySize, assetTypesBytes.len, out);
 
         try out.seekBy(assetArraySize);
-        // var prev2 = try out.getPos();
+        var prev2 = try out.getPos();
 
-        // std.debug.print("diff between prevs: {}, assetArraySize: {}\n", .{ prev2 - prev, assetArraySize });
+        std.debug.print("diff between prevs: {}, assetArraySize: {}\n", .{ prev2 - prev, assetArraySize });
         for (1..header.assetCount) |assetIndex| {
             const source = assets.assetSources[assetIndex];
             var dest = assets.assets[assetIndex];
@@ -644,14 +649,15 @@ pub fn main() !void {
 
             switch (source.t) {
                 .AssetType_Bitmap => {
+                    std.debug.print("storing {s}\n", .{ source.filename });
                     const b = try LoadBMP(source.filename, allocator);
                     dest.data.bitmap.dim = [2]u32{ @intCast(b.width), @intCast(b.height) };
 
                     platform.Assert(b.pitch == (b.width * 4));
-                    // std.debug.print("bitmap{} at: {}\n", .{ assetIndex, dest.dataOffset });
+                    std.debug.print("bitmap{} at: {}\n", .{ assetIndex, dest.dataOffset });
                     var bitmapBytes = std.mem.sliceAsBytes(b.memory[0..@intCast(b.width * b.height * 4)]);
                     try out.writer().writeAll(bitmapBytes);
-                    // try print_debug("bitmap", &pos, &prev2, @intCast(b.width * b.height * 4), bitmapBytes.len, out);
+                    try print_debug("bitmap", &pos, &prev2, @intCast(b.width * b.height * 4), bitmapBytes.len, out);
 
                     allocator.free(b.free);
                 },
@@ -671,8 +677,8 @@ pub fn main() !void {
 
         try out.seekTo(header.assets);
         var assetArrayBytes = std.mem.sliceAsBytes(assets.assets[0..header.assetCount]);
-        // std.debug.print("assets at: {}\n", .{header.assets});
+        std.debug.print("assets at: {}\n", .{header.assets});
         try out.writer().writeAll(assetArrayBytes);
-        // try print_debug("assets", &pos, &prev, assetArraySize, assetArrayBytes.len, out);
+        try print_debug("assets", &pos, &prev, assetArraySize, assetArrayBytes.len, out);
     }
 }

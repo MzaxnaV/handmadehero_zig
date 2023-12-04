@@ -75,7 +75,7 @@ pub const hha_asset = extern struct {
     firstTagIndex: u32 align(1),
     onePastLastTagIndex: u32 align(1),
     data: extern union {
-        bitmap: hha_bitmap,
-        sound: hha_sound,
+        bitmap: hha_bitmap align(1),
+        sound: hha_sound align(1),
     } align(1),
 };
