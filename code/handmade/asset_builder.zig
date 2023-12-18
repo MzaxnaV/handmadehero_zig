@@ -477,7 +477,7 @@ pub fn main() !void {
     };
 
     assets.BeginAssetType(.Asset_Test_Bitmap);
-    _ = assets.AddBitmapAsset("structured_art.bmp", .{0, 0});
+    _ = assets.AddBitmapAsset("test_art.bmp", .{ 0, 0 });
     assets.EndAssetType();
 
     assets.BeginAssetType(.Asset_Shadow);
@@ -643,13 +643,13 @@ pub fn main() !void {
         std.debug.print("diff between prevs: {}, assetArraySize: {}\n", .{ prev2 - prev, assetArraySize });
         for (1..header.assetCount) |assetIndex| {
             const source = assets.assetSources[assetIndex];
-            var dest = assets.assets[assetIndex];
+            var dest = &assets.assets[assetIndex];
 
             dest.dataOffset = try out.getPos();
 
             switch (source.t) {
                 .AssetType_Bitmap => {
-                    std.debug.print("storing {s}\n", .{ source.filename });
+                    std.debug.print("storing {s}\n", .{source.filename});
                     const b = try LoadBMP(source.filename, allocator);
                     dest.data.bitmap.dim = [2]u32{ @intCast(b.width), @intCast(b.height) };
 
