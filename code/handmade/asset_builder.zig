@@ -415,7 +415,6 @@ const game_assets = struct {
     }
 
     fn AddSoundAsset(self: *game_assets, fileName: []const u8, firstSampleIndex: u32, sampleCount: u32) h.sound_id {
-        _ = firstSampleIndex;
         assert(self.DEBUGAssetType != null);
         assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
 
@@ -435,6 +434,7 @@ const game_assets = struct {
 
         source.t = .AssetType_Sound;
         source.filename = fileName;
+        source.firstSampleIndex = firstSampleIndex;
 
         self.assetIndex = result.value;
 
