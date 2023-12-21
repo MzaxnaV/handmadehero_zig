@@ -43,15 +43,6 @@ pub const asset_slot = struct {
     },
 };
 
-pub const asset_tag = struct {
-    ID: u32,
-    value: f32,
-};
-
-pub const asset = struct {
-    hha: h.hha_asset,
-};
-
 pub const asset_vector = struct { // use @Vector(asset_tag_id.len(), f32) ??
     e: [asset_tag_id.len()]f32 = [1]f32{0} ** asset_tag_id.len(),
 };
@@ -72,9 +63,9 @@ pub const game_assets = struct {
 
     tagRange: [asset_tag_id.len()]f32,
 
-    tags: []asset_tag,
+    tags: []h.hha_tag,
 
-    assets: []asset,
+    assets: []h.hha_asset,
     slots: []asset_slot,
 
     assetTypes: [asset_type_id.count()]asset_type,
@@ -98,7 +89,7 @@ pub const game_assets = struct {
     }
 
     pub inline fn GetSoundInfo(self: *game_assets, ID: h.sound_id) *h.hha_sound {
-        const result = &self.assets[ID.value].hha.data.sound;
+        const result = &self.assets[ID.value].data.sound;
         return result;
     }
 
@@ -196,30 +187,14 @@ pub const game_assets = struct {
             assert(header.version == h.HHA_VERSION);
 
             const assetCount = header.assetCount;
-            assets.assets = arena.PushSlice(asset, assetCount);
+            assets.assets.len = assetCount;
+            assets.assets.ptr = @ptrCast(@as([*]u8, @ptrCast(header)) + header.assets);
             assets.slots = arena.PushSlice(asset_slot, assetCount);
 
-            const tagCount = header.tagCount;
-            assets.tags = arena.PushSlice(asset_tag, tagCount);
+            assets.tags.len = header.tagCount;
+            assets.tags.ptr = @ptrCast(@as([*]u8, @ptrCast(header)) + header.tags);
 
-            const hhaTags: [*]h.hha_tag = @ptrCast(@as([*]u8, @ptrCast(header)) + header.tags);
-            const hhaAssets: [*]h.hha_asset = @ptrCast(@as([*]u8, @ptrCast(header)) + header.assets);
             const hhaAssetTypes: [*]h.hha_asset_type = @ptrCast(@as([*]u8, @ptrCast(header)) + header.assetTypes);
-
-            for (0..header.tagCount) |index| {
-                const source: h.hha_tag = hhaTags[index];
-                var dest: *asset_tag = &assets.tags[index];
-
-                dest.ID = source.ID;
-                dest.value = source.value;
-            }
-
-            for (0..header.assetCount) |index| {
-                const source: h.hha_asset = hhaAssets[index];
-                var dest: *asset = &assets.assets[index];
-
-                dest.hha = source;
-            }
 
             for (0..header.assetTypeCount) |index| {
                 const source: h.hha_asset_type = hhaAssetTypes[index];
@@ -236,127 +211,6 @@ pub const game_assets = struct {
             assets.hhaContents.ptr = readResult.contents;
             assets.hhaContents.len = readResult.contentSize;
         }
-
-        //     assets.DEBUGUsedAssetCount = 1;
-
-        //     assets.BeginAssetType(.Asset_Shadow);
-        //     _ = assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Tree);
-        //     _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Sword);
-        //     _ = assets.AddBitmapAsset("test2/rock03.bmp", .{ 0.5, 0.65625 });
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Grass);
-        //     _ = assets.AddBitmapAsset("test2/grass00.bmp", .{ 0.5, 0.5 });
-        //     _ = assets.AddBitmapAsset("test2/grass01.bmp", .{ 0.5, 0.5 });
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Tuft);
-        //     _ = assets.AddBitmapAsset("test2/tuft00.bmp", .{ 0.5, 0.5 });
-        //     _ = assets.AddBitmapAsset("test2/tuft01.bmp", .{ 0.5, 0.5 });
-        //     _ = assets.AddBitmapAsset("test2/tuft02.bmp", .{ 0.5, 0.5 });
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Stone);
-        //     _ = assets.AddBitmapAsset("test2/ground00.bmp", .{ 0.5, 0.5 });
-        //     _ = assets.AddBitmapAsset("test2/ground01.bmp", .{ 0.5, 0.5 });
-        //     _ = assets.AddBitmapAsset("test2/ground02.bmp", .{ 0.5, 0.5 });
-        //     _ = assets.AddBitmapAsset("test2/ground03.bmp", .{ 0.5, 0.5 });
-        //     assets.EndAssetType();
-
-        //     const angleRight = 0.0 * platform.Tau32;
-        //     const angleBack = 0.25 * platform.Tau32;
-        //     const angleLeft = 0.5 * platform.Tau32;
-        //     const angleFront = 0.75 * platform.Tau32;
-
-        //     const heroAlign = h.v2{ 0.5, 0.156682029 };
-
-        //     assets.BeginAssetType(.Asset_Head);
-        //     _ = assets.AddBitmapAsset("test/test_hero_right_head.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleRight);
-        //     _ = assets.AddBitmapAsset("test/test_hero_back_head.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleBack);
-        //     _ = assets.AddBitmapAsset("test/test_hero_left_head.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleLeft);
-        //     _ = assets.AddBitmapAsset("test/test_hero_front_head.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleFront);
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Cape);
-        //     _ = assets.AddBitmapAsset("test/test_hero_right_cape.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleRight);
-        //     _ = assets.AddBitmapAsset("test/test_hero_back_cape.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleBack);
-        //     _ = assets.AddBitmapAsset("test/test_hero_left_cape.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleLeft);
-        //     _ = assets.AddBitmapAsset("test/test_hero_front_cape.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleFront);
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Torso);
-        //     _ = assets.AddBitmapAsset("test/test_hero_right_torso.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleRight);
-        //     _ = assets.AddBitmapAsset("test/test_hero_back_torso.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleBack);
-        //     _ = assets.AddBitmapAsset("test/test_hero_left_torso.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleLeft);
-        //     _ = assets.AddBitmapAsset("test/test_hero_front_torso.bmp", heroAlign);
-        //     assets.AddTag(.Tag_FacingDirection, angleFront);
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Bloop);
-        //     _ = assets.AddDefaultSoundAsset("test3/bloop_00.wav");
-        //     _ = assets.AddDefaultSoundAsset("test3/bloop_01.wav");
-        //     _ = assets.AddDefaultSoundAsset("test3/bloop_02.wav");
-        //     _ = assets.AddDefaultSoundAsset("test3/bloop_03.wav");
-        //     _ = assets.AddDefaultSoundAsset("test3/bloop_04.wav");
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Crack);
-        //     _ = assets.AddDefaultSoundAsset("test3/crack_00.wav");
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Drop);
-        //     _ = assets.AddDefaultSoundAsset("test3/drop_00.wav");
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Glide);
-        //     _ = assets.AddDefaultSoundAsset("test3/glide_00.wav");
-        //     assets.EndAssetType();
-
-        //     const oneMusicChunk = 48000 * 10;
-        //     // const totalMusicSampleCount = 48000 * 20;
-        //     const totalMusicSampleCount = 7468095;
-        //     assets.BeginAssetType(.Asset_Music);
-        //     var lastMusic: h.sound_id = .{};
-        //     var firstSampleIndex: u32 = 0;
-        //     while (firstSampleIndex < totalMusicSampleCount) : (firstSampleIndex += oneMusicChunk) {
-        //         var sampleCount = totalMusicSampleCount - firstSampleIndex;
-        //         if (sampleCount > oneMusicChunk) {
-        //             sampleCount = oneMusicChunk;
-        //         }
-        //         const thisMusic = assets.AddSoundAsset("test3/music_test.wav", firstSampleIndex, sampleCount);
-        //         if (lastMusic.IsValid()) {
-        //             assets.assets[lastMusic.value].info.sound.nextIDToPlay = thisMusic;
-        //         }
-        //         lastMusic = thisMusic;
-        //     }
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_Puhp);
-        //     _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
-        //     _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
-        //     assets.EndAssetType();
-
-        //     assets.BeginAssetType(.Asset_test_stereo);
-        //     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1min.wav");
-        //     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1sec.wav");
-        //     assets.EndAssetType();
 
         return assets;
     }
@@ -656,7 +510,7 @@ fn LoadBitmapWork(_: ?*platform.work_queue, data: *anyopaque) void {
     }
     const work: *load_bitmap_work = @alignCast(@ptrCast(data));
 
-    const hhaAsset: h.hha_asset = work.assets.assets[work.ID.value].hha;
+    const hhaAsset: h.hha_asset = work.assets.assets[work.ID.value];
     const info: h.hha_bitmap = hhaAsset.data.bitmap;
     const bitmap: *h.loaded_bitmap = work.bitmap;
 
@@ -717,7 +571,7 @@ fn LoadSoundWork(_: ?*platform.work_queue, data: *anyopaque) void {
     }
     const work: *load_sound_work = @alignCast(@ptrCast(data));
 
-    const hhaAsset: h.hha_asset = work.assets.assets[work.ID.value].hha;
+    const hhaAsset: h.hha_asset = work.assets.assets[work.ID.value];
     const info: h.hha_sound = hhaAsset.data.sound;
     const sound = work.sound;
 
@@ -771,12 +625,12 @@ pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: asset_type_id, matchV
 
     if (assetType.firstAssetIndex != assetType.onePastLastAssetIndex) {
         for (assetType.firstAssetIndex..assetType.onePastLastAssetIndex) |assetIndex| {
-            const a = &assets.assets[assetIndex].hha;
+            const a = &assets.assets[assetIndex];
 
             var totalWeightedDiff: f32 = 0.0;
 
             for (a.firstTagIndex..a.onePastLastTagIndex) |tagIndex| {
-                var tag: asset_tag = assets.tags[tagIndex];
+                var tag: h.hha_tag = assets.tags[tagIndex];
 
                 const _a = matchVector.e[tag.ID];
                 const _b = tag.value;
