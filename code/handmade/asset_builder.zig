@@ -477,7 +477,7 @@ pub fn main() !void {
     };
 
     assets.BeginAssetType(.Asset_Test_Bitmap);
-    _ = assets.AddBitmapAsset("test_art.bmp", .{ 0, 0 });
+    _ = assets.AddBitmapAsset("structured_art.bmp", .{ 0, 0 });
     assets.EndAssetType();
 
     assets.BeginAssetType(.Asset_Shadow);
@@ -486,6 +486,9 @@ pub fn main() !void {
 
     assets.BeginAssetType(.Asset_Tree);
     _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
+    assets.EndAssetType();
+
+    assets.BeginAssetType(.Asset_Rock);
     assets.EndAssetType();
 
     assets.BeginAssetType(.Asset_Sword);
@@ -643,7 +646,7 @@ pub fn main() !void {
         std.debug.print("diff between prevs: {}, assetArraySize: {}\n", .{ prev2 - prev, assetArraySize });
         for (1..header.assetCount) |assetIndex| {
             const source = assets.assetSources[assetIndex];
-            var dest = &assets.assets[assetIndex];
+            var dest: *h.hha_asset = &assets.assets[assetIndex];
 
             dest.dataOffset = try out.getPos();
 

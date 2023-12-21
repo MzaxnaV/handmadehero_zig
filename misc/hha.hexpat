@@ -14,11 +14,10 @@ struct hha_tag {
 enum type_id: u32 {
     Asset_NONE,
 
-    Asset_Test_Bitmap,
-
     //
     // Bitmaps
     //
+    Asset_Test_Bitmap,
 
     Asset_Shadow,
     Asset_Tree,
@@ -70,16 +69,16 @@ struct hha_sound {
     asset_id nextIDToPlay;
 };
 
-union hha_data {
+union type {
     hha_bitmap bitmap;
     hha_sound sound;
 };
 
 struct hha_asset {
-    u8* dataOffset[4]: u64;
+    u8* dataOffset[]: u64;
     u32 firstTagIndex;
     u32 onePastLastTagIndex;
-    hha_data data;
+    type;
 };
 
 struct hha_header {
