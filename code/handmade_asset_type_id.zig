@@ -4,6 +4,8 @@ pub const asset_type_id = enum(u32) {
     //
     // Bitmaps
     //
+    
+    Asset_Test_Bitmap,
 
     Asset_Shadow,
     Asset_Tree,
@@ -32,7 +34,7 @@ pub const asset_type_id = enum(u32) {
 
     Asset_test_stereo,
 
-    pub fn len() comptime_int {
+    pub fn count() comptime_int {
         comptime {
             return @typeInfo(asset_type_id).Enum.fields.len;
         }

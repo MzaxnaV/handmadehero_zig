@@ -37,24 +37,6 @@ const h = struct {
     }
 };
 
-const bitmap_id = struct {
-    value: u32 = 0,
-
-    pub inline fn IsValid(self: bitmap_id) bool {
-        const result = self.value != 0;
-        return result;
-    }
-};
-
-const sound_id = struct {
-    value: u32 = 0,
-
-    pub inline fn IsValid(self: sound_id) bool {
-        const result = self.value != 0;
-        return result;
-    }
-};
-
 const asset_type = enum {
     AssetType_Sound,
     AssetType_Bitmap,
@@ -125,6 +107,8 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !h.loaded_bitmap 
     result.height = header.height;
     result.memory = pixels;
     result.free = readResult.contents;
+
+    // std.debug.print("size of bitmap: {}\n", .{header.sizeOfBitmap});
 
     assert(header.height >= 0);
     assert(header.compression == 3);
@@ -375,7 +359,7 @@ const game_assets = struct {
     tags: [VERY_LARGE_NO]h.hha_tag = undefined,
 
     assetTypeCount: u32,
-    assetTypes: [h.asset_type_id.len()]h.hha_asset_type = undefined,
+    assetTypes: [h.asset_type_id.count()]h.hha_asset_type = undefined,
 
     assetCount: u32,
     assetSources: [VERY_LARGE_NO]asset_source = undefined,
@@ -401,11 +385,11 @@ const game_assets = struct {
     }
 
     /// Defaults: ```alignPercentage = .{ 0.5, 0.5 }```
-    fn AddBitmapAsset(self: *game_assets, fileName: []const u8, alignPercentage: [2]f32) bitmap_id {
+    fn AddBitmapAsset(self: *game_assets, fileName: []const u8, alignPercentage: [2]f32) h.bitmap_id {
         assert(self.DEBUGAssetType != null);
         assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
 
-        var result: bitmap_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
+        var result: h.bitmap_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
         self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
 
         const source: *asset_source = &self.assetSources[result.value];
@@ -426,16 +410,15 @@ const game_assets = struct {
         return result;
     }
 
-    inline fn AddDefaultSoundAsset(self: *game_assets, fileName: []const u8) sound_id {
+    inline fn AddDefaultSoundAsset(self: *game_assets, fileName: []const u8) h.sound_id {
         return self.AddSoundAsset(fileName, 0, 0);
     }
 
-    fn AddSoundAsset(self: *game_assets, fileName: []const u8, firstSampleIndex: u32, sampleCount: u32) sound_id {
-        _ = firstSampleIndex;
+    fn AddSoundAsset(self: *game_assets, fileName: []const u8, firstSampleIndex: u32, sampleCount: u32) h.sound_id {
         assert(self.DEBUGAssetType != null);
         assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
 
-        var result: sound_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
+        var result: h.sound_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
         self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
 
         const source: *asset_source = &self.assetSources[result.value];
@@ -446,11 +429,12 @@ const game_assets = struct {
         hha.data = .{ .sound = h.hha_sound{
             .channelCount = 0,
             .sampleCount = sampleCount,
-            .nextIDToPlay = 0,
+            .nextIDToPlay = .{ .value = 0 },
         } };
 
         source.t = .AssetType_Sound;
         source.filename = fileName;
+        source.firstSampleIndex = firstSampleIndex;
 
         self.assetIndex = result.value;
 
@@ -485,12 +469,20 @@ pub fn main() !void {
         .tagCount = 1,
         .assetIndex = 0,
     };
+
+    assets.BeginAssetType(.Asset_Test_Bitmap);
+    _ = assets.AddBitmapAsset("structured_art.bmp", .{ 0, 0 });
+    assets.EndAssetType();
+
     assets.BeginAssetType(.Asset_Shadow);
     _ = assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
     assets.EndAssetType();
 
     assets.BeginAssetType(.Asset_Tree);
     _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
+    assets.EndAssetType();
+
+    assets.BeginAssetType(.Asset_Rock);
     assets.EndAssetType();
 
     assets.BeginAssetType(.Asset_Sword);
@@ -579,7 +571,7 @@ pub fn main() !void {
     // const totalMusicSampleCount = 48000 * 20;
     const totalMusicSampleCount = 7468095;
     assets.BeginAssetType(.Asset_Music);
-    var lastMusic: sound_id = .{};
+    var lastMusic: h.sound_id = .{};
     var firstSampleIndex: u32 = 0;
     while (firstSampleIndex < totalMusicSampleCount) : (firstSampleIndex += oneMusicChunk) {
         var sampleCount = totalMusicSampleCount - firstSampleIndex;
@@ -588,7 +580,7 @@ pub fn main() !void {
         }
         const thisMusic = assets.AddSoundAsset("test3/music_test.wav", firstSampleIndex, sampleCount);
         if (lastMusic.IsValid()) {
-            assets.assets[lastMusic.value].data.sound.nextIDToPlay = thisMusic.value;
+            assets.assets[lastMusic.value].data.sound.nextIDToPlay = thisMusic;
         }
         lastMusic = thisMusic;
     }
@@ -613,7 +605,7 @@ pub fn main() !void {
             .version = h.HHA_VERSION,
             .tagCount = assets.tagCount,
             .assetCount = assets.assetCount,
-            .assetTypeCount = h.asset_type_id.len(),
+            .assetTypeCount = h.asset_type_id.count(),
             .tags = @sizeOf(h.hha_header),
             .assets = 0,
             .assetTypes = 0,
@@ -627,15 +619,20 @@ pub fn main() !void {
         header.assets = header.assetTypes + assetTypeArraySize;
 
         try out.writer().writeStruct(header);
-        try out.writer().writeAll(std.mem.sliceAsBytes(assets.tags[0..header.tagCount]));
-        try out.writer().writeAll(std.mem.sliceAsBytes(&assets.assetTypes));
-        const cur = try out.getPos();
+
+        var tagBytes = std.mem.sliceAsBytes(assets.tags[0..header.tagCount]);
+        try out.writer().writeAll(tagBytes);
+
+        var assetTypesBytes = std.mem.sliceAsBytes(&assets.assetTypes);
+        try out.writer().writeAll(assetTypesBytes);
+
         try out.seekBy(assetArraySize);
+
         for (1..header.assetCount) |assetIndex| {
             const source = assets.assetSources[assetIndex];
-            var dest = assets.assets[assetIndex];
+            var dest: *h.hha_asset = &assets.assets[assetIndex];
 
-            dest.dataOffset = try out.seekableStream().getPos();
+            dest.dataOffset = try out.getPos();
 
             switch (source.t) {
                 .AssetType_Bitmap => {
@@ -643,7 +640,8 @@ pub fn main() !void {
                     dest.data.bitmap.dim = [2]u32{ @intCast(b.width), @intCast(b.height) };
 
                     platform.Assert(b.pitch == (b.width * 4));
-                    try out.writer().writeAll(std.mem.sliceAsBytes(b.memory[0..@intCast(b.width * b.height * 4)]));
+                    var bitmapBytes = std.mem.sliceAsBytes(b.memory[0..@intCast(b.width * b.height * 4)]);
+                    try out.writer().writeAll(bitmapBytes);
 
                     allocator.free(b.free);
                 },
@@ -661,8 +659,8 @@ pub fn main() !void {
             }
         }
 
-        std.debug.print("{} {}", .{ cur, header.assets });
-        try out.seekTo(cur);
-        try out.writer().writeAll(std.mem.sliceAsBytes(assets.assets[0..header.assetCount]));
+        try out.seekTo(header.assets);
+        var assetArrayBytes = std.mem.sliceAsBytes(assets.assets[0..header.assetCount]);
+        try out.writer().writeAll(assetArrayBytes);
     }
 }

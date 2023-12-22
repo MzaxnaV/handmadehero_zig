@@ -12,6 +12,24 @@ pub fn HHA_CODE(comptime a: u8, comptime b: u8, comptime c: u8, comptime d: u8) 
 pub const HHA_MAGIC_VALUE = HHA_CODE('h', 'h', 'a', 'f');
 pub const HHA_VERSION = 0;
 
+pub const bitmap_id = extern struct {
+    value: u32 align(1) = 0,
+
+    pub inline fn IsValid(self: bitmap_id) bool {
+        const result = self.value != 0;
+        return result;
+    }
+};
+
+pub const sound_id = extern struct {
+    value: u32 align(1) = 0,
+
+    pub inline fn IsValid(self: sound_id) bool {
+        const result = self.value != 0;
+        return result;
+    }
+};
+
 pub const hha_header = extern struct {
     /// `HHA_MAGIC_VALUE`
     magicValue: u32 align(1),
@@ -49,7 +67,7 @@ pub const hha_bitmap = extern struct {
 pub const hha_sound = extern struct {
     sampleCount: u32 align(1),
     channelCount: u32 align(1),
-    nextIDToPlay: u32 align(1),
+    nextIDToPlay: sound_id align(1),
 };
 
 pub const hha_asset = extern struct {
@@ -57,7 +75,7 @@ pub const hha_asset = extern struct {
     firstTagIndex: u32 align(1),
     onePastLastTagIndex: u32 align(1),
     data: extern union {
-        bitmap: hha_bitmap,
-        sound: hha_sound,
+        bitmap: hha_bitmap align(1),
+        sound: hha_sound align(1),
     } align(1),
 };
