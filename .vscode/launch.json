@@ -47,7 +47,7 @@
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/data",
-            // "preLaunchTask": "Build Assets",
+            "preLaunchTask": "Build Assets",
             "environment": [],
             "console": "integratedTerminal"
         }
