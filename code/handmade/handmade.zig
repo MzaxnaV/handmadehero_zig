@@ -331,7 +331,7 @@ fn FillGroundChunk(
         if (renderGroup.AllResourcesPresent()) {
             groundBuffer.p = chunkP.*;
 
-            h.PlatformAddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
+            h.platformAPI.AddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
         } else {
             EndTaskWithMemory(work.task);
         }
@@ -518,9 +518,7 @@ pub export fn UpdateAndRender(
         }
     }
 
-    h.PlatformAddEntry = gameMemory.PlatformAddEntry;
-    h.PlatformCompleteAllWork = gameMemory.PlatformCompleteAllWork;
-    h.DEBUGPlatformReadEntireFile = gameMemory.DEBUGPlatformReadEntireFile;
+    h.platformAPI = gameMemory.platformAPI;
 
     if (HANDMADE_INTERNAL) {
         handmade_internal.debugGlobalMemory = gameMemory;

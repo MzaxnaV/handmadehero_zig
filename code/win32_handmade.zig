@@ -1099,6 +1099,41 @@ fn DoWorkerWork(_: ?*platform.work_queue, data: *anyopaque) void {
     _ = win32.OutputDebugStringA(&buffer);
 }
 
+fn Win32GetAllFilesOfTypeBegin(extension: []const u8) platform.file_group {
+    _ = extension;
+
+    const result = platform.file_group{
+        .fileCount = 0,
+        .data = undefined,
+    };
+
+    return result;
+}
+
+fn Win32GetAllFilesOfTypeEnd(fileGroup: platform.file_group) void {
+    _ = fileGroup;
+}
+
+fn Win32OpenFile(fileGroup: platform.file_group, fileIndex: u32) *platform.file_handle {
+    _ = fileIndex;
+    _ = fileGroup;
+
+    const result: *platform.file_handle = undefined;
+
+    return result;
+}
+
+fn Win32ReadDataFromFile(source: *platform.file_handle, offset: u64, size: u64, dest: *anyopaque) void {
+    _ = dest;
+    _ = size;
+    _ = offset;
+    _ = source;
+}
+fn Win32FileError(source: *platform.file_handle, message: []const u8) void {
+    _ = message;
+    _ = source;
+}
+
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
     var win32State = win32_state{
         .gameMemoryBlock = undefined,
@@ -1265,11 +1300,20 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 .transientStorage = undefined,
                 .highPriorityQueue = highPriorityQueue.to(),
                 .lowPriorityQueue = lowPriorityQueue.to(),
-                .PlatformAddEntry = Win32AddEntry,
-                .PlatformCompleteAllWork = Win32CompleteAllWork,
-                .DEBUGPlatformFreeFileMemory = DEBUGWin32FreeFileMemory,
-                .DEBUGPlatformReadEntireFile = DEBUGWin32ReadEntireFile,
-                .DEBUGPlatformWriteEntireFile = DEBUGWin32WriteEntireFile,
+                .platformAPI = platform.api{
+                    .AddEntry = Win32AddEntry,
+                    .CompleteAllWork = Win32CompleteAllWork,
+
+                    .DEBUGFreeFileMemory = DEBUGWin32FreeFileMemory,
+                    .DEBUGReadEntireFile = DEBUGWin32ReadEntireFile,
+                    .DEBUGWriteEntireFile = DEBUGWin32WriteEntireFile,
+
+                    .GetAllFilesOfTypeBegin = Win32GetAllFilesOfTypeBegin,
+                    .GetAllFilesOfTypeEnd = Win32GetAllFilesOfTypeEnd,
+                    .OpenFile = Win32OpenFile,
+                    .ReadDataFromFile = Win32ReadDataFromFile,
+                    .FileError = Win32FileError,
+                },
 
                 .d = &globalDebug,
             };

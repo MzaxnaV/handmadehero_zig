@@ -1359,14 +1359,14 @@ pub const render_group = struct {
                 work.clipRect = clipRect;
 
                 if (NOT_IGNORE) {
-                    h.PlatformAddEntry(renderQueue, DoTiledRenderWork, work);
+                    h.platformAPI.AddEntry(renderQueue, DoTiledRenderWork, work);
                 } else {
                     DoTiledRenderWork(renderQueue, work);
                 }
             }
         }
 
-        h.PlatformCompleteAllWork(renderQueue);
+        h.platformAPI.CompleteAllWork(renderQueue);
     }
 
     pub inline fn AllResourcesPresent(self: *Self) bool {

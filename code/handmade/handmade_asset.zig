@@ -58,7 +58,7 @@ pub const asset_group = struct {
 };
 
 pub const asset_file = struct {
-    // handle: platform_file_handle,
+    handle: *platform.file_handle,
 
     header: h.hha_header,
     assetTypeArray: []h.hha_asset_type,
@@ -194,108 +194,131 @@ pub const game_assets = struct {
 
         assets.tagRange[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
 
-        assets.assetCount = 0;
-        assets.tagCount = 0;
-        
-        if (!NOT_IGNORE) {
+        if (false) {
+            assets.assetCount = 0;
+            assets.tagCount = 0;
 
-            // {
-            //     var fileGroup: platform_file_group = PlatformGetAllFilesOfTypeBegin("hha");
-            //     defer PlatformGetAllFilesOfTypeEnd(fileGroup);
+            {
+                var fileGroup: platform.file_group = h.platformAPI.GetAllFilesOfTypeBegin("hha");
+                defer h.platformAPI.GetAllFilesOfTypeEnd(fileGroup);
 
-            //     assets.files = arena.PushSlice(asset_file, fileGroup.fileCount);
+                assets.files = arena.PushSlice(asset_file, fileGroup.fileCount);
 
-            //     for (0..assets.files.len) |fileIndex| {
-            //         var file: *asset_file = &assets.files[fileIndex];
+                for (0..assets.files.len) |fileIndex| {
+                    var file: *asset_file = &assets.files[fileIndex];
 
-            //         h.ZeroStruct(h.hha_header, &file.header);
-            //         file.handle = PlatformOpenFile(fileGroup, fileIndex);
-            //         PlatformReadDataFromFile(file.handle, 0, @sizeOf(@TypeOf(file.header)), &file.header);
+                    file.tagBase = assets.tagCount;
 
-            //         file.assetTypeArray = arena.PushSlice(h.hha_asset_type, file.header.assetTypeCount);
-            //         const assetTypeArraySize =  file.header.assetTypeCount * @sizeOf(h.hha_asset_type);
+                    h.ZeroStruct(h.hha_header, &file.header);
+                    file.handle = h.platformAPI.OpenFile(fileGroup, @intCast(fileIndex));
+                    h.platformAPI.ReadDataFromFile(file.handle, 0, @sizeOf(@TypeOf(file.header)), &file.header);
 
-            //         PlatformReadDataFromFile(file.handle, file.header.assetTypes, assetTypeArraySize, file.assetTypeArray.ptr);
+                    file.assetTypeArray = arena.PushSlice(h.hha_asset_type, file.header.assetTypeCount);
+                    const assetTypeArraySize = file.header.assetTypeCount * @sizeOf(h.hha_asset_type);
 
-            //         if (header.magicValue != h.HHA_MAGIC_VALUE) {
-            //             PlatformFileError(file.handle, "HHA file has invalid magic value.");
-            //         }
+                    h.platformAPI.ReadDataFromFile(file.handle, file.header.assetTypes, assetTypeArraySize, file.assetTypeArray.ptr);
 
-            //         if (header.version > h.HHA_VERSION) {
-            //             PlatformFileError(file.handle, "HHA file is of a later version.");
-            //         }
+                    if (file.header.magicValue != h.HHA_MAGIC_VALUE) {
+                        h.platformAPI.FileError(file.handle, "HHA file has invalid magic value.");
+                    }
 
-            //         if (PlatformNoFileErrors(file.handle)) {
-            //             assets.tagsCount += header.tagCount;
-            //             assets.assetCount += header.assetCount;
-            //         } else {
-            //             platform.InvalidCodePath("");
-            //         }
-            //     }
-            // }
+                    if (file.header.version > h.HHA_VERSION) {
+                        h.platformAPI.FileError(file.handle, "HHA file is of a later version.");
+                    }
 
-            // assets.assets = arena.PushSlice(h.hha_asset, assetCount);
-            // assets.slots = arena.PushSlice(asset_slot, assetCount);
-            // assets.tags = arena.PushSlice(h.hha_tag, tagCount);
-
-            // var assetCount: u32 = 0;
-            // var tagCount: u32 = 0;
-            // for (0..asset_type_id.count()) |destTypeID| {
-            //     var destType: *asset_type = &assets.assetTypes[destTypeID];
-            //     destType.firstAssetIndex = assetCount;
-
-            //     for (0..assets.files.len) |fileIndex| {
-            //         var file: *asset_file = &assets.files[fileIndex];
-            //         if (PlatformNoFileErrors(file.handle)) {
-            //             for (0..file.header.assetTypeCount) |sourceIndex| {
-            //                 var sourceType: *h.hha_asset_type = &file.assetTypeArray[sourceIndex];
-
-            //                 if (sourceType.typeID == destTypeID) {
-            //                     PlatformReadDataFromFile();
-            //                     assetCount += ;
-            //                 }
-            //             }
-            //         }
-            //     }
-
-            //     destType.onePastLastAssetIndex = assetCount;
-            // }
-
-            // assert(assetCount == assets.assetCount);
-            // assert(tagCount == assets.tagCount);
-        }
-
-        const readResult = h.DEBUGPlatformReadEntireFile.?("test.hha");
-        if (readResult.contentSize != 0) {
-            const header: *h.hha_header = @ptrCast(readResult.contents);
-
-            assert(header.magicValue == h.HHA_MAGIC_VALUE);
-            assert(header.version == h.HHA_VERSION);
-
-            const assetCount = header.assetCount;
-            assets.assetCount = assetCount;
-            assets.assets = @ptrCast(@as([*]u8, @ptrCast(header)) + header.assets);
-            assets.slots = arena.PushSlice(asset_slot, assetCount);
-
-            assets.tagCount = header.tagCount;
-            assets.tags = @ptrCast(@as([*]u8, @ptrCast(header)) + header.tags);
-
-            const hhaAssetTypes: [*]h.hha_asset_type = @ptrCast(@as([*]u8, @ptrCast(header)) + header.assetTypes);
-
-            for (0..header.assetTypeCount) |index| {
-                const source: h.hha_asset_type = hhaAssetTypes[index];
-                if (source.typeID < asset_type_id.count()) {
-                    var dest: *asset_type = &assets.assetTypes[source.typeID];
-
-                    platform.Assert(dest.firstAssetIndex == 0);
-                    platform.Assert(dest.onePastLastAssetIndex == 0);
-                    dest.firstAssetIndex = source.firstAssetIndex;
-                    dest.onePastLastAssetIndex = source.onePastLastAssetIndex;
+                    if (platform.NoFileErrors(file.handle)) {
+                        assets.tagCount += file.header.tagCount;
+                        assets.assetCount += file.header.assetCount;
+                    } else {
+                        platform.InvalidCodePath("");
+                    }
                 }
             }
 
-            assets.hhaContents.ptr = readResult.contents;
-            assets.hhaContents.len = readResult.contentSize;
+            assets.assets = arena.PushSlice(h.hha_asset, assets.assetCount).ptr;
+            assets.slots = arena.PushSlice(asset_slot, assets.assetCount);
+            assets.tags = arena.PushSlice(h.hha_tag, assets.tagCount).ptr;
+
+            for (0..assets.files.len) |fileIndex| {
+                var file: *asset_file = &assets.files[fileIndex];
+                if (platform.NoFileErrors(file.handle)) {
+                    const tagArraySize = @sizeOf(h.hha_tag) * file.header.tagCount;
+                    h.platformAPI.ReadDataFromFile(file.handle, file.header.tags, tagArraySize, assets.tags + file.tagBase);
+                }
+            }
+
+            var assetCount: u32 = 0;
+            for (0..asset_type_id.count()) |destTypeID| {
+                var destType: *asset_type = &assets.assetTypes[destTypeID];
+                destType.firstAssetIndex = assetCount;
+
+                for (0..assets.files.len) |fileIndex| {
+                    var file: *asset_file = &assets.files[fileIndex];
+                    if (platform.NoFileErrors(file.handle)) {
+                        for (0..file.header.assetTypeCount) |sourceIndex| {
+                            var sourceType: *h.hha_asset_type = &file.assetTypeArray[sourceIndex];
+
+                            if (sourceType.typeID == destTypeID) {
+                                const assetCountForType: u32 = (sourceType.onePastLastAssetIndex - sourceType.firstAssetIndex);
+
+                                h.platformAPI.ReadDataFromFile(
+                                    file.handle,
+                                    file.header.assets + sourceType.firstAssetIndex * @sizeOf(h.hha_asset),
+                                    assetCountForType * @sizeOf(h.hha_asset),
+                                    assets.assets + assetCount,
+                                );
+
+                                for (assetCount..assetCount + assetCountForType) |assetIndex| {
+                                    var asset: *h.hha_asset = &assets.assets[assetIndex];
+                                    asset.firstTagIndex += file.tagBase;
+                                    asset.onePastLastTagIndex += file.tagBase;
+                                }
+
+                                assetCount += assetCountForType;
+                                assert(assetCount < assets.assetCount);
+                            }
+                        }
+                    }
+                }
+
+                destType.onePastLastAssetIndex = assetCount;
+            }
+
+            assert(assetCount == assets.assetCount);
+        }
+
+        if (true) {
+            const readResult = h.platformAPI.DEBUGReadEntireFile("test.hha");
+            if (readResult.contentSize != 0) {
+                const header: *h.hha_header = @ptrCast(readResult.contents);
+
+                assert(header.magicValue == h.HHA_MAGIC_VALUE);
+                assert(header.version == h.HHA_VERSION);
+
+                assets.assetCount = header.assetCount;
+                assets.assets = @ptrCast(@as([*]u8, @ptrCast(header)) + header.assets);
+                assets.slots = arena.PushSlice(asset_slot, assets.assetCount);
+
+                assets.tagCount = header.tagCount;
+                assets.tags = @ptrCast(@as([*]u8, @ptrCast(header)) + header.tags);
+
+                const hhaAssetTypes: [*]h.hha_asset_type = @ptrCast(@as([*]u8, @ptrCast(header)) + header.assetTypes);
+
+                for (0..header.assetTypeCount) |index| {
+                    const source: h.hha_asset_type = hhaAssetTypes[index];
+                    if (source.typeID < asset_type_id.count()) {
+                        var dest: *asset_type = &assets.assetTypes[source.typeID];
+
+                        platform.Assert(dest.firstAssetIndex == 0);
+                        platform.Assert(dest.onePastLastAssetIndex == 0);
+                        dest.firstAssetIndex = source.firstAssetIndex;
+                        dest.onePastLastAssetIndex = source.onePastLastAssetIndex;
+                    }
+                }
+
+                assets.hhaContents.ptr = readResult.contents;
+                assets.hhaContents.len = readResult.contentSize;
+            }
         }
 
         return assets;
@@ -629,7 +652,7 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
             work.bitmap = assets.assetArena.PushStruct(h.loaded_bitmap);
             work.finalState = .AssetState_Loaded;
 
-            h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadBitmapWork, work);
+            h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadBitmapWork, work);
         } else {
             assets.slots[ID.value].state = .AssetState_Unloaded;
         }
@@ -692,7 +715,7 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             work.sound = assets.assetArena.PushStruct(loaded_sound);
             work.finalState = .AssetState_Loaded;
 
-            h.PlatformAddEntry(assets.tranState.lowPriorityQueue, LoadSoundWork, work);
+            h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadSoundWork, work);
         }
     } else {
         assets.slots[ID.value].state = .AssetState_Unloaded;

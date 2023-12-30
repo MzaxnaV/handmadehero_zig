@@ -26,9 +26,9 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
         contents: [*]u8 = undefined,
     };
 
-    pub const debug_platform_free_file_memory = *const fn (*anyopaque) void;
-    pub const debug_platform_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
-    pub const debug_platform_write_entire_file = *const fn ([*:0]const u8, u32, *anyopaque) bool;
+    pub const debug_free_file_memory = *const fn (*anyopaque) void;
+    pub const debug_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
+    pub const debug_write_entire_file = *const fn ([*:0]const u8, u32, *anyopaque) bool;
 
     // move this to someplace proper
     inline fn __rdtsc() u64 {
@@ -168,6 +168,41 @@ pub const work_queue_callback = *const fn (queue: ?*work_queue, data: *anyopaque
 pub const add_entry = *const fn (queue: *work_queue, callback: work_queue_callback, data: *anyopaque) void;
 pub const complete_all_work = *const fn (queue: *work_queue) void;
 
+pub const file_handle = struct {
+    hasErrors: bool,
+};
+
+pub const file_group = struct {
+    fileCount: u32,
+    data: *anyopaque,
+};
+
+pub const get_all_files_of_type_begin = *const fn (extension: []const u8) file_group;
+pub const get_all_files_of_type_end = *const fn (fileGroup: file_group) void;
+pub const open_file = *const fn (fileGroup: file_group, fileIndex: u32) *file_handle;
+pub const read_data_from_file = *const fn (source: *file_handle, offset: u64, size: u64, dest: *anyopaque) void;
+pub const file_error = *const fn (source: *file_handle, message: []const u8) void;
+
+pub inline fn NoFileErrors(handle: *file_handle) bool {
+    const result = !handle.hasErrors;
+    return result;
+}
+
+pub const api = struct {
+    AddEntry: add_entry,
+    CompleteAllWork: complete_all_work,
+
+    GetAllFilesOfTypeBegin: get_all_files_of_type_begin,
+    GetAllFilesOfTypeEnd: get_all_files_of_type_end,
+    OpenFile: open_file,
+    ReadDataFromFile: read_data_from_file,
+    FileError: file_error,
+
+    DEBUGFreeFileMemory: handmade_internal.debug_free_file_memory = undefined,
+    DEBUGReadEntireFile: handmade_internal.debug_read_entire_file = undefined,
+    DEBUGWriteEntireFile: handmade_internal.debug_write_entire_file = undefined,
+};
+
 pub const memory = struct {
     permanentStorageSize: u64,
     permanentStorage: [*]u8,
@@ -178,12 +213,7 @@ pub const memory = struct {
     highPriorityQueue: *work_queue,
     lowPriorityQueue: *work_queue,
 
-    PlatformAddEntry: add_entry,
-    PlatformCompleteAllWork: complete_all_work,
-
-    DEBUGPlatformFreeFileMemory: handmade_internal.debug_platform_free_file_memory = undefined,
-    DEBUGPlatformReadEntireFile: handmade_internal.debug_platform_read_entire_file = undefined,
-    DEBUGPlatformWriteEntireFile: handmade_internal.debug_platform_write_entire_file = undefined,
+    platformAPI: api,
 
     // TODO (Manav): make declaration dependent on HANDMADE_INTERNAL
     counters: [len]handmade_internal.debug_cycle_counter = [1]handmade_internal.debug_cycle_counter{.{}} ** len,
