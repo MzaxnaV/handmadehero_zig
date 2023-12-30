@@ -46,6 +46,13 @@ pub const hha_header = extern struct {
     assetTypes: u64 align(1),
     /// stores `[assetCount]hha_asset`
     assets: u64 align(1),
+
+    // fileGUID: [8]u32,
+    // removalCount: u32,
+    // hha_asset_removal = struct {
+    //     fileGUID: [8]u32,
+    //     assetIndex: u32
+    // };
 };
 
 pub const hha_tag = extern struct {

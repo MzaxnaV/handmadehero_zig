@@ -4,7 +4,7 @@ pub const asset_type_id = enum(u32) {
     //
     // Bitmaps
     //
-    
+
     Asset_Test_Bitmap,
 
     Asset_Shadow,

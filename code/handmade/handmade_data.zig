@@ -316,4 +316,4 @@ pub fn AddCollisionRule(gameState: *game_state, unsortedStorageIndexA: u32, unso
     }
 }
 
-pub var platformAPI : platform.api = undefined;
+pub var platformAPI: platform.api = undefined;

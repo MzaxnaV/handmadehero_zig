@@ -281,7 +281,7 @@ fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
     @fence(.SeqCst);
 
-    // if (platform.NoFileErrors(work.handle)) 
+    // if (platform.NoFileErrors(work.handle))
     {
         work.slot.state = work.finalState;
     }
