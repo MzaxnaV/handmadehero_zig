@@ -43,6 +43,11 @@ pub const asset_slot = struct {
     },
 };
 
+pub const asset = struct {
+    hha: h.hha_asset,
+    fileIndex: u32,
+};
+
 pub const asset_vector = struct {
     e: [asset_tag_id.len()]f32 = [1]f32{0} ** asset_tag_id.len(),
 };
@@ -79,13 +84,13 @@ pub const game_assets = struct {
     tags: [*]h.hha_tag,
 
     assetCount: u32,
-    assets: [*]h.hha_asset,
+    assets: [*]asset,
 
     slots: []asset_slot,
 
     assetTypes: [asset_type_id.count()]asset_type,
 
-    hhaContents: []u8,
+    // hhaContents: []u8,
     // heroBitmaps: [4]hero_bitmaps,
 
     // DEBUGUsedAssetCount: u32,
@@ -120,7 +125,7 @@ pub const game_assets = struct {
     }
 
     pub inline fn GetSoundInfo(self: *game_assets, ID: h.sound_id) *h.hha_sound {
-        const result = &self.assets[ID.value].data.sound;
+        const result = &self.assets[ID.value].hha.data.sound;
         return result;
     }
 
@@ -136,7 +141,7 @@ pub const game_assets = struct {
 
         assets.tagRange[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
 
-        if (false) {
+        {
             assets.assetCount = 0;
             assets.tagCount = 0;
 
@@ -177,7 +182,7 @@ pub const game_assets = struct {
                 }
             }
 
-            assets.assets = arena.PushSlice(h.hha_asset, assets.assetCount).ptr;
+            assets.assets = arena.PushSlice(asset, assets.assetCount).ptr;
             assets.slots = arena.PushSlice(asset_slot, assets.assetCount);
             assets.tags = arena.PushSlice(h.hha_tag, assets.tagCount).ptr;
 
@@ -203,21 +208,30 @@ pub const game_assets = struct {
                             if (sourceType.typeID == destTypeID) {
                                 const assetCountForType: u32 = (sourceType.onePastLastAssetIndex - sourceType.firstAssetIndex);
 
+                                const tempMem = h.BeginTemporaryMemory(&tranState.tranArena);
+                                defer h.EndTemporaryMemory(tempMem);
+
+                                const hhaAssetArray = tempMem.arena.PushSlice(h.hha_asset, assetCountForType);
+
                                 h.platformAPI.ReadDataFromFile(
                                     file.handle,
                                     file.header.assets + sourceType.firstAssetIndex * @sizeOf(h.hha_asset),
                                     assetCountForType * @sizeOf(h.hha_asset),
-                                    assets.assets + assetCount,
+                                    hhaAssetArray.ptr,
                                 );
 
-                                for (assetCount..assetCount + assetCountForType) |assetIndex| {
-                                    var asset: *h.hha_asset = &assets.assets[assetIndex];
-                                    asset.firstTagIndex += file.tagBase;
-                                    asset.onePastLastTagIndex += file.tagBase;
-                                }
+                                for (0..assetCountForType) |assetIndex| {
+                                    const hhaAsset: h.hha_asset = hhaAssetArray[assetIndex];
 
-                                assetCount += assetCountForType;
-                                assert(assetCount < assets.assetCount);
+                                    assert(assetCount < assets.assetCount);
+                                    var a: *asset = &assets.assets[assetCount + assetIndex];
+                                    assetCount += 1;
+
+                                    a.fileIndex = @intCast(fileIndex);
+                                    a.hha = hhaAsset;
+                                    a.hha.firstTagIndex += file.tagBase;
+                                    a.hha.onePastLastTagIndex += file.tagBase;
+                                }
                             }
                         }
                     }
@@ -229,39 +243,39 @@ pub const game_assets = struct {
             assert(assetCount == assets.assetCount);
         }
 
-        if (true) {
-            const readResult = h.platformAPI.DEBUGReadEntireFile("test.hha");
-            if (readResult.contentSize != 0) {
-                const header: *h.hha_header = @ptrCast(readResult.contents);
+        // if (false) {
+        //     const readResult = h.platformAPI.DEBUGReadEntireFile("test.hha");
+        //     if (readResult.contentSize != 0) {
+        //         const header: *h.hha_header = @ptrCast(readResult.contents);
 
-                assert(header.magicValue == h.HHA_MAGIC_VALUE);
-                assert(header.version == h.HHA_VERSION);
+        //         assert(header.magicValue == h.HHA_MAGIC_VALUE);
+        //         assert(header.version == h.HHA_VERSION);
 
-                assets.assetCount = header.assetCount;
-                assets.assets = @ptrCast(@as([*]u8, @ptrCast(header)) + header.assets);
-                assets.slots = arena.PushSlice(asset_slot, assets.assetCount);
+        //         assets.assetCount = header.assetCount;
+        //         assets.assets = @alignCast(@ptrCast(@as([*]u8, @ptrCast(header)) + header.assets));
+        //         assets.slots = arena.PushSlice(asset_slot, assets.assetCount);
 
-                assets.tagCount = header.tagCount;
-                assets.tags = @ptrCast(@as([*]u8, @ptrCast(header)) + header.tags);
+        //         assets.tagCount = header.tagCount;
+        //         assets.tags = @ptrCast(@as([*]u8, @ptrCast(header)) + header.tags);
 
-                const hhaAssetTypes: [*]h.hha_asset_type = @ptrCast(@as([*]u8, @ptrCast(header)) + header.assetTypes);
+        //         const hhaAssetTypes: [*]h.hha_asset_type = @ptrCast(@as([*]u8, @ptrCast(header)) + header.assetTypes);
 
-                for (0..header.assetTypeCount) |index| {
-                    const source: h.hha_asset_type = hhaAssetTypes[index];
-                    if (source.typeID < asset_type_id.count()) {
-                        var dest: *asset_type = &assets.assetTypes[source.typeID];
+        //         for (0..header.assetTypeCount) |index| {
+        //             const source: h.hha_asset_type = hhaAssetTypes[index];
+        //             if (source.typeID < asset_type_id.count()) {
+        //                 var dest: *asset_type = &assets.assetTypes[source.typeID];
 
-                        platform.Assert(dest.firstAssetIndex == 0);
-                        platform.Assert(dest.onePastLastAssetIndex == 0);
-                        dest.firstAssetIndex = source.firstAssetIndex;
-                        dest.onePastLastAssetIndex = source.onePastLastAssetIndex;
-                    }
-                }
+        //                 platform.Assert(dest.firstAssetIndex == 0);
+        //                 platform.Assert(dest.onePastLastAssetIndex == 0);
+        //                 dest.firstAssetIndex = source.firstAssetIndex;
+        //                 dest.onePastLastAssetIndex = source.onePastLastAssetIndex;
+        //             }
+        //         }
 
-                assets.hhaContents.ptr = readResult.contents;
-                assets.hhaContents.len = readResult.contentSize;
-            }
-        }
+        //         assets.hhaContents.ptr = readResult.contents;
+        //         assets.hhaContents.len = readResult.contentSize;
+        //     }
+        // }
 
         return assets;
     }
@@ -287,18 +301,20 @@ fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
     }
     const work: *load_asset_work = @alignCast(@ptrCast(data));
 
-    if (false) {
-        h.platformAPI.ReadDataFromFile(work.handle, work.offset, work.size, work.destination);
-    }
+    h.platformAPI.ReadDataFromFile(work.handle, work.offset, work.size, work.destination);
 
     @fence(.SeqCst);
 
-    // if (platform.NoFileErrors(work.handle))
-    {
+    if (platform.NoFileErrors(work.handle)) {
         work.slot.state = work.finalState;
     }
 
     h.EndTaskWithMemory(work.task);
+}
+
+inline fn GetFileHandleFor(assets: *game_assets, fileIndex: u32) *platform.file_handle {
+    const result: *platform.file_handle = assets.files[fileIndex].handle;
+    return result;
 }
 
 pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
@@ -306,8 +322,8 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
 
     if (h.AtomicCompareExchange(asset_state, &assets.slots[ID.value].state, .AssetState_Queued, .AssetState_Unloaded) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
-            const hhaAsset: *h.hha_asset = &assets.assets[ID.value];
-            const info: h.hha_bitmap = hhaAsset.data.bitmap;
+            const a: *asset = &assets.assets[ID.value];
+            const info: h.hha_bitmap = a.hha.data.bitmap;
             const bitmap: *h.loaded_bitmap = assets.assetArena.PushStruct(h.loaded_bitmap);
 
             bitmap.alignPercentage = info.alignPercentage;
@@ -318,16 +334,13 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
             bitmap.pitch = 4 * @as(i32, @intCast(info.dim[0]));
             const memorySize: u64 = @intCast(bitmap.pitch * bitmap.height);
 
-            @import("std").debug.print("Allocating {} from {} for {}\n", .{ memorySize, assets.assetArena, info });
             bitmap.memory = assets.assetArena.PushSize(memorySize);
-
-            h.Copy(memorySize, assets.hhaContents.ptr + hhaAsset.dataOffset, bitmap.memory);
 
             var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
             work.task = task;
             work.slot = &assets.slots[ID.value];
-            work.handle = undefined;
-            work.offset = hhaAsset.dataOffset;
+            work.handle = GetFileHandleFor(assets, a.fileIndex);
+            work.offset = a.hha.dataOffset;
             work.size = memorySize;
             work.destination = bitmap.memory;
             work.finalState = .AssetState_Loaded;
@@ -349,8 +362,8 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
 
     if (h.AtomicCompareExchange(asset_state, &assets.slots[ID.value].state, .AssetState_Queued, .AssetState_Unloaded) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
-            const hhaAsset: *h.hha_asset = &assets.assets[ID.value];
-            const info: *h.hha_sound = &hhaAsset.data.sound;
+            const a: *asset = &assets.assets[ID.value];
+            const info: *h.hha_sound = &a.hha.data.sound;
 
             const sound: *loaded_sound = assets.assetArena.PushStruct(loaded_sound);
             sound.sampleCount = info.sampleCount;
@@ -359,7 +372,6 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             const channelSize = sound.sampleCount * @sizeOf(i16);
             const memorySize = sound.channelCount * channelSize;
 
-            @import("std").debug.print("Allocating {} from {} for {}\n", .{ memorySize, assets.assetArena, info });
             var memory = assets.assetArena.PushSize(memorySize);
 
             var soundAt: [*]i16 = @alignCast(@ptrCast(memory));
@@ -371,16 +383,14 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
             work.task = task;
             work.slot = &assets.slots[ID.value];
-            work.handle = undefined;
-            work.offset = hhaAsset.dataOffset;
+            work.handle = GetFileHandleFor(assets, a.fileIndex);
+            work.offset = a.hha.dataOffset;
             work.size = memorySize;
             work.destination = memory;
             work.finalState = .AssetState_Loaded;
             work.slot.data = .{ .sound = sound };
 
             work.finalState = .AssetState_Loaded;
-
-            h.Copy(memorySize, assets.hhaContents.ptr + hhaAsset.dataOffset, memory);
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
@@ -405,7 +415,7 @@ pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: asset_type_id, matchV
 
             var totalWeightedDiff: f32 = 0.0;
 
-            for (a.firstTagIndex..a.onePastLastTagIndex) |tagIndex| {
+            for (a.hha.firstTagIndex..a.hha.onePastLastTagIndex) |tagIndex| {
                 var tag: h.hha_tag = assets.tags[tagIndex];
 
                 const _a = matchVector.e[tag.ID];
