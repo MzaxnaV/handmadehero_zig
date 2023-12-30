@@ -96,14 +96,26 @@ pub const game_assets = struct {
     pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id) ?*h.loaded_bitmap {
         assert(ID.value <= self.assetCount);
         const slot: *asset_slot = &self.slots[ID.value];
-        const result: ?*h.loaded_bitmap = if (@intFromEnum(slot.state) >= @intFromEnum(asset_state.AssetState_Loaded)) slot.data.bitmap else null;
+
+        var result: ?*h.loaded_bitmap = null;
+        if (@intFromEnum(slot.state) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+            @fence(.SeqCst);
+            result = slot.data.bitmap;
+        }
+
         return result;
     }
 
     pub inline fn GetSound(self: *game_assets, ID: h.sound_id) ?*loaded_sound {
         assert(ID.value <= self.assetCount);
         const slot: *asset_slot = &self.slots[ID.value];
-        const result: ?*loaded_sound = if (@intFromEnum(slot.state) >= @intFromEnum(asset_state.AssetState_Loaded)) slot.data.sound else null;
+
+        var result: ?*loaded_sound = null;
+        if (@intFromEnum(slot.state) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+            @fence(.SeqCst);
+            result = slot.data.sound;
+        }
+
         return result;
     }
 
@@ -289,43 +301,6 @@ fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
     h.EndTaskWithMemory(work.task);
 }
 
-// const load_bitmap_work = struct {
-//     assets: *game_assets,
-//     ID: h.bitmap_id,
-//     task: *h.task_with_memory,
-//     bitmap: *h.loaded_bitmap,
-
-//     finalState: asset_state,
-// };
-
-// fn LoadBitmapWork(_: ?*platform.work_queue, data: *anyopaque) void {
-//     comptime {
-//         if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(LoadBitmapWork)) {
-//             @compileError("Function signature mismatch!");
-//         }
-//     }
-//     const work: *load_bitmap_work = @alignCast(@ptrCast(data));
-
-//     const hhaAsset: h.hha_asset = work.assets.assets[work.ID.value];
-//     const info: h.hha_bitmap = hhaAsset.data.bitmap;
-//     const bitmap: *h.loaded_bitmap = work.bitmap;
-
-//     bitmap.alignPercentage = info.alignPercentage;
-//     bitmap.widthOverHeight = @as(f32, @floatFromInt(info.dim[0])) / @as(f32, @floatFromInt(info.dim[1]));
-
-//     bitmap.width = @intCast(info.dim[0]);
-//     bitmap.height = @intCast(info.dim[1]);
-//     bitmap.pitch = 4 * @as(i32, @intCast(info.dim[0]));
-//     bitmap.memory = work.assets.hhaContents.ptr + hhaAsset.dataOffset;
-
-//     @fence(.SeqCst);
-
-//     work.assets.slots[work.ID.value].data = .{ .bitmap = work.bitmap };
-//     work.assets.slots[work.ID.value].state = work.finalState;
-
-//     h.EndTaskWithMemory(work.task);
-// }
-
 pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
     if (ID.value == 0) return;
 
@@ -342,7 +317,11 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
             bitmap.height = @intCast(info.dim[1]);
             bitmap.pitch = 4 * @as(i32, @intCast(info.dim[0]));
             const memorySize: u64 = @intCast(bitmap.pitch * bitmap.height);
-            bitmap.memory = assets.assetArena.PushSlice(u8, memorySize).ptr;
+
+            @import("std").debug.print("Allocating {} from {} for {}\n", .{ memorySize, assets.assetArena, info });
+            bitmap.memory = assets.assetArena.PushSize(memorySize);
+
+            h.Copy(memorySize, assets.hhaContents.ptr + hhaAsset.dataOffset, bitmap.memory);
 
             var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
             work.task = task;
@@ -353,8 +332,6 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
             work.destination = bitmap.memory;
             work.finalState = .AssetState_Loaded;
             work.slot.data = .{ .bitmap = bitmap };
-
-            bitmap.memory = assets.hhaContents.ptr + hhaAsset.dataOffset;
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
@@ -367,62 +344,48 @@ pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id) void {
     return LoadBitmap(assets, ID);
 }
 
-const load_sound_work = struct {
-    assets: *game_assets,
-    ID: h.sound_id,
-    task: *h.task_with_memory,
-    sound: *loaded_sound,
-
-    finalState: asset_state,
-};
-
-fn LoadSoundWork(_: ?*platform.work_queue, data: *anyopaque) void {
-    comptime {
-        if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(LoadSoundWork)) {
-            @compileError("Function signature mismatch!");
-        }
-    }
-    const work: *load_sound_work = @alignCast(@ptrCast(data));
-
-    const hhaAsset: h.hha_asset = work.assets.assets[work.ID.value];
-    const info: h.hha_sound = hhaAsset.data.sound;
-    const sound = work.sound;
-
-    sound.sampleCount = info.sampleCount;
-    sound.channelCount = info.channelCount;
-    assert(sound.channelCount < sound.samples.len);
-
-    var sampleDataOffset = hhaAsset.dataOffset;
-    for (0..sound.channelCount) |channelIndex| {
-        sound.samples[channelIndex] = @alignCast(@ptrCast(work.assets.hhaContents.ptr + sampleDataOffset));
-        sampleDataOffset += sound.sampleCount * @sizeOf(i16);
-    }
-
-    @fence(.SeqCst);
-
-    work.assets.slots[work.ID.value].data = .{ .sound = work.sound };
-    work.assets.slots[work.ID.value].state = work.finalState;
-
-    h.EndTaskWithMemory(work.task);
-}
-
 pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
     if (ID.value == 0) return;
 
     if (h.AtomicCompareExchange(asset_state, &assets.slots[ID.value].state, .AssetState_Queued, .AssetState_Unloaded) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
-            var work: *load_sound_work = task.arena.PushStruct(load_sound_work);
+            const hhaAsset: *h.hha_asset = &assets.assets[ID.value];
+            const info: *h.hha_sound = &hhaAsset.data.sound;
 
-            work.assets = assets;
-            work.ID = ID;
+            const sound: *loaded_sound = assets.assetArena.PushStruct(loaded_sound);
+            sound.sampleCount = info.sampleCount;
+            sound.channelCount = info.channelCount;
+
+            const channelSize = sound.sampleCount * @sizeOf(i16);
+            const memorySize = sound.channelCount * channelSize;
+
+            @import("std").debug.print("Allocating {} from {} for {}\n", .{ memorySize, assets.assetArena, info });
+            var memory = assets.assetArena.PushSize(memorySize);
+
+            var soundAt: [*]i16 = @alignCast(@ptrCast(memory));
+            for (0..sound.channelCount) |channelIndex| {
+                sound.samples[channelIndex] = soundAt;
+                soundAt += channelSize;
+            }
+
+            var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
             work.task = task;
-            work.sound = assets.assetArena.PushStruct(loaded_sound);
+            work.slot = &assets.slots[ID.value];
+            work.handle = undefined;
+            work.offset = hhaAsset.dataOffset;
+            work.size = memorySize;
+            work.destination = memory;
+            work.finalState = .AssetState_Loaded;
+            work.slot.data = .{ .sound = sound };
+
             work.finalState = .AssetState_Loaded;
 
-            h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadSoundWork, work);
+            h.Copy(memorySize, assets.hhaContents.ptr + hhaAsset.dataOffset, memory);
+
+            h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
+        } else {
+            assets.slots[ID.value].state = .AssetState_Unloaded;
         }
-    } else {
-        assets.slots[ID.value].state = .AssetState_Unloaded;
     }
 }
 

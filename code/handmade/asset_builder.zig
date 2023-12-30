@@ -592,7 +592,6 @@ pub fn main() !void {
     assets.EndAssetType();
 
     assets.BeginAssetType(.Asset_test_stereo);
-    _ = assets.AddDefaultSoundAsset("wave_stereo_test_1min.wav");
     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1sec.wav");
     assets.EndAssetType();
 
