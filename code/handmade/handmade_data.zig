@@ -316,8 +316,4 @@ pub fn AddCollisionRule(gameState: *game_state, unsortedStorageIndexA: u32, unso
     }
 }
 
-pub var DEBUGPlatformReadEntireFile: ?hi.debug_platform_read_entire_file = null;
-
-// NOTE (Manav): the below two pointers are weird, we already have a function pointer in gameMemory
-pub var PlatformAddEntry: platform.add_entry = undefined;
-pub var PlatformCompleteAllWork: platform.complete_all_work = undefined;
+pub var platformAPI: platform.api = undefined;
