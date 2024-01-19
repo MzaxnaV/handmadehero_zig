@@ -636,24 +636,24 @@ pub fn main() !void {
             switch (source.t) {
                 .AssetType_Bitmap => {
                     const b = try LoadBMP(source.filename, allocator);
+                    defer allocator.free(b.free);
+
                     dest.data.bitmap.dim = [2]u32{ @intCast(b.width), @intCast(b.height) };
 
                     platform.Assert(b.pitch == (b.width * 4));
                     var bitmapBytes = std.mem.sliceAsBytes(b.memory[0..@intCast(b.width * b.height * 4)]);
                     try out.writer().writeAll(bitmapBytes);
-
-                    allocator.free(b.free);
                 },
                 .AssetType_Sound => {
                     const w = try LoadWAV(source.filename, source.firstSampleIndex, dest.data.sound.sampleCount, allocator);
+                    defer allocator.free(w.free);
+
                     dest.data.sound.sampleCount = w.sampleCount;
                     dest.data.sound.channelCount = w.channelCount;
 
                     for (0..w.channelCount) |channelIndex| {
                         try out.writer().writeAll(std.mem.sliceAsBytes(w.samples[channelIndex].?[0 .. dest.data.sound.sampleCount * @sizeOf(i16)]));
                     }
-
-                    allocator.free(w.free);
                 },
             }
         }
