@@ -150,4 +150,4 @@ vis::bitmap_data<60, 40> bmp1 @ header.assets[1].dataOffset;
 vis::bitmap_data<144, 217> bmp25 @ header.assets[25].dataOffset;
 
 vis::sound_data<1, 6790> snd26 @ header.assets[26].dataOffset;
-vis::sound_data<1, 48000> snd53 @ header.assets[53].dataOffset;
+vis::sound_data<1, 48000> snd52 @ header.assets[52].dataOffset;

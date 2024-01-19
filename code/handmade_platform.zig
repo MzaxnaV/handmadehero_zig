@@ -168,8 +168,8 @@ pub const work_queue_callback = *const fn (queue: ?*work_queue, data: *anyopaque
 pub const add_entry = *const fn (queue: *work_queue, callback: work_queue_callback, data: *anyopaque) void;
 pub const complete_all_work = *const fn (queue: *work_queue) void;
 
-pub const file_handle = struct {
-    hasErrors: bool,
+pub const file_handle = extern struct {
+    noErrors: bool,
 };
 
 pub const file_group = struct {
@@ -184,7 +184,7 @@ pub const read_data_from_file = *const fn (source: *file_handle, offset: u64, si
 pub const file_error = *const fn (source: *file_handle, message: []const u8) void;
 
 pub inline fn NoFileErrors(handle: *file_handle) bool {
-    const result = !handle.hasErrors;
+    const result = handle.noErrors;
     return result;
 }
 
@@ -244,6 +244,10 @@ pub inline fn TeraBytes(comptime value: comptime_int) comptime_int {
 pub inline fn Align(addr: usize, alignment: usize) usize {
     // return @import("std").mem.alignForward(usize, addr, alignment);
     return addr + (alignment - 1) & ~(alignment - 1);
+}
+
+pub inline fn SafeTruncateU64(value: u64) u32 {
+    return @intCast(value);
 }
 
 pub inline fn Assert(expression: bool) void {

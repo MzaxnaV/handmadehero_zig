@@ -10,8 +10,9 @@ const win32 = struct {
     usingnamespace @import("win32").media.audio;
     usingnamespace @import("win32").media.audio.direct_sound;
     usingnamespace @import("win32").storage.file_system;
-    usingnamespace @import("win32").system.diagnostics.debug;
     usingnamespace @import("win32").system.com;
+    usingnamespace @import("win32").system.diagnostics.debug;
+    usingnamespace @import("win32").system.io;
     usingnamespace @import("win32").system.library_loader;
     usingnamespace @import("win32").system.memory;
     usingnamespace @import("win32").system.performance;
@@ -1099,11 +1100,16 @@ fn DoWorkerWork(_: ?*platform.work_queue, data: *anyopaque) void {
     _ = win32.OutputDebugStringA(&buffer);
 }
 
+const win32_platform_file_handle = extern struct {
+    h: platform.file_handle,
+    win32Handle: win32.HANDLE,
+};
+
 fn Win32GetAllFilesOfTypeBegin(extension: []const u8) platform.file_group {
     _ = extension;
 
     const result = platform.file_group{
-        .fileCount = 0,
+        .fileCount = 1, // implement this
         .data = undefined,
     };
 
@@ -1118,21 +1124,60 @@ fn Win32OpenFile(fileGroup: platform.file_group, fileIndex: u32) *platform.file_
     _ = fileIndex;
     _ = fileGroup;
 
-    const result: *platform.file_handle = undefined;
+    const fileName = "test.hha";
 
-    return result;
+    var result: ?*win32_platform_file_handle = @alignCast(@ptrCast(win32.VirtualAlloc(null, @sizeOf(win32_platform_file_handle), allocationType, win32.PAGE_READWRITE)));
+
+    if (result) |r| {
+        result.?.win32Handle = win32.CreateFileW(win32.L(fileName), win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
+        result.?.h.noErrors = r.win32Handle != win32.INVALID_HANDLE_VALUE;
+    }
+
+    return @ptrCast(&result.?.h);
 }
 
 fn Win32ReadDataFromFile(source: *platform.file_handle, offset: u64, size: u64, dest: *anyopaque) void {
-    _ = dest;
-    _ = size;
-    _ = offset;
-    _ = source;
+    if (platform.NoFileErrors(source)) {
+        var handle: *win32_platform_file_handle = @alignCast(@ptrCast(source));
+
+        var overlapped = win32.OVERLAPPED{
+            .Internal = 0,
+            .InternalHigh = 0,
+            .Anonymous = .{ .Anonymous = .{
+                .Offset = @intCast((offset >> 0) & 0xffffffff),
+                .OffsetHigh = @intCast((offset >> 32) & 0xffffffff),
+            }},
+            .hEvent = null
+        };
+
+        const fileSize32: u32 = platform.SafeTruncateU64(size);
+
+        var bytesRead: DWORD = 0;
+        if (win32.ReadFile(handle.win32Handle, dest, fileSize32, &bytesRead, &overlapped) != 0 and fileSize32 == bytesRead) {
+        } else {
+            Win32FileError(&handle.h, "Read file failed");
+        }
+    }
 }
 fn Win32FileError(source: *platform.file_handle, message: []const u8) void {
     _ = message;
-    _ = source;
+    if (HANDMADE_INTERNAL) {
+        _ = win32.OutputDebugStringW(win32.L("Win32 File Error: "));
+
+        // TODO (Manav): fix utf8 and utf16 stuff
+        // var messageW: [256:0]u16 = [1:0]u16{ 0 } ** 256;
+        // _ = std.unicode.utf8ToUtf16Le(&messageW, message) catch |err| @compileError(err);
+        // _ = win32.OutputDebugStringW(&messageW);
+        
+        _ = win32.OutputDebugStringW(win32.L("\n"));
+    }
+
+    source.noErrors = false;
 }
+
+// fn Win32CloseFile(fileHandle: *platform.file_handle) void {
+//     _ = win32.CloseHandle(fileHandle);
+// }
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
     var win32State = win32_state{
