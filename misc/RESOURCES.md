@@ -36,6 +36,7 @@ Collection of resources, not all are related to Handmade Hero.
 ## O
 - [OpenGL Tutorial, Arcsynthesis archieved](https://www.roiatalla.com/public/arcsynthesis/html/index.html)
 - [Optimization Resources, Agner Fog](https://www.agner.org/optimize/)
+- [Open Dynamics Engine, Physics Engine](https://www.ode.org/)
 
 ## P
 - [Physically Based Rendering, (Matt Pharr, Wenzel Jakob, and Greg Humphreys)](https://www.pbr-book.org/)
@@ -44,6 +45,9 @@ Collection of resources, not all are related to Handmade Hero.
 
 ## U
 - [Unaligned Memory Access](https://www.kernel.org/doc/html/latest/core-api/unaligned-memory-access.html)
+
+## V
+- [V-COLLIDE, Collision library](https://gamma.cs.unc.edu/V-COLLIDE/)
 
 ## Z
 - [ZachLikes](https://www.zachtronics.com/zach-like/)
