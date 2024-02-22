@@ -3,6 +3,8 @@ const std = @import("std");
 const WINAPI = std.os.windows.WINAPI;
 const DWORD = std.os.windows.DWORD;
 
+pub const UNICODE = true;
+
 const win32 = struct {
     usingnamespace @import("win32").foundation;
     usingnamespace @import("win32").graphics.gdi;
@@ -52,7 +54,7 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 const WIN32_STATE_FILE_NAME_COUNT = win32.MAX_PATH;
 
-const allocationType: win32.VIRTUAL_ALLOCATION_TYPE = @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT));
+const allocationReserveCommit = win32.VIRTUAL_ALLOCATION_TYPE{ .RESERVE = 1, .COMMIT = 1 }; // = @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT));
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
@@ -203,7 +205,7 @@ fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) handmade_internal.debug_rea
         var fileSize = win32.LARGE_INTEGER{ .QuadPart = 0 };
         if (win32.GetFileSizeEx(fileHandle, &fileSize) != 0) {
             var fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @as(u32, @intCast(fileSize.QuadPart)) else platform.InvalidCodePath("");
-            if (win32.VirtualAlloc(null, fileSize32, allocationType, win32.PAGE_READWRITE)) |data| {
+            if (win32.VirtualAlloc(null, fileSize32, allocationReserveCommit, win32.PAGE_READWRITE)) |data| {
                 var bytesRead: DWORD = 0;
                 if (win32.ReadFile(fileHandle, data, fileSize32, &bytesRead, null) != 0 and fileSize32 == bytesRead) {
                     result.contents = @as([*]u8, @ptrCast(data));
@@ -227,7 +229,7 @@ fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) handmade_internal.debug_rea
 
 fn DEBUGWin32WriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool {
     var result = false;
-    var fileHandle = win32.CreateFileA(fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_MODE.NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null);
+    var fileHandle = win32.CreateFileA(fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null);
 
     if (fileHandle != win32.INVALID_HANDLE_VALUE) {
         var bytesWritten: DWORD = 0;
@@ -459,7 +461,7 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u3
     buffer.pitch = platform.Align(@as(usize, @intCast(width)) * bytesPerPixel, @alignOf(u16));
 
     const bitmapMemorySize: usize = buffer.pitch * buffer.height;
-    buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, @as(win32.VIRTUAL_ALLOCATION_TYPE, @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT))), win32.PAGE_READWRITE);
+    buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, allocationReserveCommit, win32.PAGE_READWRITE);
 }
 
 fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: win32.HDC, windowWidth: i32, windowHeight: i32) void {
@@ -743,7 +745,7 @@ fn Win32PlayBackInput(state: *win32_state, newInput: *platform.input) void {
 
 fn ToggleFullscreen(window: win32.HWND) void {
     const style = @as(u32, @intCast(win32.GetWindowLongW(window, win32.GWL_STYLE)));
-    if ((style & @intFromEnum(win32.WS_OVERLAPPEDWINDOW)) != 0) {
+    if ((style & @as(u32, @bitCast(win32.WS_OVERLAPPEDWINDOW))) != 0) {
         var monitorInfo: win32.MONITORINFO = undefined;
         monitorInfo.cbSize = @sizeOf(win32.MONITORINFO);
         const windowPlacementSucceded = win32.GetWindowPlacement(window, &globalWindowPosition);
@@ -751,7 +753,7 @@ fn ToggleFullscreen(window: win32.HWND) void {
         const monitorInfoSucceded = win32.GetMonitorInfoW(monitorFromWindow, &monitorInfo);
 
         if ((windowPlacementSucceded != win32.FALSE) and (monitorInfoSucceded) != win32.FALSE) {
-            _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @as(i32, @bitCast(style & ~@intFromEnum(win32.WS_OVERLAPPEDWINDOW))));
+            _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @as(i32, @bitCast(style & ~@as(u32, @bitCast(win32.WS_OVERLAPPEDWINDOW)))));
             _ = win32.SetWindowPos(
                 window,
                 null,
@@ -759,16 +761,20 @@ fn ToggleFullscreen(window: win32.HWND) void {
                 monitorInfo.rcMonitor.top,
                 monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
                 monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
-                @as(win32.SET_WINDOW_POS_FLAGS, @enumFromInt(@intFromEnum(win32.SWP_NOOWNERZORDER) | @intFromEnum(win32.SWP_FRAMECHANGED))),
+                win32.SET_WINDOW_POS_FLAGS{ .NOOWNERZORDER = 1, .DRAWFRAME = 1 }, // win32.SWP_NOOWNERZORDER ! win32.SWP_FRAMECHANGED
             );
         }
     } else {
-        _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @as(i32, @bitCast(style | @intFromEnum(win32.WS_OVERLAPPEDWINDOW))));
+        _ = win32.SetWindowLongW(window, win32.GWL_STYLE, @as(i32, @bitCast(style | @as(u32, @bitCast(win32.WS_OVERLAPPEDWINDOW)))));
         _ = win32.SetWindowPlacement(window, &globalWindowPosition);
-        _ = win32.SetWindowPos(window, null, 0, 0, 0, 0, @as(
-            win32.SET_WINDOW_POS_FLAGS,
-            @enumFromInt(@intFromEnum(win32.SWP_NOMOVE) | @intFromEnum(win32.SWP_NOSIZE) | @intFromEnum(win32.SWP_NOZORDER) | @intFromEnum(win32.SWP_NOOWNERZORDER) | @intFromEnum(win32.SWP_FRAMECHANGED)),
-        ));
+        _ = win32.SetWindowPos(window, null, 0, 0, 0, 0, win32.SET_WINDOW_POS_FLAGS{
+            // win32.SWP_NOMOVE | win32.SWP_NOSIZE | win32.SWP_NOZORDER | win32.SWP_NOOWNERZORDER | win32.SWP_FRAMECHANGED
+            .NOMOVE = 1,
+            .NOSIZE = 1,
+            .NOZORDER = 1,
+            .NOOWNERZORDER = 1,
+            .DRAWFRAME = 1,
+        });
     }
 }
 
@@ -1017,7 +1023,7 @@ const win32_work_queue = struct {
                 0,
                 ThreadProc,
                 @ptrCast(queue),
-                .THREAD_CREATE_RUN_IMMEDIATELY,
+                win32.THREAD_CREATE_RUN_IMMEDIATELY,
                 &threadID,
             );
 
@@ -1126,7 +1132,7 @@ fn Win32OpenFile(fileGroup: platform.file_group, fileIndex: u32) *platform.file_
 
     const fileName = "test.hha";
 
-    var result: ?*win32_platform_file_handle = @alignCast(@ptrCast(win32.VirtualAlloc(null, @sizeOf(win32_platform_file_handle), allocationType, win32.PAGE_READWRITE)));
+    var result: ?*win32_platform_file_handle = @alignCast(@ptrCast(win32.VirtualAlloc(null, @sizeOf(win32_platform_file_handle), allocationReserveCommit, win32.PAGE_READWRITE)));
 
     if (result) |r| {
         result.?.win32Handle = win32.CreateFileW(win32.L(fileName), win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
@@ -1146,15 +1152,14 @@ fn Win32ReadDataFromFile(source: *platform.file_handle, offset: u64, size: u64, 
             .Anonymous = .{ .Anonymous = .{
                 .Offset = @intCast((offset >> 0) & 0xffffffff),
                 .OffsetHigh = @intCast((offset >> 32) & 0xffffffff),
-            }},
-            .hEvent = null
+            } },
+            .hEvent = null,
         };
 
         const fileSize32: u32 = platform.SafeTruncateU64(size);
 
         var bytesRead: DWORD = 0;
-        if (win32.ReadFile(handle.win32Handle, dest, fileSize32, &bytesRead, &overlapped) != 0 and fileSize32 == bytesRead) {
-        } else {
+        if (win32.ReadFile(handle.win32Handle, dest, fileSize32, &bytesRead, &overlapped) != 0 and fileSize32 == bytesRead) {} else {
             Win32FileError(&handle.h, "Read file failed");
         }
     }
@@ -1168,7 +1173,7 @@ fn Win32FileError(source: *platform.file_handle, message: []const u8) void {
         // var messageW: [256:0]u16 = [1:0]u16{ 0 } ** 256;
         // _ = std.unicode.utf8ToUtf16Le(&messageW, message) catch |err| @compileError(err);
         // _ = win32.OutputDebugStringW(&messageW);
-        
+
         _ = win32.OutputDebugStringW(win32.L("\n"));
     }
 
@@ -1267,7 +1272,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     debugGlobalShowCursor = HANDMADE_INTERNAL;
 
     const windowclass = win32.WNDCLASSW{
-        .style = @enumFromInt(0), // WS_EX_TOPMOST|WS_EX_LAYERED
+        .style = win32.WNDCLASS_STYLES{}, // WS_EX_TOPMOST|WS_EX_LAYERED
         .lpfnWndProc = Win32MainWindowCallback,
         .cbClsExtra = 0,
         .cbWndExtra = 0,
@@ -1281,10 +1286,18 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
     if (win32.RegisterClassW(&windowclass) != 0) {
         if (win32.CreateWindowExW(
-            @as(win32.WINDOW_EX_STYLE, @enumFromInt(0)),
+            win32.WINDOW_EX_STYLE{},
             windowclass.lpszClassName,
             win32.L("Handmade Hero in Zig"),
-            @enumFromInt(@intFromEnum(win32.WS_OVERLAPPEDWINDOW) | @intFromEnum(win32.WS_VISIBLE)),
+            win32.WINDOW_STYLE{ // win32.WS_OVERLAPPEDWINDOW | win32.WS_VISIBLE,
+                .TABSTOP = 1,
+                .GROUP = 1,
+                .THICKFRAME = 1,
+                .SYSMENU = 1,
+                .DLGFRAME = 1,
+                .BORDER = 1,
+                .VISIBLE = 1,
+            },
             win32.CW_USEDEFAULT,
             win32.CW_USEDEFAULT,
             win32.CW_USEDEFAULT,
@@ -1333,7 +1346,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             }
 
             const maxPossibleOverrun = 2 * 8 * @sizeOf(u16);
-            const samples: ?*anyopaque = win32.VirtualAlloc(null, soundOutput.secondaryBufferSize + maxPossibleOverrun, allocationType, win32.PAGE_READWRITE);
+            const samples: ?*anyopaque = win32.VirtualAlloc(null, soundOutput.secondaryBufferSize + maxPossibleOverrun, allocationReserveCommit, win32.PAGE_READWRITE);
             // defer _ = win32.VirtualFree();
 
             const baseAddress: ?[*]u8 = if (HANDMADE_INTERNAL) @ptrFromInt(platform.TeraBytes(2)) else null;
@@ -1364,7 +1377,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             };
 
             win32State.totalSize = gameMemory.permanentStorageSize + gameMemory.transientStorageSize;
-            win32State.gameMemoryBlock = win32.VirtualAlloc(baseAddress, win32State.totalSize, allocationType, win32.PAGE_READWRITE).?;
+            win32State.gameMemoryBlock = win32.VirtualAlloc(baseAddress, win32State.totalSize, allocationReserveCommit, win32.PAGE_READWRITE).?;
 
             gameMemory.permanentStorage = @ptrCast(win32State.gameMemoryBlock);
             gameMemory.transientStorage = gameMemory.permanentStorage + gameMemory.permanentStorageSize;
@@ -1374,9 +1387,21 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                 Win32GetInputFileLocation(&win32State, false, replayIndex, replayBuffer.fileName[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
+                const fileAccessFlags = win32.FILE_ACCESS_FLAGS{ // win32.FILE_GENERIC_WRITE | win32.FILE_GENERIC_READ,
+                    .FILE_READ_DATA = 1,
+                    .FILE_WRITE_DATA = 1,
+                    .FILE_READ_EA = 1,
+                    .FILE_APPEND_DATA = 1,
+                    .FILE_WRITE_EA = 1,
+                    .FILE_READ_ATTRIBUTES = 1,
+                    .FILE_WRITE_ATTRIBUTES = 1,
+                    .READ_CONTROL = 1,
+                    .SYNCHRONIZE = 1,
+                };
+
                 replayBuffer.fileHandle = win32.CreateFileW(
                     &replayBuffer.fileName,
-                    @as(win32.FILE_ACCESS_FLAGS, @enumFromInt(@intFromEnum(win32.FILE_GENERIC_WRITE) | @intFromEnum(win32.FILE_GENERIC_READ))),
+                    fileAccessFlags,
                     win32.FILE_SHARE_NONE,
                     null,
                     win32.CREATE_ALWAYS,

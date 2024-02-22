@@ -6,6 +6,9 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // const options = b.addOptions();
+    // options.addOption(bool, "NOTIGNORE", true);
+
     const platform = b.createModule(.{
         .source_file = .{ .path = "./code/handmade_platform.zig" },
     });
@@ -19,7 +22,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const win32 = b.createModule(.{
-        .source_file = .{ .path = "./code/zwin32/win32.zig" },
+        .source_file = .{ .path = "./code/zigwin32/win32.zig" },
     });
 
     const lib = b.addSharedLibrary(.{
