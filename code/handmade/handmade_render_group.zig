@@ -1078,7 +1078,7 @@ pub const render_group = struct {
 
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
-    pub inline fn PushBitmap2(self: *Self, ID: h.bitmap_id, height: f32, offset: h.v3, colour: h.v4) void {
+    pub fn PushBitmap2(self: *Self, ID: h.bitmap_id, height: f32, offset: h.v3, colour: h.v4) void {
         var bitmap = self.assets.GetBitmap(ID);
         if (bitmap) |b| {
             self.PushBitmap(b, height, offset, colour);

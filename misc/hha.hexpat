@@ -105,7 +105,7 @@ namespace vis {
     
     struct sound_data<auto channels, auto samples> {
         u32 sample_rate = 48000;    // fixed sample rate
-        u16 data[channels * (samples * 2)];
+        u16 data[channels * samples];
     } [[hex::visualize("sound", data, channels, sample_rate)]];
     
     

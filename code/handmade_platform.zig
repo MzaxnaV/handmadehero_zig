@@ -254,7 +254,7 @@ pub inline fn Assert(expression: bool) void {
     if (HANDMADE_SLOW and !expression) unreachable;
 }
 
-pub inline fn InvalidCodePath(comptime _: []const u8) noreturn {
+pub fn InvalidCodePath(comptime _: []const u8) noreturn {
     unreachable;
 }
 

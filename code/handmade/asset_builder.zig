@@ -456,7 +456,7 @@ const game_assets = struct {
 };
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .verbose_log = true }){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .verbose_log = false }){};
 
     const allocator = gpa.allocator();
     defer {
@@ -617,13 +617,23 @@ pub fn main() !void {
         header.assetTypes = header.tags + tagArraySize;
         header.assets = header.assetTypes + assetTypeArraySize;
 
-        try out.writer().writeStruct(header);
+        const headerBytesToWrite = std.mem.asBytes(&header);
+        const headerBytesWritten = try out.writer().write(headerBytesToWrite);
 
-        var tagBytes = std.mem.sliceAsBytes(assets.tags[0..header.tagCount]);
-        try out.writer().writeAll(tagBytes);
+        std.debug.print("Header:\n\tBytesToWrite: {}\n", .{headerBytesToWrite.len});
+        std.debug.print("\tBytesWritten: {}\n", .{headerBytesWritten});
 
-        var assetTypesBytes = std.mem.sliceAsBytes(&assets.assetTypes);
-        try out.writer().writeAll(assetTypesBytes);
+        var tagBytesToWrite = std.mem.sliceAsBytes(assets.tags[0..header.tagCount]);
+        const tagsBytesWritten = try out.writer().write(tagBytesToWrite);
+
+        std.debug.print("Tags:\n\tBytesToWrite: {}\n", .{tagBytesToWrite.len});
+        std.debug.print("\tBytesWritten: {}\n", .{tagsBytesWritten});
+
+        var assetTypesBytesToWrite = std.mem.sliceAsBytes(&assets.assetTypes);
+        const assetTypesByteWritten = try out.writer().write(assetTypesBytesToWrite);
+
+        std.debug.print("Asset Types:\n\tBytesToWrite: {}\n", .{assetTypesBytesToWrite.len});
+        std.debug.print("\tBytesWritten: {}\n", .{assetTypesByteWritten});
 
         try out.seekBy(assetArraySize);
 
@@ -641,8 +651,16 @@ pub fn main() !void {
                     dest.data.bitmap.dim = [2]u32{ @intCast(b.width), @intCast(b.height) };
 
                     platform.Assert(b.pitch == (b.width * 4));
-                    var bitmapBytes = std.mem.sliceAsBytes(b.memory[0..@intCast(b.width * b.height * 4)]);
-                    try out.writer().writeAll(bitmapBytes);
+
+                    std.debug.print("Bitmap filename {s}:\n", .{source.filename});
+
+                    const data: []u8 = b.memory[0..@intCast(b.width * b.height * 4)];
+                    const bytesToWrite: []u8 = std.mem.sliceAsBytes(data);
+                    const bytesWritten: usize = try out.writer().write(bytesToWrite);
+
+                    std.debug.print("\tDataSize: {}\n", .{data.len});
+                    std.debug.print("\tBytesToWrite: {}\n", .{bytesToWrite.len});
+                    std.debug.print("\tBytesWritten: {}\n", .{bytesWritten});
                 },
                 .AssetType_Sound => {
                     const w = try LoadWAV(source.filename, source.firstSampleIndex, dest.data.sound.sampleCount, allocator);
@@ -651,8 +669,16 @@ pub fn main() !void {
                     dest.data.sound.sampleCount = w.sampleCount;
                     dest.data.sound.channelCount = w.channelCount;
 
+                    std.debug.print("Sound filename {s}:\n", .{source.filename});
+
                     for (0..w.channelCount) |channelIndex| {
-                        try out.writer().writeAll(std.mem.sliceAsBytes(w.samples[channelIndex].?[0 .. dest.data.sound.sampleCount * @sizeOf(i16)]));
+                        const data: []i16 = w.samples[channelIndex].?[0..dest.data.sound.sampleCount];
+                        const bytesToWrite: []u8 = std.mem.sliceAsBytes(data);
+                        const bytesWritten: usize = try out.writer().write(bytesToWrite);
+
+                        std.debug.print("{}:\tDataSize: {}\n", .{ channelIndex, data.len * @sizeOf(i16) });
+                        std.debug.print("{}:\tBytesToWrite: {}\n", .{ channelIndex, bytesToWrite.len });
+                        std.debug.print("{}:\tBytesWritten: {}\n", .{ channelIndex, bytesWritten });
                     }
                 },
             }
