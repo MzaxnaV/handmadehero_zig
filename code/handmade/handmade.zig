@@ -257,7 +257,7 @@ fn FillGroundChunk(
         const width = h.X(gameState.world.chunkDimInMeters);
         const height = h.Y(gameState.world.chunkDimInMeters);
         assert(width == height);
-        const haldDim = h.Scale(.{ 0.5 * width, 0.5 * height }, 1);
+        const haldDim = h.Scale(.{ width, height }, 0.5);
 
         const renderGroup = h.render_group.Allocate(tranState.assets, &task.arena, 0);
         renderGroup.Orthographic(
@@ -267,14 +267,14 @@ fn FillGroundChunk(
         );
         renderGroup.Clear(.{ 1, 0, 1, 1 });
 
-        work.buffer = buffer;
         work.renderGroup = renderGroup;
+        work.buffer = buffer;
         work.task = task;
 
         {
-            var chunkOffsetY = @as(i32, -1);
+            var chunkOffsetY: i32 = -1;
             while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
-                var chunkOffsetX = @as(i32, -1);
+                var chunkOffsetX: i32 = -1;
                 while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
                     const chunkX = chunkP.chunkX + chunkOffsetX;
                     const chunkY = chunkP.chunkY + chunkOffsetY;
@@ -293,7 +293,7 @@ fn FillGroundChunk(
 
                     const center = h.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
 
-                    var grassIndex = @as(u32, 0);
+                    var grassIndex: u32 = 0;
                     while (grassIndex < 50) : (grassIndex += 1) {
                         const stamp = h.GetRandomBitmapFrom(tranState.assets, if (series.RandomChoice(2) == 1) .Asset_Grass else .Asset_Stone, &series);
 

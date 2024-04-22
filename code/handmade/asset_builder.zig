@@ -358,14 +358,14 @@ const game_assets = struct {
     tagCount: u32,
     tags: [VERY_LARGE_NO]h.hha_tag = undefined,
 
-    assetTypeCount: u32,
+    assetTypeCount: u32 = 0,
     assetTypes: [h.asset_type_id.count()]h.hha_asset_type = undefined,
 
     assetCount: u32,
     assetSources: [VERY_LARGE_NO]asset_source = undefined,
     assets: [VERY_LARGE_NO]h.hha_asset = undefined,
 
-    DEBUGAssetType: ?*h.hha_asset_type = null,
+    DEBUGAssetType: ?*h.hha_asset_type,
     assetIndex: u32,
 
     fn BeginAssetType(self: *game_assets, typeID: h.asset_type_id) void {
@@ -464,9 +464,9 @@ pub fn main() !void {
     }
 
     var assets = game_assets{
-        .assetTypeCount = 0,
         .assetCount = 1,
         .tagCount = 1,
+        .DEBUGAssetType = null,
         .assetIndex = 0,
     };
 
@@ -480,9 +480,6 @@ pub fn main() !void {
 
     assets.BeginAssetType(.Asset_Tree);
     _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
-    assets.EndAssetType();
-
-    assets.BeginAssetType(.Asset_Rock);
     assets.EndAssetType();
 
     assets.BeginAssetType(.Asset_Sword);

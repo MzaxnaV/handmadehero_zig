@@ -141,107 +141,106 @@ pub const game_assets = struct {
 
         assets.tagRange[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
 
+        assets.tagCount = 0;
+        assets.assetCount = 0;
+
         {
-            assets.assetCount = 0;
-            assets.tagCount = 0;
+            var fileGroup: platform.file_group = h.platformAPI.GetAllFilesOfTypeBegin("hha");
+            defer h.platformAPI.GetAllFilesOfTypeEnd(fileGroup);
 
-            {
-                var fileGroup: platform.file_group = h.platformAPI.GetAllFilesOfTypeBegin("hha");
-                defer h.platformAPI.GetAllFilesOfTypeEnd(fileGroup);
+            assets.files = arena.PushSlice(asset_file, fileGroup.fileCount);
 
-                assets.files = arena.PushSlice(asset_file, fileGroup.fileCount);
+            for (0..assets.files.len) |fileIndex| {
+                var file: *asset_file = &assets.files[fileIndex];
 
-                for (0..assets.files.len) |fileIndex| {
-                    var file: *asset_file = &assets.files[fileIndex];
+                file.tagBase = assets.tagCount;
 
-                    file.tagBase = assets.tagCount;
+                h.ZeroStruct(h.hha_header, &file.header);
+                file.handle = h.platformAPI.OpenFile(fileGroup, @intCast(fileIndex));
+                h.platformAPI.ReadDataFromFile(file.handle, 0, @sizeOf(@TypeOf(file.header)), &file.header);
 
-                    h.ZeroStruct(h.hha_header, &file.header);
-                    file.handle = h.platformAPI.OpenFile(fileGroup, @intCast(fileIndex));
-                    h.platformAPI.ReadDataFromFile(file.handle, 0, @sizeOf(@TypeOf(file.header)), &file.header);
+                file.assetTypeArray = arena.PushSlice(h.hha_asset_type, file.header.assetTypeCount);
+                const assetTypeArraySize = file.header.assetTypeCount * @sizeOf(h.hha_asset_type);
 
-                    file.assetTypeArray = arena.PushSlice(h.hha_asset_type, file.header.assetTypeCount);
-                    const assetTypeArraySize = file.header.assetTypeCount * @sizeOf(h.hha_asset_type);
+                h.platformAPI.ReadDataFromFile(file.handle, file.header.assetTypes, assetTypeArraySize, file.assetTypeArray.ptr);
 
-                    h.platformAPI.ReadDataFromFile(file.handle, file.header.assetTypes, assetTypeArraySize, file.assetTypeArray.ptr);
+                if (file.header.magicValue != h.HHA_MAGIC_VALUE) {
+                    h.platformAPI.FileError(file.handle, "HHA file has invalid magic value.");
+                }
 
-                    if (file.header.magicValue != h.HHA_MAGIC_VALUE) {
-                        h.platformAPI.FileError(file.handle, "HHA file has invalid magic value.");
-                    }
+                if (file.header.version > h.HHA_VERSION) {
+                    h.platformAPI.FileError(file.handle, "HHA file is of a later version.");
+                }
 
-                    if (file.header.version > h.HHA_VERSION) {
-                        h.platformAPI.FileError(file.handle, "HHA file is of a later version.");
-                    }
-
-                    if (platform.NoFileErrors(file.handle)) {
-                        assets.tagCount += file.header.tagCount;
-                        assets.assetCount += file.header.assetCount;
-                    } else {
-                        platform.InvalidCodePath("");
-                    }
+                if (platform.NoFileErrors(file.handle)) {
+                    assets.tagCount += file.header.tagCount;
+                    assets.assetCount += file.header.assetCount;
+                } else {
+                    platform.InvalidCodePath("");
                 }
             }
+        }
 
-            assets.assets = arena.PushSlice(asset, assets.assetCount).ptr;
-            assets.slots = arena.PushSlice(asset_slot, assets.assetCount);
-            assets.tags = arena.PushSlice(h.hha_tag, assets.tagCount).ptr;
+        assets.assets = arena.PushSlice(asset, assets.assetCount).ptr;
+        assets.slots = arena.PushSlice(asset_slot, assets.assetCount);
+        assets.tags = arena.PushSlice(h.hha_tag, assets.tagCount).ptr;
+
+        for (0..assets.files.len) |fileIndex| {
+            var file: *asset_file = &assets.files[fileIndex];
+            if (platform.NoFileErrors(file.handle)) {
+                const tagArraySize = @sizeOf(h.hha_tag) * file.header.tagCount;
+                h.platformAPI.ReadDataFromFile(file.handle, file.header.tags, tagArraySize, assets.tags + file.tagBase);
+            }
+        }
+
+        var assetCount: u32 = 0;
+
+        for (0..asset_type_id.count()) |destTypeID| {
+            var destType: *asset_type = &assets.assetTypes[destTypeID];
+            destType.firstAssetIndex = assetCount;
 
             for (0..assets.files.len) |fileIndex| {
                 var file: *asset_file = &assets.files[fileIndex];
                 if (platform.NoFileErrors(file.handle)) {
-                    const tagArraySize = @sizeOf(h.hha_tag) * file.header.tagCount;
-                    h.platformAPI.ReadDataFromFile(file.handle, file.header.tags, tagArraySize, assets.tags + file.tagBase);
-                }
-            }
+                    for (0..file.header.assetTypeCount) |sourceIndex| {
+                        var sourceType: *h.hha_asset_type = &file.assetTypeArray[sourceIndex];
 
-            var assetCount: u32 = 0;
-            for (0..asset_type_id.count()) |destTypeID| {
-                var destType: *asset_type = &assets.assetTypes[destTypeID];
-                destType.firstAssetIndex = assetCount;
+                        if (sourceType.typeID == destTypeID) {
+                            const assetCountForType: u32 = (sourceType.onePastLastAssetIndex - sourceType.firstAssetIndex);
 
-                for (0..assets.files.len) |fileIndex| {
-                    var file: *asset_file = &assets.files[fileIndex];
-                    if (platform.NoFileErrors(file.handle)) {
-                        for (0..file.header.assetTypeCount) |sourceIndex| {
-                            var sourceType: *h.hha_asset_type = &file.assetTypeArray[sourceIndex];
+                            const tempMem = h.BeginTemporaryMemory(&tranState.tranArena);
+                            defer h.EndTemporaryMemory(tempMem);
 
-                            if (sourceType.typeID == destTypeID) {
-                                const assetCountForType: u32 = (sourceType.onePastLastAssetIndex - sourceType.firstAssetIndex);
+                            const hhaAssetArray = tempMem.arena.PushSlice(h.hha_asset, assetCountForType);
 
-                                const tempMem = h.BeginTemporaryMemory(&tranState.tranArena);
-                                defer h.EndTemporaryMemory(tempMem);
+                            h.platformAPI.ReadDataFromFile(
+                                file.handle,
+                                file.header.assets + sourceType.firstAssetIndex * @sizeOf(h.hha_asset),
+                                assetCountForType * @sizeOf(h.hha_asset),
+                                hhaAssetArray.ptr,
+                            );
 
-                                const hhaAssetArray = tempMem.arena.PushSlice(h.hha_asset, assetCountForType);
+                            for (0..assetCountForType) |assetIndex| {
+                                const hhaAsset: h.hha_asset = hhaAssetArray[assetIndex];
 
-                                h.platformAPI.ReadDataFromFile(
-                                    file.handle,
-                                    file.header.assets + sourceType.firstAssetIndex * @sizeOf(h.hha_asset),
-                                    assetCountForType * @sizeOf(h.hha_asset),
-                                    hhaAssetArray.ptr,
-                                );
+                                assert(assetCount < assets.assetCount);
+                                var a: *asset = &assets.assets[assetCount];
+                                assetCount += 1;
 
-                                for (0..assetCountForType) |assetIndex| {
-                                    const hhaAsset: h.hha_asset = hhaAssetArray[assetIndex];
-
-                                    assert(assetCount < assets.assetCount);
-                                    var a: *asset = &assets.assets[assetCount + assetIndex];
-                                    assetCount += 1;
-
-                                    a.fileIndex = @intCast(fileIndex);
-                                    a.hha = hhaAsset;
-                                    a.hha.firstTagIndex += file.tagBase;
-                                    a.hha.onePastLastTagIndex += file.tagBase;
-                                }
+                                a.fileIndex = @intCast(fileIndex);
+                                a.hha = hhaAsset;
+                                a.hha.firstTagIndex += file.tagBase;
+                                a.hha.onePastLastTagIndex += file.tagBase;
                             }
                         }
                     }
                 }
-
-                destType.onePastLastAssetIndex = assetCount;
             }
 
-            assert(assetCount == assets.assetCount);
+            destType.onePastLastAssetIndex = assetCount;
         }
+
+        assert(assetCount == assets.assetCount);
 
         // if (false) {
         //     const readResult = h.platformAPI.DEBUGReadEntireFile("test.hha");

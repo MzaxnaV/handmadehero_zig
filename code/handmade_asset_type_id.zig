@@ -36,7 +36,7 @@ pub const asset_type_id = enum(u32) {
 
     pub fn count() comptime_int {
         comptime {
-            return @typeInfo(asset_type_id).Enum.fields.len;
+            return @typeInfo(@This()).Enum.fields.len;
         }
     }
 };
@@ -48,7 +48,7 @@ pub const asset_tag_id = enum {
 
     pub fn len() comptime_int {
         comptime {
-            return @typeInfo(asset_type_id).Enum.fields.len;
+            return @typeInfo(@This()).Enum.fields.len;
         }
     }
 };
