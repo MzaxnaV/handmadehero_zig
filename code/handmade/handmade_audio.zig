@@ -149,9 +149,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
         while (totalChunksToMix != 0 and !soundFinished) {
             if (assets.GetSound(playingSound.ID)) |loadedSound| {
-                var info = assets.GetSoundInfo(playingSound.ID);
-
-                h.PrefetchSound(assets, info.nextIDToPlay);
+                var nextSoundInChain = h.GetNextSoundInChain(assets, playingSound.ID);
+                h.PrefetchSound(assets, nextSoundInChain);
 
                 var volume: h.v2 = playingSound.currentVolume;
                 var dVolume: h.v2 = h.Scale(playingSound.dCurrentVolume, secondsPerSample);
@@ -276,8 +275,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
                 totalChunksToMix -= chunksToMix;
 
                 if (chunksToMix == chunksRemainingInSound) {
-                    if (info.nextIDToPlay.IsValid()) {
-                        playingSound.ID = info.nextIDToPlay;
+                    if (nextSoundInChain.IsValid()) {
+                        playingSound.ID = nextSoundInChain;
 
                         // TODO (Manav): assert still fires
                         assert(playingSound.samplesPlayed >= @as(f32, @floatFromInt(loadedSound.sampleCount)));

@@ -440,7 +440,7 @@ const game_assets = struct {
         hha.data = .{ .sound = h.hha_sound{
             .channelCount = 0,
             .sampleCount = sampleCount,
-            .nextIDToPlay = .{ .value = 0 },
+            .chain = .HHASOUNDCHAIN_None,
         } };
 
         source.t = .AssetType_Sound;
@@ -689,7 +689,6 @@ fn WriteSounds() void {
     // const totalMusicSampleCount = 48000 * 20;
     const totalMusicSampleCount = 7468095;
     assets.BeginAssetType(.Asset_Music);
-    var lastMusic: h.sound_id = .{};
     var firstSampleIndex: u32 = 0;
     while (firstSampleIndex < totalMusicSampleCount) : (firstSampleIndex += oneMusicChunk) {
         var sampleCount = totalMusicSampleCount - firstSampleIndex;
@@ -697,10 +696,9 @@ fn WriteSounds() void {
             sampleCount = oneMusicChunk;
         }
         const thisMusic = assets.AddSoundAsset("test3/music_test.wav", firstSampleIndex, sampleCount);
-        if (lastMusic.IsValid()) {
-            assets.assets[lastMusic.value].data.sound.nextIDToPlay = thisMusic;
+        if ((firstSampleIndex + oneMusicChunk) < totalMusicSampleCount) {
+            assets.assets[thisMusic.value].data.sound.chain = .HHASOUNDCHAIN_Advance;
         }
-        lastMusic = thisMusic;
     }
     assets.EndAssetType();
 

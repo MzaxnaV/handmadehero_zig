@@ -66,6 +66,12 @@ pub const hha_asset_type = extern struct {
     onePastLastAssetIndex: u32 align(1),
 };
 
+pub const hha_sound_chain = enum(u32) {
+    HHASOUNDCHAIN_None,
+    HHASOUNDCHAIN_Loop,
+    HHASOUNDCHAIN_Advance,
+};
+
 pub const hha_bitmap = extern struct {
     dim: [2]u32 align(1),
     alignPercentage: [2]f32 align(1),
@@ -74,7 +80,7 @@ pub const hha_bitmap = extern struct {
 pub const hha_sound = extern struct {
     sampleCount: u32 align(1),
     channelCount: u32 align(1),
-    nextIDToPlay: sound_id align(1),
+    chain: hha_sound_chain align(1),
 };
 
 pub const hha_asset = extern struct {

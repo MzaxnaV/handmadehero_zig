@@ -377,6 +377,19 @@ pub inline fn PrefetchSound(assets: *game_assets, ID: h.sound_id) void {
     return LoadSound(assets, ID);
 }
 
+pub inline fn GetNextSoundInChain(assets: *game_assets, ID: h.sound_id) h.sound_id {
+    var result = h.sound_id{};
+
+    const info = assets.GetSoundInfo(ID);
+    switch (info.chain) {
+        .HHASOUNDCHAIN_None => {},
+        .HHASOUNDCHAIN_Loop => result = ID,
+        .HHASOUNDCHAIN_Advance => result.value = ID.value + 1,
+    }
+
+    return result;
+}
+
 pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) u32 {
     var result: u32 = 0;
 
