@@ -355,18 +355,29 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
 }
 
 const game_assets = struct {
-    tagCount: u32,
+    tagCount: u32 = 0,
     tags: [VERY_LARGE_NO]h.hha_tag = undefined,
 
     assetTypeCount: u32 = 0,
     assetTypes: [h.asset_type_id.count()]h.hha_asset_type = undefined,
 
-    assetCount: u32,
+    assetCount: u32 = 0,
     assetSources: [VERY_LARGE_NO]asset_source = undefined,
     assets: [VERY_LARGE_NO]h.hha_asset = undefined,
 
-    DEBUGAssetType: ?*h.hha_asset_type,
-    assetIndex: u32,
+    DEBUGAssetType: ?*h.hha_asset_type = null,
+    assetIndex: u32 = 0,
+
+    fn Initialize(self: *game_assets) void {
+        self.assetCount = 1;
+        self.tagCount = 1;
+        self.DEBUGAssetType = null;
+        self.assetIndex = 0;
+
+        // NOTE (Manav): Not really needed for us
+        self.assetTypeCount = h.asset_type_id.count();
+        self.assetTypes = [1]h.hha_asset_type{.{ .typeID = 0, .firstAssetIndex = 0, .onePastLastAssetIndex = 0 }} ** h.asset_type_id.count();
+    }
 
     fn BeginAssetType(self: *game_assets, typeID: h.asset_type_id) void {
         assert(self.DEBUGAssetType == null);
@@ -455,7 +466,7 @@ const game_assets = struct {
     }
 };
 
-pub fn main() !void {
+fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .verbose_log = false }){};
 
     const allocator = gpa.allocator();
@@ -463,46 +474,104 @@ pub fn main() !void {
         _ = gpa.detectLeaks();
     }
 
-    var assets = game_assets{
-        .assetCount = 1,
-        .tagCount = 1,
-        .DEBUGAssetType = null,
-        .assetIndex = 0,
-    };
+    const out = try std.fs.cwd().createFile(filename, .{});
+    defer out.close();
 
-    assets.BeginAssetType(.Asset_Test_Bitmap);
-    _ = assets.AddBitmapAsset("structured_art.bmp", .{ 0, 0 });
-    assets.EndAssetType();
+    {
+        var header = h.hha_header{
+            .magicValue = h.HHA_MAGIC_VALUE,
+            .version = h.HHA_VERSION,
+            .tagCount = assets.tagCount,
+            .assetCount = assets.assetCount,
+            .assetTypeCount = h.asset_type_id.count(),
+            .tags = @sizeOf(h.hha_header),
+            .assets = 0,
+            .assetTypes = 0,
+        };
 
-    assets.BeginAssetType(.Asset_Shadow);
-    _ = assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
-    assets.EndAssetType();
+        const tagArraySize = @sizeOf(h.hha_tag) * header.tagCount;
+        const assetTypeArraySize = @sizeOf(h.hha_asset_type) * header.assetTypeCount;
+        const assetArraySize = @sizeOf(h.hha_asset) * header.assetCount;
 
-    assets.BeginAssetType(.Asset_Tree);
-    _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
-    assets.EndAssetType();
+        header.assetTypes = header.tags + tagArraySize;
+        header.assets = header.assetTypes + assetTypeArraySize;
 
-    assets.BeginAssetType(.Asset_Sword);
-    _ = assets.AddBitmapAsset("test2/rock03.bmp", .{ 0.5, 0.65625 });
-    assets.EndAssetType();
+        const headerBytesToWrite = std.mem.asBytes(&header);
+        const headerBytesWritten = try out.writer().write(headerBytesToWrite);
 
-    assets.BeginAssetType(.Asset_Grass);
-    _ = assets.AddBitmapAsset("test2/grass00.bmp", .{ 0.5, 0.5 });
-    _ = assets.AddBitmapAsset("test2/grass01.bmp", .{ 0.5, 0.5 });
-    assets.EndAssetType();
+        std.debug.print("\n{s}> \n\tHeader:\n\t\tBytesToWrite: {}\n", .{ filename, headerBytesToWrite.len });
+        std.debug.print("\t\tBytesWritten: {}\n", .{headerBytesWritten});
 
-    assets.BeginAssetType(.Asset_Tuft);
-    _ = assets.AddBitmapAsset("test2/tuft00.bmp", .{ 0.5, 0.5 });
-    _ = assets.AddBitmapAsset("test2/tuft01.bmp", .{ 0.5, 0.5 });
-    _ = assets.AddBitmapAsset("test2/tuft02.bmp", .{ 0.5, 0.5 });
-    assets.EndAssetType();
+        var tagBytesToWrite = std.mem.sliceAsBytes(assets.tags[0..header.tagCount]);
+        const tagsBytesWritten = try out.writer().write(tagBytesToWrite);
 
-    assets.BeginAssetType(.Asset_Stone);
-    _ = assets.AddBitmapAsset("test2/ground00.bmp", .{ 0.5, 0.5 });
-    _ = assets.AddBitmapAsset("test2/ground01.bmp", .{ 0.5, 0.5 });
-    _ = assets.AddBitmapAsset("test2/ground02.bmp", .{ 0.5, 0.5 });
-    _ = assets.AddBitmapAsset("test2/ground03.bmp", .{ 0.5, 0.5 });
-    assets.EndAssetType();
+        std.debug.print("\tTags:\n\t\tBytesToWrite: {}\n", .{tagBytesToWrite.len});
+        std.debug.print("\t\tBytesWritten: {}\n", .{tagsBytesWritten});
+
+        var assetTypesBytesToWrite = std.mem.sliceAsBytes(&assets.assetTypes);
+        const assetTypesByteWritten = try out.writer().write(assetTypesBytesToWrite);
+
+        std.debug.print("\tAsset Types:\n\t\tBytesToWrite: {}\n", .{assetTypesBytesToWrite.len});
+        std.debug.print("\t\tBytesWritten: {}\n", .{assetTypesByteWritten});
+
+        try out.seekBy(assetArraySize);
+
+        for (1..header.assetCount) |assetIndex| {
+            const source = assets.assetSources[assetIndex];
+            var dest: *h.hha_asset = &assets.assets[assetIndex];
+
+            dest.dataOffset = try out.getPos();
+
+            switch (source.t) {
+                .AssetType_Bitmap => {
+                    const b = try LoadBMP(source.filename, allocator);
+                    defer allocator.free(b.free);
+
+                    dest.data.bitmap.dim = [2]u32{ @intCast(b.width), @intCast(b.height) };
+
+                    platform.Assert(b.pitch == (b.width * 4));
+
+                    std.debug.print("\tBitmap filename {s}:\n", .{source.filename});
+
+                    const data: []u8 = b.memory[0..@intCast(b.width * b.height * 4)];
+                    const bytesToWrite: []u8 = std.mem.sliceAsBytes(data);
+                    const bytesWritten: usize = try out.writer().write(bytesToWrite);
+
+                    std.debug.print("\t\tDataSize: {}\n", .{data.len});
+                    std.debug.print("\t\tBytesToWrite: {}\n", .{bytesToWrite.len});
+                    std.debug.print("\t\tBytesWritten: {}\n", .{bytesWritten});
+                },
+                .AssetType_Sound => {
+                    const w = try LoadWAV(source.filename, source.firstSampleIndex, dest.data.sound.sampleCount, allocator);
+                    defer allocator.free(w.free);
+
+                    dest.data.sound.sampleCount = w.sampleCount;
+                    dest.data.sound.channelCount = w.channelCount;
+
+                    std.debug.print("\tSound filename {s}:\n", .{source.filename});
+
+                    for (0..w.channelCount) |channelIndex| {
+                        const data: []i16 = w.samples[channelIndex].?[0..dest.data.sound.sampleCount];
+                        const bytesToWrite: []u8 = std.mem.sliceAsBytes(data);
+                        const bytesWritten: usize = try out.writer().write(bytesToWrite);
+
+                        std.debug.print("{}:\t\tDataSize: {}\n", .{ channelIndex, data.len * @sizeOf(i16) });
+                        std.debug.print("{}:\t\tBytesToWrite: {}\n", .{ channelIndex, bytesToWrite.len });
+                        std.debug.print("{}:\t\tBytesWritten: {}\n", .{ channelIndex, bytesWritten });
+                    }
+                },
+            }
+        }
+
+        try out.seekTo(header.assets);
+        var assetArrayBytes = std.mem.sliceAsBytes(assets.assets[0..header.assetCount]);
+        try out.writer().writeAll(assetArrayBytes);
+    }
+}
+
+fn WriteHero() void {
+    var assets = game_assets{};
+    assets.Initialize();
 
     const angleRight = 0.0 * platform.Tau32;
     const angleBack = 0.25 * platform.Tau32;
@@ -543,6 +612,58 @@ pub fn main() !void {
     _ = assets.AddBitmapAsset("test/test_hero_front_torso.bmp", heroAlign);
     assets.AddTag(.Tag_FacingDirection, angleFront);
     assets.EndAssetType();
+
+    WriteHHA(&assets, "test1.hha") catch |err| {
+        std.debug.print("{}\n", .{err});
+    };
+}
+
+fn WriteNonHero() void {
+    var assets = game_assets{};
+    assets.Initialize();
+
+    assets.BeginAssetType(.Asset_Test_Bitmap);
+    _ = assets.AddBitmapAsset("structured_art.bmp", .{ 0, 0 });
+    assets.EndAssetType();
+
+    assets.BeginAssetType(.Asset_Shadow);
+    _ = assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
+    assets.EndAssetType();
+
+    assets.BeginAssetType(.Asset_Tree);
+    _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
+    assets.EndAssetType();
+
+    assets.BeginAssetType(.Asset_Sword);
+    _ = assets.AddBitmapAsset("test2/rock03.bmp", .{ 0.5, 0.65625 });
+    assets.EndAssetType();
+
+    assets.BeginAssetType(.Asset_Grass);
+    _ = assets.AddBitmapAsset("test2/grass00.bmp", .{ 0.5, 0.5 });
+    _ = assets.AddBitmapAsset("test2/grass01.bmp", .{ 0.5, 0.5 });
+    assets.EndAssetType();
+
+    assets.BeginAssetType(.Asset_Tuft);
+    _ = assets.AddBitmapAsset("test2/tuft00.bmp", .{ 0.5, 0.5 });
+    _ = assets.AddBitmapAsset("test2/tuft01.bmp", .{ 0.5, 0.5 });
+    _ = assets.AddBitmapAsset("test2/tuft02.bmp", .{ 0.5, 0.5 });
+    assets.EndAssetType();
+
+    assets.BeginAssetType(.Asset_Stone);
+    _ = assets.AddBitmapAsset("test2/ground00.bmp", .{ 0.5, 0.5 });
+    _ = assets.AddBitmapAsset("test2/ground01.bmp", .{ 0.5, 0.5 });
+    _ = assets.AddBitmapAsset("test2/ground02.bmp", .{ 0.5, 0.5 });
+    _ = assets.AddBitmapAsset("test2/ground03.bmp", .{ 0.5, 0.5 });
+    assets.EndAssetType();
+
+    WriteHHA(&assets, "test2.hha") catch |err| {
+        std.debug.print("{}\n", .{err});
+    };
+}
+
+fn WriteSounds() void {
+    var assets = game_assets{};
+    assets.Initialize();
 
     assets.BeginAssetType(.Asset_Bloop);
     _ = assets.AddDefaultSoundAsset("test3/bloop_00.wav");
@@ -592,97 +713,13 @@ pub fn main() !void {
     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1sec.wav");
     assets.EndAssetType();
 
-    const out = try std.fs.cwd().createFile("test.hha", .{});
-    defer out.close();
+    WriteHHA(&assets, "test3.hha") catch |err| {
+        std.debug.print("{}\n", .{err});
+    };
+}
 
-    {
-        var header = h.hha_header{
-            .magicValue = h.HHA_MAGIC_VALUE,
-            .version = h.HHA_VERSION,
-            .tagCount = assets.tagCount,
-            .assetCount = assets.assetCount,
-            .assetTypeCount = h.asset_type_id.count(),
-            .tags = @sizeOf(h.hha_header),
-            .assets = 0,
-            .assetTypes = 0,
-        };
-
-        const tagArraySize = @sizeOf(h.hha_tag) * header.tagCount;
-        const assetTypeArraySize = @sizeOf(h.hha_asset_type) * header.assetTypeCount;
-        const assetArraySize = @sizeOf(h.hha_asset) * header.assetCount;
-
-        header.assetTypes = header.tags + tagArraySize;
-        header.assets = header.assetTypes + assetTypeArraySize;
-
-        const headerBytesToWrite = std.mem.asBytes(&header);
-        const headerBytesWritten = try out.writer().write(headerBytesToWrite);
-
-        std.debug.print("Header:\n\tBytesToWrite: {}\n", .{headerBytesToWrite.len});
-        std.debug.print("\tBytesWritten: {}\n", .{headerBytesWritten});
-
-        var tagBytesToWrite = std.mem.sliceAsBytes(assets.tags[0..header.tagCount]);
-        const tagsBytesWritten = try out.writer().write(tagBytesToWrite);
-
-        std.debug.print("Tags:\n\tBytesToWrite: {}\n", .{tagBytesToWrite.len});
-        std.debug.print("\tBytesWritten: {}\n", .{tagsBytesWritten});
-
-        var assetTypesBytesToWrite = std.mem.sliceAsBytes(&assets.assetTypes);
-        const assetTypesByteWritten = try out.writer().write(assetTypesBytesToWrite);
-
-        std.debug.print("Asset Types:\n\tBytesToWrite: {}\n", .{assetTypesBytesToWrite.len});
-        std.debug.print("\tBytesWritten: {}\n", .{assetTypesByteWritten});
-
-        try out.seekBy(assetArraySize);
-
-        for (1..header.assetCount) |assetIndex| {
-            const source = assets.assetSources[assetIndex];
-            var dest: *h.hha_asset = &assets.assets[assetIndex];
-
-            dest.dataOffset = try out.getPos();
-
-            switch (source.t) {
-                .AssetType_Bitmap => {
-                    const b = try LoadBMP(source.filename, allocator);
-                    defer allocator.free(b.free);
-
-                    dest.data.bitmap.dim = [2]u32{ @intCast(b.width), @intCast(b.height) };
-
-                    platform.Assert(b.pitch == (b.width * 4));
-
-                    std.debug.print("Bitmap filename {s}:\n", .{source.filename});
-
-                    const data: []u8 = b.memory[0..@intCast(b.width * b.height * 4)];
-                    const bytesToWrite: []u8 = std.mem.sliceAsBytes(data);
-                    const bytesWritten: usize = try out.writer().write(bytesToWrite);
-
-                    std.debug.print("\tDataSize: {}\n", .{data.len});
-                    std.debug.print("\tBytesToWrite: {}\n", .{bytesToWrite.len});
-                    std.debug.print("\tBytesWritten: {}\n", .{bytesWritten});
-                },
-                .AssetType_Sound => {
-                    const w = try LoadWAV(source.filename, source.firstSampleIndex, dest.data.sound.sampleCount, allocator);
-                    defer allocator.free(w.free);
-
-                    dest.data.sound.sampleCount = w.sampleCount;
-                    dest.data.sound.channelCount = w.channelCount;
-
-                    std.debug.print("Sound filename {s}:\n", .{source.filename});
-
-                    for (0..w.channelCount) |channelIndex| {
-                        const data: []i16 = w.samples[channelIndex].?[0..dest.data.sound.sampleCount];
-                        const bytesToWrite: []u8 = std.mem.sliceAsBytes(data);
-                        const bytesWritten: usize = try out.writer().write(bytesToWrite);
-
-                        std.debug.print("{}:\tDataSize: {}\n", .{ channelIndex, data.len * @sizeOf(i16) });
-                        std.debug.print("{}:\tBytesToWrite: {}\n", .{ channelIndex, bytesToWrite.len });
-                        std.debug.print("{}:\tBytesWritten: {}\n", .{ channelIndex, bytesWritten });
-                    }
-                },
-            }
-        }
-
-        try out.seekTo(header.assets);
-        var assetArrayBytes = std.mem.sliceAsBytes(assets.assets[0..header.assetCount]);
-        try out.writer().writeAll(assetArrayBytes);
-    }
+pub fn main() void {
+    WriteNonHero();
+    WriteHero();
+    WriteSounds();
 }

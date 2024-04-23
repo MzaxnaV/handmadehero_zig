@@ -1115,7 +1115,7 @@ fn Win32GetAllFilesOfTypeBegin(extension: []const u8) platform.file_group {
     _ = extension;
 
     const result = platform.file_group{
-        .fileCount = 1, // implement this
+        .fileCount = 3,
         .data = undefined,
     };
 
@@ -1127,15 +1127,20 @@ fn Win32GetAllFilesOfTypeEnd(fileGroup: platform.file_group) void {
 }
 
 fn Win32OpenFile(fileGroup: platform.file_group, fileIndex: u32) *platform.file_handle {
-    _ = fileIndex;
     _ = fileGroup;
 
-    const fileName = "test.hha";
+    const fileName = switch (fileIndex) {
+        0 => "test1.hha",
+        1 => "test2.hha",
+        2 => "test3.hha",
+        else => "invalid.hha",
+    };
 
     var result: ?*win32_platform_file_handle = @alignCast(@ptrCast(win32.VirtualAlloc(null, @sizeOf(win32_platform_file_handle), allocationReserveCommit, win32.PAGE_READWRITE)));
 
     if (result) |r| {
-        result.?.win32Handle = win32.CreateFileW(win32.L(fileName), win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
+        // TODO (Manav): convert to unicode later
+        result.?.win32Handle = win32.CreateFileA(fileName, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
         result.?.h.noErrors = r.win32Handle != win32.INVALID_HANDLE_VALUE;
     }
 
