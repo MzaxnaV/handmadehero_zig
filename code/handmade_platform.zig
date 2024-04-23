@@ -172,14 +172,13 @@ pub const file_handle = extern struct {
     noErrors: bool,
 };
 
-pub const file_group = struct {
+pub const file_group = extern struct {
     fileCount: u32,
-    data: *anyopaque,
 };
 
-pub const get_all_files_of_type_begin = *const fn (extension: []const u8) file_group;
-pub const get_all_files_of_type_end = *const fn (fileGroup: file_group) void;
-pub const open_file = *const fn (fileGroup: file_group, fileIndex: u32) *file_handle;
+pub const get_all_files_of_type_begin = *const fn (extension: []const u8) *file_group;
+pub const get_all_files_of_type_end = *const fn (fileGroup: ?*file_group) void;
+pub const open_next_file = *const fn (fileGroup: *file_group) ?*file_handle;
 pub const read_data_from_file = *const fn (source: *file_handle, offset: u64, size: u64, dest: *anyopaque) void;
 pub const file_error = *const fn (source: *file_handle, message: []const u8) void;
 
@@ -194,7 +193,7 @@ pub const api = struct {
 
     GetAllFilesOfTypeBegin: get_all_files_of_type_begin,
     GetAllFilesOfTypeEnd: get_all_files_of_type_end,
-    OpenFile: open_file,
+    OpenNextFile: open_next_file,
     ReadDataFromFile: read_data_from_file,
     FileError: file_error,
 

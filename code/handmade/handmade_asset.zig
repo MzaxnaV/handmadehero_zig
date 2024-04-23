@@ -145,7 +145,7 @@ pub const game_assets = struct {
         assets.assetCount = 1;
 
         {
-            var fileGroup: platform.file_group = h.platformAPI.GetAllFilesOfTypeBegin("hha");
+            var fileGroup = h.platformAPI.GetAllFilesOfTypeBegin("hha");
             defer h.platformAPI.GetAllFilesOfTypeEnd(fileGroup);
 
             assets.files = arena.PushSlice(asset_file, fileGroup.fileCount);
@@ -156,7 +156,7 @@ pub const game_assets = struct {
                 file.tagBase = assets.tagCount;
 
                 h.ZeroStruct(h.hha_header, &file.header);
-                file.handle = h.platformAPI.OpenFile(fileGroup, @intCast(fileIndex));
+                file.handle = h.platformAPI.OpenNextFile(fileGroup).?;
                 h.platformAPI.ReadDataFromFile(file.handle, 0, @sizeOf(@TypeOf(file.header)), &file.header);
 
                 file.assetTypeArray = arena.PushSlice(h.hha_asset_type, file.header.assetTypeCount);

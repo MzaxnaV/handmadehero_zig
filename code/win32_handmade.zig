@@ -25,7 +25,7 @@ const win32 = struct {
 
     usingnamespace @import("win32").zig;
 
-    const extra = struct {
+    const x = struct {
         extern "USER32" fn wsprintfW(
             param0: ?win32.PWSTR,
             param1: ?[*:0]const u16,
@@ -40,6 +40,7 @@ const win32 = struct {
 
         const SEMAPHORE_ALL_ACCESS = 0x1f003;
         const INFINITE = @as(u32, 4294967295);
+        const INVALID_FIND_HANDLE_VALUE = @as(win32.FindFileHandle, -1);
     };
 };
 
@@ -650,7 +651,7 @@ fn Win32GetInputFileLocation(state: *win32_state, inputStream: bool, slotIndex: 
 
     const s = if (inputStream) win32.L("input") else win32.L("state");
 
-    _ = win32.extra.wsprintfW(@ptrCast(&exeName), win32.L("loop_edit_%d_%s.hmi"), slotIndex, s);
+    _ = win32.x.wsprintfW(@ptrCast(&exeName), win32.L("loop_edit_%d_%s.hmi"), slotIndex, s);
 
     Win32BuildEXEPathFileName(state, exeName[0..64], dest);
 }
@@ -855,7 +856,7 @@ fn HandleDebugCycleCounters(gameMemory: *platform.memory) void {
         for (&gameMemory.counters) |*counter| {
             if (counter.hitCount > 0) {
                 var textbuffer = [1]u16{0} ** 256;
-                _ = win32.extra.wsprintfW(
+                _ = win32.x.wsprintfW(
                     @as([*:0]u16, @ptrCast(&textbuffer)),
                     win32.L("%S - %I64ucy %dh %I64ucy/h\n"),
                     @tagName(counter.t).ptr,
@@ -1013,7 +1014,7 @@ const win32_work_queue = struct {
     fn MakeQueue(queue: *win32_work_queue, comptime threadCount: comptime_int) void {
         const initialCount = 0;
 
-        queue.semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.extra.SEMAPHORE_ALL_ACCESS);
+        queue.semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.x.SEMAPHORE_ALL_ACCESS);
 
         var threadIndex = @as(u32, 0);
         while (threadIndex < threadCount) : (threadIndex += 1) {
@@ -1091,7 +1092,7 @@ fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
 
     while (true) {
         if (Win32DoNextWorkQueueEntry(queue)) {
-            _ = win32.WaitForSingleObjectEx(queue.semaphoreHandle, win32.extra.INFINITE, win32.FALSE);
+            _ = win32.WaitForSingleObjectEx(queue.semaphoreHandle, win32.x.INFINITE, win32.FALSE);
         }
     }
 
@@ -1102,7 +1103,7 @@ fn DoWorkerWork(_: ?*platform.work_queue, data: *anyopaque) void {
     var buffer = [1:0]u8{0} ** 256;
 
     // std.debug.print("Thread {}: {s}\n", .{ win32.GetCurrentThreadId(), @ptrCast([*:0]const u8, data) });
-    _ = win32.extra.wsprintfA(&buffer, "Thread %u: %s\n", win32.GetCurrentThreadId(), @as([*:0]const u8, @ptrCast(data)));
+    _ = win32.x.wsprintfA(&buffer, "Thread %u: %s\n", win32.GetCurrentThreadId(), @as([*:0]const u8, @ptrCast(data)));
     _ = win32.OutputDebugStringA(&buffer);
 }
 
@@ -1111,40 +1112,79 @@ const win32_platform_file_handle = extern struct {
     win32Handle: win32.HANDLE,
 };
 
-fn Win32GetAllFilesOfTypeBegin(extension: []const u8) platform.file_group {
-    _ = extension;
+const win32_platform_file_group = extern struct {
+    h: platform.file_group,
+    fileHandle: win32.FindFileHandle,
+    findData: win32.WIN32_FIND_DATAW,
+};
 
-    const result = platform.file_group{
-        .fileCount = 3,
-        .data = undefined,
-    };
+fn Win32GetAllFilesOfTypeBegin(extension: []const u8) *platform.file_group {
+    var win32FileGroup: *win32_platform_file_group = @alignCast(@ptrCast(win32.VirtualAlloc(null, @sizeOf(win32_platform_file_group), allocationReserveCommit, win32.PAGE_READWRITE).?));
 
-    return result;
-}
+    var wildcard = [2]u8{ '*', '.' } ++ [1]u8{0} ** 30;
 
-fn Win32GetAllFilesOfTypeEnd(fileGroup: platform.file_group) void {
-    _ = fileGroup;
-}
-
-fn Win32OpenFile(fileGroup: platform.file_group, fileIndex: u32) *platform.file_handle {
-    _ = fileGroup;
-
-    const fileName = switch (fileIndex) {
-        0 => "test1.hha",
-        1 => "test2.hha",
-        2 => "test3.hha",
-        else => "invalid.hha",
-    };
-
-    var result: ?*win32_platform_file_handle = @alignCast(@ptrCast(win32.VirtualAlloc(null, @sizeOf(win32_platform_file_handle), allocationReserveCommit, win32.PAGE_READWRITE)));
-
-    if (result) |r| {
-        // TODO (Manav): convert to unicode later
-        result.?.win32Handle = win32.CreateFileA(fileName, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
-        result.?.h.noErrors = r.win32Handle != win32.INVALID_HANDLE_VALUE;
+    for (2..wildcard.len) |i| {
+        if (i - 2 >= extension.len) {
+            break;
+        }
+        wildcard[i] = extension[i - 2];
     }
 
-    return @ptrCast(&result.?.h);
+    var wildcard_l = [1:0]u16{0} ** 32;
+    _ = std.unicode.utf8ToUtf16Le(wildcard_l[0..], wildcard[0..]) catch |err| {
+        std.debug.print("{}\n", .{err});
+    };
+
+    win32FileGroup.h.fileCount = 0;
+
+    var findData: win32.WIN32_FIND_DATAW = undefined;
+    var fileHandle = win32.FindFirstFileW(&wildcard_l, &findData);
+
+    while (fileHandle != win32.x.INVALID_FIND_HANDLE_VALUE) {
+        win32FileGroup.h.fileCount += 1;
+
+        if (win32.FindNextFileW(fileHandle, &findData) != win32.TRUE) {
+            break;
+        }
+    }
+
+    _ = win32.FindClose(fileHandle);
+
+    win32FileGroup.fileHandle = win32.FindFirstFileW(&wildcard_l, &win32FileGroup.findData);
+
+    return @ptrCast(win32FileGroup);
+}
+
+fn Win32GetAllFilesOfTypeEnd(fileGroup: ?*platform.file_group) void {
+    var win32FileGroup: ?*win32_platform_file_group = @alignCast(@ptrCast(fileGroup));
+    if (win32FileGroup) |_| {
+        _ = win32.FindClose(win32FileGroup.?.fileHandle);
+
+        _ = win32.VirtualFree(win32FileGroup, 0, win32.MEM_RELEASE);
+    }
+}
+
+fn Win32OpenNextFile(fileGroup: *platform.file_group) ?*platform.file_handle {
+    var win32FileGroup: *win32_platform_file_group = @alignCast(@ptrCast(fileGroup));
+
+    var result: ?*win32_platform_file_handle = null;
+
+    if (win32FileGroup.fileHandle != win32.x.INVALID_FIND_HANDLE_VALUE) {
+        result = @alignCast(@ptrCast(win32.VirtualAlloc(null, @sizeOf(win32_platform_file_handle), allocationReserveCommit, win32.PAGE_READWRITE)));
+
+        if (result) |r| {
+            // TODO (Manav): convert to unicode later
+            result.?.win32Handle = win32.CreateFileW(win32FileGroup.findData.cFileName[0.. :0], win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
+            result.?.h.noErrors = r.win32Handle != win32.INVALID_HANDLE_VALUE;
+        }
+
+        if (win32.FindNextFileW(win32FileGroup.fileHandle, &win32FileGroup.findData) != win32.TRUE) {
+            _ = win32.FindClose(win32FileGroup.fileHandle);
+            win32FileGroup.fileHandle = win32.x.INVALID_FIND_HANDLE_VALUE;
+        }
+    }
+
+    return @ptrCast(result);
 }
 
 fn Win32ReadDataFromFile(source: *platform.file_handle, offset: u64, size: u64, dest: *anyopaque) void {
@@ -1373,7 +1413,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                     .GetAllFilesOfTypeBegin = Win32GetAllFilesOfTypeBegin,
                     .GetAllFilesOfTypeEnd = Win32GetAllFilesOfTypeEnd,
-                    .OpenFile = Win32OpenFile,
+                    .OpenNextFile = Win32OpenNextFile,
                     .ReadDataFromFile = Win32ReadDataFromFile,
                     .FileError = Win32FileError,
                 },
@@ -1694,7 +1734,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                                 if (!NOT_IGNORE) {
                                     var textbuffer = [1]u16{0} ** 256;
-                                    _ = win32.extra.wsprintfW(&textbuffer, win32.L("BTL:%u TC:%u BTW:%u - PC:%u WC:%u DELTA:%u (%fs)\n"), byteToLock, targetCursor, bytesToWrite, playCursor, writeCursor, audioLatencyBytes, audioLatencySeconds);
+                                    _ = win32.x.wsprintfW(&textbuffer, win32.L("BTL:%u TC:%u BTW:%u - PC:%u WC:%u DELTA:%u (%fs)\n"), byteToLock, targetCursor, bytesToWrite, playCursor, writeCursor, audioLatencyBytes, audioLatencySeconds);
                                     _ = win32.OutputDebugStringW(&textbuffer);
                                 }
                             }
@@ -1766,7 +1806,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             const mcpf = @as(f64, @floatFromInt(cyclesElapsed)) / (1000 * 1000);
                             const fps: f64 = 1000 / msPerFrame;
                             var fpsBuffer = [1:0]u16{0} ** 256;
-                            _ = win32.extra.wsprintfW(@as([*:0]u16, @ptrCast(&fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), &msPerFrame, &fps, &mcpf);
+                            _ = win32.x.wsprintfW(@as([*:0]u16, @ptrCast(&fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), &msPerFrame, &fps, &mcpf);
                             // std.debug.print("{d:.2}ms/f, {d:.2}f/s, {d:.2}mc/f\n", .{ msPerFrame, fps, mcpf });
                             // _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&fpsBuffer)));
                         }
