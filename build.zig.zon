@@ -1,0 +1,17 @@
+.{
+    .name = "handmadehero_zig",
+    .version = "0.1.0",
+    .dependencies = .{
+        .zigwin32 = .{
+            .url = "https://github.com/marlersoft/zigwin32/archive/c778640d3dc153e900fbe37e2816b5176af3c802.tar.gz",
+            .hash = "122001853ff1c42814e8d5e65f630be7cc15a530e92253b2935bcc8ebe3fb402fdbb",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "code",
+        "README.md",
+    },
+}

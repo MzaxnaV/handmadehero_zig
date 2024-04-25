@@ -21,9 +21,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("./code/handmade_asset_type_id.zig"),
     });
 
-    const win32 = b.createModule(.{
-        .root_source_file = b.path("./code/zigwin32/win32.zig"),
-    });
+    const win32 = b.dependency("zigwin32", .{}).module("zigwin32");
 
     const lib = b.addSharedLibrary(.{
         .name = lib_name,
