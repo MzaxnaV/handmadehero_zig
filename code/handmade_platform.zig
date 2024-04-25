@@ -70,7 +70,7 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
 
     inline fn EndTimedBlock(comptime id: debug_cycle_counter_type) void {
         if (debugGlobalMemory) |m| {
-            var startCycleCount = m.counters[@intFromEnum(id)].startCyleCount;
+            const startCycleCount = m.counters[@intFromEnum(id)].startCyleCount;
             // TODO things are busted.
             m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% startCycleCount;
             m.counters[@intFromEnum(id)].hitCount +%= 1;

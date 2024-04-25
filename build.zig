@@ -10,59 +10,59 @@ pub fn build(b: *std.Build) void {
     // options.addOption(bool, "NOTIGNORE", true);
 
     const platform = b.createModule(.{
-        .source_file = .{ .path = "./code/handmade_platform.zig" },
+        .root_source_file = b.path("./code/handmade_platform.zig"),
     });
 
     const simd = b.createModule(.{
-        .source_file = .{ .path = "./code/simd.zig" },
+        .root_source_file = b.path("./code/simd.zig"),
     });
 
     const asset_type_id = b.createModule(.{
-        .source_file = .{ .path = "./code/handmade_asset_type_id.zig" },
+        .root_source_file = b.path("./code/handmade_asset_type_id.zig"),
     });
 
     const win32 = b.createModule(.{
-        .source_file = .{ .path = "./code/zigwin32/win32.zig" },
+        .root_source_file = b.path("./code/zigwin32/win32.zig"),
     });
 
     const lib = b.addSharedLibrary(.{
         .name = lib_name,
-        .root_source_file = .{ .path = "./code/handmade/handmade.zig" },
+        .root_source_file = b.path("./code/handmade/handmade.zig"),
         .version = .{ .major = 0, .minor = 1, .patch = 0 },
         .target = target,
         .optimize = optimize,
     });
 
-    lib.addModule("handmade_platform", platform);
-    lib.addModule("handmade_asset_type_id", asset_type_id);
-    lib.addModule("simd", simd);
+    lib.root_module.addImport("handmade_platform", platform);
+    lib.root_module.addImport("handmade_asset_type_id", asset_type_id);
+    lib.root_module.addImport("simd", simd);
 
     const exe = b.addExecutable(.{
         .name = "win32_handmade",
-        .root_source_file = .{ .path = "./code/win32_handmade.zig" },
+        .root_source_file = b.path("./code/win32_handmade.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    exe.addModule("win32", win32);
-    exe.addModule("handmade_platform", platform);
+    exe.root_module.addImport("win32", win32);
+    exe.root_module.addImport("handmade_platform", platform);
 
     const lib_tests = b.addTest(.{
-        .root_source_file = .{ .path = "./code/handmade/handmade_tests.zig" },
+        .root_source_file = b.path("./code/handmade/handmade_tests.zig"),
         .target = target,
         .optimize = optimize,
     });
-    lib_tests.addModule("handmade_platform", platform);
-    lib_tests.addModule("simd", simd);
+    lib_tests.root_module.addImport("handmade_platform", platform);
+    lib_tests.root_module.addImport("simd", simd);
 
     const asset_builder = b.addExecutable(.{
         .name = "asset_builder",
-        .root_source_file = .{ .path = "./code/handmade/asset_builder.zig" },
+        .root_source_file = b.path("./code/handmade/asset_builder.zig"),
         .target = target,
         .optimize = optimize,
     });
-    asset_builder.addModule("handmade_asset_type_id", asset_type_id);
-    asset_builder.addModule("handmade_platform", platform);
+    asset_builder.root_module.addImport("handmade_asset_type_id", asset_type_id);
+    asset_builder.root_module.addImport("handmade_platform", platform);
 
     const run_test = b.addRunArtifact(lib_tests);
 

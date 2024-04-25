@@ -197,8 +197,8 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
 
         fn riffCode(a: u8, b: u8, c: u8, d: u8) u32 {
             return @bitCast(switch (platform.native_endian) {
-                .Big => [4]u8{ d, c, b, a },
-                .Little => [4]u8{ a, b, c, d },
+                .big => [4]u8{ d, c, b, a },
+                .little => [4]u8{ a, b, c, d },
             });
         }
     };
@@ -321,7 +321,7 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
         }
 
         for (0..sampleCount) |sampleIndex| {
-            var source: i16 = sampleData.?[2 * sampleIndex];
+            const source: i16 = sampleData.?[2 * sampleIndex];
             sampleData.?[2 * sampleIndex] = sampleData.?[sampleIndex];
             sampleData.?[sampleIndex] = source;
         }
@@ -400,7 +400,7 @@ const game_assets = struct {
         assert(self.DEBUGAssetType != null);
         assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
 
-        var result: h.bitmap_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
+        const result: h.bitmap_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
         self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
 
         const source: *asset_source = &self.assetSources[result.value];
@@ -429,7 +429,7 @@ const game_assets = struct {
         assert(self.DEBUGAssetType != null);
         assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
 
-        var result: h.sound_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
+        const result: h.sound_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
         self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
 
         const source: *asset_source = &self.assetSources[result.value];
@@ -502,13 +502,13 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
         std.debug.print("\n{s}> \n\tHeader:\n\t\tBytesToWrite: {}\n", .{ filename, headerBytesToWrite.len });
         std.debug.print("\t\tBytesWritten: {}\n", .{headerBytesWritten});
 
-        var tagBytesToWrite = std.mem.sliceAsBytes(assets.tags[0..header.tagCount]);
+        const tagBytesToWrite = std.mem.sliceAsBytes(assets.tags[0..header.tagCount]);
         const tagsBytesWritten = try out.writer().write(tagBytesToWrite);
 
         std.debug.print("\tTags:\n\t\tBytesToWrite: {}\n", .{tagBytesToWrite.len});
         std.debug.print("\t\tBytesWritten: {}\n", .{tagsBytesWritten});
 
-        var assetTypesBytesToWrite = std.mem.sliceAsBytes(&assets.assetTypes);
+        const assetTypesBytesToWrite = std.mem.sliceAsBytes(&assets.assetTypes);
         const assetTypesByteWritten = try out.writer().write(assetTypesBytesToWrite);
 
         std.debug.print("\tAsset Types:\n\t\tBytesToWrite: {}\n", .{assetTypesBytesToWrite.len});
@@ -564,7 +564,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
         }
 
         try out.seekTo(header.assets);
-        var assetArrayBytes = std.mem.sliceAsBytes(assets.assets[0..header.assetCount]);
+        const assetArrayBytes = std.mem.sliceAsBytes(assets.assets[0..header.assetCount]);
         try out.writer().writeAll(assetArrayBytes);
     }
 }

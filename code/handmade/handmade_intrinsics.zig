@@ -15,7 +15,7 @@ pub inline fn SquareRoot(float32: f32) f32 {
 }
 
 pub inline fn AbsoluteValue(float32: f32) f32 {
-    const result = @fabs(float32);
+    const result = @abs(float32);
     return result;
 }
 
@@ -78,7 +78,7 @@ pub inline fn Cos(angle: f32) f32 {
 }
 
 pub inline fn Atan2(y: f32, x: f32) f32 {
-    const result = math.atan2(f32, y, x);
+    const result = math.atan2(y, x);
     return result;
 }
 
@@ -106,5 +106,5 @@ pub inline fn FindLeastSignificantSetBit(value: u32) u32 {
 /// }
 /// ```
 pub inline fn AtomicCompareExchange(comptime T: type, ptr: *T, new_value: T, expected_value: T) ?T {
-    return @cmpxchgStrong(T, ptr, expected_value, new_value, .SeqCst, .SeqCst);
+    return @cmpxchgStrong(T, ptr, expected_value, new_value, .seq_cst, .seq_cst);
 }

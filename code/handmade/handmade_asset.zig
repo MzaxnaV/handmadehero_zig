@@ -104,7 +104,7 @@ pub const game_assets = struct {
 
         var result: ?*h.loaded_bitmap = null;
         if (@intFromEnum(slot.state) >= @intFromEnum(asset_state.AssetState_Loaded)) {
-            @fence(.SeqCst);
+            @fence(.seq_cst);
             result = slot.data.bitmap;
         }
 
@@ -117,7 +117,7 @@ pub const game_assets = struct {
 
         var result: ?*loaded_sound = null;
         if (@intFromEnum(slot.state) >= @intFromEnum(asset_state.AssetState_Loaded)) {
-            @fence(.SeqCst);
+            @fence(.seq_cst);
             result = slot.data.sound;
         }
 
@@ -145,7 +145,7 @@ pub const game_assets = struct {
         assets.assetCount = 1;
 
         {
-            var fileGroup = h.platformAPI.GetAllFilesOfTypeBegin("hha");
+            const fileGroup = h.platformAPI.GetAllFilesOfTypeBegin("hha");
             defer h.platformAPI.GetAllFilesOfTypeEnd(fileGroup);
 
             assets.files = arena.PushSlice(asset_file, fileGroup.fileCount);
@@ -188,7 +188,7 @@ pub const game_assets = struct {
         h.ZeroStruct(h.hha_tag, &assets.tags[0]);
 
         for (0..assets.files.len) |fileIndex| {
-            var file: *asset_file = &assets.files[fileIndex];
+            const file: *asset_file = &assets.files[fileIndex];
             if (platform.NoFileErrors(file.handle)) {
                 const tagArraySize = @sizeOf(h.hha_tag) * (file.header.tagCount - 1);
                 h.platformAPI.ReadDataFromFile(file.handle, file.header.tags + @sizeOf(h.hha_tag), tagArraySize, assets.tags + file.tagBase);
@@ -207,7 +207,7 @@ pub const game_assets = struct {
                 var file: *asset_file = &assets.files[fileIndex];
                 if (platform.NoFileErrors(file.handle)) {
                     for (0..file.header.assetTypeCount) |sourceIndex| {
-                        var sourceType: *h.hha_asset_type = &file.assetTypeArray[sourceIndex];
+                        const sourceType: *h.hha_asset_type = &file.assetTypeArray[sourceIndex];
 
                         if (sourceType.typeID == destTypeID) {
                             const assetCountForType: u32 = (sourceType.onePastLastAssetIndex - sourceType.firstAssetIndex);
@@ -277,7 +277,7 @@ fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
     h.platformAPI.ReadDataFromFile(work.handle, work.offset, work.size, work.destination);
 
-    @fence(.SeqCst);
+    @fence(.seq_cst);
 
     if (platform.NoFileErrors(work.handle)) {
         work.slot.state = work.finalState;
@@ -346,7 +346,7 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             const channelSize = sound.sampleCount * @sizeOf(i16);
             const memorySize = sound.channelCount * channelSize;
 
-            var memory = assets.assetArena.PushSize(memorySize);
+            const memory = assets.assetArena.PushSize(memorySize);
 
             var soundAt: [*]i16 = @alignCast(@ptrCast(memory));
             for (0..sound.channelCount) |channelIndex| {
@@ -403,7 +403,7 @@ pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: asset_type_id, matchV
             var totalWeightedDiff: f32 = 0.0;
 
             for (a.hha.firstTagIndex..a.hha.onePastLastTagIndex) |tagIndex| {
-                var tag: h.hha_tag = assets.tags[tagIndex];
+                const tag: h.hha_tag = assets.tags[tagIndex];
 
                 const _a = matchVector.e[tag.ID];
                 const _b = tag.value;

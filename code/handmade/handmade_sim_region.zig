@@ -146,7 +146,7 @@ pub fn GetHashFromStorageIndex(simRegion: *sim_region, storageIndex: u32) *sim_e
 }
 
 pub inline fn GetEntityByStorageIndex(simRegion: *sim_region, storageIndex: u32) ?*sim_entity {
-    var entry = GetHashFromStorageIndex(simRegion, storageIndex);
+    const entry = GetHashFromStorageIndex(simRegion, storageIndex);
     const result = entry.ptr;
     return result;
 }
@@ -470,11 +470,11 @@ pub fn EntitiesOverlap(entity: *sim_entity, testEntity: *sim_entity, epsilon: h.
     var result = false;
     var volumeIndex = @as(u32, 0);
     while (!result and (volumeIndex < entity.collision.volumes.len)) : (volumeIndex += 1) {
-        var volume = entity.collision.volumes[volumeIndex];
+        const volume = entity.collision.volumes[volumeIndex];
 
         var testVolumeIndex = @as(u32, 0);
         while (!result and testVolumeIndex < (testEntity.collision.volumes.len)) : (testVolumeIndex += 1) {
-            var testVolume = testEntity.collision.volumes[testVolumeIndex];
+            const testVolume = testEntity.collision.volumes[testVolumeIndex];
 
             const entityRect = h.rect3.InitCenterDim(h.Add(entity.p, volume.offsetP), h.Add(volume.dim, epsilon));
             const testEntityRect = h.rect3.InitCenterDim(h.Add(testEntity.p, testVolume.offsetP), testVolume.dim);
@@ -543,10 +543,10 @@ pub fn MoveEntity(gameState: *h.game_state, simRegion: *sim_region, entity: *sim
                     {
                         var volumeIndex = @as(u32, 0);
                         while (volumeIndex < entity.collision.volumes.len) : (volumeIndex += 1) {
-                            var volume = entity.collision.volumes[volumeIndex];
+                            const volume = entity.collision.volumes[volumeIndex];
                             var testVolumeIndex = @as(u32, 0);
                             while (testVolumeIndex < testEntity.collision.volumes.len) : (testVolumeIndex += 1) {
-                                var testVolume = testEntity.collision.volumes[testVolumeIndex];
+                                const testVolume = testEntity.collision.volumes[testVolumeIndex];
                                 const minkowskiDiameter: h.v3 = .{
                                     h.X(testVolume.dim) + h.X(volume.dim),
                                     h.Y(testVolume.dim) + h.Y(volume.dim),
@@ -619,7 +619,7 @@ pub fn MoveEntity(gameState: *h.game_state, simRegion: *sim_region, entity: *sim
                                         }
 
                                         if (hitThis) {
-                                            var testP = h.Add(entity.p, h.Scale(playerDelta, tMinTest));
+                                            const testP = h.Add(entity.p, h.Scale(playerDelta, tMinTest));
                                             if (SpeculativeCollide(entity, testEntity, testP)) {
                                                 tMin = tMinTest;
                                                 wallNormalMin = testWallNormal;
@@ -634,9 +634,9 @@ pub fn MoveEntity(gameState: *h.game_state, simRegion: *sim_region, entity: *sim
                 }
             }
 
-            var wallNormal = if (tMin < tMax) wallNormalMin else wallNormalMax;
-            var hitEntity: ?*sim_entity = if (tMin < tMax) hitEntityMin else hitEntityMax;
-            var tStop = if (tMin < tMax) tMin else tMax;
+            const wallNormal = if (tMin < tMax) wallNormalMin else wallNormalMax;
+            const hitEntity: ?*sim_entity = if (tMin < tMax) hitEntityMin else hitEntityMax;
+            const tStop = if (tMin < tMax) tMin else tMax;
 
             h.AddTo(&entity.p, h.Scale(playerDelta, tStop));
             distanceRemaining -= tStop * playerDeltaLength;

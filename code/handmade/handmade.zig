@@ -217,7 +217,7 @@ pub fn BeginTaskWithMemory(tranState: *h.transient_state) ?*h.task_with_memory {
 pub fn EndTaskWithMemory(task: *h.task_with_memory) void {
     h.EndTemporaryMemory(task.memoryFlush);
 
-    @fence(.SeqCst);
+    @fence(.seq_cst);
 
     task.beingUsed = false;
 }
@@ -319,7 +319,7 @@ fn FillGroundChunk(
 
                     var grassIndex = @as(u32, 0);
                     while (grassIndex < 50) : (grassIndex += 1) {
-                        var stamp: h.bitmap_id = h.GetRandomBitmapFrom(tranState.assets, .Asset_Tuft, &series);
+                        const stamp: h.bitmap_id = h.GetRandomBitmapFrom(tranState.assets, .Asset_Tuft, &series);
 
                         const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
                         renderGroup.PushBitmap2(stamp, 0.1, h.ToV3(p, 0), .{ 1, 1, 1, 1 });
@@ -420,7 +420,7 @@ fn MakeSphereNormalMap(bitmap: *const h.loaded_bitmap, roughness: f32, cX: f32, 
             const nY = cY * (2 * h.Y(bitmapUV) - 1);
             const nZ_sq = 1 - nX * nX - nY * nY;
 
-            var normal: h.v3 = if (nZ_sq >= 0) .{ nX, nY, h.SquareRoot(nZ_sq) } else .{ 0, 0.70710678118, 0.70710678118 };
+            const normal: h.v3 = if (nZ_sq >= 0) .{ nX, nY, h.SquareRoot(nZ_sq) } else .{ 0, 0.70710678118, 0.70710678118 };
 
             const colour = h.v4{
                 255 * (0.5 * (h.X(normal) + 1)),
@@ -784,7 +784,7 @@ pub export fn UpdateAndRender(
     }
 
     {
-        var musicVolume: h.v2 = .{};
+        var musicVolume: h.v2 = .{ 0, 0 };
         musicVolume[1] = h.SafeRatiof0(@floatFromInt(gameInput.mouseX), @floatFromInt(buffer.width));
         musicVolume[0] = 1 - musicVolume[1];
 
@@ -1001,7 +1001,7 @@ pub export fn UpdateAndRender(
             // }
 
             // Update (pre-physics entity)
-            var heroBitmaps = h.hero_bitmap_ids{
+            const heroBitmaps = h.hero_bitmap_ids{
                 .head = h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Head, &matchVector, &weightVector),
                 .cape = h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Cape, &matchVector, &weightVector),
                 .torso = h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Torso, &matchVector, &weightVector),
@@ -1064,7 +1064,7 @@ pub export fn UpdateAndRender(
                         while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
                             const testEntity: *h.sim_entity = &simRegion.entities[testEntityIndex];
                             if (testEntity.entityType == .Hero) {
-                                var testDSq = h.LengthSq(3, testEntity.p - entity.p);
+                                const testDSq = h.LengthSq(3, testEntity.p - entity.p);
 
                                 if (closestHeroDSq > testDSq) {
                                     closestHero = testEntity;
@@ -1179,8 +1179,8 @@ pub export fn UpdateAndRender(
                 const map = &tranState.envMaps[mapIndex];
                 const lod = &map.lod[0];
                 var rowCheckerOn = false;
-                var checkerWidth = @as(i32, 16);
-                var checkerHeight = @as(i32, 16);
+                const checkerWidth = @as(i32, 16);
+                const checkerHeight = @as(i32, 16);
 
                 var y = @as(i32, 0);
                 while (y < lod.height) : (y += checkerHeight) {
@@ -1205,9 +1205,9 @@ pub export fn UpdateAndRender(
 
         // angle = 0;
 
-        var origin = screenCenter;
+        const origin = screenCenter;
 
-        var angle = 0.1 * gameState.time;
+        const angle = 0.1 * gameState.time;
         const disp: h.v2 = if (NOT_IGNORE) .{ 100 * h.Cos(5 * angle), 100 * h.Sin(3 * angle) } else .{ 0, 0 };
 
         var xAxis: h.v2 = undefined;

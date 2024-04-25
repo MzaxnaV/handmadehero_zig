@@ -50,7 +50,7 @@ pub const rect2i = struct {
     }
 
     pub inline fn InvertedInfinityRectangle() Self {
-        var result = Self{
+        const result = Self{
             .xMin = MaxInt(i32),
             .yMin = MaxInt(i32),
             .xMax = -MaxInt(i32),
@@ -455,17 +455,17 @@ pub inline fn Lerp(a: f32, t: f32, b: f32) f32 {
 }
 
 pub inline fn SafeRatioN(num: f32, div: f32, comptime n: comptime_float) f32 {
-    var result = if (div != 0) num / div else n;
+    const result = if (div != 0) num / div else n;
     return result;
 }
 
 pub inline fn SafeRatiof0(num: f32, div: f32) f32 {
-    var result = SafeRatioN(num, div, 0);
+    const result = SafeRatioN(num, div, 0);
     return result;
 }
 
 pub inline fn SafeRatiof1(num: f32, div: f32) f32 {
-    var result = SafeRatioN(num, div, 1);
+    const result = SafeRatioN(num, div, 1);
     return result;
 }
 

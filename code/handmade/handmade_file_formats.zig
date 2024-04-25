@@ -3,8 +3,8 @@ const native_endian = @import("builtin").target.cpu.arch.endian();
 pub fn HHA_CODE(comptime a: u8, comptime b: u8, comptime c: u8, comptime d: u8) u32 {
     comptime {
         return @bitCast(switch (native_endian) {
-            .Big => [4]u8{ d, c, b, a },
-            .Little => [4]u8{ a, b, c, d },
+            .big => [4]u8{ d, c, b, a },
+            .little => [4]u8{ a, b, c, d },
         });
     }
 }

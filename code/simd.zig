@@ -29,7 +29,7 @@ pub const perf_analyzer = struct {
     };
 
     pub fn Start(comptime m: method, comptime region: []const u8) void {
-        @fence(.SeqCst);
+        @fence(.seq_cst);
         switch (m) {
             .LLVM_MCA => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: "memory"),
         }
@@ -39,7 +39,7 @@ pub const perf_analyzer = struct {
         switch (m) {
             .LLVM_MCA => asm volatile ("# LLVM-MCA-END " ++ region ::: "memory"),
         }
-        @fence(.SeqCst);
+        @fence(.seq_cst);
     }
 };
 
@@ -143,8 +143,8 @@ pub const z = struct {
 
         inline for (0..8) |index| {
             // NOTE: for some reason not storing these gives erros when function inlines
-            var __ai = @as(i32, __a[index]);
-            var __bi = @as(i32, __b[index]);
+            const __ai = @as(i32, __a[index]);
+            const __bi = @as(i32, __b[index]);
             result[index] = @as(u16, @truncate(@as(u32, @bitCast(__ai * __bi >> 16))));
         }
 

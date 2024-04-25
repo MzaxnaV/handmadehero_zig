@@ -44,7 +44,7 @@ const win32 = struct {
     };
 };
 
-const Atomic = std.atomic.Atomic;
+const atomic = std.atomic;
 
 const platform = @import("handmade_platform");
 const handmade_internal = platform.handmade_internal;
@@ -200,12 +200,12 @@ fn DEBUGWin32FreeFileMemory(memory: *anyopaque) void {
 
 fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) handmade_internal.debug_read_file_result {
     var result = handmade_internal.debug_read_file_result{};
-    var fileHandle = win32.CreateFileA(filename, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
+    const fileHandle = win32.CreateFileA(filename, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
 
     if (fileHandle != win32.INVALID_HANDLE_VALUE) {
         var fileSize = win32.LARGE_INTEGER{ .QuadPart = 0 };
         if (win32.GetFileSizeEx(fileHandle, &fileSize) != 0) {
-            var fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @as(u32, @intCast(fileSize.QuadPart)) else platform.InvalidCodePath("");
+            const fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @as(u32, @intCast(fileSize.QuadPart)) else platform.InvalidCodePath("");
             if (win32.VirtualAlloc(null, fileSize32, allocationReserveCommit, win32.PAGE_READWRITE)) |data| {
                 var bytesRead: DWORD = 0;
                 if (win32.ReadFile(fileHandle, data, fileSize32, &bytesRead, null) != 0 and fileSize32 == bytesRead) {
@@ -230,7 +230,7 @@ fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) handmade_internal.debug_rea
 
 fn DEBUGWin32WriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool {
     var result = false;
-    var fileHandle = win32.CreateFileA(fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null);
+    const fileHandle = win32.CreateFileA(fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null);
 
     if (fileHandle != win32.INVALID_HANDLE_VALUE) {
         var bytesWritten: DWORD = 0;
@@ -546,7 +546,7 @@ fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32
         win32.WM_PAINT => {
             var paint: win32.PAINTSTRUCT = undefined;
             if (win32.BeginPaint(windowHandle, &paint)) |deviceContext| {
-                var dimension = Win32GetWindowDimenstion(windowHandle);
+                const dimension = Win32GetWindowDimenstion(windowHandle);
                 Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
             }
             _ = win32.EndPaint(windowHandle, &paint);
@@ -595,7 +595,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
         if (region1) |ptr| {
             const region1SampleCount = region1Size / soundOutput.bytesPerSample;
             var destSample: [*]i16 = @alignCast(@ptrCast(ptr));
-            var sourceSample = sourceBuffer.samples;
+            const sourceSample = sourceBuffer.samples;
 
             for (0..region1SampleCount) |sampleIndex| {
                 destSample[2 * sampleIndex] = sourceSample[2 * sampleIndex];
@@ -608,7 +608,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
         if (region2) |ptr| {
             const region2SampleCount = region2Size / soundOutput.bytesPerSample;
             var destSample: [*]i16 = @alignCast(@ptrCast(ptr));
-            var sourceSample = sourceBuffer.samples;
+            const sourceSample = sourceBuffer.samples;
 
             for (0..region2SampleCount) |sampleIndex| {
                 destSample[2 * sampleIndex] = sourceSample[2 * sampleIndex];
@@ -1002,11 +1002,11 @@ const win32_work_queue_entry = struct {
 const win32_work_queue = struct {
     const Self = @This();
 
-    completionGoal: Atomic(u32) = Atomic(u32).init(0),
-    completionCount: Atomic(u32) = Atomic(u32).init(0),
+    completionGoal: atomic.Value(u32) = atomic.Value(u32).init(0),
+    completionCount: atomic.Value(u32) = atomic.Value(u32).init(0),
 
-    nextEntryToWrite: Atomic(u32) = Atomic(u32).init(0),
-    nextEntryToRead: Atomic(u32) = Atomic(u32).init(0),
+    nextEntryToWrite: atomic.Value(u32) = atomic.Value(u32).init(0),
+    nextEntryToRead: atomic.Value(u32) = atomic.Value(u32).init(0),
     semaphoreHandle: ?win32.HANDLE = null,
 
     entries: [256]win32_work_queue_entry = [1]win32_work_queue_entry{.{}} ** 256,
@@ -1019,7 +1019,7 @@ const win32_work_queue = struct {
         var threadIndex = @as(u32, 0);
         while (threadIndex < threadCount) : (threadIndex += 1) {
             var threadID: DWORD = 0;
-            var threadHandle = win32.CreateThread(
+            const threadHandle = win32.CreateThread(
                 null,
                 0,
                 ThreadProc,
@@ -1045,16 +1045,16 @@ const win32_work_queue = struct {
 fn Win32AddEntry(q: *platform.work_queue, callback: platform.work_queue_callback, data: *anyopaque) void {
     const queue = win32_work_queue.from(q);
 
-    const newNextEntryToWrite: u32 = ((queue.nextEntryToWrite.value + 1) % @as(u32, queue.entries.len));
+    const newNextEntryToWrite: u32 = ((queue.nextEntryToWrite.raw + 1) % @as(u32, queue.entries.len));
 
-    std.debug.assert(newNextEntryToWrite != queue.nextEntryToRead.value);
+    std.debug.assert(newNextEntryToWrite != queue.nextEntryToRead.raw);
 
-    const entry: *win32_work_queue_entry = &queue.entries[queue.nextEntryToWrite.value];
+    const entry: *win32_work_queue_entry = &queue.entries[queue.nextEntryToWrite.raw];
     entry.data = data;
     entry.callback = callback;
 
-    _ = queue.completionGoal.fetchAdd(1, .Monotonic);
-    queue.nextEntryToWrite.store(newNextEntryToWrite, .SeqCst);
+    _ = queue.completionGoal.fetchAdd(1, .monotonic);
+    queue.nextEntryToWrite.store(newNextEntryToWrite, .seq_cst);
 
     _ = win32.ReleaseSemaphore(queue.semaphoreHandle, 1, null);
 }
@@ -1062,13 +1062,13 @@ fn Win32AddEntry(q: *platform.work_queue, callback: platform.work_queue_callback
 fn Win32DoNextWorkQueueEntry(queue: *win32_work_queue) bool {
     var weShouldSleep = false;
 
-    const originalNextEntryToRead = queue.nextEntryToRead.load(.SeqCst);
+    const originalNextEntryToRead = queue.nextEntryToRead.load(.seq_cst);
     const newNextEntryToRead = (originalNextEntryToRead + 1) % @as(u32, queue.entries.len);
-    if (originalNextEntryToRead != queue.nextEntryToWrite.load(.SeqCst)) {
-        if (queue.nextEntryToRead.compareAndSwap(originalNextEntryToRead, newNextEntryToRead, .SeqCst, .SeqCst)) |_| {} else {
-            var entry = queue.entries[originalNextEntryToRead];
+    if (originalNextEntryToRead != queue.nextEntryToWrite.load(.seq_cst)) {
+        if (queue.nextEntryToRead.cmpxchgStrong(originalNextEntryToRead, newNextEntryToRead, .seq_cst, .seq_cst)) |_| {} else {
+            const entry = queue.entries[originalNextEntryToRead];
             entry.callback.?(queue.to(), entry.data.?);
-            _ = queue.completionCount.fetchAdd(1, .SeqCst);
+            _ = queue.completionCount.fetchAdd(1, .seq_cst);
         }
     } else {
         weShouldSleep = true;
@@ -1079,12 +1079,12 @@ fn Win32DoNextWorkQueueEntry(queue: *win32_work_queue) bool {
 
 fn Win32CompleteAllWork(q: *platform.work_queue) void {
     const queue = win32_work_queue.from(q);
-    while (queue.completionGoal.value != queue.completionCount.value) {
+    while (queue.completionGoal.raw != queue.completionCount.raw) {
         _ = Win32DoNextWorkQueueEntry(queue);
     }
 
-    queue.completionGoal.store(0, .SeqCst);
-    queue.completionCount.store(0, .SeqCst);
+    queue.completionGoal.store(0, .seq_cst);
+    queue.completionCount.store(0, .seq_cst);
 }
 
 fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
@@ -1138,7 +1138,7 @@ fn Win32GetAllFilesOfTypeBegin(extension: []const u8) *platform.file_group {
     win32FileGroup.h.fileCount = 0;
 
     var findData: win32.WIN32_FIND_DATAW = undefined;
-    var fileHandle = win32.FindFirstFileW(&wildcard_l, &findData);
+    const fileHandle = win32.FindFirstFileW(&wildcard_l, &findData);
 
     while (fileHandle != win32.x.INVALID_FIND_HANDLE_VALUE) {
         win32FileGroup.h.fileCount += 1;
@@ -1156,7 +1156,7 @@ fn Win32GetAllFilesOfTypeBegin(extension: []const u8) *platform.file_group {
 }
 
 fn Win32GetAllFilesOfTypeEnd(fileGroup: ?*platform.file_group) void {
-    var win32FileGroup: ?*win32_platform_file_group = @alignCast(@ptrCast(fileGroup));
+    const win32FileGroup: ?*win32_platform_file_group = @alignCast(@ptrCast(fileGroup));
     if (win32FileGroup) |_| {
         _ = win32.FindClose(win32FileGroup.?.fileHandle);
 
@@ -1174,7 +1174,8 @@ fn Win32OpenNextFile(fileGroup: *platform.file_group) ?*platform.file_handle {
 
         if (result) |r| {
             // TODO (Manav): convert to unicode later
-            result.?.win32Handle = win32.CreateFileW(win32FileGroup.findData.cFileName[0.. :0], win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
+            const fileName = win32FileGroup.findData.cFileName[0 .. win32FileGroup.findData.cFileName.len - 1 :0];
+            result.?.win32Handle = win32.CreateFileW(fileName, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
             result.?.h.noErrors = r.win32Handle != win32.INVALID_HANDLE_VALUE;
         }
 
@@ -1782,8 +1783,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         flipWallClock = Win32GetWallClock();
 
                         if (HANDMADE_INTERNAL) {
-                            var play: DWORD = 0;
-                            var write: DWORD = 0;
+                            const play: DWORD = 0;
+                            const write: DWORD = 0;
 
                             if (win32.SUCCEEDED((globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor)))) {
                                 std.debug.assert(debugTimeMarkerIndex < debugTimeMarkers.len);
@@ -1799,7 +1800,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         oldInput = temp;
 
                         if (NOT_IGNORE) {
-                            var endCycleCount = rdtsc();
+                            const endCycleCount = rdtsc();
                             const cyclesElapsed = endCycleCount - lastCycleCount;
                             lastCycleCount = endCycleCount;
 

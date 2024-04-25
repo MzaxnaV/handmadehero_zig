@@ -198,10 +198,10 @@ pub const loaded_bitmap = struct {
                         if (normalMapOptional) |normalMap| {
                             const normalSample: bilinear_sample = BilinearSample(normalMap, X, Y);
 
-                            var normalA: h.v4 = Unpack4x8(normalSample.a);
-                            var normalB: h.v4 = Unpack4x8(normalSample.b);
-                            var normalC: h.v4 = Unpack4x8(normalSample.c);
-                            var normalD: h.v4 = Unpack4x8(normalSample.d);
+                            const normalA: h.v4 = Unpack4x8(normalSample.a);
+                            const normalB: h.v4 = Unpack4x8(normalSample.b);
+                            const normalC: h.v4 = Unpack4x8(normalSample.c);
+                            const normalD: h.v4 = Unpack4x8(normalSample.d);
 
                             var normal: h.v4 = h.LerpV(
                                 h.LerpV(normalA, fX, normalB),
@@ -278,7 +278,7 @@ pub const loaded_bitmap = struct {
 
                         const blended: h.v4 = h.Add(h.Scale(dest, 1 - h.A(texel)), texel);
 
-                        var blended255 = h.Linear1ToSRGB255(blended);
+                        const blended255 = h.Linear1ToSRGB255(blended);
 
                         pixel[index] = (@as(u32, @intFromFloat(h.A(blended255) + 0.5)) << 24) |
                             (@as(u32, @intFromFloat(h.R(blended255) + 0.5)) << 16) |
@@ -499,28 +499,28 @@ pub const loaded_bitmap = struct {
                         const pitchOffset2 = if (texturePitch > 0) texelPtr2 + @as(usize, @intCast(texturePitch)) else texelPtr2 - @as(usize, @intCast(-texturePitch));
                         const pitchOffset3 = if (texturePitch > 0) texelPtr3 + @as(usize, @intCast(texturePitch)) else texelPtr3 - @as(usize, @intCast(-texturePitch));
 
-                        var sampleA: simd.u32x4 = .{
+                        const sampleA: simd.u32x4 = .{
                             @as(*align(1) u32, @ptrCast(texelPtr0)).*,
                             @as(*align(1) u32, @ptrCast(texelPtr1)).*,
                             @as(*align(1) u32, @ptrCast(texelPtr2)).*,
                             @as(*align(1) u32, @ptrCast(texelPtr3)).*,
                         };
 
-                        var sampleB: simd.u32x4 = .{
+                        const sampleB: simd.u32x4 = .{
                             @as(*align(1) u32, @ptrCast(texelPtr0 + @sizeOf(u32))).*,
                             @as(*align(1) u32, @ptrCast(texelPtr1 + @sizeOf(u32))).*,
                             @as(*align(1) u32, @ptrCast(texelPtr2 + @sizeOf(u32))).*,
                             @as(*align(1) u32, @ptrCast(texelPtr3 + @sizeOf(u32))).*,
                         };
 
-                        var sampleC: simd.u32x4 = .{
+                        const sampleC: simd.u32x4 = .{
                             @as(*align(1) u32, @ptrCast(pitchOffset0)).*,
                             @as(*align(1) u32, @ptrCast(pitchOffset1)).*,
                             @as(*align(1) u32, @ptrCast(pitchOffset2)).*,
                             @as(*align(1) u32, @ptrCast(pitchOffset3)).*,
                         };
 
-                        var sampleD: simd.u32x4 = .{
+                        const sampleD: simd.u32x4 = .{
                             @as(*align(1) u32, @ptrCast(pitchOffset0 + @sizeOf(u32))).*,
                             @as(*align(1) u32, @ptrCast(pitchOffset1 + @sizeOf(u32))).*,
                             @as(*align(1) u32, @ptrCast(pitchOffset2 + @sizeOf(u32))).*,
@@ -532,25 +532,25 @@ pub const loaded_bitmap = struct {
                         var texelArb: simd.i32x4 = @as(simd.i32x4, @bitCast(sampleA)) & maskff00ff;
                         var texelAag: simd.i32x4 = @as(simd.i32x4, @bitCast(sampleA >> @as(u5x4, @splat(8)))) & maskff00ff;
                         texelArb = simd.z._mm_mullo_epi16(texelArb, texelArb);
-                        var texelAa: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(texelAag >> @as(u5x4, @splat(16)))) & maskff); // cvtepi32
+                        const texelAa: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(texelAag >> @as(u5x4, @splat(16)))) & maskff); // cvtepi32
                         texelAag = simd.z._mm_mullo_epi16(texelAag, texelAag);
 
                         var texelBrb: simd.i32x4 = @as(simd.i32x4, @bitCast(sampleB)) & maskff00ff;
                         var texelBag: simd.i32x4 = @as(simd.i32x4, @bitCast(sampleB >> @as(u5x4, @splat(8)))) & maskff00ff;
                         texelBrb = simd.z._mm_mullo_epi16(texelBrb, texelBrb);
-                        var texelBa: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(texelBag >> @as(u5x4, @splat(16)))) & maskff);
+                        const texelBa: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(texelBag >> @as(u5x4, @splat(16)))) & maskff);
                         texelBag = simd.z._mm_mullo_epi16(texelBag, texelBag);
 
                         var texelCrb: simd.i32x4 = @as(simd.i32x4, @bitCast(sampleC)) & maskff00ff;
                         var texelCag: simd.i32x4 = @as(simd.i32x4, @bitCast(sampleC >> @as(u5x4, @splat(8)))) & maskff00ff;
                         texelCrb = simd.z._mm_mullo_epi16(texelCrb, texelCrb);
-                        var texelCa: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(texelCag >> @as(u5x4, @splat(16)))) & maskff);
+                        const texelCa: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(texelCag >> @as(u5x4, @splat(16)))) & maskff);
                         texelCag = simd.z._mm_mullo_epi16(texelCag, texelCag);
 
                         var texelDrb: simd.i32x4 = @as(simd.i32x4, @bitCast(sampleD)) & maskff00ff;
                         var texelDag: simd.i32x4 = @as(simd.i32x4, @bitCast(sampleD >> @as(u5x4, @splat(8)))) & maskff00ff;
                         texelDrb = simd.z._mm_mullo_epi16(texelDrb, texelDrb);
-                        var texelDa: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(texelDag >> @as(u5x4, @splat(16)))) & maskff);
+                        const texelDa: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(texelDag >> @as(u5x4, @splat(16)))) & maskff);
                         texelDag = simd.z._mm_mullo_epi16(texelDag, texelDag);
 
                         // var texelAb: simd.f32x4 = simd.z._mm_cvtepi32_ps(@bitCast(simd.i32x4, sampleA) & maskff);
@@ -576,24 +576,24 @@ pub const loaded_bitmap = struct {
                         var destb: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(originalDest)) & maskff);
                         var destg: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(originalDest >> @as(u5x4, @splat(8)))) & maskff);
                         var destr: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(originalDest >> @as(u5x4, @splat(16)))) & maskff);
-                        var desta: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(originalDest >> @as(u5x4, @splat(24)))) & maskff);
+                        const desta: simd.f32x4 = simd.z._mm_cvtepi32_ps(@as(simd.i32x4, @bitCast(originalDest >> @as(u5x4, @splat(24)))) & maskff);
 
                         // Notes (Manav): >> operation on simd.i32x4 doesn't generate vpsrld but vpsrad
-                        var texelAr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
-                        var texelAg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelAag & maskffff);
-                        var texelAb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelArb & maskffff);
+                        const texelAr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
+                        const texelAg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelAag & maskffff);
+                        const texelAb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelArb & maskffff);
 
-                        var texelBr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
-                        var texelBg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelBag & maskffff);
-                        var texelBb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelBrb & maskffff);
+                        const texelBr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
+                        const texelBg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelBag & maskffff);
+                        const texelBb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelBrb & maskffff);
 
-                        var texelCr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
-                        var texelCg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelCag & maskffff);
-                        var texelCb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelCrb & maskffff);
+                        const texelCr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
+                        const texelCg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelCag & maskffff);
+                        const texelCb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelCrb & maskffff);
 
-                        var texelDr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
-                        var texelDg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelDag & maskffff);
-                        var texelDb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelDrb & maskffff);
+                        const texelDr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
+                        const texelDg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelDag & maskffff);
+                        const texelDb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelDrb & maskffff);
 
                         // texelAr = texelAr * texelAr;
                         // texelAg = texelAg * texelAg;
@@ -1061,7 +1061,7 @@ pub const render_group = struct {
 
         var result: element_ptr_type = null;
 
-        var size: u32 = @sizeOf(element_type) + @sizeOf(render_group_entry_header);
+        const size: u32 = @sizeOf(element_type) + @sizeOf(render_group_entry_header);
 
         if ((self.pushBufferSize + size) < self.maxPushBufferSize) {
             const ptr = self.pushBufferBase + self.pushBufferSize;
@@ -1079,7 +1079,7 @@ pub const render_group = struct {
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
     pub fn PushBitmap2(self: *Self, ID: h.bitmap_id, height: f32, offset: h.v3, colour: h.v4) void {
-        var bitmap = self.assets.GetBitmap(ID);
+        const bitmap = self.assets.GetBitmap(ID);
         if (bitmap) |b| {
             self.PushBitmap(b, height, offset, colour);
         } else {
@@ -1186,7 +1186,7 @@ pub const render_group = struct {
             switch (header.entryType) {
                 .Clear => {
                     const entry = @as(*align(1) render_entry_clear, @ptrCast(data));
-                    var colour: h.v4 = entry.colour;
+                    const colour: h.v4 = entry.colour;
                     outputTarget.DrawRectangle(
                         .{ 0, 0 },
                         .{ @as(f32, @floatFromInt(outputTarget.width)), @as(f32, @floatFromInt(outputTarget.height)) },
@@ -1305,7 +1305,7 @@ pub const render_group = struct {
     pub fn NonTiledRenderGroupToOutput(self: *Self, outputTarget: *loaded_bitmap) void {
         assert((@intFromPtr(outputTarget.memory) & 15) == 0); // TODO (Manav): use alignment as a requirement in the stuct itself?
 
-        var clipRect = h.rect2i{
+        const clipRect = h.rect2i{
             .xMin = 0,
             .xMax = outputTarget.width,
             .yMin = 0,

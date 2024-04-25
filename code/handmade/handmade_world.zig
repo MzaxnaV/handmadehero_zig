@@ -129,7 +129,7 @@ pub fn GetWorldChunk(memoryArena: ?*h.memory_arena, w: *world, chunkX: i32, chun
 }
 
 inline fn RecanonicalizeCoord(chunkDim: f32, tile: *i32, tileRel: *f32) void {
-    var offSet = h.RoundF32ToInt(i32, tileRel.* / chunkDim);
+    const offSet = h.RoundF32ToInt(i32, tileRel.* / chunkDim);
     tile.* +%= offSet;
     tileRel.* -= @as(f32, @floatFromInt(offSet)) * chunkDim;
 
