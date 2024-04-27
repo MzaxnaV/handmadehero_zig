@@ -449,6 +449,17 @@ pub inline fn ClampV301(value: v3) v3 {
     return result;
 }
 
+pub inline fn ClampV401(value: v4) v4 {
+    const result = v4{
+        Clampf01(value[0]),
+        Clampf01(value[1]),
+        Clampf01(value[2]),
+        Clampf01(value[3]),
+    };
+
+    return result;
+}
+
 pub inline fn Lerp(a: f32, t: f32, b: f32) f32 {
     const result = (1 - t) * a + t * b;
     return result;

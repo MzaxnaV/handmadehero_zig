@@ -141,6 +141,13 @@ pub const hero_bitmap_ids = struct {
     torso: h.bitmap_id,
 };
 
+pub const particle = struct {
+    p: h.v3,
+    dP: h.v3,
+    colour: h.v4,
+    dColour: h.v4,
+};
+
 pub const game_state = struct {
     isInitialized: bool = false,
 
@@ -175,11 +182,14 @@ pub const game_state = struct {
     testDiffuse: h.loaded_bitmap,
     testNormal: h.loaded_bitmap,
 
-    generalEntropy: h.random_series,
+    effectsEntropy: h.random_series,
     tSine: f32,
 
     audioState: h.audio_state,
-    music: *h.playing_sound,
+    music: ?*h.playing_sound,
+
+    nextParticle: u32,
+    particles: [64]particle,
 };
 
 pub const task_with_memory = struct {

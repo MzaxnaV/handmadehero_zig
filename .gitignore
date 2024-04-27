@@ -4,6 +4,8 @@ zig-cache
 
 zig-out
 
+*.rdbg
+
 /data/test*
 
 /misc/*.s
