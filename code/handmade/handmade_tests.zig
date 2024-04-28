@@ -87,6 +87,17 @@ test "math" {
     try testing.expectEqual(h.XYZ(c4), h.RGB(c4));
     try testing.expectEqual(h.Sub(h.RGB(c4), h.v3{ 1, 1, 1 }), c3);
 
+    var c4v = c4;
+
+    h.SetX(&c4v, 9);
+    try testing.expectEqual(c4v, h.v4{ 9, h.Y(c4v), h.Z(c4v), h.W(c4v) });
+    h.SetY(&c4v, 8);
+    try testing.expectEqual(c4v, h.v4{ h.X(c4v), 8, h.Z(c4v), h.W(c4v) });
+    h.SetZ(&c4v, 7);
+    try testing.expectEqual(c4v, h.v4{ h.X(c4v), h.Y(c4v), 7, h.W(c4v) });
+    h.SetW(&c4v, 6);
+    try testing.expectEqual(c4v, h.v4{ h.X(c4v), h.Y(c4v), h.Z(c4v), 6 });
+
     try testing.expectEqual(h.Length(h.Normalize(c4)), 1.0); // float precision problems
 
     try testing.expectEqual(h.rect2.InitMinDim(.{ 3, 2 }, .{ 4, 3 }), h.rect2.InitMinDim(h.XY(c3), h.XY(c4)));

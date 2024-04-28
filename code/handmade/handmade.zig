@@ -1119,7 +1119,7 @@ pub export fn UpdateAndRender(
                     renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
-                    for (0..1) |_| {
+                    for (0..2) |_| {
                         const particle: *h.particle = &gameState.particles[gameState.nextParticle];
                         gameState.nextParticle += 1;
 
@@ -1127,10 +1127,19 @@ pub export fn UpdateAndRender(
                             gameState.nextParticle = 0;
                         }
 
-                        particle.p = .{ 0, 0, 0 };
-                        particle.dP = .{ 0, 1, 0 };
-                        particle.colour = .{ 1, 1, 1, 2 };
-                        particle.dColour = .{ 0, 0, 0, -1 };
+                        particle.p = .{ gameState.effectsEntropy.RandomBetweenF32(-0.25, 0.25), 0, 0 };
+                        particle.dP = .{
+                            gameState.effectsEntropy.RandomBetweenF32(-0.5, 0.5),
+                            gameState.effectsEntropy.RandomBetweenF32(0.7, 1),
+                            0,
+                        };
+                        particle.colour = .{
+                            gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
+                            gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
+                            gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
+                            1.0,
+                        };
+                        particle.dColour = .{ 0, 0, 0, -0.5 };
                     }
 
                     for (0..gameState.particles.len) |i| {
@@ -1141,9 +1150,12 @@ pub export fn UpdateAndRender(
                         // particle.colour += particle.dColour * gameInput.dtForFrame;
                         h.AddTo(&particle.colour, h.Scale(particle.dColour, gameInput.dtForFrame));
 
-                        const colour: h.v4 = h.ClampV401(particle.colour);
+                        var colour: h.v4 = h.ClampV401(particle.colour);
 
-                        renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 1.0, particle.p, colour);
+                        if (h.A(colour) > 0.9) {
+                            h.SetA(&colour, 0.9 * h.ClampMapToRange(1, h.A(colour), 0.9));
+                        }
+                        renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Head), 2.0, particle.p, colour);
                     }
 
                     DrawHitpoints(entity, renderGroup);

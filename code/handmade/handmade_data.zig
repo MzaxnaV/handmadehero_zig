@@ -189,7 +189,7 @@ pub const game_state = struct {
     music: ?*h.playing_sound,
 
     nextParticle: u32,
-    particles: [64]particle,
+    particles: [256]particle,
 };
 
 pub const task_with_memory = struct {
