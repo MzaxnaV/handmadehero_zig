@@ -539,7 +539,7 @@ pub export fn UpdateAndRender(
         const tilesPerHeight = 9;
 
         gameState.typicalFloorHeight = 3.0;
-        gameState.generalEntropy = h.RandomSeed(1234);
+        gameState.effectsEntropy = h.RandomSeed(1234);
 
         const worldChunkDimInMeters = h.v3{
             pixelsToMeters * groundBufferWidth,
@@ -741,7 +741,7 @@ pub export fn UpdateAndRender(
 
         tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(64), tranState);
 
-        gameState.music = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
+        gameState.music = null; // h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
         const groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushSlice(h.ground_buffer, groundBufferCount);
@@ -996,8 +996,16 @@ pub export fn UpdateAndRender(
             weightVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] = 1.0;
 
             // if (entity.facingDirection != 0) {
-            //     @import("std").debug.print("{}, {}, {}\n", .{ entity.facingDirection, h.asset_tag_id.Tag_FacingDirection, matchVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] });
-            //     @import("std").debug.print("{}, {}, {}\n", .{ entity.facingDirection, h.asset_tag_id.Tag_FacingDirection, weightVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] });
+            //     @import("std").debug.print("{}, {}, {}\n", .{
+            //         entity.facingDirection,
+            //         h.asset_tag_id.Tag_FacingDirection,
+            //         matchVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)],
+            //     });
+            //     @import("std").debug.print("{}, {}, {}\n", .{
+            //         entity.facingDirection,
+            //         h.asset_tag_id.Tag_FacingDirection,
+            //         weightVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)],
+            //     });
             // }
 
             // Update (pre-physics entity)
@@ -1029,7 +1037,7 @@ pub export fn UpdateAndRender(
                                             h.MakeEntitySpatial(sword, entity.p, h.Add(entity.dP, (h.Scale(dSwordV3, 5))));
                                             h.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
 
-                                            _ = h.PlaySound(&gameState.audioState, h.GetRandomSoundFrom(tranState.assets, .Asset_Bloop, &gameState.generalEntropy));
+                                            _ = h.PlaySound(&gameState.audioState, h.GetRandomSoundFrom(tranState.assets, .Asset_Bloop, &gameState.effectsEntropy));
                                         }
                                     },
 
@@ -1110,6 +1118,45 @@ pub export fn UpdateAndRender(
                     renderGroup.PushBitmap2(heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+
+                    for (0..2) |_| {
+                        const particle: *h.particle = &gameState.particles[gameState.nextParticle];
+                        gameState.nextParticle += 1;
+
+                        if (gameState.nextParticle >= gameState.particles.len) {
+                            gameState.nextParticle = 0;
+                        }
+
+                        particle.p = .{ gameState.effectsEntropy.RandomBetweenF32(-0.25, 0.25), 0, 0 };
+                        particle.dP = .{
+                            gameState.effectsEntropy.RandomBetweenF32(-0.5, 0.5),
+                            gameState.effectsEntropy.RandomBetweenF32(0.7, 1),
+                            0,
+                        };
+                        particle.colour = .{
+                            gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
+                            gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
+                            gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
+                            1.0,
+                        };
+                        particle.dColour = .{ 0, 0, 0, -0.5 };
+                    }
+
+                    for (0..gameState.particles.len) |i| {
+                        const particle: *h.particle = &gameState.particles[i];
+
+                        // particle.p += particle.dp * gameInput.dtForFrame;
+                        h.AddTo(&particle.p, h.Scale(particle.dP, gameInput.dtForFrame));
+                        // particle.colour += particle.dColour * gameInput.dtForFrame;
+                        h.AddTo(&particle.colour, h.Scale(particle.dColour, gameInput.dtForFrame));
+
+                        var colour: h.v4 = h.ClampV401(particle.colour);
+
+                        if (h.A(colour) > 0.9) {
+                            h.SetA(&colour, 0.9 * h.ClampMapToRange(1, h.A(colour), 0.9));
+                        }
+                        renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Head), 2.0, particle.p, colour);
+                    }
 
                     DrawHitpoints(entity, renderGroup);
                 },

@@ -90,15 +90,17 @@ pub fn PlaySound(audioState: *audio_state, soundID: h.sound_id) *playing_sound {
     return playingSound;
 }
 
-pub fn ChangeVolume(_: *audio_state, sound: *playing_sound, fadeDurationInSeconds: f32, volume: h.v2) void {
+pub fn ChangeVolume(_: *audio_state, sound: ?*playing_sound, fadeDurationInSeconds: f32, volume: h.v2) void {
     // _ = audioState;
-    if (fadeDurationInSeconds <= 0) {
-        sound.targetVolume = volume;
-        sound.currentVolume = sound.targetVolume;
-    } else {
-        const oneOverFade = 1 / fadeDurationInSeconds;
-        sound.targetVolume = volume;
-        sound.dCurrentVolume = h.Scale(h.Sub(sound.targetVolume, sound.currentVolume), oneOverFade);
+    if (sound) |s| {
+        if (fadeDurationInSeconds <= 0) {
+            s.targetVolume = volume;
+            s.currentVolume = s.targetVolume;
+        } else {
+            const oneOverFade = 1 / fadeDurationInSeconds;
+            s.targetVolume = volume;
+            s.dCurrentVolume = h.Scale(h.Sub(s.targetVolume, s.currentVolume), oneOverFade);
+        }
     }
 }
 

@@ -252,6 +252,15 @@ pub inline fn X(vec: anytype) f32 {
     return vec[0];
 }
 
+pub inline fn SetX(vec: anytype, val: f32) void {
+    comptime {
+        if (@TypeOf(vec) != *[vec.len]f32) {
+            @compileError("vec should be of the type *[N]f32");
+        }
+    }
+    vec[0] = val;
+}
+
 pub inline fn Y(vec: anytype) f32 {
     comptime {
         if (vec.len < 1) {
@@ -261,6 +270,15 @@ pub inline fn Y(vec: anytype) f32 {
     return vec[1];
 }
 
+pub inline fn SetY(vec: anytype, val: f32) void {
+    comptime {
+        if (@TypeOf(vec) != *[vec.len]f32 and vec.len > 1) {
+            @compileError("vec should be of the type *[N]f32 where N >= 1");
+        }
+    }
+    vec[1] = val;
+}
+
 pub inline fn Z(vec: anytype) f32 {
     comptime {
         if (vec.len < 2) {
@@ -268,6 +286,15 @@ pub inline fn Z(vec: anytype) f32 {
         }
     }
     return vec[2];
+}
+
+pub inline fn SetZ(vec: anytype, val: f32) void {
+    comptime {
+        if (@TypeOf(vec) != *[vec.len]f32 and vec.len > 2) {
+            @compileError("vec should be of the type *[N]f32 where N >= 2");
+        }
+    }
+    vec[2] = val;
 }
 
 /// w in xyzw
@@ -280,13 +307,28 @@ pub inline fn W(vec: anytype) f32 {
     return vec[3];
 }
 
+pub inline fn SetW(vec: anytype, val: f32) void {
+    comptime {
+        if (@TypeOf(vec) != *[vec.len]f32 and vec.len > 3) {
+            @compileError("vec should be of the type *[N]f32 where N >= 3");
+        }
+    }
+    vec[3] = val;
+}
+
 pub const R = X;
+pub const SetR = SetX;
 pub const G = Y;
+pub const SetG = SetY;
 pub const B = Z;
+pub const SetB = SetZ;
 pub const A = W;
+pub const SetA = SetW;
 
 pub const U = X;
+pub const SetU = SetX;
 pub const V = Y;
+pub const SetV = SetX;
 
 pub inline fn XY(vec: anytype) v2 {
     comptime {
@@ -444,6 +486,17 @@ pub inline fn ClampV301(value: v3) v3 {
         Clampf01(value[0]),
         Clampf01(value[1]),
         Clampf01(value[2]),
+    };
+
+    return result;
+}
+
+pub inline fn ClampV401(value: v4) v4 {
+    const result = v4{
+        Clampf01(value[0]),
+        Clampf01(value[1]),
+        Clampf01(value[2]),
+        Clampf01(value[3]),
     };
 
     return result;
