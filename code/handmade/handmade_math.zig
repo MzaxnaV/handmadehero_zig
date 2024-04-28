@@ -272,7 +272,7 @@ pub inline fn Y(vec: anytype) f32 {
 
 pub inline fn SetY(vec: anytype, val: f32) void {
     comptime {
-        if (@TypeOf(vec) != *[vec.len]f32 and vec.len > 1) {
+        if (@TypeOf(vec) != *[vec.len]f32 and vec.len < 1) {
             @compileError("vec should be of the type *[N]f32 where N >= 1");
         }
     }
@@ -290,7 +290,7 @@ pub inline fn Z(vec: anytype) f32 {
 
 pub inline fn SetZ(vec: anytype, val: f32) void {
     comptime {
-        if (@TypeOf(vec) != *[vec.len]f32 and vec.len > 2) {
+        if (@TypeOf(vec) != *[vec.len]f32 and vec.len < 2) {
             @compileError("vec should be of the type *[N]f32 where N >= 2");
         }
     }
@@ -309,7 +309,7 @@ pub inline fn W(vec: anytype) f32 {
 
 pub inline fn SetW(vec: anytype, val: f32) void {
     comptime {
-        if (@TypeOf(vec) != *[vec.len]f32 and vec.len > 3) {
+        if (@TypeOf(vec) != *[vec.len]f32 and vec.len < 3) {
             @compileError("vec should be of the type *[N]f32 where N >= 3");
         }
     }
@@ -328,7 +328,7 @@ pub const SetA = SetW;
 pub const U = X;
 pub const SetU = SetX;
 pub const V = Y;
-pub const SetV = SetX;
+pub const SetV = SetY;
 
 pub inline fn XY(vec: anytype) v2 {
     comptime {

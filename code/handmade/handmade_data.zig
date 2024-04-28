@@ -141,11 +141,20 @@ pub const hero_bitmap_ids = struct {
     torso: h.bitmap_id,
 };
 
+pub const particle_cel = struct {
+    density: f32,
+    velocityTimesDensity: h.v3,
+};
+
+pub const PARTICLE_CEL_DIM = 32;
+
 pub const particle = struct {
     p: h.v3,
     dP: h.v3,
+    ddP: h.v3,
     colour: h.v4,
     dColour: h.v4,
+    bitmapID: h.bitmap_id,
 };
 
 pub const game_state = struct {
@@ -190,6 +199,7 @@ pub const game_state = struct {
 
     nextParticle: u32,
     particles: [256]particle,
+    particleCels: [PARTICLE_CEL_DIM][PARTICLE_CEL_DIM]particle_cel,
 };
 
 pub const task_with_memory = struct {

@@ -1127,12 +1127,13 @@ pub export fn UpdateAndRender(
                             gameState.nextParticle = 0;
                         }
 
-                        particle.p = .{ gameState.effectsEntropy.RandomBetweenF32(-0.25, 0.25), 0, 0 };
+                        particle.p = .{ gameState.effectsEntropy.RandomBetweenF32(-0.05, 0.05), 0, 0 };
                         particle.dP = .{
-                            gameState.effectsEntropy.RandomBetweenF32(-0.5, 0.5),
-                            gameState.effectsEntropy.RandomBetweenF32(0.7, 1),
+                            gameState.effectsEntropy.RandomBetweenF32(-0.01, 0.01),
+                            7 * gameState.effectsEntropy.RandomBetweenF32(0.7, 1),
                             0,
                         };
+                        particle.ddP = .{ 0, -9.8, 0 };
                         particle.colour = .{
                             gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
                             gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
@@ -1140,22 +1141,122 @@ pub export fn UpdateAndRender(
                             1.0,
                         };
                         particle.dColour = .{ 0, 0, 0, -0.5 };
+                        particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Head, &gameState.effectsEntropy);
+                    }
+
+                    h.ZeroStruct(@TypeOf(gameState.particleCels), &gameState.particleCels);
+
+                    const gridScale = 0.25;
+                    const invGridScale = 1.0 / gridScale;
+                    const gridOrigin = h.v3{ -0.5 * gridScale * h.PARTICLE_CEL_DIM, 0, 0 };
+
+                    for (0..gameState.particles.len) |i| {
+                        const particle: *h.particle = &gameState.particles[i];
+
+                        const p = h.Scale(h.Sub(particle.p, gridOrigin), invGridScale);
+
+                        var x = h.TruncateF32ToI32(h.X(p));
+                        var y = h.TruncateF32ToI32(h.Y(p));
+
+                        if (x < 0) {
+                            x = 0;
+                        }
+                        if (x > h.PARTICLE_CEL_DIM - 1) {
+                            x = h.PARTICLE_CEL_DIM - 1;
+                        }
+
+                        if (y < 0) {
+                            y = 0;
+                        }
+                        if (y > h.PARTICLE_CEL_DIM - 1) {
+                            y = h.PARTICLE_CEL_DIM - 1;
+                        }
+
+                        const cel: *h.particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x)];
+                        const density = h.A(particle.colour);
+                        cel.density += density;
+                        // cel.velocityTimesDensity += density * particle.dP
+                        h.AddTo(&cel.velocityTimesDensity, h.Scale(particle.dP, density));
+                    }
+
+                    for (0..h.PARTICLE_CEL_DIM) |y| {
+                        for (0..h.PARTICLE_CEL_DIM) |x| {
+                            const cel: *h.particle_cel = &gameState.particleCels[y][x];
+
+                            const a = h.Clampf01(0.1 * cel.density);
+
+                            renderGroup.PushRect(
+                                h.Add(gridOrigin, h.Scale(h.v3{ @floatFromInt(x), @floatFromInt(y), 0 }, gridScale)),
+                                .{ gridScale * 1, gridScale * 1 },
+                                .{ a, a, a, 1 },
+                            );
+                        }
                     }
 
                     for (0..gameState.particles.len) |i| {
                         const particle: *h.particle = &gameState.particles[i];
 
-                        // particle.p += particle.dp * gameInput.dtForFrame;
-                        h.AddTo(&particle.p, h.Scale(particle.dP, gameInput.dtForFrame));
+                        const p = h.Scale(h.Sub(particle.p, gridOrigin), invGridScale);
+
+                        var x = h.TruncateF32ToI32(h.X(p));
+                        var y = h.TruncateF32ToI32(h.Y(p));
+
+                        if (x < 1) {
+                            x = 1;
+                        }
+                        if (x > h.PARTICLE_CEL_DIM - 2) {
+                            x = h.PARTICLE_CEL_DIM - 2;
+                        }
+
+                        if (y < 1) {
+                            y = 1;
+                        }
+                        if (y > h.PARTICLE_CEL_DIM - 2) {
+                            y = h.PARTICLE_CEL_DIM - 2;
+                        }
+
+                        const celCenter: *h.particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x)];
+                        const celLeft: *h.particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x - 1)];
+                        const celRight: *h.particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x + 1)];
+                        const celDown: *h.particle_cel = &gameState.particleCels[@intCast(y - 1)][@intCast(x)];
+                        const celUp: *h.particle_cel = &gameState.particleCels[@intCast(y + 1)][@intCast(x)];
+
+                        const dc = 1.0;
+                        var dispersion = h.v3{ 0, 0, 0 };
+                        // dispersion += dc * (celCenter.density - celLeft.density) * h.v3{ -1, 0, 0 };
+                        h.AddTo(&dispersion, h.Scale(h.v3{ -1, 0, 0 }, dc * (celCenter.density - celLeft.density)));
+                        // dispersion += dc * (celCenter.density - celRight.density) * h.v3{ 1, 0, 0 };
+                        h.AddTo(&dispersion, h.Scale(h.v3{ 1, 0, 0 }, dc * (celCenter.density - celRight.density)));
+                        // dispersion += dc * (celCenter.density - celDown.density) * h.v3{ 0, -1, 0 };
+                        h.AddTo(&dispersion, h.Scale(h.v3{ 0, -1, 0 }, dc * (celCenter.density - celDown.density)));
+                        // dispersion += dc * (celCenter.density - celUp.density) * h.v3{ 0, 1, 0 };
+                        h.AddTo(&dispersion, h.Scale(h.v3{ 0, 1, 0 }, dc * (celCenter.density - celUp.density)));
+
+                        const particleDDP = h.Add(particle.ddP, dispersion);
+
+                        // particle.p += 0.5* Square(gameInput.dtForFrame) * particleDDP + particle.dp * gameInput.dtForFrame;
+                        h.AddTo(&particle.p, h.Add(h.Scale(particleDDP, 0.5 * h.Square(gameInput.dtForFrame)), h.Scale(particle.dP, gameInput.dtForFrame)));
+
+                        // particle.dp += particleDDP * gameInput.dtForFrame;
+                        h.AddTo(&particle.dP, h.Scale(particleDDP, gameInput.dtForFrame));
+
                         // particle.colour += particle.dColour * gameInput.dtForFrame;
                         h.AddTo(&particle.colour, h.Scale(particle.dColour, gameInput.dtForFrame));
+
+                        if (h.Y(particle.p) < 0) {
+                            const coefficientOfRestitution = 0.3;
+                            const coefficientOfFriction = 0.7;
+                            h.SetY(&particle.p, -h.Y(particle.p));
+                            h.SetY(&particle.dP, -coefficientOfRestitution * h.Y(particle.dP));
+                            h.SetX(&particle.dP, coefficientOfFriction * h.X(particle.dP));
+                        }
 
                         var colour: h.v4 = h.ClampV401(particle.colour);
 
                         if (h.A(colour) > 0.9) {
                             h.SetA(&colour, 0.9 * h.ClampMapToRange(1, h.A(colour), 0.9));
                         }
-                        renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Head), 2.0, particle.p, colour);
+                        renderGroup.PushBitmap2(particle.bitmapID, 1.0, particle.p, colour);
                     }
 
                     DrawHitpoints(entity, renderGroup);
