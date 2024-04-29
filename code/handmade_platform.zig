@@ -245,10 +245,6 @@ pub inline fn Align(addr: usize, alignment: usize) usize {
     return addr + (alignment - 1) & ~(alignment - 1);
 }
 
-pub inline fn SafeTruncateU64(value: u64) u32 {
-    return @intCast(value);
-}
-
 pub inline fn Assert(expression: bool) void {
     if (HANDMADE_SLOW and !expression) unreachable;
 }

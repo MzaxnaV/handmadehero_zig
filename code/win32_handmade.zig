@@ -1202,7 +1202,7 @@ fn Win32ReadDataFromFile(source: *platform.file_handle, offset: u64, size: u64, 
             .hEvent = null,
         };
 
-        const fileSize32: u32 = platform.SafeTruncateU64(size);
+        const fileSize32: u32 = @intCast(size);
 
         var bytesRead: DWORD = 0;
         if (win32.ReadFile(handle.win32Handle, dest, fileSize32, &bytesRead, &overlapped) != 0 and fileSize32 == bytesRead) {} else {

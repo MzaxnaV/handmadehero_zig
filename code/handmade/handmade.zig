@@ -346,10 +346,10 @@ fn ClearBitmap(bitmap: *h.loaded_bitmap) void {
 fn MakeEmptyBitmap(arena: *h.memory_arena, width: i32, height: i32, clearToZero: bool) h.loaded_bitmap {
     var result = h.loaded_bitmap{};
 
-    result.width = width;
-    result.height = height;
-    result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
-    const totalBitmapSize = @as(usize, @intCast(result.width * result.height * platform.BITMAP_BYTES_PER_PIXEL));
+    result.width = @intCast(width);
+    result.height = @intCast(height);
+    result.pitch = @as(i16, @intCast(result.width)) * platform.BITMAP_BYTES_PER_PIXEL;
+    const totalBitmapSize: usize = @intCast(@as(i32, result.width) * @as(i32, result.height) * platform.BITMAP_BYTES_PER_PIXEL);
     result.memory = arena.PushSizeAlign(16, totalBitmapSize); // NOTE (Manav): force alignment by design, make aligned loaded bitmap ?
     if (clearToZero) {
         ClearBitmap(&result);
@@ -739,9 +739,9 @@ pub export fn UpdateAndRender(
             task.arena.SubArena(&tranState.tranArena, 16, platform.MegaBytes(1));
         }
 
-        tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(64), tranState);
+        tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(3), tranState);
 
-        gameState.music = null; // h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
+        gameState.music = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
         const groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushSlice(h.ground_buffer, groundBufferCount);
@@ -850,9 +850,9 @@ pub export fn UpdateAndRender(
     }
 
     var drawBuffer_ = h.loaded_bitmap{
-        .width = @as(i32, @intCast(buffer.width)),
-        .height = @as(i32, @intCast(buffer.height)),
-        .pitch = @as(i32, @intCast(buffer.pitch)),
+        .width = @intCast(buffer.width),
+        .height = @intCast(buffer.height),
+        .pitch = @intCast(buffer.pitch),
         .memory = @as([*]u8, @ptrCast(buffer.memory.?)),
     };
     const drawBuffer = &drawBuffer_;
@@ -1140,7 +1140,7 @@ pub export fn UpdateAndRender(
                             gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
                             1.0,
                         };
-                        particle.dColour = .{ 0, 0, 0, -0.5 };
+                        particle.dColour = .{ 0, 0, 0, -0.25 };
                         particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Head, &gameState.effectsEntropy);
                     }
 
@@ -1179,17 +1179,19 @@ pub export fn UpdateAndRender(
                         h.AddTo(&cel.velocityTimesDensity, h.Scale(particle.dP, density));
                     }
 
-                    for (0..h.PARTICLE_CEL_DIM) |y| {
-                        for (0..h.PARTICLE_CEL_DIM) |x| {
-                            const cel: *h.particle_cel = &gameState.particleCels[y][x];
+                    if (!NOT_IGNORE) {
+                        for (0..h.PARTICLE_CEL_DIM) |y| {
+                            for (0..h.PARTICLE_CEL_DIM) |x| {
+                                const cel: *h.particle_cel = &gameState.particleCels[y][x];
 
-                            const a = h.Clampf01(0.1 * cel.density);
+                                const a = h.Clampf01(0.1 * cel.density);
 
-                            renderGroup.PushRect(
-                                h.Add(gridOrigin, h.Scale(h.v3{ @floatFromInt(x), @floatFromInt(y), 0 }, gridScale)),
-                                .{ gridScale * 1, gridScale * 1 },
-                                .{ a, a, a, 1 },
-                            );
+                                renderGroup.PushRect(
+                                    h.Add(gridOrigin, h.Scale(h.v3{ @floatFromInt(x), @floatFromInt(y), 0 }, gridScale)),
+                                    .{ gridScale * 1, gridScale * 1 },
+                                    .{ a, a, a, 1 },
+                                );
+                            }
                         }
                     }
 

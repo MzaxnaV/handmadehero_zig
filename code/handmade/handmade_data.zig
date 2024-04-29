@@ -32,7 +32,7 @@ pub const memory_arena = struct {
         return self.PushSizeAlign(@alignOf(u32), size);
     }
 
-    pub inline fn PushSizeAlign(self: *memory_arena, comptime alignment: u5, sizeInit: platform.memory_index) [*]align(alignment) u8 {
+    pub fn PushSizeAlign(self: *memory_arena, comptime alignment: u5, sizeInit: platform.memory_index) [*]align(alignment) u8 {
         const alignmentOffset = self.GetAlignmentOffset(alignment);
 
         const size = sizeInit + alignmentOffset;
@@ -73,7 +73,7 @@ pub const memory_arena = struct {
         return @as([*]T, @ptrCast(self.PushSizeAlign(@alignOf(T), count * @sizeOf(T))));
     }
 
-    pub inline fn CheckArena(self: *memory_arena) void {
+    pub fn CheckArena(self: *memory_arena) void {
         platform.Assert(self.tempCount == 0);
     }
 

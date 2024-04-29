@@ -21,25 +21,25 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 const asset_tag_id = @import("handmade_asset_type_id").asset_tag_id;
 const asset_type_id = @import("handmade_asset_type_id").asset_type_id;
 
-pub const loaded_sound = struct {
+pub const loaded_sound = extern struct {
     /// it is `sampleCount` divided by `8`
+    samples: [2]?[*]i16 = undefined,
     sampleCount: u32 = 0,
     channelCount: u32 = 0,
-    samples: [2]?[*]i16 = undefined,
 };
 
-pub const asset_state = enum {
+pub const asset_state = enum(u32) {
     AssetState_Unloaded,
     AssetState_Queued,
     AssetState_Loaded,
     AssetState_Locked,
 };
 
-pub const asset_slot = struct {
+pub const asset_slot = extern struct {
     state: asset_state,
     data: extern union {
-        bitmap: ?*h.loaded_bitmap,
-        sound: ?*loaded_sound,
+        bitmap: h.loaded_bitmap,
+        sound: loaded_sound,
     },
 };
 
@@ -73,7 +73,7 @@ pub const asset_file = struct {
 
 pub const game_assets = struct {
     tranState: *h.transient_state,
-    assetArena: h.memory_arena,
+    arena: h.memory_arena,
 
     tagRange: [asset_tag_id.len()]f32,
 
@@ -105,7 +105,7 @@ pub const game_assets = struct {
         var result: ?*h.loaded_bitmap = null;
         if (@intFromEnum(slot.state) >= @intFromEnum(asset_state.AssetState_Loaded)) {
             @fence(.seq_cst);
-            result = slot.data.bitmap;
+            result = &slot.data.bitmap;
         }
 
         return result;
@@ -118,7 +118,7 @@ pub const game_assets = struct {
         var result: ?*loaded_sound = null;
         if (@intFromEnum(slot.state) >= @intFromEnum(asset_state.AssetState_Loaded)) {
             @fence(.seq_cst);
-            result = slot.data.sound;
+            result = &slot.data.sound;
         }
 
         return result;
@@ -132,7 +132,7 @@ pub const game_assets = struct {
     pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
         var assets: *game_assets = arena.PushStruct(game_assets);
 
-        assets.assetArena.SubArena(arena, 16, size);
+        assets.arena.SubArena(arena, 16, size);
         assets.tranState = tranState;
 
         for (0..asset_tag_id.len()) |tagType| {
@@ -294,21 +294,23 @@ inline fn GetFileHandleFor(assets: *game_assets, fileIndex: u32) *platform.file_
 pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
     if (ID.value == 0) return;
 
-    if (h.AtomicCompareExchange(asset_state, &assets.slots[ID.value].state, .AssetState_Queued, .AssetState_Unloaded) == null) {
+    const slot: *asset_slot = &assets.slots[ID.value];
+
+    if (h.AtomicCompareExchange(asset_state, &slot.state, .AssetState_Queued, .AssetState_Unloaded) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
             const a: *asset = &assets.assets[ID.value];
             const info: h.hha_bitmap = a.hha.data.bitmap;
-            const bitmap: *h.loaded_bitmap = assets.assetArena.PushStruct(h.loaded_bitmap);
+            const bitmap: *h.loaded_bitmap = &slot.data.bitmap;
 
             bitmap.alignPercentage = info.alignPercentage;
             bitmap.widthOverHeight = @as(f32, @floatFromInt(info.dim[0])) / @as(f32, @floatFromInt(info.dim[1]));
 
             bitmap.width = @intCast(info.dim[0]);
             bitmap.height = @intCast(info.dim[1]);
-            bitmap.pitch = 4 * @as(i32, @intCast(info.dim[0]));
-            const memorySize: u64 = @intCast(bitmap.pitch * bitmap.height);
+            bitmap.pitch = 4 * @as(i16, @intCast(info.dim[0]));
+            const memorySize: u64 = @intCast(@as(i32, bitmap.pitch) * @as(i32, bitmap.height));
 
-            bitmap.memory = assets.assetArena.PushSize(memorySize);
+            bitmap.memory = assets.arena.PushSize(memorySize);
 
             var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
             work.task = task;
@@ -318,11 +320,10 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
             work.size = memorySize;
             work.destination = bitmap.memory;
             work.finalState = .AssetState_Loaded;
-            work.slot.data = .{ .bitmap = bitmap };
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
-            assets.slots[ID.value].state = .AssetState_Unloaded;
+            slot.state = .AssetState_Unloaded;
         }
     }
 }
@@ -334,19 +335,21 @@ pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id) void {
 pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
     if (ID.value == 0) return;
 
-    if (h.AtomicCompareExchange(asset_state, &assets.slots[ID.value].state, .AssetState_Queued, .AssetState_Unloaded) == null) {
+    const slot: *asset_slot = &assets.slots[ID.value];
+
+    if (h.AtomicCompareExchange(asset_state, &slot.state, .AssetState_Queued, .AssetState_Unloaded) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
             const a: *asset = &assets.assets[ID.value];
             const info: *h.hha_sound = &a.hha.data.sound;
 
-            const sound: *loaded_sound = assets.assetArena.PushStruct(loaded_sound);
+            const sound: *loaded_sound = &slot.data.sound;
             sound.sampleCount = info.sampleCount;
             sound.channelCount = info.channelCount;
 
             const channelSize = sound.sampleCount * @sizeOf(i16);
             const memorySize = sound.channelCount * channelSize;
 
-            const memory = assets.assetArena.PushSize(memorySize);
+            const memory = assets.arena.PushSize(memorySize);
 
             var soundAt: [*]i16 = @alignCast(@ptrCast(memory));
             for (0..sound.channelCount) |channelIndex| {
@@ -362,13 +365,10 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             work.size = memorySize;
             work.destination = memory;
             work.finalState = .AssetState_Loaded;
-            work.slot.data = .{ .sound = sound };
-
-            work.finalState = .AssetState_Loaded;
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
-            assets.slots[ID.value].state = .AssetState_Unloaded;
+            slot.state = .AssetState_Unloaded;
         }
     }
 }
