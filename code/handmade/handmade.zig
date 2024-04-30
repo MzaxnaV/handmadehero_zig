@@ -346,9 +346,9 @@ fn ClearBitmap(bitmap: *h.loaded_bitmap) void {
 fn MakeEmptyBitmap(arena: *h.memory_arena, width: i32, height: i32, clearToZero: bool) h.loaded_bitmap {
     var result = h.loaded_bitmap{};
 
-    result.width = @intCast(width);
-    result.height = @intCast(height);
-    result.pitch = @as(i16, @intCast(result.width)) * platform.BITMAP_BYTES_PER_PIXEL;
+    result.width = width;
+    result.height = height;
+    result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
     const totalBitmapSize: usize = @intCast(@as(i32, result.width) * @as(i32, result.height) * platform.BITMAP_BYTES_PER_PIXEL);
     result.memory = arena.PushSizeAlign(16, totalBitmapSize); // NOTE (Manav): force alignment by design, make aligned loaded bitmap ?
     if (clearToZero) {

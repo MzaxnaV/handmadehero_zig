@@ -38,9 +38,9 @@ pub const loaded_bitmap = extern struct {
     alignPercentage: h.v2 = .{ 0, 0 },
     widthOverHeight: f32 = 0,
 
-    width: i16 = 0,
-    height: i16 = 0,
-    pitch: i16 = 0,
+    width: i32 = 0,
+    height: i32 = 0,
+    pitch: i32 = 0,
     memory: [*]u8 = undefined,
 
     // Draw routines -----------------------------------------------------------------------------------------------------------------------
