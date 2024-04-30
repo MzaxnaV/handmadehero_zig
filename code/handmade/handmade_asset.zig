@@ -32,38 +32,29 @@ pub const asset_state = enum(u32) {
     AssetState_Unloaded,
     AssetState_Queued,
     AssetState_Loaded,
-    AssetState_Locked,
     AssetState_StateMask = 0xfff,
 
-    AssetState_Sound = 0x1000,
-    AssetState_Bitmap = 0x2000,
-    AssetState_TypeMask = 0xf000,
+    AssetState_Lock = 0x10000,
 
-    // TODO (Manav):
-    // AssetState_Sound_Unloaded = 0x1000 | 0,
-    // AssetState_Sound_Queued = 0x1000 | 1,
-    // AssetState_Sound_Loaded = 0x1000 | 2,
-    // AssetState_Sound_Locked = 0x1000 | 3,
-
-    // AssetState_Bitmap_Unloaded = 0x2000 | 0,
-    // AssetState_Bitmap_Queued = 0x2000 | 1,
-    // AssetState_Bitmap_Loaded = 0x2000 | 2,
-    // AssetState_Bitmap_Locked = 0x2000 | 3,
-
-    pub fn or_operator(a: asset_state, b: asset_state) u32 {
-        return @intFromEnum(a) | @intFromEnum(b);
-    }
+    // TODO (Manav): use zig enum and combine some of the states to eliminate @intFromEnum()
 };
 
-pub const asset_slot = extern struct {
-    state: u32,
-    data: extern union { // TODO (Manav): use zig union instead ?
+pub const asset_memory_header = extern struct {
+    next: *align(1) asset_memory_header,
+    prev: *align(1) asset_memory_header,
+
+    assetIndex: u32,
+    totalSize: u32,
+
+    data: extern union {
         bitmap: h.loaded_bitmap,
         sound: loaded_sound,
     },
 };
 
-pub const asset = struct {
+pub const asset = extern struct {
+    state: u32,
+    header: *asset_memory_header,
     hha: h.hha_asset,
     fileIndex: u32,
 };
@@ -80,13 +71,6 @@ pub const asset_type = struct {
 pub const asset_group = struct {
     firstTagIndex: u32,
     onePastLastTagIndex: u32,
-};
-
-pub const asset_memory_header = extern struct {
-    next: *align(1) asset_memory_header,
-    prev: *align(1) asset_memory_header,
-    slotIndex: u32,
-    reserved: u32,
 };
 
 pub const asset_file = struct {
@@ -117,8 +101,6 @@ pub const game_assets = struct {
     assetCount: u32,
     assets: [*]asset,
 
-    slots: []asset_slot,
-
     assetTypes: [asset_type_id.count()]asset_type,
 
     // hhaContents: []u8,
@@ -129,14 +111,16 @@ pub const game_assets = struct {
     // DEBUGAssetType: ?*asset_type,
     // DEBUGAsset: ?*asset,
 
-    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id) ?*h.loaded_bitmap {
+    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id, mustBeLocked: bool) ?*h.loaded_bitmap {
         assert(ID.value <= self.assetCount);
-        const slot: *asset_slot = &self.slots[ID.value];
+        const asset_: *asset = &self.assets[ID.value];
 
         var result: ?*h.loaded_bitmap = null;
-        if (GetState(slot) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+        if (GetState(asset_) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+            platform.Assert(!mustBeLocked or IsLocked(asset_));
             @fence(.seq_cst);
-            result = &slot.data.bitmap;
+            result = &asset_.header.data.bitmap;
+            MoveHeaderToFront(self, asset_);
         }
 
         return result;
@@ -144,12 +128,13 @@ pub const game_assets = struct {
 
     pub inline fn GetSound(self: *game_assets, ID: h.sound_id) ?*loaded_sound {
         assert(ID.value <= self.assetCount);
-        const slot: *asset_slot = &self.slots[ID.value];
+        const asset_: *asset = &self.assets[ID.value];
 
         var result: ?*loaded_sound = null;
-        if (GetState(slot) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+        if (GetState(asset_) >= @intFromEnum(asset_state.AssetState_Loaded)) {
             @fence(.seq_cst);
-            result = &slot.data.sound;
+            result = &asset_.header.data.sound;
+            MoveHeaderToFront(self, asset_);
         }
 
         return result;
@@ -218,7 +203,7 @@ pub const game_assets = struct {
         }
 
         assets.assets = arena.PushSlice(asset, assets.assetCount).ptr;
-        assets.slots = arena.PushSlice(asset_slot, assets.assetCount);
+        // assets.assets = arena.PushSlice(asset, assets.assetCount);
         assets.tags = arena.PushSlice(h.hha_tag, assets.tagCount).ptr;
 
         h.ZeroStruct(h.hha_tag, &assets.tags[0]);
@@ -291,19 +276,19 @@ pub const game_assets = struct {
     }
 };
 
-inline fn GetType(slot: *asset_slot) u32 {
-    const result: u32 = slot.state & @intFromEnum(asset_state.AssetState_TypeMask);
-    return result;
+inline fn IsLocked(asset_: *asset) bool {
+    const result: u32 = asset_.state & @intFromEnum(asset_state.AssetState_Lock);
+    return result != 0;
 }
 
-inline fn GetState(slot: *asset_slot) u32 {
-    const result: u32 = slot.state & @intFromEnum(asset_state.AssetState_StateMask);
+inline fn GetState(asset_: *asset) u32 {
+    const result: u32 = asset_.state & @intFromEnum(asset_state.AssetState_StateMask);
     return result;
 }
 
 const load_asset_work = struct {
     task: *h.task_with_memory,
-    slot: *asset_slot,
+    asset_: *asset,
 
     handle: *platform.file_handle,
     offset: u64,
@@ -328,7 +313,7 @@ fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
     if (!platform.NoFileErrors(work.handle)) {
         h.ZeroSize(work.size, @ptrCast(work.destination));
     }
-    work.slot.state = work.finalState;
+    work.asset_.state = work.finalState;
 
     h.EndTaskWithMemory(work.task);
 }
@@ -360,44 +345,21 @@ const asset_memory_size = struct {
     section: u32 = 0,
 };
 
-fn GetSizeOfAsset(assets: *game_assets, t: u32, slotIndex: u32) asset_memory_size {
-    const a: *asset = &assets.assets[slotIndex];
-
-    var result: asset_memory_size = .{};
-
-    if (t == @intFromEnum(asset_state.AssetState_Sound)) {
-        const info: *h.hha_sound = &a.hha.data.sound;
-
-        result.section = info.sampleCount * @sizeOf(i16);
-        result.data = result.section * info.channelCount;
-    } else {
-        platform.Assert(t == @intFromEnum(asset_state.AssetState_Bitmap));
-
-        const info: h.hha_bitmap = a.hha.data.bitmap;
-
-        const width: u32 = info.dim[0];
-        const height: u32 = info.dim[1];
-
-        result.section = 4 * width;
-        result.data = result.section * height;
-    }
-
-    result.total = result.data + @sizeOf(asset_memory_header);
-
-    return result;
-}
-
-fn AddAssetHeaderToList(assets: *game_assets, slotIndex: u32, memory: [*]u8, size: asset_memory_size) void {
-    const header: *align(1) asset_memory_header = @ptrCast(memory + size.data);
-
+fn InsertAssetHeaderAtFront(assets: *game_assets, header: *align(1) asset_memory_header) void {
     const sentinel = &assets.loadedAssetSentinel;
 
-    header.slotIndex = slotIndex;
     header.prev = sentinel;
     header.next = sentinel.next;
 
     header.next.prev = header;
     header.prev.next = header;
+}
+
+fn AddAssetHeaderToList(assets: *game_assets, assetIndex: u32, size: asset_memory_size) void {
+    const header: *align(1) asset_memory_header = assets.assets[assetIndex].header;
+    header.assetIndex = assetIndex;
+    header.totalSize = size.total;
+    InsertAssetHeaderAtFront(assets, header);
 }
 
 fn RemoveAssetHeaderFromList(header: *align(1) asset_memory_header) void {
@@ -408,65 +370,86 @@ fn RemoveAssetHeaderFromList(header: *align(1) asset_memory_header) void {
     header.prev = undefined;
 }
 
-pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
+pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, locked: bool) void {
     if (ID.value == 0) return;
 
-    const slot: *asset_slot = &assets.slots[ID.value];
+    const asset_: *asset = &assets.assets[ID.value];
 
-    if (h.AtomicCompareExchange(u32, &slot.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
+    if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
-            const a: *asset = &assets.assets[ID.value];
-            const info: h.hha_bitmap = a.hha.data.bitmap;
-            const bitmap: *h.loaded_bitmap = &slot.data.bitmap;
+            const info: h.hha_bitmap = asset_.hha.data.bitmap;
 
+            var size: asset_memory_size = .{};
+
+            const width: u32 = info.dim[0];
+            const height: u32 = info.dim[1];
+
+            size.section = 4 * width;
+            size.data = size.section * height;
+
+            size.total = size.data + @sizeOf(asset_memory_header);
+
+            asset_.header = @alignCast(@ptrCast(AcquireAssetMemory(assets, size.total).?));
+
+            const bitmap: *h.loaded_bitmap = &asset_.header.data.bitmap;
             bitmap.alignPercentage = info.alignPercentage;
             bitmap.widthOverHeight = @as(f32, @floatFromInt(info.dim[0])) / @as(f32, @floatFromInt(info.dim[1]));
             bitmap.width = @intCast(info.dim[0]);
             bitmap.height = @intCast(info.dim[1]);
 
-            const size = GetSizeOfAsset(assets, @intFromEnum(asset_state.AssetState_Bitmap), ID.value);
             bitmap.pitch = @intCast(size.section);
-            bitmap.memory = @ptrCast(AcquireAssetMemory(assets, size.total).?); // assets.arena.PushSize(memorySize);
+            bitmap.memory = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
 
             var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
             work.task = task;
-            work.slot = &assets.slots[ID.value];
-            work.handle = GetFileHandleFor(assets, a.fileIndex);
-            work.offset = a.hha.dataOffset;
+            work.asset_ = &assets.assets[ID.value];
+            work.handle = GetFileHandleFor(assets, asset_.fileIndex);
+            work.offset = asset_.hha.dataOffset;
             work.size = size.data;
             work.destination = bitmap.memory;
-            work.finalState = asset_state.or_operator(.AssetState_Loaded, .AssetState_Bitmap);
+            work.finalState = @intFromEnum(asset_state.AssetState_Loaded) | (if (locked) @intFromEnum(asset_state.AssetState_Lock) else 0);
 
-            AddAssetHeaderToList(assets, ID.value, bitmap.memory, size);
+            asset_.state |= @intFromEnum(asset_state.AssetState_Lock);
+
+            if (!locked) {
+                AddAssetHeaderToList(assets, ID.value, size);
+            }
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
-            slot.state = @intFromEnum(asset_state.AssetState_Unloaded);
+            asset_.state = @intFromEnum(asset_state.AssetState_Unloaded);
         }
     }
 }
 
-pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id) void {
-    return LoadBitmap(assets, ID);
+pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id, locked: bool) void {
+    return LoadBitmap(assets, ID, locked);
 }
 
 pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
     if (ID.value == 0) return;
 
-    const slot: *asset_slot = &assets.slots[ID.value];
+    const asset_: *asset = &assets.assets[ID.value];
 
-    if (h.AtomicCompareExchange(u32, &slot.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
+    if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
-            const a: *asset = &assets.assets[ID.value];
-            const info: *h.hha_sound = &a.hha.data.sound;
+            const info: *h.hha_sound = &asset_.hha.data.sound;
 
-            const sound: *loaded_sound = &slot.data.sound;
+            var size: asset_memory_size = .{};
+
+            size.section = info.sampleCount * @sizeOf(i16);
+            size.data = size.section * info.channelCount;
+            size.total = size.data + @sizeOf(asset_memory_header);
+
+            asset_.header = @alignCast(@ptrCast(AcquireAssetMemory(assets, size.total).?));
+            const sound: *loaded_sound = &asset_.header.data.sound;
+
             sound.sampleCount = info.sampleCount;
             sound.channelCount = info.channelCount;
 
-            const size: asset_memory_size = GetSizeOfAsset(assets, @intFromEnum(asset_state.AssetState_Sound), ID.value);
             const channelSize = size.section;
-            const memory = AcquireAssetMemory(assets, size.total).?; // assets.arena.PushSize(memorySize);
+
+            const memory: *anyopaque = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
 
             var soundAt: [*]i16 = @alignCast(@ptrCast(memory));
             for (0..sound.channelCount) |channelIndex| {
@@ -476,18 +459,18 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
 
             var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
             work.task = task;
-            work.slot = &assets.slots[ID.value];
-            work.handle = GetFileHandleFor(assets, a.fileIndex);
-            work.offset = a.hha.dataOffset;
+            work.asset_ = &assets.assets[ID.value];
+            work.handle = GetFileHandleFor(assets, asset_.fileIndex);
+            work.offset = asset_.hha.dataOffset;
             work.size = size.data;
-            work.destination = memory;
-            work.finalState = asset_state.or_operator(.AssetState_Loaded, .AssetState_Sound);
+            work.destination = @ptrCast(memory);
+            work.finalState = @intFromEnum(asset_state.AssetState_Loaded);
 
-            AddAssetHeaderToList(assets, ID.value, @ptrCast(memory), size);
+            AddAssetHeaderToList(assets, ID.value, size);
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
-            slot.state = @intFromEnum(asset_state.AssetState_Unloaded);
+            asset_.state = @intFromEnum(asset_state.AssetState_Unloaded);
         }
     }
 }
@@ -544,7 +527,7 @@ pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: asset_type_id, matchV
     return result;
 }
 
-fn GetRandomSlotFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) u32 {
+fn GetRandomAssetFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) u32 {
     var result: u32 = 0;
 
     const assetType = assets.assetTypes[@intFromEnum(typeID)];
@@ -558,7 +541,7 @@ fn GetRandomSlotFrom(assets: *game_assets, typeID: asset_type_id, series: *h.ran
     return result;
 }
 
-fn GetFirstSlotFrom(assets: *game_assets, typeID: asset_type_id) u32 {
+fn GetFirstAssetFrom(assets: *game_assets, typeID: asset_type_id) u32 {
     var result: u32 = 0;
 
     const assetType = assets.assetTypes[@intFromEnum(typeID)];
@@ -576,12 +559,12 @@ pub inline fn GetBestMatchBitmapFrom(assets: *game_assets, typeID: asset_type_id
 }
 
 pub inline fn GetFirstBitmapFrom(assets: *game_assets, typeID: asset_type_id) h.bitmap_id {
-    const result = h.bitmap_id{ .value = GetFirstSlotFrom(assets, typeID) };
+    const result = h.bitmap_id{ .value = GetFirstAssetFrom(assets, typeID) };
     return result;
 }
 
 pub inline fn GetRandomBitmapFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) h.bitmap_id {
-    const result = h.bitmap_id{ .value = GetRandomSlotFrom(assets, typeID, series) };
+    const result = h.bitmap_id{ .value = GetRandomAssetFrom(assets, typeID, series) };
     return result;
 }
 
@@ -591,42 +574,48 @@ pub inline fn GetBestMatchSoundFrom(assets: *game_assets, typeID: asset_type_id,
 }
 
 pub inline fn GetFirstSoundFrom(assets: *game_assets, typeID: asset_type_id) h.sound_id {
-    const result = h.sound_id{ .value = GetFirstSlotFrom(assets, typeID) };
+    const result = h.sound_id{ .value = GetFirstAssetFrom(assets, typeID) };
     return result;
 }
 
 pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) h.sound_id {
-    const result = h.sound_id{ .value = GetRandomSlotFrom(assets, typeID, series) };
+    const result = h.sound_id{ .value = GetRandomAssetFrom(assets, typeID, series) };
     return result;
 }
 
-pub fn EvictAsset(assets: *game_assets, header: *align(1) asset_memory_header) void {
-    const slotIndex = header.slotIndex;
+fn MoveHeaderToFront(assets: *game_assets, asset_: *asset) void {
+    if (!IsLocked(asset_)) {
+        const header: *align(1) asset_memory_header = asset_.header;
 
-    const slot: *asset_slot = &assets.slots[slotIndex];
-
-    platform.Assert(GetState(slot) == @intFromEnum(asset_state.AssetState_Loaded));
-
-    const size = GetSizeOfAsset(assets, GetType(slot), slotIndex);
-    var memory: ?*anyopaque = null;
-    if (GetType(slot) == @intFromEnum(asset_state.AssetState_Sound)) {
-        memory = @ptrCast(&slot.data.sound.samples);
-    } else {
-        platform.Assert(GetType(slot) == @intFromEnum(asset_state.AssetState_Bitmap));
-        memory = @ptrCast(&slot.data.bitmap.memory);
+        RemoveAssetHeaderFromList(header);
+        InsertAssetHeaderAtFront(assets, header);
     }
+}
+
+pub fn EvictAsset(assets: *game_assets, header: *align(1) asset_memory_header) void {
+    const assetIndex = header.assetIndex;
+
+    const asset_: *asset = &assets.assets[assetIndex];
+
+    platform.Assert(GetState(asset_) == @intFromEnum(asset_state.AssetState_Loaded));
+    platform.Assert(!IsLocked(asset_));
 
     RemoveAssetHeaderFromList(header);
-    ReleaseAssetMemory(assets, size.total, memory);
+    ReleaseAssetMemory(assets, asset_.header.totalSize, asset_.header);
 
-    slot.state = @intFromEnum(asset_state.AssetState_Unloaded);
+    asset_.state = @intFromEnum(asset_state.AssetState_Unloaded);
+    asset_.header = undefined;
 }
 
 pub fn EvictAssetsAsNecessary(assets: *game_assets) void {
     while (assets.totalMemoryUsed > assets.targetMemoryUsed) {
-        const a = assets.loadedAssetSentinel.prev;
-        if (a != &assets.loadedAssetSentinel) {
-            EvictAsset(assets, a);
+        const header = assets.loadedAssetSentinel.prev;
+        if (header != &assets.loadedAssetSentinel) {
+            const asset_: *asset = &assets.assets[header.assetIndex];
+
+            if (GetState(asset_) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+                EvictAsset(assets, header);
+            }
         } else {
             platform.InvalidCodePath("");
             break;

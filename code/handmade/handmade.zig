@@ -259,7 +259,7 @@ fn FillGroundChunk(
         assert(width == height);
         const haldDim = h.Scale(.{ width, height }, 0.5);
 
-        const renderGroup = h.render_group.Allocate(tranState.assets, &task.arena, 0);
+        const renderGroup = h.render_group.Allocate(tranState.assets, &task.arena, 0, true);
         renderGroup.Orthographic(
             @intCast(buffer.width),
             @intCast(buffer.height),
@@ -346,9 +346,9 @@ fn ClearBitmap(bitmap: *h.loaded_bitmap) void {
 fn MakeEmptyBitmap(arena: *h.memory_arena, width: i32, height: i32, clearToZero: bool) h.loaded_bitmap {
     var result = h.loaded_bitmap{};
 
-    result.width = @intCast(width);
-    result.height = @intCast(height);
-    result.pitch = @as(i16, @intCast(result.width)) * platform.BITMAP_BYTES_PER_PIXEL;
+    result.width = width;
+    result.height = height;
+    result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
     const totalBitmapSize: usize = @intCast(@as(i32, result.width) * @as(i32, result.height) * platform.BITMAP_BYTES_PER_PIXEL);
     result.memory = arena.PushSizeAlign(16, totalBitmapSize); // NOTE (Manav): force alignment by design, make aligned loaded bitmap ?
     if (clearToZero) {
@@ -739,7 +739,7 @@ pub export fn UpdateAndRender(
             task.arena.SubArena(&tranState.tranArena, 16, platform.MegaBytes(1));
         }
 
-        tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(3), tranState);
+        tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(4), tranState);
 
         gameState.music = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
@@ -863,7 +863,7 @@ pub export fn UpdateAndRender(
     }
 
     const renderMemory = h.BeginTemporaryMemory(&tranState.tranArena);
-    const renderGroup = h.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(4));
+    const renderGroup = h.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(4), false);
 
     const widthOfMonitorInMeters = 0.635;
     const metersToPixels = @as(f32, @floatFromInt(drawBuffer.width)) * widthOfMonitorInMeters;
