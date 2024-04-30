@@ -34,10 +34,6 @@ pub const asset_state = enum(u32) {
     AssetState_Loaded,
     AssetState_StateMask = 0xfff,
 
-    AssetState_Sound = 0x1000,
-    AssetState_Bitmap = 0x2000,
-    AssetState_TypeMask = 0xf000,
-
     AssetState_Lock = 0x10000,
 
     // TODO (Manav):
@@ -48,25 +44,29 @@ pub const asset_state = enum(u32) {
     // AssetState_Bitmap_Unloaded = 0x2000 | 0,
     // AssetState_Bitmap_Queued = 0x2000 | 1,
     // AssetState_Bitmap_Loaded = 0x2000 | 2,
+};
 
-    pub fn or_operator(a: asset_state, b: asset_state) u32 {
-        return @intFromEnum(a) | @intFromEnum(b);
-    }
+pub const asset_memory_type = enum(u32) {
+    AssetState_Sound,
+    AssetState_Bitmap,
 };
 
 pub const asset_memory_header = extern struct {
     next: *align(1) asset_memory_header,
     prev: *align(1) asset_memory_header,
-    assetIndex: u32,
-    reserved: u32,
-};
 
-pub const asset = extern struct {
-    state: u32,
+    assetIndex: u32,
+    totalSize: u32,
+
     data: extern union { // TODO (Manav): use zig union instead ?
         bitmap: h.loaded_bitmap,
         sound: loaded_sound,
     },
+};
+
+pub const asset = extern struct {
+    state: u32,
+    header: *asset_memory_header,
     hha: h.hha_asset,
     fileIndex: u32,
 };
@@ -131,8 +131,8 @@ pub const game_assets = struct {
         if (GetState(asset_) >= @intFromEnum(asset_state.AssetState_Loaded)) {
             platform.Assert(!mustBeLocked or IsLocked(asset_));
             @fence(.seq_cst);
-            result = &asset_.data.bitmap;
-            MoveHeaderToFront(self, ID.value, asset_);
+            result = &asset_.header.data.bitmap;
+            MoveHeaderToFront(self, asset_);
         }
 
         return result;
@@ -145,8 +145,8 @@ pub const game_assets = struct {
         var result: ?*loaded_sound = null;
         if (GetState(asset_) >= @intFromEnum(asset_state.AssetState_Loaded)) {
             @fence(.seq_cst);
-            result = &asset_.data.sound;
-            MoveHeaderToFront(self, ID.value, asset_);
+            result = &asset_.header.data.sound;
+            MoveHeaderToFront(self, asset_);
         }
 
         return result;
@@ -293,11 +293,6 @@ inline fn IsLocked(asset_: *asset) bool {
     return result != 0;
 }
 
-inline fn GetType(asset_: *asset) u32 {
-    const result: u32 = asset_.state & @intFromEnum(asset_state.AssetState_TypeMask);
-    return result;
-}
-
 inline fn GetState(asset_: *asset) u32 {
     const result: u32 = asset_.state & @intFromEnum(asset_state.AssetState_StateMask);
     return result;
@@ -367,13 +362,13 @@ fn GetSizeOfAsset(assets: *game_assets, t: u32, assetIndex: u32) asset_memory_si
 
     var result: asset_memory_size = .{};
 
-    if (t == @intFromEnum(asset_state.AssetState_Sound)) {
+    if (t == @intFromEnum(asset_memory_type.AssetState_Sound)) {
         const info: *h.hha_sound = &a.hha.data.sound;
 
         result.section = info.sampleCount * @sizeOf(i16);
         result.data = result.section * info.channelCount;
     } else {
-        platform.Assert(t == @intFromEnum(asset_state.AssetState_Bitmap));
+        platform.Assert(t == @intFromEnum(asset_memory_type.AssetState_Bitmap));
 
         const info: h.hha_bitmap = a.hha.data.bitmap;
 
@@ -402,7 +397,7 @@ inline fn InsertAssetHeaderAtFront(assets: *game_assets, header: *align(1) asset
 inline fn AddAssetHeaderToList(assets: *game_assets, assetIndex: u32, memory: [*]u8, size: asset_memory_size) void {
     const header: *align(1) asset_memory_header = @ptrCast(memory + size.data);
     header.assetIndex = assetIndex;
-
+    header.totalSize = size.total;
     InsertAssetHeaderAtFront(assets, header);
 }
 
@@ -421,27 +416,28 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, locked: bool) void {
 
     if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
-            const a: *asset = &assets.assets[ID.value];
-            const info: h.hha_bitmap = a.hha.data.bitmap;
-            const bitmap: *h.loaded_bitmap = &asset_.data.bitmap;
+            const info: h.hha_bitmap = asset_.hha.data.bitmap;
 
+            const size = GetSizeOfAsset(assets, @intFromEnum(asset_memory_type.AssetState_Bitmap), ID.value);
+            asset_.header = @alignCast(@ptrCast(AcquireAssetMemory(assets, size.total).?));
+
+            const bitmap: *h.loaded_bitmap = &asset_.header.data.bitmap;
             bitmap.alignPercentage = info.alignPercentage;
             bitmap.widthOverHeight = @as(f32, @floatFromInt(info.dim[0])) / @as(f32, @floatFromInt(info.dim[1]));
             bitmap.width = @intCast(info.dim[0]);
             bitmap.height = @intCast(info.dim[1]);
 
-            const size = GetSizeOfAsset(assets, @intFromEnum(asset_state.AssetState_Bitmap), ID.value);
             bitmap.pitch = @intCast(size.section);
-            bitmap.memory = @ptrCast(AcquireAssetMemory(assets, size.total).?); // assets.arena.PushSize(memorySize);
+            bitmap.memory = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
 
             var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
             work.task = task;
             work.asset_ = &assets.assets[ID.value];
-            work.handle = GetFileHandleFor(assets, a.fileIndex);
-            work.offset = a.hha.dataOffset;
+            work.handle = GetFileHandleFor(assets, asset_.fileIndex);
+            work.offset = asset_.hha.dataOffset;
             work.size = size.data;
             work.destination = bitmap.memory;
-            work.finalState = asset_state.or_operator(.AssetState_Loaded, .AssetState_Bitmap) | (if (locked) @intFromEnum(asset_state.AssetState_Lock) else 0);
+            work.finalState = @intFromEnum(asset_state.AssetState_Loaded) | @intFromEnum(asset_memory_type.AssetState_Bitmap) | (if (locked) @intFromEnum(asset_state.AssetState_Lock) else 0);
 
             asset_.state |= @intFromEnum(asset_state.AssetState_Lock);
 
@@ -467,16 +463,18 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
 
     if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
-            const a: *asset = &assets.assets[ID.value];
-            const info: *h.hha_sound = &a.hha.data.sound;
+            const info: *h.hha_sound = &asset_.hha.data.sound;
 
-            const sound: *loaded_sound = &asset_.data.sound;
+            const size: asset_memory_size = GetSizeOfAsset(assets, @intFromEnum(asset_memory_type.AssetState_Sound), ID.value);
+            asset_.header = @alignCast(@ptrCast(AcquireAssetMemory(assets, size.total).?));
+            const sound: *loaded_sound = &asset_.header.data.sound;
+
             sound.sampleCount = info.sampleCount;
             sound.channelCount = info.channelCount;
 
-            const size: asset_memory_size = GetSizeOfAsset(assets, @intFromEnum(asset_state.AssetState_Sound), ID.value);
             const channelSize = size.section;
-            const memory = AcquireAssetMemory(assets, size.total).?; // assets.arena.PushSize(memorySize);
+
+            const memory: *anyopaque = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
 
             var soundAt: [*]i16 = @alignCast(@ptrCast(memory));
             for (0..sound.channelCount) |channelIndex| {
@@ -487,11 +485,11 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
             work.task = task;
             work.asset_ = &assets.assets[ID.value];
-            work.handle = GetFileHandleFor(assets, a.fileIndex);
-            work.offset = a.hha.dataOffset;
+            work.handle = GetFileHandleFor(assets, asset_.fileIndex);
+            work.offset = asset_.hha.dataOffset;
             work.size = size.data;
-            work.destination = memory;
-            work.finalState = asset_state.or_operator(.AssetState_Loaded, .AssetState_Sound);
+            work.destination = @ptrCast(memory);
+            work.finalState = @intFromEnum(asset_state.AssetState_Loaded) | @intFromEnum(asset_memory_type.AssetState_Sound);
 
             AddAssetHeaderToList(assets, ID.value, @ptrCast(memory), size);
 
@@ -610,19 +608,9 @@ pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: asset_type_id, se
     return result;
 }
 
-fn MoveHeaderToFront(assets: *game_assets, assetIndex: u32, asset_: *asset) void {
+fn MoveHeaderToFront(assets: *game_assets, asset_: *asset) void {
     if (!IsLocked(asset_)) {
-        const size = GetSizeOfAsset(assets, GetType(asset_), assetIndex);
-        var memory: [*]u8 = undefined;
-
-        if (GetType(asset_) == @intFromEnum(asset_state.AssetState_Sound)) {
-            memory = @ptrCast(asset_.data.bitmap.memory);
-        } else {
-            platform.Assert(GetType(asset_) == @intFromEnum(asset_state.AssetState_Bitmap));
-            memory = @ptrCast(&asset_.data.sound.samples[0]);
-        }
-
-        const header: *align(1) asset_memory_header = @ptrCast(memory + size.data);
+        const header: *align(1) asset_memory_header = asset_.header;
 
         RemoveAssetHeaderFromList(header);
         InsertAssetHeaderAtFront(assets, header);
@@ -637,19 +625,11 @@ pub fn EvictAsset(assets: *game_assets, header: *align(1) asset_memory_header) v
     platform.Assert(GetState(asset_) == @intFromEnum(asset_state.AssetState_Loaded));
     platform.Assert(!IsLocked(asset_));
 
-    const size = GetSizeOfAsset(assets, GetType(asset_), assetIndex);
-    var memory: ?*anyopaque = null;
-    if (GetType(asset_) == @intFromEnum(asset_state.AssetState_Sound)) {
-        memory = @ptrCast(&asset_.data.sound.samples);
-    } else {
-        platform.Assert(GetType(asset_) == @intFromEnum(asset_state.AssetState_Bitmap));
-        memory = @ptrCast(&asset_.data.bitmap.memory);
-    }
-
     RemoveAssetHeaderFromList(header);
-    ReleaseAssetMemory(assets, size.total, memory);
+    ReleaseAssetMemory(assets, asset_.header.totalSize, asset_.header);
 
     asset_.state = @intFromEnum(asset_state.AssetState_Unloaded);
+    asset_.header = undefined;
 }
 
 pub fn EvictAssetsAsNecessary(assets: *game_assets) void {
