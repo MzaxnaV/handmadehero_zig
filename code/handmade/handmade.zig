@@ -739,7 +739,7 @@ pub export fn UpdateAndRender(
             task.arena.SubArena(&tranState.tranArena, 16, platform.MegaBytes(1));
         }
 
-        tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(3), tranState);
+        tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(4), tranState);
 
         gameState.music = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
