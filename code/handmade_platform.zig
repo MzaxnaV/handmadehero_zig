@@ -182,6 +182,9 @@ pub const open_next_file = *const fn (fileGroup: *file_group) ?*file_handle;
 pub const read_data_from_file = *const fn (source: *file_handle, offset: u64, size: u64, dest: *anyopaque) void;
 pub const file_error = *const fn (source: *file_handle, message: []const u8) void;
 
+pub const platform_allocate_memory = *const fn (size: memory_index) ?*anyopaque;
+pub const platform_deallocate_memory = *const fn (memory: ?*anyopaque) void;
+
 pub inline fn NoFileErrors(handle: *file_handle) bool {
     const result = handle.noErrors;
     return result;
@@ -196,6 +199,9 @@ pub const api = struct {
     OpenNextFile: open_next_file,
     ReadDataFromFile: read_data_from_file,
     FileError: file_error,
+
+    AllocateMemory: platform_allocate_memory,
+    DeallocateMemory: platform_deallocate_memory,
 
     DEBUGFreeFileMemory: handmade_internal.debug_free_file_memory = undefined,
     DEBUGReadEntireFile: handmade_internal.debug_read_entire_file = undefined,

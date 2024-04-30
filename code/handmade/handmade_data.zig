@@ -13,6 +13,10 @@ const h = struct {
 
 const hi = platform.handmade_internal;
 
+// global variables -----------------------------------------------------------------------------------------------------------------------
+
+pub var platformAPI: platform.api = undefined;
+
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
 pub const memory_arena = struct {
@@ -345,5 +349,3 @@ pub fn AddCollisionRule(gameState: *game_state, unsortedStorageIndexA: u32, unso
         rule.storageIndexB = storageIndexB;
     }
 }
-
-pub var platformAPI: platform.api = undefined;

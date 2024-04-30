@@ -1226,6 +1226,15 @@ fn Win32FileError(source: *platform.file_handle, message: []const u8) void {
     source.noErrors = false;
 }
 
+fn Win32AllocateMemory(size: platform.memory_index) ?*anyopaque {
+    const memory = win32.VirtualAlloc(null, size, allocationReserveCommit, win32.PAGE_READWRITE);
+    return memory;
+}
+
+fn Win32DeallocateMemory(memory: ?*anyopaque) void {
+    _ = win32.VirtualFree(memory, 0, win32.MEM_RELEASE);
+}
+
 // fn Win32CloseFile(fileHandle: *platform.file_handle) void {
 //     _ = win32.CloseHandle(fileHandle);
 // }
@@ -1408,15 +1417,18 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     .AddEntry = Win32AddEntry,
                     .CompleteAllWork = Win32CompleteAllWork,
 
-                    .DEBUGFreeFileMemory = DEBUGWin32FreeFileMemory,
-                    .DEBUGReadEntireFile = DEBUGWin32ReadEntireFile,
-                    .DEBUGWriteEntireFile = DEBUGWin32WriteEntireFile,
-
                     .GetAllFilesOfTypeBegin = Win32GetAllFilesOfTypeBegin,
                     .GetAllFilesOfTypeEnd = Win32GetAllFilesOfTypeEnd,
                     .OpenNextFile = Win32OpenNextFile,
                     .ReadDataFromFile = Win32ReadDataFromFile,
                     .FileError = Win32FileError,
+
+                    .AllocateMemory = Win32AllocateMemory,
+                    .DeallocateMemory = Win32DeallocateMemory,
+
+                    .DEBUGFreeFileMemory = DEBUGWin32FreeFileMemory,
+                    .DEBUGReadEntireFile = DEBUGWin32ReadEntireFile,
+                    .DEBUGWriteEntireFile = DEBUGWin32WriteEntireFile,
                 },
 
                 .d = &globalDebug,

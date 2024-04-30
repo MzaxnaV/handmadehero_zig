@@ -33,11 +33,31 @@ pub const asset_state = enum(u32) {
     AssetState_Queued,
     AssetState_Loaded,
     AssetState_Locked,
+    AssetState_StateMask = 0xfff,
+
+    AssetState_Sound = 0x1000,
+    AssetState_Bitmap = 0x2000,
+    AssetState_TypeMask = 0xf000,
+
+    // TODO (Manav):
+    // AssetState_Sound_Unloaded = 0x1000 | 0,
+    // AssetState_Sound_Queued = 0x1000 | 1,
+    // AssetState_Sound_Loaded = 0x1000 | 2,
+    // AssetState_Sound_Locked = 0x1000 | 3,
+
+    // AssetState_Bitmap_Unloaded = 0x2000 | 0,
+    // AssetState_Bitmap_Queued = 0x2000 | 1,
+    // AssetState_Bitmap_Loaded = 0x2000 | 2,
+    // AssetState_Bitmap_Locked = 0x2000 | 3,
+
+    pub fn or_operator(a: asset_state, b: asset_state) u32 {
+        return @intFromEnum(a) | @intFromEnum(b);
+    }
 };
 
 pub const asset_slot = extern struct {
-    state: asset_state,
-    data: extern union {
+    state: u32,
+    data: extern union { // TODO (Manav): use zig union instead ?
         bitmap: h.loaded_bitmap,
         sound: loaded_sound,
     },
@@ -62,6 +82,13 @@ pub const asset_group = struct {
     onePastLastTagIndex: u32,
 };
 
+pub const asset_memory_header = extern struct {
+    next: *align(1) asset_memory_header,
+    prev: *align(1) asset_memory_header,
+    slotIndex: u32,
+    reserved: u32,
+};
+
 pub const asset_file = struct {
     handle: *platform.file_handle,
 
@@ -74,6 +101,10 @@ pub const asset_file = struct {
 pub const game_assets = struct {
     tranState: *h.transient_state,
     arena: h.memory_arena,
+
+    targetMemoryUsed: u64,
+    totalMemoryUsed: u64,
+    loadedAssetSentinel: asset_memory_header,
 
     tagRange: [asset_tag_id.len()]f32,
 
@@ -103,7 +134,7 @@ pub const game_assets = struct {
         const slot: *asset_slot = &self.slots[ID.value];
 
         var result: ?*h.loaded_bitmap = null;
-        if (@intFromEnum(slot.state) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+        if (GetState(slot) >= @intFromEnum(asset_state.AssetState_Loaded)) {
             @fence(.seq_cst);
             result = &slot.data.bitmap;
         }
@@ -116,7 +147,7 @@ pub const game_assets = struct {
         const slot: *asset_slot = &self.slots[ID.value];
 
         var result: ?*loaded_sound = null;
-        if (@intFromEnum(slot.state) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+        if (GetState(slot) >= @intFromEnum(asset_state.AssetState_Loaded)) {
             @fence(.seq_cst);
             result = &slot.data.sound;
         }
@@ -134,6 +165,11 @@ pub const game_assets = struct {
 
         assets.arena.SubArena(arena, 16, size);
         assets.tranState = tranState;
+
+        assets.totalMemoryUsed = 0;
+        assets.targetMemoryUsed = size;
+        assets.loadedAssetSentinel.next = &assets.loadedAssetSentinel;
+        assets.loadedAssetSentinel.prev = &assets.loadedAssetSentinel;
 
         for (0..asset_tag_id.len()) |tagType| {
             assets.tagRange[tagType] = 1000000.0;
@@ -255,6 +291,16 @@ pub const game_assets = struct {
     }
 };
 
+inline fn GetType(slot: *asset_slot) u32 {
+    const result: u32 = slot.state & @intFromEnum(asset_state.AssetState_TypeMask);
+    return result;
+}
+
+inline fn GetState(slot: *asset_slot) u32 {
+    const result: u32 = slot.state & @intFromEnum(asset_state.AssetState_StateMask);
+    return result;
+}
+
 const load_asset_work = struct {
     task: *h.task_with_memory,
     slot: *asset_slot,
@@ -264,7 +310,7 @@ const load_asset_work = struct {
     size: u64,
     destination: *anyopaque,
 
-    finalState: asset_state,
+    finalState: u32,
 };
 
 fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
@@ -279,9 +325,10 @@ fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
     @fence(.seq_cst);
 
-    if (platform.NoFileErrors(work.handle)) {
-        work.slot.state = work.finalState;
+    if (!platform.NoFileErrors(work.handle)) {
+        h.ZeroSize(work.size, @ptrCast(work.destination));
     }
+    work.slot.state = work.finalState;
 
     h.EndTaskWithMemory(work.task);
 }
@@ -291,12 +338,82 @@ inline fn GetFileHandleFor(assets: *game_assets, fileIndex: u32) *platform.file_
     return result;
 }
 
+inline fn AcquireAssetMemory(assets: *game_assets, size: platform.memory_index) ?*anyopaque {
+    const result = h.platformAPI.AllocateMemory(size);
+    if (result) |_| {
+        assets.totalMemoryUsed += size;
+    }
+
+    return result;
+}
+
+inline fn ReleaseAssetMemory(assets: *game_assets, size: platform.memory_index, memory: ?*anyopaque) void {
+    if (memory) |_| {
+        assets.totalMemoryUsed -= size;
+    }
+    h.platformAPI.DeallocateMemory(memory);
+}
+
+const asset_memory_size = struct {
+    total: u32 = 0,
+    data: u32 = 0,
+    section: u32 = 0,
+};
+
+fn GetSizeOfAsset(assets: *game_assets, t: u32, slotIndex: u32) asset_memory_size {
+    const a: *asset = &assets.assets[slotIndex];
+
+    var result: asset_memory_size = .{};
+
+    if (t == @intFromEnum(asset_state.AssetState_Sound)) {
+        const info: *h.hha_sound = &a.hha.data.sound;
+
+        result.section = info.sampleCount * @sizeOf(i16);
+        result.data = result.section * info.channelCount;
+    } else {
+        platform.Assert(t == @intFromEnum(asset_state.AssetState_Bitmap));
+
+        const info: h.hha_bitmap = a.hha.data.bitmap;
+
+        const width: u32 = info.dim[0];
+        const height: u32 = info.dim[1];
+
+        result.section = 4 * width;
+        result.data = result.section * height;
+    }
+
+    result.total = result.data + @sizeOf(asset_memory_header);
+
+    return result;
+}
+
+fn AddAssetHeaderToList(assets: *game_assets, slotIndex: u32, memory: [*]u8, size: asset_memory_size) void {
+    const header: *align(1) asset_memory_header = @ptrCast(memory + size.data);
+
+    const sentinel = &assets.loadedAssetSentinel;
+
+    header.slotIndex = slotIndex;
+    header.prev = sentinel;
+    header.next = sentinel.next;
+
+    header.next.prev = header;
+    header.prev.next = header;
+}
+
+fn RemoveAssetHeaderFromList(header: *align(1) asset_memory_header) void {
+    header.prev.next = header.next;
+    header.next.prev = header.prev;
+
+    header.next = undefined;
+    header.prev = undefined;
+}
+
 pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
     if (ID.value == 0) return;
 
     const slot: *asset_slot = &assets.slots[ID.value];
 
-    if (h.AtomicCompareExchange(asset_state, &slot.state, .AssetState_Queued, .AssetState_Unloaded) == null) {
+    if (h.AtomicCompareExchange(u32, &slot.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
             const a: *asset = &assets.assets[ID.value];
             const info: h.hha_bitmap = a.hha.data.bitmap;
@@ -304,26 +421,27 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
 
             bitmap.alignPercentage = info.alignPercentage;
             bitmap.widthOverHeight = @as(f32, @floatFromInt(info.dim[0])) / @as(f32, @floatFromInt(info.dim[1]));
-
             bitmap.width = @intCast(info.dim[0]);
             bitmap.height = @intCast(info.dim[1]);
-            bitmap.pitch = 4 * @as(i16, @intCast(info.dim[0]));
-            const memorySize: u64 = @intCast(@as(i32, bitmap.pitch) * @as(i32, bitmap.height));
 
-            bitmap.memory = assets.arena.PushSize(memorySize);
+            const size = GetSizeOfAsset(assets, @intFromEnum(asset_state.AssetState_Bitmap), ID.value);
+            bitmap.pitch = @intCast(size.section);
+            bitmap.memory = @ptrCast(AcquireAssetMemory(assets, size.total).?); // assets.arena.PushSize(memorySize);
 
             var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
             work.task = task;
             work.slot = &assets.slots[ID.value];
             work.handle = GetFileHandleFor(assets, a.fileIndex);
             work.offset = a.hha.dataOffset;
-            work.size = memorySize;
+            work.size = size.data;
             work.destination = bitmap.memory;
-            work.finalState = .AssetState_Loaded;
+            work.finalState = asset_state.or_operator(.AssetState_Loaded, .AssetState_Bitmap);
+
+            AddAssetHeaderToList(assets, ID.value, bitmap.memory, size);
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
-            slot.state = .AssetState_Unloaded;
+            slot.state = @intFromEnum(asset_state.AssetState_Unloaded);
         }
     }
 }
@@ -337,7 +455,7 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
 
     const slot: *asset_slot = &assets.slots[ID.value];
 
-    if (h.AtomicCompareExchange(asset_state, &slot.state, .AssetState_Queued, .AssetState_Unloaded) == null) {
+    if (h.AtomicCompareExchange(u32, &slot.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
         if (h.BeginTaskWithMemory(assets.tranState)) |task| {
             const a: *asset = &assets.assets[ID.value];
             const info: *h.hha_sound = &a.hha.data.sound;
@@ -346,10 +464,9 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             sound.sampleCount = info.sampleCount;
             sound.channelCount = info.channelCount;
 
-            const channelSize = sound.sampleCount * @sizeOf(i16);
-            const memorySize = sound.channelCount * channelSize;
-
-            const memory = assets.arena.PushSize(memorySize);
+            const size: asset_memory_size = GetSizeOfAsset(assets, @intFromEnum(asset_state.AssetState_Sound), ID.value);
+            const channelSize = size.section;
+            const memory = AcquireAssetMemory(assets, size.total).?; // assets.arena.PushSize(memorySize);
 
             var soundAt: [*]i16 = @alignCast(@ptrCast(memory));
             for (0..sound.channelCount) |channelIndex| {
@@ -362,13 +479,15 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             work.slot = &assets.slots[ID.value];
             work.handle = GetFileHandleFor(assets, a.fileIndex);
             work.offset = a.hha.dataOffset;
-            work.size = memorySize;
+            work.size = size.data;
             work.destination = memory;
-            work.finalState = .AssetState_Loaded;
+            work.finalState = asset_state.or_operator(.AssetState_Loaded, .AssetState_Sound);
+
+            AddAssetHeaderToList(assets, ID.value, @ptrCast(memory), size);
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
-            slot.state = .AssetState_Unloaded;
+            slot.state = @intFromEnum(asset_state.AssetState_Unloaded);
         }
     }
 }
@@ -479,4 +598,38 @@ pub inline fn GetFirstSoundFrom(assets: *game_assets, typeID: asset_type_id) h.s
 pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) h.sound_id {
     const result = h.sound_id{ .value = GetRandomSlotFrom(assets, typeID, series) };
     return result;
+}
+
+pub fn EvictAsset(assets: *game_assets, header: *align(1) asset_memory_header) void {
+    const slotIndex = header.slotIndex;
+
+    const slot: *asset_slot = &assets.slots[slotIndex];
+
+    platform.Assert(GetState(slot) == @intFromEnum(asset_state.AssetState_Loaded));
+
+    const size = GetSizeOfAsset(assets, GetType(slot), slotIndex);
+    var memory: ?*anyopaque = null;
+    if (GetType(slot) == @intFromEnum(asset_state.AssetState_Sound)) {
+        memory = @ptrCast(&slot.data.sound.samples);
+    } else {
+        platform.Assert(GetType(slot) == @intFromEnum(asset_state.AssetState_Bitmap));
+        memory = @ptrCast(&slot.data.bitmap.memory);
+    }
+
+    RemoveAssetHeaderFromList(header);
+    ReleaseAssetMemory(assets, size.total, memory);
+
+    slot.state = @intFromEnum(asset_state.AssetState_Unloaded);
+}
+
+pub fn EvictAssetsAsNecessary(assets: *game_assets) void {
+    while (assets.totalMemoryUsed > assets.targetMemoryUsed) {
+        const a = assets.loadedAssetSentinel.prev;
+        if (a != &assets.loadedAssetSentinel) {
+            EvictAsset(assets, a);
+        } else {
+            platform.InvalidCodePath("");
+            break;
+        }
+    }
 }
