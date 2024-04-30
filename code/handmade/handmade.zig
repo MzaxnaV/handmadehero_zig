@@ -259,7 +259,7 @@ fn FillGroundChunk(
         assert(width == height);
         const haldDim = h.Scale(.{ width, height }, 0.5);
 
-        const renderGroup = h.render_group.Allocate(tranState.assets, &task.arena, 0);
+        const renderGroup = h.render_group.Allocate(tranState.assets, &task.arena, 0, true);
         renderGroup.Orthographic(
             @intCast(buffer.width),
             @intCast(buffer.height),
@@ -863,7 +863,7 @@ pub export fn UpdateAndRender(
     }
 
     const renderMemory = h.BeginTemporaryMemory(&tranState.tranArena);
-    const renderGroup = h.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(4));
+    const renderGroup = h.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(4), false);
 
     const widthOfMonitorInMeters = 0.635;
     const metersToPixels = @as(f32, @floatFromInt(drawBuffer.width)) * widthOfMonitorInMeters;

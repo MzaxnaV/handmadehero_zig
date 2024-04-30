@@ -43,7 +43,6 @@ pub const asset_state = enum(u32) {
     // AssetState_Sound_Unloaded = 0x1000 | 0,
     // AssetState_Sound_Queued = 0x1000 | 1,
     // AssetState_Sound_Loaded = 0x1000 | 2,
-    // AssetState_Sound_Locked = 0x1000 | 3,
 
     // AssetState_Bitmap_Unloaded = 0x2000 | 0,
     // AssetState_Bitmap_Queued = 0x2000 | 1,
@@ -129,12 +128,13 @@ pub const game_assets = struct {
     // DEBUGAssetType: ?*asset_type,
     // DEBUGAsset: ?*asset,
 
-    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id) ?*h.loaded_bitmap {
+    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id, mustBeLocked: bool) ?*h.loaded_bitmap {
         assert(ID.value <= self.assetCount);
         const slot: *asset_slot = &self.slots[ID.value];
 
         var result: ?*h.loaded_bitmap = null;
         if (GetState(slot) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+            platform.Assert(!mustBeLocked or GetState(slot) == @intFromEnum(asset_state.AssetState_Locked));
             @fence(.seq_cst);
             result = &slot.data.bitmap;
         }
@@ -408,7 +408,7 @@ fn RemoveAssetHeaderFromList(header: *align(1) asset_memory_header) void {
     header.prev = undefined;
 }
 
-pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
+pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, locked: bool) void {
     if (ID.value == 0) return;
 
     const slot: *asset_slot = &assets.slots[ID.value];
@@ -435,9 +435,11 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
             work.offset = a.hha.dataOffset;
             work.size = size.data;
             work.destination = bitmap.memory;
-            work.finalState = asset_state.or_operator(.AssetState_Loaded, .AssetState_Bitmap);
+            work.finalState = asset_state.or_operator(if (locked) .AssetState_Locked else .AssetState_Loaded, .AssetState_Bitmap);
 
-            AddAssetHeaderToList(assets, ID.value, bitmap.memory, size);
+            if (!locked) {
+                AddAssetHeaderToList(assets, ID.value, bitmap.memory, size);
+            }
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
@@ -446,8 +448,8 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
     }
 }
 
-pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id) void {
-    return LoadBitmap(assets, ID);
+pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id, locked: bool) void {
+    return LoadBitmap(assets, ID, locked);
 }
 
 pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
@@ -624,9 +626,13 @@ pub fn EvictAsset(assets: *game_assets, header: *align(1) asset_memory_header) v
 
 pub fn EvictAssetsAsNecessary(assets: *game_assets) void {
     while (assets.totalMemoryUsed > assets.targetMemoryUsed) {
-        const a = assets.loadedAssetSentinel.prev;
-        if (a != &assets.loadedAssetSentinel) {
-            EvictAsset(assets, a);
+        const header = assets.loadedAssetSentinel.prev;
+        if (header != &assets.loadedAssetSentinel) {
+            const slot: *asset_slot = &assets.slots[header.slotIndex];
+
+            if (GetState(slot) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+                EvictAsset(assets, header);
+            }
         } else {
             platform.InvalidCodePath("");
             break;
