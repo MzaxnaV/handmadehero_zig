@@ -39,9 +39,9 @@ pub const asset_state = enum(u32) {
     // TODO (Manav): use zig enum and combine some of the states to eliminate @intFromEnum()
 };
 
-pub const asset_memory_header = extern struct {
-    next: *align(1) asset_memory_header,
-    prev: *align(1) asset_memory_header,
+pub const asset_memory_header = struct {
+    next: *asset_memory_header,
+    prev: *asset_memory_header,
 
     assetIndex: u32,
     totalSize: u32,
@@ -324,6 +324,8 @@ inline fn GetFileHandleFor(assets: *game_assets, fileIndex: u32) *platform.file_
 }
 
 inline fn AcquireAssetMemory(assets: *game_assets, size: platform.memory_index) ?*anyopaque {
+    EvictAssetsAsNecessary(assets);
+
     const result = h.platformAPI.AllocateMemory(size);
     if (result) |_| {
         assets.totalMemoryUsed += size;
@@ -345,7 +347,7 @@ const asset_memory_size = struct {
     section: u32 = 0,
 };
 
-fn InsertAssetHeaderAtFront(assets: *game_assets, header: *align(1) asset_memory_header) void {
+fn InsertAssetHeaderAtFront(assets: *game_assets, header: *asset_memory_header) void {
     const sentinel = &assets.loadedAssetSentinel;
 
     header.prev = sentinel;
@@ -356,7 +358,7 @@ fn InsertAssetHeaderAtFront(assets: *game_assets, header: *align(1) asset_memory
 }
 
 fn AddAssetHeaderToList(assets: *game_assets, assetIndex: u32, size: asset_memory_size) void {
-    const header: *align(1) asset_memory_header = assets.assets[assetIndex].header;
+    const header: *asset_memory_header = assets.assets[assetIndex].header;
     header.assetIndex = assetIndex;
     header.totalSize = size.total;
     InsertAssetHeaderAtFront(assets, header);
@@ -585,7 +587,7 @@ pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: asset_type_id, se
 
 fn MoveHeaderToFront(assets: *game_assets, asset_: *asset) void {
     if (!IsLocked(asset_)) {
-        const header: *align(1) asset_memory_header = asset_.header;
+        const header: *asset_memory_header = asset_.header;
 
         RemoveAssetHeaderFromList(header);
         InsertAssetHeaderAtFront(assets, header);
