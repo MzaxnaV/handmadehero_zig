@@ -82,9 +82,15 @@ pub const asset_file = struct {
     tagBase: u32,
 };
 
+pub const asset_memory_block = extern struct {
+    totalSize: u32,
+    usedSize: u32,
+};
+
 pub const game_assets = struct {
     tranState: *h.transient_state,
-    arena: h.memory_arena,
+
+    firstBlock: *asset_memory_block,
 
     targetMemoryUsed: u64,
     totalMemoryUsed: u64,
@@ -148,7 +154,10 @@ pub const game_assets = struct {
     pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
         var assets: *game_assets = arena.PushStruct(game_assets);
 
-        assets.arena.SubArena(arena, 16, size);
+        // assets.arena.SubArena(arena, 16, size);
+        assets.firstBlock = @ptrCast(arena.PushSizeAlign(16, size));
+        assets.firstBlock.totalSize = @intCast(size - @sizeOf(asset_memory_block));
+        assets.firstBlock.usedSize = 0;
         assets.tranState = tranState;
 
         assets.totalMemoryUsed = 0;
@@ -323,10 +332,29 @@ inline fn GetFileHandleFor(assets: *game_assets, fileIndex: u32) *platform.file_
     return result;
 }
 
-inline fn AcquireAssetMemory(assets: *game_assets, size: platform.memory_index) ?*anyopaque {
+fn AcquireAssetMemory(assets: *game_assets, size: platform.memory_index) ?*anyopaque {
     EvictAssetsAsNecessary(assets);
 
-    const result = h.platformAPI.AllocateMemory(size);
+    var result: ?*anyopaque = null;
+
+    var offset: usize = 0;
+
+    if (!NOT_IGNORE) {
+        result = h.platformAPI.AllocateMemory(size);
+    } else {
+        const block = assets.firstBlock;
+
+        const res_ptr = @intFromPtr(block) + @sizeOf(asset_memory_block) + block.usedSize;
+
+        offset = platform.GetAlignForwardOffset(res_ptr, 16);
+
+        platform.Assert(size + block.usedSize + offset < block.totalSize);
+
+        result = @ptrFromInt(res_ptr + offset);
+
+        block.usedSize += @intCast(size + offset);
+    }
+
     if (result) |_| {
         assets.totalMemoryUsed += size;
     }
@@ -338,7 +366,10 @@ inline fn ReleaseAssetMemory(assets: *game_assets, size: platform.memory_index, 
     if (memory) |_| {
         assets.totalMemoryUsed -= size;
     }
-    h.platformAPI.DeallocateMemory(memory);
+
+    if (!NOT_IGNORE) {
+        h.platformAPI.DeallocateMemory(memory);
+    } else {}
 }
 
 const asset_memory_size = struct {
