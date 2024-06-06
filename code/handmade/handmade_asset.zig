@@ -82,15 +82,21 @@ pub const asset_file = struct {
     tagBase: u32,
 };
 
+pub const asset_memory_block_flags = enum(u64) {
+    AssetMemory_Used = 0x1,
+};
+
 pub const asset_memory_block = extern struct {
-    totalSize: u32,
-    usedSize: u32,
+    prev: *asset_memory_block,
+    next: *asset_memory_block,
+    flags: u64,
+    size: platform.memory_index,
 };
 
 pub const game_assets = struct {
     tranState: *h.transient_state,
 
-    firstBlock: *asset_memory_block,
+    memorySentinel: asset_memory_block,
 
     targetMemoryUsed: u64,
     totalMemoryUsed: u64,
@@ -154,14 +160,17 @@ pub const game_assets = struct {
     pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
         var assets: *game_assets = arena.PushStruct(game_assets);
 
-        // assets.arena.SubArena(arena, 16, size);
-        assets.firstBlock = @ptrCast(arena.PushSizeAlign(16, size));
-        assets.firstBlock.totalSize = @intCast(size - @sizeOf(asset_memory_block));
-        assets.firstBlock.usedSize = 0;
-        assets.tranState = tranState;
+        assets.memorySentinel.flags = 0;
+        assets.memorySentinel.size = 0;
+        assets.memorySentinel.prev = &assets.memorySentinel;
+        assets.memorySentinel.next = &assets.memorySentinel;
 
+        _ = InsertBlock(&assets.memorySentinel, size, arena.PushSizeAlign(16, size));
+
+        assets.tranState = tranState;
         assets.totalMemoryUsed = 0;
         assets.targetMemoryUsed = size;
+
         assets.loadedAssetSentinel.next = &assets.loadedAssetSentinel;
         assets.loadedAssetSentinel.prev = &assets.loadedAssetSentinel;
 
@@ -332,27 +341,63 @@ inline fn GetFileHandleFor(assets: *game_assets, fileIndex: u32) *platform.file_
     return result;
 }
 
-fn AcquireAssetMemory(assets: *game_assets, size: platform.memory_index) ?*anyopaque {
-    EvictAssetsAsNecessary(assets);
+fn FindBlockForSize(assets: *game_assets, size: platform.memory_index) ?*asset_memory_block {
+    var result: ?*asset_memory_block = null;
 
+    var block: *asset_memory_block = assets.memorySentinel.next;
+    while (block != &assets.memorySentinel) : (block = block.next) {
+        if ((block.flags & @intFromEnum(asset_memory_block_flags.AssetMemory_Used)) == 0) {
+            if (block.size >= size) {
+                result = block;
+                break;
+            }
+        }
+    }
+
+    return result;
+}
+
+fn AcquireAssetMemory(assets: *game_assets, size_: platform.memory_index) ?*anyopaque {
     var result: ?*anyopaque = null;
 
-    var offset: usize = 0;
+    // NOTE (Manav): Align size forward assuming that blocks are always aligned (check AllocateGameAssets())
+    // so headers in LoadSound() and LoadBitmap() points to aligned memory address
+    const size = platform.Align(size_, 16);
 
     if (!NOT_IGNORE) {
+        EvictAssetsAsNecessary(assets);
         result = h.platformAPI.AllocateMemory(size);
     } else {
-        const block = assets.firstBlock;
+        while (true) {
+            if (FindBlockForSize(assets, size)) |block| {
+                block.flags |= @intFromEnum(asset_memory_block_flags.AssetMemory_Used);
 
-        const res_ptr = @intFromPtr(block) + @sizeOf(asset_memory_block) + block.usedSize;
+                const res_ptr = @intFromPtr(block) + @sizeOf(asset_memory_block);
 
-        offset = platform.GetAlignForwardOffset(res_ptr, 16);
+                platform.Assert(size <= block.size);
+                result = @ptrFromInt(res_ptr);
 
-        platform.Assert(size + block.usedSize + offset < block.totalSize);
+                const remainingSize = block.size - size;
+                const blockSplitThreshold = 4096;
+                if (remainingSize > blockSplitThreshold) {
+                    block.size -= remainingSize;
+                    _ = InsertBlock(block, remainingSize, @ptrFromInt(res_ptr + size));
+                }
 
-        result = @ptrFromInt(res_ptr + offset);
+                break;
+            } else {
+                var header: *asset_memory_header = assets.loadedAssetSentinel.prev;
+                while (header != &assets.loadedAssetSentinel) : (header = header.prev) {
+                    const asset_: *asset = &assets.assets[header.assetIndex];
 
-        block.usedSize += @intCast(size + offset);
+                    if (GetState(asset_) >= @intFromEnum(asset_state.AssetState_Loaded)) {
+                        // block = EvictAsset(assets, header);
+                        EvictAsset(assets, header);
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     if (result) |_| {
@@ -362,6 +407,20 @@ fn AcquireAssetMemory(assets: *game_assets, size: platform.memory_index) ?*anyop
     return result;
 }
 
+fn InsertBlock(prev: *asset_memory_block, size: u64, memory: *anyopaque) *asset_memory_block {
+    platform.Assert(size > @sizeOf(asset_memory_block));
+
+    var block: *asset_memory_block = @alignCast(@ptrCast(memory));
+    block.flags = 0;
+    block.size = size - @sizeOf(asset_memory_block);
+    block.prev = prev;
+    block.next = prev.next;
+    block.prev.next = block;
+    block.next.prev = block;
+
+    return block;
+}
+
 inline fn ReleaseAssetMemory(assets: *game_assets, size: platform.memory_index, memory: ?*anyopaque) void {
     if (memory) |_| {
         assets.totalMemoryUsed -= size;
@@ -369,7 +428,10 @@ inline fn ReleaseAssetMemory(assets: *game_assets, size: platform.memory_index, 
 
     if (!NOT_IGNORE) {
         h.platformAPI.DeallocateMemory(memory);
-    } else {}
+    } else {
+        const block = &(@as([*]asset_memory_block, @alignCast(@ptrCast(memory))) - 1)[0];
+        block.flags &= ~(@intFromEnum(asset_memory_block_flags.AssetMemory_Used));
+    }
 }
 
 const asset_memory_size = struct {
