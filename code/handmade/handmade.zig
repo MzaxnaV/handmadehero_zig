@@ -1421,8 +1421,6 @@ pub export fn UpdateAndRender(
     h.EndTemporaryMemory(simMemory);
     h.EndTemporaryMemory(renderMemory);
 
-    h.EvictAssetsAsNecessary(tranState.assets);
-
     gameState.worldArena.CheckArena();
     tranState.tranArena.CheckArena();
 }

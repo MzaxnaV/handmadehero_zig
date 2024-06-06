@@ -51,12 +51,7 @@ pub const memory_arena = struct {
     }
 
     pub inline fn GetAlignmentOffset(self: *memory_arena, comptime alignment: u5) platform.memory_index {
-        const resultPointer = self.base_addr + self.used;
-        const alignmentMask = alignment - 1;
-
-        const alignmentOffset = if ((resultPointer & alignmentMask) != 0) alignment - (resultPointer & alignmentMask) else 0;
-
-        return alignmentOffset;
+        return platform.GetAlignForwardOffset(self.base_addr + self.used, alignment);
     }
 
     pub inline fn GetSizeRemaining(self: *memory_arena, comptime alignment: u5) platform.memory_index {

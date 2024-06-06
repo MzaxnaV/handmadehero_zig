@@ -251,6 +251,12 @@ pub inline fn Align(addr: usize, alignment: usize) usize {
     return addr + (alignment - 1) & ~(alignment - 1);
 }
 
+pub inline fn GetAlignForwardOffset(resultPointer: memory_index, comptime alignment: u5) memory_index {
+    const alignmentMask = alignment - 1;
+    const alignmentOffset = if ((resultPointer & alignmentMask) != 0) alignment - (resultPointer & alignmentMask) else 0;
+    return alignmentOffset;
+}
+
 pub inline fn Assert(expression: bool) void {
     if (HANDMADE_SLOW and !expression) unreachable;
 }
