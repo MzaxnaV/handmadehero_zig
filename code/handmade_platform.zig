@@ -170,15 +170,28 @@ pub const complete_all_work = *const fn (queue: *work_queue) void;
 
 pub const file_handle = extern struct {
     noErrors: bool,
+    platform: ?*anyopaque,
 };
 
 pub const file_group = extern struct {
     fileCount: u32,
+    platform: ?*anyopaque,
 };
 
-pub const get_all_files_of_type_begin = *const fn (extension: []const u8) *file_group;
-pub const get_all_files_of_type_end = *const fn (fileGroup: ?*file_group) void;
-pub const open_next_file = *const fn (fileGroup: *file_group) ?*file_handle;
+pub const file_type = enum(u32) {
+    PlatformFileType_AssetFile,
+    PlatformFileType_SavedGameFile,
+
+    pub fn count() comptime_int {
+        comptime {
+            return @typeInfo(@This()).Enum.fields.len;
+        }
+    }
+};
+
+pub const get_all_files_of_type_begin = *const fn (fileType: file_type) file_group;
+pub const get_all_files_of_type_end = *const fn (fileGroup: *file_group) void;
+pub const open_next_file = *const fn (fileGroup: *file_group) file_handle;
 pub const read_data_from_file = *const fn (source: *file_handle, offset: u64, size: u64, dest: *anyopaque) void;
 pub const file_error = *const fn (source: *file_handle, message: []const u8) void;
 
