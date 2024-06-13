@@ -189,6 +189,7 @@ pub const game_state = struct {
 
     testDiffuse: h.loaded_bitmap,
     testNormal: h.loaded_bitmap,
+    testFont: h.loaded_bitmap,
 
     effectsEntropy: h.random_series,
     tSine: f32,

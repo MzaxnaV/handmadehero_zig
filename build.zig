@@ -23,6 +23,8 @@ pub fn build(b: *std.Build) void {
 
     const win32 = b.dependency("zigwin32", .{}).module("zigwin32");
 
+    const stb_truetype_data = "#define STB_TRUETYPE_IMPLEMENTATION\n#include \"stb_truetype.h\"\n";
+
     const lib = b.addSharedLibrary(.{
         .name = lib_name,
         .root_source_file = b.path("./code/handmade/handmade.zig"),
@@ -33,6 +35,12 @@ pub fn build(b: *std.Build) void {
     lib.root_module.addImport("handmade_platform", platform);
     lib.root_module.addImport("handmade_asset_type_id", asset_type_id);
     lib.root_module.addImport("simd", simd);
+    lib.root_module.addCSourceFile(.{ // NOTE: Need to add a source file to make zig compile the stb_truetype implementation
+        .file = b.addWriteFiles().add("std_truetype.c", stb_truetype_data),
+        .flags = &.{""},
+    });
+    lib.root_module.addIncludePath(b.path("./code/handmade/"));
+    lib.root_module.link_libc = true;
 
     const lib_tests = b.addTest(.{
         .root_source_file = b.path("./code/handmade/handmade_tests.zig"),

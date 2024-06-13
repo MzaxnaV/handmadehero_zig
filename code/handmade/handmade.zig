@@ -344,10 +344,13 @@ fn ClearBitmap(bitmap: *h.loaded_bitmap) void {
 }
 
 fn MakeEmptyBitmap(arena: *h.memory_arena, width: i32, height: i32, clearToZero: bool) h.loaded_bitmap {
-    var result = h.loaded_bitmap{};
+    var result = h.loaded_bitmap{
+        .alignPercentage = .{ 0.5, 0.5 },
+        .widthOverHeight = h.SafeRatiof1(@floatFromInt(width), @floatFromInt(height)),
+        .width = width,
+        .height = height,
+    };
 
-    result.width = width;
-    result.height = height;
     result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
     const totalBitmapSize: usize = @intCast(@as(i32, result.width) * @as(i32, result.height) * platform.BITMAP_BYTES_PER_PIXEL);
     result.memory = arena.PushSizeAlign(16, totalBitmapSize); // NOTE (Manav): force alignment by design, make aligned loaded bitmap ?
@@ -504,6 +507,45 @@ pub inline fn ChunkPosFromTilePos(w: *h.world, absTileX: i32, absTileY: i32, abs
     return result;
 }
 
+pub const s = @cImport({
+    @cInclude("stb_truetype.h");
+});
+
+pub fn MakeNothingsTest(arena: *h.memory_arena) h.loaded_bitmap {
+    const ttfFile = h.platformAPI.DEBUGReadEntireFile("c:/windows/fonts/arialbd.ttf");
+
+    var font = s.stbtt_fontinfo{};
+    _ = s.stbtt_InitFont(&font, ttfFile.contents, s.stbtt_GetFontOffsetForIndex(ttfFile.contents, 0));
+
+    var width: i32 = 0;
+    var height: i32 = 0;
+    var xOffset: i32 = 0;
+    var yOffset: i32 = 0;
+
+    const monoBitmap: [*]u8 = s.stbtt_GetCodepointBitmap(&font, 0, s.stbtt_ScaleForPixelHeight(&font, 128.0), 'N', &width, &height, &xOffset, &yOffset);
+
+    const result = MakeEmptyBitmap(arena, width, height, false);
+
+    var source: [*]u8 = monoBitmap;
+    var destRow: [*]u8 = result.memory + @as(usize, @intCast((height - 1) * result.pitch));
+    for (0..@intCast(height)) |_| {
+        var dest: [*]u32 = @alignCast(@ptrCast(destRow));
+        for (0..@intCast(width)) |_| {
+            const alpha: u32 = @intCast(source[0]);
+            source += 1;
+
+            dest[0] = ((alpha << 24) | (alpha << 16) | (alpha << 8) | (alpha << 0));
+            dest += 1;
+        }
+
+        destRow -= @as(usize, @intCast(result.pitch));
+    }
+
+    s.stbtt_FreeBitmap(monoBitmap, null);
+
+    return result;
+}
+
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(
@@ -551,6 +593,8 @@ pub export fn UpdateAndRender(
             gameMemory.permanentStorageSize - @sizeOf(h.game_state),
             gameMemory.permanentStorage + @sizeOf(h.game_state),
         );
+
+        gameState.testFont = MakeNothingsTest(&gameState.worldArena);
 
         h.InitializeAudioState(&gameState.audioState, &gameState.worldArena);
 
@@ -1258,7 +1302,8 @@ pub export fn UpdateAndRender(
                         if (h.A(colour) > 0.9) {
                             h.SetA(&colour, 0.9 * h.ClampMapToRange(1, h.A(colour), 0.9));
                         }
-                        renderGroup.PushBitmap2(particle.bitmapID, 1.0, particle.p, colour);
+                        // renderGroup.PushBitmap2(particle.bitmapID, 1.0, particle.p, colour);
+                        renderGroup.PushBitmap(&gameState.testFont, 0.2, particle.p, colour);
                     }
 
                     DrawHitpoints(entity, renderGroup);
