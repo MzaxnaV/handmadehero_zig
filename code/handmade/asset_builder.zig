@@ -3,8 +3,11 @@ const assert = std.debug.assert;
 
 const platform = @import("handmade_platform");
 
+const s = @cImport({
+    @cInclude("stb_truetype.h");
+});
+
 const h = struct {
-    usingnamespace @import("handmade_asset_type_id");
     usingnamespace @import("handmade_file_formats.zig");
     usingnamespace @import("handmade_math.zig");
 
@@ -353,6 +356,41 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
 
     return result;
 }
+
+// fn MakeNothingsTest(arena: *h.memory_arena) h.loaded_bitmap {
+//     const ttfFile = h.platformAPI.DEBUGReadEntireFile("c:/windows/fonts/arialbd.ttf");
+
+//     var font = s.stbtt_fontinfo{};
+//     _ = s.stbtt_InitFont(&font, ttfFile.contents, s.stbtt_GetFontOffsetForIndex(ttfFile.contents, 0));
+
+//     var width: i32 = 0;
+//     var height: i32 = 0;
+//     var xOffset: i32 = 0;
+//     var yOffset: i32 = 0;
+
+//     const monoBitmap: [*]u8 = s.stbtt_GetCodepointBitmap(&font, 0, s.stbtt_ScaleForPixelHeight(&font, 128.0), 'N', &width, &height, &xOffset, &yOffset);
+
+//     const result = MakeEmptyBitmap(arena, width, height, false);
+
+//     var source: [*]u8 = monoBitmap;
+//     var destRow: [*]u8 = result.memory + @as(usize, @intCast((height - 1) * result.pitch));
+//     for (0..@intCast(height)) |_| {
+//         var dest: [*]u32 = @alignCast(@ptrCast(destRow));
+//         for (0..@intCast(width)) |_| {
+//             const alpha: u32 = @intCast(source[0]);
+//             source += 1;
+
+//             dest[0] = ((alpha << 24) | (alpha << 16) | (alpha << 8) | (alpha << 0));
+//             dest += 1;
+//         }
+
+//         destRow -= @as(usize, @intCast(result.pitch));
+//     }
+
+//     s.stbtt_FreeBitmap(monoBitmap, null);
+
+//     return result;
+// }
 
 const game_assets = struct {
     tagCount: u32 = 0,
