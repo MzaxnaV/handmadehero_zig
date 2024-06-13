@@ -1,5 +1,5 @@
 # References:
-Collection of resources, not all are related to Handmade Hero.
+Collection of stuff, not all are related to Handmade Hero.
 
 ## A
 - [Architecture Manuals, AMD64](https://developer.amd.com/resources/developer-guides-manuals/)
@@ -8,6 +8,9 @@ Collection of resources, not all are related to Handmade Hero.
 ## B
 - [Blending Layer Equations](https://nothings.org/gamedev/blend_equations_with_destination_alpha.txt), [Sean Barrel Gamedev](https://nothings.org/gamedev/)
 - [Book list, RealTimeRendering](https://www.realtimerendering.com/books.html)
+
+## C
+- [Continuum Mechanics](https://en.wikipedia.org/wiki/Continuum_mechanics)
 
 ## F
 - [Fabian Giesen blog](https://fgiesen.wordpress.com/)
