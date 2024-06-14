@@ -1142,7 +1142,22 @@ pub export fn UpdateAndRender(
                             1.0,
                         };
                         particle.dColour = .{ 0, 0, 0, -0.25 };
-                        particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
+
+                        var matchVectorFont = h.asset_vector{};
+                        var weightVectorFont = h.asset_vector{};
+
+                        const nothings = "NOTHINGS";
+
+                        matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
+                        weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
+
+                        particle.bitmapID = h.GetBestMatchBitmapFrom(
+                            tranState.assets,
+                            .Asset_Font,
+                            &matchVectorFont,
+                            &weightVectorFont,
+                        );
+                        // particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
                     }
 
                     h.ZeroStruct(@TypeOf(gameState.particleCels), &gameState.particleCels);
@@ -1259,7 +1274,7 @@ pub export fn UpdateAndRender(
                         if (h.A(colour) > 0.9) {
                             h.SetA(&colour, 0.9 * h.ClampMapToRange(1, h.A(colour), 0.9));
                         }
-                        renderGroup.PushBitmap2(particle.bitmapID, 1.0, particle.p, colour);
+                        renderGroup.PushBitmap2(particle.bitmapID, 0.2, particle.p, colour);
                     }
 
                     DrawHitpoints(entity, renderGroup);

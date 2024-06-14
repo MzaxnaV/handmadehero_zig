@@ -532,6 +532,7 @@ pub const random_series = struct {
         return result;
     }
 
+    /// `[0, choiceCount)`
     pub inline fn RandomChoice(self: *Self, choiceCount: u32) u32 {
         const result = self.NextRandomU32() % choiceCount;
         return result;
