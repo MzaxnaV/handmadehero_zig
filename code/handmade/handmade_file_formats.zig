@@ -12,6 +12,64 @@ pub fn HHA_CODE(comptime a: u8, comptime b: u8, comptime c: u8, comptime d: u8) 
 pub const HHA_MAGIC_VALUE = HHA_CODE('h', 'h', 'a', 'f');
 pub const HHA_VERSION = 0;
 
+pub const asset_type_id = enum(u32) {
+    Asset_NONE = 0,
+
+    //
+    // Bitmaps
+    //
+
+    Asset_Test_Bitmap,
+
+    Asset_Shadow,
+    Asset_Tree,
+    Asset_Sword,
+    // Asset_Stairwell,
+    Asset_Rock,
+
+    Asset_Grass,
+    Asset_Tuft,
+    Asset_Stone,
+
+    Asset_Head,
+    Asset_Cape,
+    Asset_Torso,
+
+    Asset_Font,
+
+    //
+    // Sounds
+    //
+
+    Asset_Bloop,
+    Asset_Crack,
+    Asset_Drop,
+    Asset_Glide,
+    Asset_Music,
+    Asset_Puhp,
+
+    Asset_test_stereo,
+
+    pub fn count() comptime_int {
+        comptime {
+            return @typeInfo(@This()).Enum.fields.len;
+        }
+    }
+};
+
+pub const asset_tag_id = enum {
+    Tag_Smoothness,
+    Tag_Flatness,
+    Tag_FacingDirection,
+    Tag_UnicodeCodepoint,
+
+    pub fn len() comptime_int {
+        comptime {
+            return @typeInfo(@This()).Enum.fields.len;
+        }
+    }
+};
+
 pub const bitmap_id = extern struct {
     value: u32 align(1) = 0,
 

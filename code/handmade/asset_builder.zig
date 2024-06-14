@@ -3,8 +3,11 @@ const assert = std.debug.assert;
 
 const platform = @import("handmade_platform");
 
+const s = @cImport({
+    @cInclude("stb_truetype.h");
+});
+
 const h = struct {
-    usingnamespace @import("handmade_asset_type_id");
     usingnamespace @import("handmade_file_formats.zig");
     usingnamespace @import("handmade_math.zig");
 
@@ -40,12 +43,16 @@ const h = struct {
 const asset_type = enum {
     AssetType_Sound,
     AssetType_Bitmap,
+    AssetType_Font,
 };
 
 const asset_source = struct {
     t: asset_type,
     filename: []const u8 = "",
-    firstSampleIndex: u32 = 0,
+    data: union {
+        codePoint: u8,
+        firstSampleIndex: u32,
+    },
 };
 
 const VERY_LARGE_NO = 4096;
@@ -54,10 +61,10 @@ const entire_file = struct {
     contents: []u8 = undefined,
 };
 
-fn ReadEntireFile(fileName: []const u8, allocator: std.mem.Allocator) !entire_file {
+fn ReadEntireFile(fileName: []const u8, absolute: bool, allocator: std.mem.Allocator) !entire_file {
     var result = entire_file{};
 
-    const prefix = "../data/";
+    const prefix = if (absolute) "" else "../data/";
 
     const newFileName = try std.mem.concat(allocator, u8, &[_][]const u8{ prefix, fileName });
 
@@ -96,7 +103,7 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !h.loaded_bitmap 
 
     var result = h.loaded_bitmap{};
 
-    const readResult = ReadEntireFile(fileName, allocator) catch |err| {
+    const readResult = ReadEntireFile(fileName, false, allocator) catch |err| {
         std.log.err("{}\nFilename: {s}", .{ err, fileName });
         return err;
     };
@@ -164,6 +171,66 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !h.loaded_bitmap 
         // result.memory += @as(usize, @intCast(result.pitch * (result.height - 1)));
         // result.pitch = -result.width;
     }
+
+    return result;
+}
+
+fn LoadGlyphBitmap(fileName: []const u8, codePoint: u8, allocator: std.mem.Allocator) !h.loaded_bitmap {
+    const ttfFile = ReadEntireFile(fileName, true, allocator) catch |err| {
+        std.log.err("{}\nFilename: {s}\n", .{ err, fileName });
+        return err;
+    };
+
+    var font = s.stbtt_fontinfo{};
+    _ = s.stbtt_InitFont(&font, ttfFile.contents.ptr, s.stbtt_GetFontOffsetForIndex(ttfFile.contents.ptr, 0));
+
+    var width: i32 = 0;
+    var height: i32 = 0;
+    var xOffset: i32 = 0;
+    var yOffset: i32 = 0;
+
+    const monoBitmap: [*]u8 = s.stbtt_GetCodepointBitmap(
+        &font,
+        0,
+        s.stbtt_ScaleForPixelHeight(&font, 128.0),
+        @intCast(codePoint),
+        &width,
+        &height,
+        &xOffset,
+        &yOffset,
+    );
+
+    var result = h.loaded_bitmap{};
+
+    result.width = width;
+    result.height = height;
+    result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
+
+    const memory = allocator.alloc(u8, @intCast(result.pitch * height)) catch |err| {
+        std.log.err("{}\nCodepoint: {c}\n", .{ err, codePoint });
+        return err;
+    };
+    result.memory = memory.ptr;
+    result.free = memory;
+
+    var source: [*]u8 = monoBitmap;
+    var destRow: [*]u8 = result.memory + @as(usize, @intCast((height - 1) * result.pitch));
+    for (0..@intCast(height)) |_| {
+        var dest: [*]u32 = @alignCast(@ptrCast(destRow));
+        for (0..@intCast(width)) |_| {
+            const alpha: u32 = @intCast(source[0]);
+            source += 1;
+
+            dest[0] = ((alpha << 24) | (alpha << 16) | (alpha << 8) | (alpha << 0));
+            dest += 1;
+        }
+
+        destRow -= @as(usize, @intCast(result.pitch));
+    }
+
+    s.stbtt_FreeBitmap(monoBitmap, null);
+
+    allocator.free(ttfFile.contents);
 
     return result;
 }
@@ -260,7 +327,7 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
 
     var result = h.loaded_sound{};
 
-    const readResult: entire_file = ReadEntireFile(fileName, allocator) catch |err| {
+    const readResult: entire_file = ReadEntireFile(fileName, false, allocator) catch |err| {
         std.log.err("{}\nFilename: {s}", .{ err, fileName });
         return err;
     };
@@ -415,12 +482,45 @@ const game_assets = struct {
 
         source.t = .AssetType_Bitmap;
         source.filename = fileName;
+        source.data = .{ .firstSampleIndex = 0 };
 
         self.assetIndex = result.value;
 
         return result;
     }
 
+    /// Defaults: ```alignPercentage = .{ 0.5, 0.5 }```
+    inline fn AddDefaultCharacterAsset(self: *game_assets, fontFile: [:0]const u8, codePoint: u8) h.bitmap_id {
+        return self.AddCharacterAsset(fontFile, codePoint, .{ 0.5, 0.5 });
+    }
+
+    fn AddCharacterAsset(self: *game_assets, fontFile: [:0]const u8, codePoint: u8, alignPercentage: [2]f32) h.bitmap_id {
+        assert(self.DEBUGAssetType != null);
+        assert(self.DEBUGAssetType.?.onePastLastAssetIndex < self.assets.len);
+
+        const result: h.bitmap_id = .{ .value = self.DEBUGAssetType.?.onePastLastAssetIndex };
+        self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
+
+        const source: *asset_source = &self.assetSources[result.value];
+        const hha: *h.hha_asset = &self.assets[result.value];
+
+        hha.firstTagIndex = self.tagCount;
+        hha.onePastLastTagIndex = hha.firstTagIndex;
+        hha.data = .{ .bitmap = h.hha_bitmap{
+            .dim = .{ 0, 0 },
+            .alignPercentage = alignPercentage,
+        } };
+
+        source.t = .AssetType_Font;
+        source.filename = fontFile;
+        source.data = .{ .codePoint = codePoint };
+
+        self.assetIndex = result.value;
+
+        return result;
+    }
+
+    /// Defaults: ```firstSampleIndex = 0, sampleCount = 0```
     inline fn AddDefaultSoundAsset(self: *game_assets, fileName: []const u8) h.sound_id {
         return self.AddSoundAsset(fileName, 0, 0);
     }
@@ -445,7 +545,7 @@ const game_assets = struct {
 
         source.t = .AssetType_Sound;
         source.filename = fileName;
-        source.firstSampleIndex = firstSampleIndex;
+        source.data = .{ .firstSampleIndex = firstSampleIndex };
 
         self.assetIndex = result.value;
 
@@ -523,26 +623,8 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
             dest.dataOffset = try out.getPos();
 
             switch (source.t) {
-                .AssetType_Bitmap => {
-                    const b = try LoadBMP(source.filename, allocator);
-                    defer allocator.free(b.free);
-
-                    dest.data.bitmap.dim = [2]u32{ @intCast(b.width), @intCast(b.height) };
-
-                    platform.Assert(b.pitch == (b.width * 4));
-
-                    std.debug.print("\tBitmap filename {s}:\n", .{source.filename});
-
-                    const data: []u8 = b.memory[0..@intCast(b.width * b.height * 4)];
-                    const bytesToWrite: []u8 = std.mem.sliceAsBytes(data);
-                    const bytesWritten: usize = try out.writer().write(bytesToWrite);
-
-                    std.debug.print("\t\tDataSize: {}\n", .{data.len});
-                    std.debug.print("\t\tBytesToWrite: {}\n", .{bytesToWrite.len});
-                    std.debug.print("\t\tBytesWritten: {}\n", .{bytesWritten});
-                },
                 .AssetType_Sound => {
-                    const w = try LoadWAV(source.filename, source.firstSampleIndex, dest.data.sound.sampleCount, allocator);
+                    const w = try LoadWAV(source.filename, source.data.firstSampleIndex, dest.data.sound.sampleCount, allocator);
                     defer allocator.free(w.free);
 
                     dest.data.sound.sampleCount = w.sampleCount;
@@ -559,6 +641,44 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
                         std.debug.print("{}:\t\tBytesToWrite: {}\n", .{ channelIndex, bytesToWrite.len });
                         std.debug.print("{}:\t\tBytesWritten: {}\n", .{ channelIndex, bytesWritten });
                     }
+                },
+                .AssetType_Bitmap => {
+                    const b = try LoadBMP(source.filename, allocator);
+
+                    defer allocator.free(b.free);
+
+                    dest.data.bitmap.dim = [2]u32{ @intCast(b.width), @intCast(b.height) };
+
+                    platform.Assert(b.pitch == (b.width * 4));
+
+                    std.debug.print("\tBitmap filename {s}:\n", .{source.filename});
+
+                    const data: []u8 = b.memory[0..@intCast(b.width * b.height * 4)];
+                    const bytesToWrite: []u8 = std.mem.sliceAsBytes(data);
+                    const bytesWritten: usize = try out.writer().write(bytesToWrite);
+
+                    std.debug.print("\t\tDataSize: {}\n", .{data.len});
+                    std.debug.print("\t\tBytesToWrite: {}\n", .{bytesToWrite.len});
+                    std.debug.print("\t\tBytesWritten: {}\n", .{bytesWritten});
+                },
+                .AssetType_Font => {
+                    const b = try LoadGlyphBitmap(source.filename, source.data.codePoint, allocator);
+
+                    defer allocator.free(b.free);
+
+                    dest.data.bitmap.dim = [2]u32{ @intCast(b.width), @intCast(b.height) };
+
+                    platform.Assert(b.pitch == (b.width * 4));
+
+                    std.debug.print("\tBitmapFont file {s}, codepoint: {c}:\n", .{ source.filename, source.data.codePoint });
+
+                    const data: []u8 = b.memory[0..@intCast(b.width * b.height * 4)];
+                    const bytesToWrite: []u8 = std.mem.sliceAsBytes(data);
+                    const bytesWritten: usize = try out.writer().write(bytesToWrite);
+
+                    std.debug.print("\t\tDataSize: {}\n", .{data.len});
+                    std.debug.print("\t\tBytesToWrite: {}\n", .{bytesToWrite.len});
+                    std.debug.print("\t\tBytesWritten: {}\n", .{bytesWritten});
                 },
             }
         }
@@ -615,6 +735,7 @@ fn WriteHero() void {
 
     WriteHHA(&assets, "test1.hha") catch |err| {
         std.debug.print("{}\n", .{err});
+        return;
     };
 }
 
@@ -656,8 +777,16 @@ fn WriteNonHero() void {
     _ = assets.AddBitmapAsset("test2/ground03.bmp", .{ 0.5, 0.5 });
     assets.EndAssetType();
 
+    assets.BeginAssetType(.Asset_Font);
+    for ('A'..'Z' + 1) |character| {
+        _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/arialbd.ttf", @intCast(character));
+        assets.AddTag(.Tag_UnicodeCodepoint, @floatFromInt(character));
+    }
+    assets.EndAssetType();
+
     WriteHHA(&assets, "test2.hha") catch |err| {
         std.debug.print("{}\n", .{err});
+        return;
     };
 }
 
@@ -713,6 +842,7 @@ fn WriteSounds() void {
 
     WriteHHA(&assets, "test3.hha") catch |err| {
         std.debug.print("{}\n", .{err});
+        return;
     };
 }
 

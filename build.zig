@@ -17,10 +17,6 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("./code/simd.zig"),
     });
 
-    const asset_type_id = b.createModule(.{
-        .root_source_file = b.path("./code/handmade_asset_type_id.zig"),
-    });
-
     const win32 = b.dependency("zigwin32", .{}).module("zigwin32");
 
     const lib = b.addSharedLibrary(.{
@@ -31,7 +27,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     lib.root_module.addImport("handmade_platform", platform);
-    lib.root_module.addImport("handmade_asset_type_id", asset_type_id);
     lib.root_module.addImport("simd", simd);
 
     const lib_tests = b.addTest(.{
@@ -56,14 +51,21 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("win32", win32);
     exe.root_module.addImport("handmade_platform", platform);
 
+    const stb_truetype_data = "#define STB_TRUETYPE_IMPLEMENTATION\n#include <stb_truetype.h>\n";
+
     const asset_builder = b.addExecutable(.{
         .name = "asset_builder",
         .root_source_file = b.path("./code/handmade/asset_builder.zig"),
         .target = target,
         .optimize = optimize,
     });
-    asset_builder.root_module.addImport("handmade_asset_type_id", asset_type_id);
     asset_builder.root_module.addImport("handmade_platform", platform);
+    asset_builder.root_module.addCSourceFile(.{ // NOTE: Need to add a source file to make zig compile the stb_truetype implementation
+        .file = b.addWriteFiles().add("std_truetype.c", stb_truetype_data),
+        .flags = &.{""},
+    });
+    asset_builder.root_module.addIncludePath(b.path("./code/handmade/"));
+    asset_builder.root_module.link_libc = true;
 
     const exe_install_step = b.addInstallArtifact(exe, .{
         .dest_dir = .{ .override = .{ .custom = "../build" } }, // TODO: change prefix to build instead

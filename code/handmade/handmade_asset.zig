@@ -18,9 +18,6 @@ const NOT_IGNORE = platform.NOT_IGNORE;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
-const asset_tag_id = @import("handmade_asset_type_id").asset_tag_id;
-const asset_type_id = @import("handmade_asset_type_id").asset_type_id;
-
 pub const loaded_sound = extern struct {
     /// it is `sampleCount` divided by `8`
     samples: [2]?[*]i16 = undefined,
@@ -60,7 +57,7 @@ pub const asset = extern struct {
 };
 
 pub const asset_vector = struct {
-    e: [asset_tag_id.len()]f32 = [1]f32{0} ** asset_tag_id.len(),
+    e: [h.asset_tag_id.len()]f32 = [1]f32{0} ** h.asset_tag_id.len(),
 };
 
 pub const asset_type = struct {
@@ -101,7 +98,7 @@ pub const game_assets = struct {
 
     loadedAssetSentinel: asset_memory_header,
 
-    tagRange: [asset_tag_id.len()]f32,
+    tagRange: [h.asset_tag_id.len()]f32,
 
     // fileCount: u32,
     files: []asset_file,
@@ -112,7 +109,7 @@ pub const game_assets = struct {
     assetCount: u32,
     assets: [*]asset,
 
-    assetTypes: [asset_type_id.count()]asset_type,
+    assetTypes: [h.asset_type_id.count()]asset_type,
 
     // hhaContents: []u8,
     // heroBitmaps: [4]hero_bitmaps,
@@ -171,11 +168,11 @@ pub const game_assets = struct {
         assets.loadedAssetSentinel.next = &assets.loadedAssetSentinel;
         assets.loadedAssetSentinel.prev = &assets.loadedAssetSentinel;
 
-        for (0..asset_tag_id.len()) |tagType| {
+        for (0..h.asset_tag_id.len()) |tagType| {
             assets.tagRange[tagType] = 1000000.0;
         }
 
-        assets.tagRange[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
+        assets.tagRange[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
 
         assets.tagCount = 1;
         assets.assetCount = 1;
@@ -235,7 +232,7 @@ pub const game_assets = struct {
         h.ZeroStruct(asset, &assets.assets[assetCount]);
         assetCount += 1;
 
-        for (0..asset_type_id.count()) |destTypeID| {
+        for (0..h.asset_type_id.count()) |destTypeID| {
             var destType: *asset_type = &assets.assetTypes[destTypeID];
             destType.firstAssetIndex = assetCount;
 
@@ -605,7 +602,7 @@ pub inline fn GetNextSoundInChain(assets: *game_assets, ID: h.sound_id) h.sound_
     return result;
 }
 
-pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) u32 {
+pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: h.asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) u32 {
     var result: u32 = 0;
 
     var bestDiff = platform.F32MAXIMUM;
@@ -640,7 +637,7 @@ pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: asset_type_id, matchV
     return result;
 }
 
-fn GetRandomAssetFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) u32 {
+fn GetRandomAssetFrom(assets: *game_assets, typeID: h.asset_type_id, series: *h.random_series) u32 {
     var result: u32 = 0;
 
     const assetType = assets.assetTypes[@intFromEnum(typeID)];
@@ -654,7 +651,7 @@ fn GetRandomAssetFrom(assets: *game_assets, typeID: asset_type_id, series: *h.ra
     return result;
 }
 
-fn GetFirstAssetFrom(assets: *game_assets, typeID: asset_type_id) u32 {
+fn GetFirstAssetFrom(assets: *game_assets, typeID: h.asset_type_id) u32 {
     var result: u32 = 0;
 
     const assetType = assets.assetTypes[@intFromEnum(typeID)];
@@ -666,32 +663,32 @@ fn GetFirstAssetFrom(assets: *game_assets, typeID: asset_type_id) u32 {
     return result;
 }
 
-pub inline fn GetBestMatchBitmapFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) h.bitmap_id {
+pub inline fn GetBestMatchBitmapFrom(assets: *game_assets, typeID: h.asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) h.bitmap_id {
     const result = h.bitmap_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
     return result;
 }
 
-pub inline fn GetFirstBitmapFrom(assets: *game_assets, typeID: asset_type_id) h.bitmap_id {
+pub inline fn GetFirstBitmapFrom(assets: *game_assets, typeID: h.asset_type_id) h.bitmap_id {
     const result = h.bitmap_id{ .value = GetFirstAssetFrom(assets, typeID) };
     return result;
 }
 
-pub inline fn GetRandomBitmapFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) h.bitmap_id {
+pub inline fn GetRandomBitmapFrom(assets: *game_assets, typeID: h.asset_type_id, series: *h.random_series) h.bitmap_id {
     const result = h.bitmap_id{ .value = GetRandomAssetFrom(assets, typeID, series) };
     return result;
 }
 
-pub inline fn GetBestMatchSoundFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) h.sound_id {
+pub inline fn GetBestMatchSoundFrom(assets: *game_assets, typeID: h.asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) h.sound_id {
     const result = h.sound_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
     return result;
 }
 
-pub inline fn GetFirstSoundFrom(assets: *game_assets, typeID: asset_type_id) h.sound_id {
+pub inline fn GetFirstSoundFrom(assets: *game_assets, typeID: h.asset_type_id) h.sound_id {
     const result = h.sound_id{ .value = GetFirstAssetFrom(assets, typeID) };
     return result;
 }
 
-pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_series) h.sound_id {
+pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: h.asset_type_id, series: *h.random_series) h.sound_id {
     const result = h.sound_id{ .value = GetRandomAssetFrom(assets, typeID, series) };
     return result;
 }

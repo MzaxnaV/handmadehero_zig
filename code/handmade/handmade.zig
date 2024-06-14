@@ -11,8 +11,6 @@ const h = struct {
     usingnamespace @import("handmade_render_group.zig");
     usingnamespace @import("handmade_sim_region.zig");
     usingnamespace @import("handmade_world.zig");
-
-    usingnamespace @import("handmade_asset_type_id");
 };
 
 const assert = platform.Assert;
@@ -344,10 +342,13 @@ fn ClearBitmap(bitmap: *h.loaded_bitmap) void {
 }
 
 fn MakeEmptyBitmap(arena: *h.memory_arena, width: i32, height: i32, clearToZero: bool) h.loaded_bitmap {
-    var result = h.loaded_bitmap{};
+    var result = h.loaded_bitmap{
+        .alignPercentage = .{ 0.5, 0.5 },
+        .widthOverHeight = h.SafeRatiof1(@floatFromInt(width), @floatFromInt(height)),
+        .width = width,
+        .height = height,
+    };
 
-    result.width = width;
-    result.height = height;
     result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
     const totalBitmapSize: usize = @intCast(@as(i32, result.width) * @as(i32, result.height) * platform.BITMAP_BYTES_PER_PIXEL);
     result.memory = arena.PushSizeAlign(16, totalBitmapSize); // NOTE (Manav): force alignment by design, make aligned loaded bitmap ?
@@ -1141,7 +1142,22 @@ pub export fn UpdateAndRender(
                             1.0,
                         };
                         particle.dColour = .{ 0, 0, 0, -0.25 };
-                        particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Head, &gameState.effectsEntropy);
+
+                        var matchVectorFont = h.asset_vector{};
+                        var weightVectorFont = h.asset_vector{};
+
+                        const nothings = "NOTHINGS";
+
+                        matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
+                        weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
+
+                        particle.bitmapID = h.GetBestMatchBitmapFrom(
+                            tranState.assets,
+                            .Asset_Font,
+                            &matchVectorFont,
+                            &weightVectorFont,
+                        );
+                        // particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
                     }
 
                     h.ZeroStruct(@TypeOf(gameState.particleCels), &gameState.particleCels);
@@ -1258,7 +1274,7 @@ pub export fn UpdateAndRender(
                         if (h.A(colour) > 0.9) {
                             h.SetA(&colour, 0.9 * h.ClampMapToRange(1, h.A(colour), 0.9));
                         }
-                        renderGroup.PushBitmap2(particle.bitmapID, 1.0, particle.p, colour);
+                        renderGroup.PushBitmap2(particle.bitmapID, 0.2, particle.p, colour);
                     }
 
                     DrawHitpoints(entity, renderGroup);

@@ -25,6 +25,8 @@ enum type_id: u32 {
     Asset_Cape,
     Asset_Torso,
 
+    Asset_Font,
+
     //
     // Sounds
     //
@@ -118,7 +120,7 @@ namespace vis {
                 (type_id::Asset_NONE) : {
                     //
                 }
-                (type_id::Asset_Test_Bitmap ... type_id::Asset_Torso) : {
+                (type_id::Asset_Test_Bitmap ... type_id::Asset_Font) : {
                     for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
                         u32 width = header.assets[ai].t.bitmap.dim[0];
                         u32 height = header.assets[ai].t.bitmap.dim[1];
