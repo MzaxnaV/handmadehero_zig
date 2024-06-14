@@ -35,6 +35,8 @@ pub const asset_type_id = enum(u32) {
     Asset_Cape,
     Asset_Torso,
 
+    Asset_Font,
+
     //
     // Sounds
     //
@@ -59,6 +61,7 @@ pub const asset_tag_id = enum {
     Tag_Smoothness,
     Tag_Flatness,
     Tag_FacingDirection,
+    Tag_UnicodeCodepoint,
 
     pub fn len() comptime_int {
         comptime {

@@ -1142,7 +1142,7 @@ pub export fn UpdateAndRender(
                             1.0,
                         };
                         particle.dColour = .{ 0, 0, 0, -0.25 };
-                        particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Head, &gameState.effectsEntropy);
+                        particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
                     }
 
                     h.ZeroStruct(@TypeOf(gameState.particleCels), &gameState.particleCels);
