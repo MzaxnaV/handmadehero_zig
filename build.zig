@@ -59,6 +59,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    asset_builder.root_module.addImport("win32", win32);
     asset_builder.root_module.addImport("handmade_platform", platform);
     asset_builder.root_module.addCSourceFile(.{ // NOTE: Need to add a source file to make zig compile the stb_truetype implementation
         .file = b.addWriteFiles().add("std_truetype.c", stb_truetype_data),

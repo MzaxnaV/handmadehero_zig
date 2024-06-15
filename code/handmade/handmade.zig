@@ -1274,7 +1274,7 @@ pub export fn UpdateAndRender(
                         if (h.A(colour) > 0.9) {
                             h.SetA(&colour, 0.9 * h.ClampMapToRange(1, h.A(colour), 0.9));
                         }
-                        renderGroup.PushBitmap2(particle.bitmapID, 0.2, particle.p, colour);
+                        renderGroup.PushBitmap2(particle.bitmapID, 1, particle.p, colour);
                     }
 
                     DrawHitpoints(entity, renderGroup);
@@ -1300,6 +1300,7 @@ pub export fn UpdateAndRender(
                         entity.tBob -= platform.Tau32;
                     }
                     const bobSin = h.Sin(2 * entity.tBob);
+
                     renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
                     renderGroup.PushBitmap2(heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
                 },
