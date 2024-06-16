@@ -29,11 +29,7 @@ pub const asset_state = enum(u32) {
     AssetState_Unloaded,
     AssetState_Queued,
     AssetState_Loaded,
-    AssetState_StateMask = 0xfff,
-
-    AssetState_Lock = 0x10000,
-
-    // TODO (Manav): use zig enum and combine some of the states to eliminate @intFromEnum()
+    AssetState_Operating,
 };
 
 pub const asset_memory_header = struct {
@@ -42,6 +38,7 @@ pub const asset_memory_header = struct {
 
     assetIndex: u32,
     totalSize: u32,
+    generationID: u32,
 
     data: extern union {
         bitmap: h.loaded_bitmap,
@@ -111,38 +108,51 @@ pub const game_assets = struct {
 
     assetTypes: [h.asset_type_id.count()]asset_type,
 
-    // hhaContents: []u8,
-    // heroBitmaps: [4]hero_bitmaps,
+    pub inline fn GetAsset(self: *game_assets, ID: u32) ?*asset_memory_header {
+        assert(ID <= self.assetCount);
+        const asset_: *asset = &self.assets[ID];
 
-    // DEBUGUsedAssetCount: u32,
-    // DEBUGUsedTagCount: u32,
-    // DEBUGAssetType: ?*asset_type,
-    // DEBUGAsset: ?*asset,
+        var result: ?*asset_memory_header = null;
+        while (true) {
+            const state = asset_.state;
+            if (state == @intFromEnum(asset_state.AssetState_Loaded)) {
+                if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Operating), state) == null) {
+                    result = asset_.header;
+                    MoveHeaderToFront(self, asset_);
 
-    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id, mustBeLocked: bool) ?*h.loaded_bitmap {
-        assert(ID.value <= self.assetCount);
-        const asset_: *asset = &self.assets[ID.value];
+                    // if (asset_.header.generationID < generationID) {
+                    //     asset_.header.generationID = generationID;
+                    // }
 
+                    @fence(.seq_cst);
+
+                    asset_.state = state;
+
+                    break;
+                }
+            } else if (state != @intFromEnum(asset_state.AssetState_Operating)) {
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id) ?*h.loaded_bitmap {
         var result: ?*h.loaded_bitmap = null;
-        if (GetState(asset_) >= @intFromEnum(asset_state.AssetState_Loaded)) {
-            platform.Assert(!mustBeLocked or IsLocked(asset_));
-            @fence(.seq_cst);
-            result = &asset_.header.data.bitmap;
-            MoveHeaderToFront(self, asset_);
+
+        if (self.GetAsset(ID.value)) |header| {
+            result = &header.data.bitmap;
         }
 
         return result;
     }
 
     pub inline fn GetSound(self: *game_assets, ID: h.sound_id) ?*loaded_sound {
-        assert(ID.value <= self.assetCount);
-        const asset_: *asset = &self.assets[ID.value];
-
         var result: ?*loaded_sound = null;
-        if (GetState(asset_) >= @intFromEnum(asset_state.AssetState_Loaded)) {
-            @fence(.seq_cst);
-            result = &asset_.header.data.sound;
-            MoveHeaderToFront(self, asset_);
+
+        if (self.GetAsset(ID.value)) |header| {
+            result = &header.data.sound;
         }
 
         return result;
@@ -288,16 +298,6 @@ pub const game_assets = struct {
     }
 };
 
-inline fn IsLocked(asset_: *asset) bool {
-    const result: u32 = asset_.state & @intFromEnum(asset_state.AssetState_Lock);
-    return result != 0;
-}
-
-inline fn GetState(asset_: *asset) u32 {
-    const result: u32 = asset_.state & @intFromEnum(asset_state.AssetState_StateMask);
-    return result;
-}
-
 const load_asset_work = struct {
     task: *h.task_with_memory,
     asset_: *asset,
@@ -419,12 +419,11 @@ fn AcquireAssetMemory(assets: *game_assets, size_: platform.memory_index) ?*anyo
         } else {
             var header: *asset_memory_header = assets.loadedAssetSentinel.prev;
             while (header != &assets.loadedAssetSentinel) : (header = header.prev) {
-                // TODO (Manav): investigate a potential bug here with evicting assets
+                // NOTE: fixing this
                 const asset_: *asset = &assets.assets[header.assetIndex];
 
-                if (GetState(asset_) >= @intFromEnum(asset_state.AssetState_Loaded)) {
-                    platform.Assert(GetState(asset_) == @intFromEnum(asset_state.AssetState_Loaded));
-                    platform.Assert(!IsLocked(asset_));
+                if (asset_.state >= @intFromEnum(asset_state.AssetState_Loaded)) {
+                    platform.Assert(asset_.state == @intFromEnum(asset_state.AssetState_Loaded));
 
                     RemoveAssetHeaderFromList(header);
 
@@ -480,7 +479,7 @@ fn RemoveAssetHeaderFromList(header: *align(1) asset_memory_header) void {
     header.prev = undefined;
 }
 
-pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, locked: bool) void {
+pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
     if (ID.value == 0) return;
 
     const asset_: *asset = &assets.assets[ID.value];
@@ -517,13 +516,9 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, locked: bool) void {
             work.offset = asset_.hha.dataOffset;
             work.size = size.data;
             work.destination = bitmap.memory;
-            work.finalState = @intFromEnum(asset_state.AssetState_Loaded) | (if (locked) @intFromEnum(asset_state.AssetState_Lock) else 0);
+            work.finalState = @intFromEnum(asset_state.AssetState_Loaded);
 
-            asset_.state |= @intFromEnum(asset_state.AssetState_Lock);
-
-            if (!locked) {
-                AddAssetHeaderToList(assets, ID.value, size);
-            }
+            AddAssetHeaderToList(assets, ID.value, size);
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
@@ -532,8 +527,8 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, locked: bool) void {
     }
 }
 
-pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id, locked: bool) void {
-    return LoadBitmap(assets, ID, locked);
+pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id) void {
+    return LoadBitmap(assets, ID);
 }
 
 pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
@@ -694,10 +689,8 @@ pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: h.asset_type_id, 
 }
 
 fn MoveHeaderToFront(assets: *game_assets, asset_: *asset) void {
-    if (!IsLocked(asset_)) {
-        const header: *asset_memory_header = asset_.header;
+    const header: *asset_memory_header = asset_.header;
 
-        RemoveAssetHeaderFromList(header);
-        InsertAssetHeaderAtFront(assets, header);
-    }
+    RemoveAssetHeaderFromList(header);
+    InsertAssetHeaderAtFront(assets, header);
 }

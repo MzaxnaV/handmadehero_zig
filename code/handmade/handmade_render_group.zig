@@ -993,10 +993,10 @@ pub const render_group = struct {
 
     missingResourceCount: u32,
 
-    assetsShouldBeLocked: bool,
-
     /// Create render group using the memory `arena`, initialize it and return a pointer to it.
     pub fn Allocate(assets: *h.game_assets, arena: *h.memory_arena, maxPushBufferSize: u32, assetsShouldBeLocked: bool) *Self {
+        _ = assetsShouldBeLocked;
+
         var pushBufferSize = maxPushBufferSize;
 
         var result: *render_group = arena.PushStruct(render_group);
@@ -1016,7 +1016,6 @@ pub const render_group = struct {
         result.transform.scale = 1;
 
         result.missingResourceCount = 0;
-        result.assetsShouldBeLocked = assetsShouldBeLocked;
 
         return result;
     }
@@ -1082,11 +1081,11 @@ pub const render_group = struct {
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
     pub fn PushBitmap2(self: *Self, ID: h.bitmap_id, height: f32, offset: h.v3, colour: h.v4) void {
-        const bitmap = self.assets.GetBitmap(ID, self.assetsShouldBeLocked);
+        const bitmap = self.assets.GetBitmap(ID);
         if (bitmap) |b| {
             self.PushBitmap(b, height, offset, colour);
         } else {
-            h.LoadBitmap(self.assets, ID, self.assetsShouldBeLocked);
+            h.LoadBitmap(self.assets, ID);
             self.missingResourceCount += 1;
         }
     }
