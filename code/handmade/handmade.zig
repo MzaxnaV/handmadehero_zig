@@ -235,6 +235,7 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     const work: *fill_ground_chunk_work = @alignCast(@ptrCast(data));
 
     work.renderGroup.NonTiledRenderGroupToOutput(work.buffer);
+    h.FinishRenderGroup(work.renderGroup);
 
     EndTaskWithMemory(work.task);
 }
@@ -326,13 +327,10 @@ fn FillGroundChunk(
             }
         }
 
-        if (renderGroup.AllResourcesPresent()) {
-            groundBuffer.p = chunkP.*;
+        assert(renderGroup.AllResourcesPresent());
 
-            h.platformAPI.AddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
-        } else {
-            EndTaskWithMemory(work.task);
-        }
+        groundBuffer.p = chunkP.*;
+        h.platformAPI.AddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
     }
 }
 
@@ -1120,7 +1118,7 @@ pub export fn UpdateAndRender(
                     renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
-                    for (0..2) |_| {
+                    for (0..3) |_| {
                         const particle: *h.particle = &gameState.particles[gameState.nextParticle];
                         gameState.nextParticle += 1;
 
@@ -1433,6 +1431,7 @@ pub export fn UpdateAndRender(
     }
 
     renderGroup.TiledRenderGroupToOutput(tranState.highPriorityQueue, drawBuffer);
+    h.FinishRenderGroup(renderGroup);
 
     h.EndSim(simRegion, gameState); // TODO (Manav): use defer
     h.EndTemporaryMemory(simMemory);

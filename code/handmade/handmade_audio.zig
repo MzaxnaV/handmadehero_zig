@@ -113,7 +113,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     const mixerMemory = h.BeginTemporaryMemory(tempArena);
     defer h.EndTemporaryMemory(mixerMemory);
 
-    const generationID = assets.NewGenerationID();
+    const generationID = h.BeginGeneration(assets);
+    defer h.EndGeneration(assets, generationID);
 
     assert((soundBuffer.sampleCount & 3) == 0);
     const chunkCount: u32 = (soundBuffer.sampleCount) / 4;

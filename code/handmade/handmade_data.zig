@@ -167,6 +167,7 @@ pub const game_state = struct {
 
     cameraFollowingEntityIndex: u32,
     cameraP: h.world_position = .{},
+    lastCameraP: h.world_position,
 
     controlledHeroes: [platform.CONTROLLERS]controlled_hero,
 

@@ -1014,7 +1014,7 @@ pub const render_group = struct {
         result.assets = assets;
         result.globalAlpha = 1.0;
 
-        result.generationID = assets.NewGenerationID();
+        result.generationID = h.BeginGeneration(assets);
 
         result.transform.offsetP = h.v3{ 0, 0, 0 };
         result.transform.scale = 1;
@@ -1389,6 +1389,12 @@ pub const render_group = struct {
         return result;
     }
 };
+
+pub fn FinishRenderGroup(group: ?*render_group) void {
+    if (group) |renderGroup| {
+        h.EndGeneration(renderGroup.assets, renderGroup.generationID);
+    }
+}
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
 

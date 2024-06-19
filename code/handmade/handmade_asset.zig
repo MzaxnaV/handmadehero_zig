@@ -111,6 +111,9 @@ pub const game_assets = struct {
 
     operationLock: u32,
 
+    inFlightGenerationCount: u32,
+    inFlightGenerations: [16]u32,
+
     pub inline fn GetAsset(self: *game_assets, ID: u32, generationID: u32) ?*asset_memory_header {
         assert(ID <= self.assetCount);
         const asset_: *asset = &self.assets[ID];
@@ -136,7 +139,7 @@ pub const game_assets = struct {
         return result;
     }
 
-    pub fn GetBitmap(self: *game_assets, ID: h.bitmap_id, generationID: u32) ?*h.loaded_bitmap {
+    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id, generationID: u32) ?*h.loaded_bitmap {
         var result: ?*h.loaded_bitmap = null;
 
         if (self.GetAsset(ID.value, generationID)) |header| {
@@ -161,12 +164,6 @@ pub const game_assets = struct {
         return result;
     }
 
-    pub inline fn NewGenerationID(self: *game_assets) u32 {
-        const result = h.AtomicAdd(u32, &self.nextGenerationID, 1);
-
-        return result;
-    }
-
     pub inline fn BeginAssetLock(self: *game_assets) void {
         while (true) {
             if (h.AtomicCompareExchange(u32, &self.operationLock, 1, 0) == null) {
@@ -182,6 +179,9 @@ pub const game_assets = struct {
 
     pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
         var assets: *game_assets = arena.PushStruct(game_assets);
+
+        assets.nextGenerationID = 0;
+        assets.inFlightGenerationCount = 0;
 
         assets.memorySentinel.flags = .{ .used = false };
         assets.memorySentinel.size = 0;
@@ -426,6 +426,19 @@ fn MergeIfPossible(assets: *game_assets, first: *asset_memory_block, second: *as
     return result;
 }
 
+fn GenerationHasCompleted(assets: *game_assets, checkID: u32) bool {
+    var result = true;
+
+    for (0..assets.inFlightGenerationCount) |index| {
+        if (assets.inFlightGenerations[index] == checkID) {
+            result = false;
+            break;
+        }
+    }
+
+    return result;
+}
+
 fn AcquireAssetMemory(assets: *game_assets, size_: u32, assetIndex: u32) ?*asset_memory_header {
     var result: ?*asset_memory_header = null;
 
@@ -462,7 +475,7 @@ fn AcquireAssetMemory(assets: *game_assets, size_: u32, assetIndex: u32) ?*asset
                 // NOTE: fixing this
                 const asset_: *asset = &assets.assets[header.assetIndex];
 
-                if (asset_.state >= @intFromEnum(asset_state.AssetState_Loaded)) {
+                if (asset_.state >= @intFromEnum(asset_state.AssetState_Loaded) and GenerationHasCompleted(assets, asset_.header.generationID)) {
                     platform.Assert(asset_.state == @intFromEnum(asset_state.AssetState_Loaded));
 
                     RemoveAssetHeaderFromList(header);
@@ -717,4 +730,34 @@ pub inline fn GetFirstSoundFrom(assets: *game_assets, typeID: h.asset_type_id) h
 pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: h.asset_type_id, series: *h.random_series) h.sound_id {
     const result = h.sound_id{ .value = GetRandomAssetFrom(assets, typeID, series) };
     return result;
+}
+
+pub inline fn BeginGeneration(assets: *game_assets) u32 {
+    assets.BeginAssetLock();
+
+    assert(assets.inFlightGenerationCount < assets.inFlightGenerations.len);
+
+    const result = assets.nextGenerationID;
+    assets.nextGenerationID += 1;
+
+    assets.inFlightGenerations[assets.inFlightGenerationCount] = result;
+    assets.inFlightGenerationCount += 1;
+
+    assets.EndAssetLock();
+
+    return result;
+}
+
+pub inline fn EndGeneration(assets: *game_assets, generationID: u32) void {
+    assets.BeginAssetLock();
+
+    for (0..assets.inFlightGenerationCount) |index| {
+        if (assets.inFlightGenerations[index] == generationID) {
+            assets.inFlightGenerationCount -= 1;
+            assets.inFlightGenerations[index] = assets.inFlightGenerations[assets.inFlightGenerationCount];
+            break;
+        }
+    }
+
+    assets.EndAssetLock();
 }

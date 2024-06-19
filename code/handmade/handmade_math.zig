@@ -191,6 +191,13 @@ pub inline fn AddTo(vec: anytype, other: [vec.len]f32) void {
     }
 }
 
+/// returns `-vec`
+pub inline fn Neg(vec: anytype) [vec.len]f32 {
+    const result = Sub(v3{ 0, 0, 0 }, vec);
+
+    return result;
+}
+
 /// returns `a - b`
 pub inline fn Sub(a: anytype, b: [a.len]f32) [a.len]f32 {
     var result = [1]f32{0} ** a.len;
