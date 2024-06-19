@@ -29,7 +29,6 @@ pub const asset_state = enum(u32) {
     AssetState_Unloaded,
     AssetState_Queued,
     AssetState_Loaded,
-    AssetState_Operating,
 };
 
 pub const asset_memory_header = struct {
@@ -89,6 +88,8 @@ pub const asset_memory_block = extern struct {
 };
 
 pub const game_assets = struct {
+    nextGenerationID: u32,
+
     tranState: *h.transient_state,
 
     memorySentinel: asset_memory_block,
@@ -108,50 +109,50 @@ pub const game_assets = struct {
 
     assetTypes: [h.asset_type_id.count()]asset_type,
 
-    pub inline fn GetAsset(self: *game_assets, ID: u32) ?*asset_memory_header {
+    operationLock: u32,
+
+    inFlightGenerationCount: u32,
+    inFlightGenerations: [16]u32,
+
+    pub inline fn GetAsset(self: *game_assets, ID: u32, generationID: u32) ?*asset_memory_header {
         assert(ID <= self.assetCount);
         const asset_: *asset = &self.assets[ID];
 
         var result: ?*asset_memory_header = null;
-        while (true) {
-            const state = asset_.state;
-            if (state == @intFromEnum(asset_state.AssetState_Loaded)) {
-                if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Operating), state) == null) {
-                    result = asset_.header;
-                    MoveHeaderToFront(self, asset_);
 
-                    // if (asset_.header.generationID < generationID) {
-                    //     asset_.header.generationID = generationID;
-                    // }
+        self.BeginAssetLock();
 
-                    @fence(.seq_cst);
+        if (asset_.state == @intFromEnum(asset_state.AssetState_Loaded)) {
+            result = asset_.header;
+            RemoveAssetHeaderFromList(result.?);
+            InsertAssetHeaderAtFront(self, result.?);
 
-                    asset_.state = state;
-
-                    break;
-                }
-            } else if (state != @intFromEnum(asset_state.AssetState_Operating)) {
-                break;
+            if (asset_.header.generationID < generationID) {
+                asset_.header.generationID = generationID;
             }
+
+            @fence(.seq_cst);
         }
+
+        self.EndAssetLock();
 
         return result;
     }
 
-    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id) ?*h.loaded_bitmap {
+    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id, generationID: u32) ?*h.loaded_bitmap {
         var result: ?*h.loaded_bitmap = null;
 
-        if (self.GetAsset(ID.value)) |header| {
+        if (self.GetAsset(ID.value, generationID)) |header| {
             result = &header.data.bitmap;
         }
 
         return result;
     }
 
-    pub inline fn GetSound(self: *game_assets, ID: h.sound_id) ?*loaded_sound {
+    pub inline fn GetSound(self: *game_assets, ID: h.sound_id, generationID: u32) ?*loaded_sound {
         var result: ?*loaded_sound = null;
 
-        if (self.GetAsset(ID.value)) |header| {
+        if (self.GetAsset(ID.value, generationID)) |header| {
             result = &header.data.sound;
         }
 
@@ -163,8 +164,24 @@ pub const game_assets = struct {
         return result;
     }
 
+    pub inline fn BeginAssetLock(self: *game_assets) void {
+        while (true) {
+            if (h.AtomicCompareExchange(u32, &self.operationLock, 1, 0) == null) {
+                break;
+            }
+        }
+    }
+
+    pub inline fn EndAssetLock(self: *game_assets) void {
+        @fence(.seq_cst);
+        self.operationLock = 0;
+    }
+
     pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
         var assets: *game_assets = arena.PushStruct(game_assets);
+
+        assets.nextGenerationID = 0;
+        assets.inFlightGenerationCount = 0;
 
         assets.memorySentinel.flags = .{ .used = false };
         assets.memorySentinel.size = 0;
@@ -298,9 +315,27 @@ pub const game_assets = struct {
     }
 };
 
+fn InsertAssetHeaderAtFront(assets: *game_assets, header: *asset_memory_header) void {
+    const sentinel = &assets.loadedAssetSentinel;
+
+    header.prev = sentinel;
+    header.next = sentinel.next;
+
+    header.next.prev = header;
+    header.prev.next = header;
+}
+
+fn RemoveAssetHeaderFromList(header: *asset_memory_header) void {
+    header.prev.next = header.next;
+    header.next.prev = header.prev;
+
+    header.next = undefined;
+    header.prev = undefined;
+}
+
 const load_asset_work = struct {
-    task: *h.task_with_memory,
-    asset_: *asset,
+    task: ?*h.task_with_memory,
+    asset_: *asset, // TODO: (change code style to match with casey? or switch to zig?)
 
     handle: *platform.file_handle,
     offset: u64,
@@ -310,14 +345,7 @@ const load_asset_work = struct {
     finalState: u32,
 };
 
-fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
-    comptime {
-        if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(LoadAssetWork)) {
-            @compileError("Function signature mismatch!");
-        }
-    }
-    const work: *load_asset_work = @alignCast(@ptrCast(data));
-
+fn LoadAssetWorkDirectly(work: *load_asset_work) void {
     h.platformAPI.ReadDataFromFile(work.handle, work.offset, work.size, work.destination);
 
     @fence(.seq_cst);
@@ -326,8 +354,19 @@ fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
         h.ZeroSize(work.size, @ptrCast(work.destination));
     }
     work.asset_.state = work.finalState;
+}
 
-    h.EndTaskWithMemory(work.task);
+fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
+    comptime {
+        if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(LoadAssetWork)) {
+            @compileError("Function signature mismatch!");
+        }
+    }
+    const work: *load_asset_work = @alignCast(@ptrCast(data));
+
+    LoadAssetWorkDirectly(work);
+
+    h.EndTaskWithMemory(work.task.?);
 }
 
 inline fn GetFileHandleFor(assets: *game_assets, fileIndex: u32) *platform.file_handle {
@@ -387,14 +426,28 @@ fn MergeIfPossible(assets: *game_assets, first: *asset_memory_block, second: *as
     return result;
 }
 
-fn AcquireAssetMemory(assets: *game_assets, size_: platform.memory_index) ?*anyopaque {
-    var result: ?*anyopaque = null;
+fn GenerationHasCompleted(assets: *game_assets, checkID: u32) bool {
+    var result = true;
+
+    for (0..assets.inFlightGenerationCount) |index| {
+        if (assets.inFlightGenerations[index] == checkID) {
+            result = false;
+            break;
+        }
+    }
+
+    return result;
+}
+
+fn AcquireAssetMemory(assets: *game_assets, size_: u32, assetIndex: u32) ?*asset_memory_header {
+    var result: ?*asset_memory_header = null;
 
     // NOTE (Manav): Hack, blocks are always aligned (check AllocateGameAssets())
     // and since @sizeOf(asset_memory_block) is 32, we only need to forward align size
     // so headers in LoadSound() and LoadBitmap() points to aligned memory address.
-    // This might have introduced the flickering bug with evicting assets
-    const size = platform.Align(size_, 16);
+    const size: u32 = @intCast(platform.Align(size_, 16));
+
+    assets.BeginAssetLock();
 
     var block = FindBlockForSize(assets, size);
 
@@ -404,7 +457,7 @@ fn AcquireAssetMemory(assets: *game_assets, size_: platform.memory_index) ?*anyo
 
             const resPtr: [*]u8 = @ptrCast(@as([*]asset_memory_block, @ptrCast(block)) + 1);
 
-            result = resPtr;
+            result = @alignCast(@ptrCast(resPtr));
 
             const remainingSize = block.?.size - size;
             const blockSplitThreshold = 4096;
@@ -422,7 +475,7 @@ fn AcquireAssetMemory(assets: *game_assets, size_: platform.memory_index) ?*anyo
                 // NOTE: fixing this
                 const asset_: *asset = &assets.assets[header.assetIndex];
 
-                if (asset_.state >= @intFromEnum(asset_state.AssetState_Loaded)) {
+                if (asset_.state >= @intFromEnum(asset_state.AssetState_Loaded) and GenerationHasCompleted(assets, asset_.header.generationID)) {
                     platform.Assert(asset_.state == @intFromEnum(asset_state.AssetState_Loaded));
 
                     RemoveAssetHeaderFromList(header);
@@ -445,6 +498,14 @@ fn AcquireAssetMemory(assets: *game_assets, size_: platform.memory_index) ?*anyo
         }
     }
 
+    if (result) |header| {
+        header.assetIndex = assetIndex;
+        header.totalSize = size; // NOTE (Manav): use aligned size
+        InsertAssetHeaderAtFront(assets, header);
+    }
+
+    assets.EndAssetLock();
+
     return result;
 }
 
@@ -454,38 +515,18 @@ const asset_memory_size = struct {
     section: u32 = 0,
 };
 
-fn InsertAssetHeaderAtFront(assets: *game_assets, header: *asset_memory_header) void {
-    const sentinel = &assets.loadedAssetSentinel;
-
-    header.prev = sentinel;
-    header.next = sentinel.next;
-
-    header.next.prev = header;
-    header.prev.next = header;
-}
-
-fn AddAssetHeaderToList(assets: *game_assets, assetIndex: u32, size: asset_memory_size) void {
-    const header: *asset_memory_header = assets.assets[assetIndex].header;
-    header.assetIndex = assetIndex;
-    header.totalSize = size.total;
-    InsertAssetHeaderAtFront(assets, header);
-}
-
-fn RemoveAssetHeaderFromList(header: *align(1) asset_memory_header) void {
-    header.prev.next = header.next;
-    header.next.prev = header.prev;
-
-    header.next = undefined;
-    header.prev = undefined;
-}
-
-pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
+pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
     if (ID.value == 0) return;
 
     const asset_: *asset = &assets.assets[ID.value];
 
     if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
-        if (h.BeginTaskWithMemory(assets.tranState)) |task| {
+        var task: ?*h.task_with_memory = null;
+
+        if (!immediate) {
+            task = h.BeginTaskWithMemory(assets.tranState);
+        }
+        if (immediate or task != null) {
             const info: h.hha_bitmap = asset_.hha.data.bitmap;
 
             var size: asset_memory_size = .{};
@@ -498,7 +539,7 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
 
             size.total = size.data + @sizeOf(asset_memory_header);
 
-            asset_.header = @alignCast(@ptrCast(AcquireAssetMemory(assets, size.total).?));
+            asset_.header = AcquireAssetMemory(assets, size.total, ID.value).?;
 
             const bitmap: *h.loaded_bitmap = &asset_.header.data.bitmap;
             bitmap.alignPercentage = info.alignPercentage;
@@ -509,26 +550,34 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id) void {
             bitmap.pitch = @intCast(size.section);
             bitmap.memory = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
 
-            var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
-            work.task = task;
-            work.asset_ = &assets.assets[ID.value];
-            work.handle = GetFileHandleFor(assets, asset_.fileIndex);
-            work.offset = asset_.hha.dataOffset;
-            work.size = size.data;
-            work.destination = bitmap.memory;
-            work.finalState = @intFromEnum(asset_state.AssetState_Loaded);
+            var work = load_asset_work{
+                .task = task,
+                .asset_ = &assets.assets[ID.value],
+                .handle = GetFileHandleFor(assets, asset_.fileIndex),
+                .offset = asset_.hha.dataOffset,
+                .size = size.data,
+                .destination = bitmap.memory,
+                .finalState = @intFromEnum(asset_state.AssetState_Loaded),
+            };
 
-            AddAssetHeaderToList(assets, ID.value, size);
-
-            h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
+            if (task) |_| {
+                const taskWork: *load_asset_work = task.?.arena.PushStruct(load_asset_work);
+                taskWork.* = work;
+                h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, taskWork);
+            } else {
+                LoadAssetWorkDirectly(&work);
+            }
         } else {
             asset_.state = @intFromEnum(asset_state.AssetState_Unloaded);
         }
+    } else {
+        // NOTE (Manav): not really needed
+        while (asset_.state == @intFromEnum(asset_state.AssetState_Queued)) {}
     }
 }
 
 pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id) void {
-    return LoadBitmap(assets, ID);
+    return LoadBitmap(assets, ID, false);
 }
 
 pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
@@ -546,7 +595,7 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             size.data = size.section * info.channelCount;
             size.total = size.data + @sizeOf(asset_memory_header);
 
-            asset_.header = @alignCast(@ptrCast(AcquireAssetMemory(assets, size.total).?));
+            asset_.header = @alignCast(@ptrCast(AcquireAssetMemory(assets, size.total, ID.value).?));
             const sound: *loaded_sound = &asset_.header.data.sound;
 
             sound.sampleCount = info.sampleCount;
@@ -570,8 +619,6 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             work.size = size.data;
             work.destination = @ptrCast(memory);
             work.finalState = @intFromEnum(asset_state.AssetState_Loaded);
-
-            AddAssetHeaderToList(assets, ID.value, size);
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
@@ -688,9 +735,32 @@ pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: h.asset_type_id, 
     return result;
 }
 
-fn MoveHeaderToFront(assets: *game_assets, asset_: *asset) void {
-    const header: *asset_memory_header = asset_.header;
+pub inline fn BeginGeneration(assets: *game_assets) u32 {
+    assets.BeginAssetLock();
 
-    RemoveAssetHeaderFromList(header);
-    InsertAssetHeaderAtFront(assets, header);
+    assert(assets.inFlightGenerationCount < assets.inFlightGenerations.len);
+
+    const result = assets.nextGenerationID;
+    assets.nextGenerationID += 1;
+
+    assets.inFlightGenerations[assets.inFlightGenerationCount] = result;
+    assets.inFlightGenerationCount += 1;
+
+    assets.EndAssetLock();
+
+    return result;
+}
+
+pub inline fn EndGeneration(assets: *game_assets, generationID: u32) void {
+    assets.BeginAssetLock();
+
+    for (0..assets.inFlightGenerationCount) |index| {
+        if (assets.inFlightGenerations[index] == generationID) {
+            assets.inFlightGenerationCount -= 1;
+            assets.inFlightGenerations[index] = assets.inFlightGenerations[assets.inFlightGenerationCount];
+            break;
+        }
+    }
+
+    assets.EndAssetLock();
 }

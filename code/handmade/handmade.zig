@@ -221,8 +221,11 @@ pub fn EndTaskWithMemory(task: *h.task_with_memory) void {
 }
 
 const fill_ground_chunk_work = struct {
-    renderGroup: *h.render_group,
-    buffer: *h.loaded_bitmap,
+    tranState: *h.transient_state,
+    gameState: *h.game_state,
+    groundBuffer: *h.ground_buffer,
+    chunkP: h.world_position,
+
     task: *h.task_with_memory,
 };
 
@@ -234,7 +237,84 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     }
     const work: *fill_ground_chunk_work = @alignCast(@ptrCast(data));
 
-    work.renderGroup.NonTiledRenderGroupToOutput(work.buffer);
+    var buffer = &work.groundBuffer.bitmap;
+    buffer.alignPercentage = h.v2{ 0.5, 0.5 };
+    buffer.widthOverHeight = 1.0;
+
+    const width = h.X(work.gameState.world.chunkDimInMeters);
+    const height = h.Y(work.gameState.world.chunkDimInMeters);
+    assert(width == height);
+    const haldDim = h.Scale(.{ width, height }, 0.5);
+
+    const renderGroup = h.render_group.Allocate(work.tranState.assets, &work.task.arena, 0, true);
+    renderGroup.Orthographic(
+        @intCast(buffer.width),
+        @intCast(buffer.height),
+        @as(f32, @floatFromInt(buffer.width - 2)) / width,
+    );
+    renderGroup.Clear(.{ 1, 0, 1, 1 });
+
+    {
+        var chunkOffsetY: i32 = -1;
+        while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
+            var chunkOffsetX: i32 = -1;
+            while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
+                const chunkX = work.chunkP.chunkX + chunkOffsetX;
+                const chunkY = work.chunkP.chunkY + chunkOffsetY;
+                const chunkZ = work.chunkP.chunkZ;
+
+                var series = h.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
+
+                var colour = h.v4{ 1, 1, 1, 1 };
+
+                if (!NOT_IGNORE) {
+                    colour = h.v4{ 1, 0, 0, 1 };
+                    if (@mod(chunkX, 2) == @mod(chunkY, 2)) {
+                        colour = h.v4{ 0, 0, 1, 1 };
+                    }
+                }
+
+                const center = h.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
+
+                var grassIndex: u32 = 0;
+                while (grassIndex < 50) : (grassIndex += 1) {
+                    const stamp = h.GetRandomBitmapFrom(work.tranState.assets, if (series.RandomChoice(2) == 1) .Asset_Grass else .Asset_Stone, &series);
+
+                    const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
+                    renderGroup.PushBitmap2(stamp, 2.5, h.ToV3(p, 0), colour);
+                }
+            }
+        }
+    }
+
+    {
+        var chunkOffsetY = @as(i32, -1);
+        while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
+            var chunkOffsetX = @as(i32, -1);
+            while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
+                const chunkX = work.chunkP.chunkX + chunkOffsetX;
+                const chunkY = work.chunkP.chunkY + chunkOffsetY;
+                const chunkZ = work.chunkP.chunkZ;
+
+                var series = h.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
+
+                const center = h.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
+
+                var grassIndex = @as(u32, 0);
+                while (grassIndex < 50) : (grassIndex += 1) {
+                    const stamp: h.bitmap_id = h.GetRandomBitmapFrom(work.tranState.assets, .Asset_Tuft, &series);
+
+                    const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
+                    renderGroup.PushBitmap2(stamp, 0.1, h.ToV3(p, 0), .{ 1, 1, 1, 1 });
+                }
+            }
+        }
+    }
+
+    assert(renderGroup.AllResourcesPresent());
+
+    renderGroup.NonTiledRenderGroupToOutput(buffer);
+    h.FinishRenderGroup(renderGroup);
 
     EndTaskWithMemory(work.task);
 }
@@ -247,92 +327,14 @@ fn FillGroundChunk(
 ) void {
     if (BeginTaskWithMemory(tranState)) |task| {
         var work: *fill_ground_chunk_work = task.arena.PushStruct(fill_ground_chunk_work);
-
-        var buffer = &groundBuffer.bitmap;
-        buffer.alignPercentage = h.v2{ 0.5, 0.5 };
-        buffer.widthOverHeight = 1.0;
-
-        const width = h.X(gameState.world.chunkDimInMeters);
-        const height = h.Y(gameState.world.chunkDimInMeters);
-        assert(width == height);
-        const haldDim = h.Scale(.{ width, height }, 0.5);
-
-        const renderGroup = h.render_group.Allocate(tranState.assets, &task.arena, 0, true);
-        renderGroup.Orthographic(
-            @intCast(buffer.width),
-            @intCast(buffer.height),
-            @as(f32, @floatFromInt(buffer.width - 2)) / width,
-        );
-        renderGroup.Clear(.{ 1, 0, 1, 1 });
-
-        work.renderGroup = renderGroup;
-        work.buffer = buffer;
         work.task = task;
+        work.tranState = tranState;
+        work.gameState = gameState;
+        work.groundBuffer = groundBuffer;
+        work.chunkP = chunkP.*;
+        groundBuffer.p = chunkP.*;
 
-        {
-            var chunkOffsetY: i32 = -1;
-            while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
-                var chunkOffsetX: i32 = -1;
-                while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
-                    const chunkX = chunkP.chunkX + chunkOffsetX;
-                    const chunkY = chunkP.chunkY + chunkOffsetY;
-                    const chunkZ = chunkP.chunkZ;
-
-                    var series = h.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
-
-                    var colour = h.v4{ 1, 1, 1, 1 };
-
-                    if (!NOT_IGNORE) {
-                        colour = h.v4{ 1, 0, 0, 1 };
-                        if (@mod(chunkX, 2) == @mod(chunkY, 2)) {
-                            colour = h.v4{ 0, 0, 1, 1 };
-                        }
-                    }
-
-                    const center = h.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
-
-                    var grassIndex: u32 = 0;
-                    while (grassIndex < 50) : (grassIndex += 1) {
-                        const stamp = h.GetRandomBitmapFrom(tranState.assets, if (series.RandomChoice(2) == 1) .Asset_Grass else .Asset_Stone, &series);
-
-                        const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
-                        renderGroup.PushBitmap2(stamp, 2.5, h.ToV3(p, 0), colour);
-                    }
-                }
-            }
-        }
-
-        {
-            var chunkOffsetY = @as(i32, -1);
-            while (chunkOffsetY <= 1) : (chunkOffsetY += 1) {
-                var chunkOffsetX = @as(i32, -1);
-                while (chunkOffsetX <= 1) : (chunkOffsetX += 1) {
-                    const chunkX = chunkP.chunkX + chunkOffsetX;
-                    const chunkY = chunkP.chunkY + chunkOffsetY;
-                    const chunkZ = chunkP.chunkZ;
-
-                    var series = h.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
-
-                    const center = h.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
-
-                    var grassIndex = @as(u32, 0);
-                    while (grassIndex < 50) : (grassIndex += 1) {
-                        const stamp: h.bitmap_id = h.GetRandomBitmapFrom(tranState.assets, .Asset_Tuft, &series);
-
-                        const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
-                        renderGroup.PushBitmap2(stamp, 0.1, h.ToV3(p, 0), .{ 1, 1, 1, 1 });
-                    }
-                }
-            }
-        }
-
-        if (renderGroup.AllResourcesPresent()) {
-            groundBuffer.p = chunkP.*;
-
-            h.platformAPI.AddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
-        } else {
-            EndTaskWithMemory(work.task);
-        }
+        h.platformAPI.AddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
     }
 }
 
@@ -1120,7 +1122,7 @@ pub export fn UpdateAndRender(
                     renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
-                    for (0..2) |_| {
+                    for (0..3) |_| {
                         const particle: *h.particle = &gameState.particles[gameState.nextParticle];
                         gameState.nextParticle += 1;
 
@@ -1433,6 +1435,7 @@ pub export fn UpdateAndRender(
     }
 
     renderGroup.TiledRenderGroupToOutput(tranState.highPriorityQueue, drawBuffer);
+    h.FinishRenderGroup(renderGroup);
 
     h.EndSim(simRegion, gameState); // TODO (Manav): use defer
     h.EndTemporaryMemory(simMemory);
