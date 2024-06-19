@@ -992,11 +992,10 @@ pub const render_group = struct {
     pushBufferBase: [*]u8,
 
     missingResourceCount: u32,
+    rendersInBackground: bool,
 
     /// Create render group using the memory `arena`, initialize it and return a pointer to it.
-    pub fn Allocate(assets: *h.game_assets, arena: *h.memory_arena, maxPushBufferSize: u32, assetsShouldBeLocked: bool) *Self {
-        _ = assetsShouldBeLocked;
-
+    pub fn Allocate(assets: *h.game_assets, arena: *h.memory_arena, maxPushBufferSize: u32, rendersInBackground: bool) *Self {
         var pushBufferSize = maxPushBufferSize;
 
         var result: *render_group = arena.PushStruct(render_group);
@@ -1004,6 +1003,7 @@ pub const render_group = struct {
         if (pushBufferSize == 0) {
             pushBufferSize = @intCast(arena.GetSizeRemaining(@alignOf(render_group)));
         }
+
         result.pushBufferBase = arena.PushSizeAlign(@alignOf(u8), pushBufferSize);
 
         result.maxPushBufferSize = pushBufferSize;
@@ -1016,6 +1016,7 @@ pub const render_group = struct {
         result.transform.scale = 1;
 
         result.missingResourceCount = 0;
+        result.rendersInBackground = rendersInBackground;
 
         return result;
     }
@@ -1081,11 +1082,18 @@ pub const render_group = struct {
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
     pub fn PushBitmap2(self: *Self, ID: h.bitmap_id, height: f32, offset: h.v3, colour: h.v4) void {
-        const bitmap = self.assets.GetBitmap(ID);
+        var bitmap = self.assets.GetBitmap(ID);
+
+        if (self.rendersInBackground and bitmap == null) {
+            h.LoadBitmap(self.assets, ID, true);
+            bitmap = self.assets.GetBitmap(ID);
+        }
+
         if (bitmap) |b| {
             self.PushBitmap(b, height, offset, colour);
         } else {
-            h.LoadBitmap(self.assets, ID);
+            assert(!self.rendersInBackground);
+            h.LoadBitmap(self.assets, ID, false);
             self.missingResourceCount += 1;
         }
     }
