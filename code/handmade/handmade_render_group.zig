@@ -984,6 +984,8 @@ pub const render_group = struct {
     assets: *h.game_assets,
     globalAlpha: f32,
 
+    generationID: u32,
+
     monitorHalfDimInMeters: h.v2,
     transform: render_transform,
 
@@ -1011,6 +1013,8 @@ pub const render_group = struct {
 
         result.assets = assets;
         result.globalAlpha = 1.0;
+
+        result.generationID = assets.NewGenerationID();
 
         result.transform.offsetP = h.v3{ 0, 0, 0 };
         result.transform.scale = 1;
@@ -1082,11 +1086,11 @@ pub const render_group = struct {
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
     pub fn PushBitmap2(self: *Self, ID: h.bitmap_id, height: f32, offset: h.v3, colour: h.v4) void {
-        var bitmap = self.assets.GetBitmap(ID);
+        var bitmap = self.assets.GetBitmap(ID, self.generationID);
 
         if (self.rendersInBackground and bitmap == null) {
             h.LoadBitmap(self.assets, ID, true);
-            bitmap = self.assets.GetBitmap(ID);
+            bitmap = self.assets.GetBitmap(ID, self.generationID);
         }
 
         if (bitmap) |b| {

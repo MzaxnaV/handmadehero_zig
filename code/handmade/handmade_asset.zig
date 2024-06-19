@@ -29,7 +29,6 @@ pub const asset_state = enum(u32) {
     AssetState_Unloaded,
     AssetState_Queued,
     AssetState_Loaded,
-    AssetState_Operating,
 };
 
 pub const asset_memory_header = struct {
@@ -89,6 +88,8 @@ pub const asset_memory_block = extern struct {
 };
 
 pub const game_assets = struct {
+    nextGenerationID: u32,
+
     tranState: *h.transient_state,
 
     memorySentinel: asset_memory_block,
@@ -110,7 +111,7 @@ pub const game_assets = struct {
 
     operationLock: u32,
 
-    pub inline fn GetAsset(self: *game_assets, ID: u32) ?*asset_memory_header {
+    pub inline fn GetAsset(self: *game_assets, ID: u32, generationID: u32) ?*asset_memory_header {
         assert(ID <= self.assetCount);
         const asset_: *asset = &self.assets[ID];
 
@@ -123,9 +124,9 @@ pub const game_assets = struct {
             RemoveAssetHeaderFromList(result.?);
             InsertAssetHeaderAtFront(self, result.?);
 
-            // if (asset_.header.generationID < generationID) {
-            //     asset_.header.generationID = generationID;
-            // }
+            if (asset_.header.generationID < generationID) {
+                asset_.header.generationID = generationID;
+            }
 
             @fence(.seq_cst);
         }
@@ -135,20 +136,20 @@ pub const game_assets = struct {
         return result;
     }
 
-    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id) ?*h.loaded_bitmap {
+    pub fn GetBitmap(self: *game_assets, ID: h.bitmap_id, generationID: u32) ?*h.loaded_bitmap {
         var result: ?*h.loaded_bitmap = null;
 
-        if (self.GetAsset(ID.value)) |header| {
+        if (self.GetAsset(ID.value, generationID)) |header| {
             result = &header.data.bitmap;
         }
 
         return result;
     }
 
-    pub inline fn GetSound(self: *game_assets, ID: h.sound_id) ?*loaded_sound {
+    pub inline fn GetSound(self: *game_assets, ID: h.sound_id, generationID: u32) ?*loaded_sound {
         var result: ?*loaded_sound = null;
 
-        if (self.GetAsset(ID.value)) |header| {
+        if (self.GetAsset(ID.value, generationID)) |header| {
             result = &header.data.sound;
         }
 
@@ -157,6 +158,12 @@ pub const game_assets = struct {
 
     pub inline fn GetSoundInfo(self: *game_assets, ID: h.sound_id) *h.hha_sound {
         const result = &self.assets[ID.value].hha.data.sound;
+        return result;
+    }
+
+    pub inline fn NewGenerationID(self: *game_assets) u32 {
+        const result = h.AtomicAdd(u32, &self.nextGenerationID, 1);
+
         return result;
     }
 

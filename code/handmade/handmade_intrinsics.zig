@@ -108,3 +108,8 @@ pub inline fn FindLeastSignificantSetBit(value: u32) u32 {
 pub inline fn AtomicCompareExchange(comptime T: type, ptr: *T, new_value: T, expected_value: T) ?T {
     return @cmpxchgStrong(T, ptr, expected_value, new_value, .seq_cst, .seq_cst);
 }
+
+/// Dereferences a pointer to a `T` and atomically adds the addend to the value and returns it (the current value).
+pub inline fn AtomicAdd(comptime T: type, ptr: *T, addend: T) T {
+    return (@atomicRmw(T, ptr, .Add, addend, .seq_cst) + addend);
+}

@@ -113,6 +113,8 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
     const mixerMemory = h.BeginTemporaryMemory(tempArena);
     defer h.EndTemporaryMemory(mixerMemory);
 
+    const generationID = assets.NewGenerationID();
+
     assert((soundBuffer.sampleCount & 3) == 0);
     const chunkCount: u32 = (soundBuffer.sampleCount) / 4;
 
@@ -150,7 +152,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
         var dest1 = realChannel1;
 
         while (totalChunksToMix != 0 and !soundFinished) {
-            if (assets.GetSound(playingSound.ID)) |loadedSound| {
+            if (assets.GetSound(playingSound.ID, generationID)) |loadedSound| {
                 var nextSoundInChain = h.GetNextSoundInChain(assets, playingSound.ID);
                 h.PrefetchSound(assets, nextSoundInChain);
 
