@@ -385,7 +385,7 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                         if (win32.SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &pB, null))) {
                             if (pB) |primaryBuffer| {
                                 if (win32.SUCCEEDED(primaryBuffer.vtable.SetFormat(primaryBuffer, &waveFormat))) {
-                                    win32.OutputDebugStringW(win32.L("Primary buffer format was set\n"));
+                                    win32.OutputDebugStringA("Primary buffer format was set\n");
                                 } else {
                                     // TODO: diagnostic
                                 }
@@ -414,7 +414,7 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                     if (win32.SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &secondaryBuffer, null))) {
                         if (secondaryBuffer) |value| {
                             globalSecondaryBuffer = value;
-                            win32.OutputDebugStringW(win32.L("Secondary buffer created successfully\n"));
+                            win32.OutputDebugStringA("Secondary buffer created successfully\n");
                         }
                     } else {
                         // TODO: diagnostic
@@ -1102,8 +1102,7 @@ fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
 fn DoWorkerWork(_: ?*platform.work_queue, data: *anyopaque) void {
     var buffer = [1:0]u8{0} ** 256;
 
-    // std.debug.print("Thread {}: {s}\n", .{ win32.GetCurrentThreadId(), @ptrCast([*:0]const u8, data) });
-    _ = win32.x.wsprintfA(&buffer, "Thread %u: %s\n", win32.GetCurrentThreadId(), @as([*:0]const u8, @ptrCast(data)));
+    std.debug.print("Thread {}: {s}\n", .{ win32.GetCurrentThreadId(), @as([*:0]const u8, @ptrCast(data)) });
     _ = win32.OutputDebugStringA(&buffer);
 }
 
@@ -1214,17 +1213,13 @@ fn Win32ReadDataFromFile(source: *platform.file_handle, offset: u64, size: u64, 
     }
 }
 
-fn Win32FileError(source: *platform.file_handle, message: []const u8) void {
-    _ = message;
+fn Win32FileError(source: *platform.file_handle, message: [:0]const u8) void {
     if (HANDMADE_INTERNAL) {
-        _ = win32.OutputDebugStringW(win32.L("Win32 File Error: "));
+        _ = win32.OutputDebugStringA("Win32 File Error: ");
 
-        // TODO (Manav): fix utf8 and utf16 stuff
-        // var messageW: [256:0]u16 = [1:0]u16{ 0 } ** 256;
-        // _ = std.unicode.utf8ToUtf16Le(&messageW, message) catch |err| @compileError(err);
-        // _ = win32.OutputDebugStringW(&messageW);
+        _ = win32.OutputDebugStringA(message[0.. :0].ptr);
 
-        _ = win32.OutputDebugStringW(win32.L("\n"));
+        _ = win32.OutputDebugStringA("\n");
     }
 
     source.noErrors = false;
@@ -1750,9 +1745,19 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 audioLatencySeconds = (@as(f32, @floatFromInt(audioLatencyBytes)) / @as(f32, @floatFromInt(soundOutput.bytesPerSample))) / @as(f32, @floatFromInt(soundOutput.samplesPerSecond));
 
                                 if (!NOT_IGNORE) {
-                                    var textbuffer = [1]u16{0} ** 256;
-                                    _ = win32.x.wsprintfW(&textbuffer, win32.L("BTL:%u TC:%u BTW:%u - PC:%u WC:%u DELTA:%u (%fs)\n"), byteToLock, targetCursor, bytesToWrite, playCursor, writeCursor, audioLatencyBytes, audioLatencySeconds);
-                                    _ = win32.OutputDebugStringW(&textbuffer);
+                                    var textbuffer = [1:0]u8{0} ** 256;
+                                    std.fmt.bufPrintZ(textbuffer[0.. :0], "BTL:{} TC:{} BTW:{} - PC:{} WC:{} DELTA:{} ({}s)", .{
+                                        byteToLock,
+                                        targetCursor,
+                                        bytesToWrite,
+                                        playCursor,
+                                        writeCursor,
+                                        audioLatencyBytes,
+                                        audioLatencySeconds,
+                                    }) catch |err| {
+                                        std.debug.print("{}\n", .{err});
+                                    };
+                                    _ = win32.OutputDebugStringA(&textbuffer);
                                 }
                             }
                             Win32FillSoundBuffer(&soundOutput, byteToLock, bytesToWrite, &soundBuffer);
@@ -1822,10 +1827,12 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                             const mcpf = @as(f64, @floatFromInt(cyclesElapsed)) / (1000 * 1000);
                             const fps: f64 = 1000 / msPerFrame;
-                            var fpsBuffer = [1:0]u16{0} ** 256;
-                            _ = win32.x.wsprintfW(@as([*:0]u16, @ptrCast(&fpsBuffer)), win32.L("%.02fms/f,  %.02ff/s,  %.02fmc/f\n"), &msPerFrame, &fps, &mcpf);
-                            // std.debug.print("{d:.2}ms/f, {d:.2}f/s, {d:.2}mc/f\n", .{ msPerFrame, fps, mcpf });
-                            // _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&fpsBuffer)));
+                            var fpsBuffer = [1:0]u8{0} ** 256;
+
+                            _ = std.fmt.bufPrintZ(fpsBuffer[0.. :0], "{d:.02}ms/f, {d:.02}f/s, {d:.02}mc/f\n", .{ msPerFrame, fps, mcpf }) catch |err| {
+                                std.debug.print("{}\n", .{err});
+                            };
+                            _ = win32.OutputDebugStringA(@ptrCast(fpsBuffer[0.. :0].ptr));
                         }
 
                         if (HANDMADE_INTERNAL) {

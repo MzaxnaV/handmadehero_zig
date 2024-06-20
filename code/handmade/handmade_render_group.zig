@@ -996,6 +996,8 @@ pub const render_group = struct {
     missingResourceCount: u32,
     rendersInBackground: bool,
 
+    insideRender: bool,
+
     /// Create render group using the memory `arena`, initialize it and return a pointer to it.
     pub fn Allocate(assets: *h.game_assets, arena: *h.memory_arena, maxPushBufferSize: u32, rendersInBackground: bool) *Self {
         var pushBufferSize = maxPushBufferSize;
@@ -1014,13 +1016,15 @@ pub const render_group = struct {
         result.assets = assets;
         result.globalAlpha = 1.0;
 
-        result.generationID = h.BeginGeneration(assets);
+        result.generationID = 0;
 
         result.transform.offsetP = h.v3{ 0, 0, 0 };
         result.transform.scale = 1;
 
         result.missingResourceCount = 0;
         result.rendersInBackground = rendersInBackground;
+
+        result.insideRender = false;
 
         return result;
     }
@@ -1063,6 +1067,8 @@ pub const render_group = struct {
     }
 
     fn PushRenderElements(self: *Self, comptime t: render_group_entry_type) ?*align(1) t.Type() {
+        assert(self.insideRender);
+
         const element_type = t.Type();
         const element_ptr_type = ?*align(1) element_type;
 
@@ -1317,6 +1323,8 @@ pub const render_group = struct {
     }
 
     pub fn NonTiledRenderGroupToOutput(self: *Self, outputTarget: *loaded_bitmap) void {
+        assert(self.insideRender);
+
         assert((@intFromPtr(outputTarget.memory) & 15) == 0); // TODO (Manav): use alignment as a requirement in the stuct itself?
 
         const clipRect = h.rect2i{
@@ -1336,6 +1344,8 @@ pub const render_group = struct {
     }
 
     pub fn TiledRenderGroupToOutput(self: *Self, renderQueue: *platform.work_queue, outputTarget: *loaded_bitmap) void {
+        assert(self.insideRender);
+
         const tileCountX = 4;
         const tileCountY = 4;
         var workArray: [tileCountX * tileCountY]tile_render_work = [1]tile_render_work{.{}} ** (tileCountX * tileCountY);
@@ -1390,9 +1400,23 @@ pub const render_group = struct {
     }
 };
 
-pub fn FinishRenderGroup(group: ?*render_group) void {
+pub fn BeginRender(group: ?*render_group) void {
     if (group) |renderGroup| {
+        assert(!renderGroup.insideRender);
+        renderGroup.insideRender = true;
+
+        renderGroup.generationID = h.BeginGeneration(renderGroup.assets);
+    }
+}
+
+pub fn EndRender(group: ?*render_group) void {
+    if (group) |renderGroup| {
+        assert(renderGroup.insideRender);
+        renderGroup.insideRender = false;
+
         h.EndGeneration(renderGroup.assets, renderGroup.generationID);
+        renderGroup.generationID = 0;
+        renderGroup.pushBufferSize = 0;
     }
 }
 

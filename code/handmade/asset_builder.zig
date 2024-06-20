@@ -950,7 +950,7 @@ fn WriteNonHero() void {
     assets.EndAssetType();
 
     assets.BeginAssetType(.Asset_Font);
-    for ('A'..'Z' + 1) |character| {
+    for ('!'..'~' + 1) |character| {
         // _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/arial.ttf", "Arial", @intCast(character));
         _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/cour.ttf", "Courier New", @intCast(character));
 

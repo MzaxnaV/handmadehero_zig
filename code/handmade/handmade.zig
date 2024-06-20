@@ -247,6 +247,7 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     const haldDim = h.Scale(.{ width, height }, 0.5);
 
     const renderGroup = h.render_group.Allocate(work.tranState.assets, &work.task.arena, 0, true);
+    h.BeginRender(renderGroup);
     renderGroup.Orthographic(
         @intCast(buffer.width),
         @intCast(buffer.height),
@@ -314,7 +315,7 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     assert(renderGroup.AllResourcesPresent());
 
     renderGroup.NonTiledRenderGroupToOutput(buffer);
-    h.FinishRenderGroup(renderGroup);
+    h.EndRender(renderGroup);
 
     EndTaskWithMemory(work.task);
 }
@@ -507,6 +508,90 @@ pub inline fn ChunkPosFromTilePos(w: *h.world, absTileX: i32, absTileY: i32, abs
     return result;
 }
 
+pub var DEBUGrenderGroup: ?*h.render_group = null;
+pub var leftEdge: f32 = 0;
+pub var atY: f32 = 0;
+pub var fontScale: f32 = 0;
+
+fn DEBUGReset(width: u32, height: u32) void {
+    fontScale = 20;
+    DEBUGrenderGroup.?.Orthographic(width, height, 1);
+    atY = 0.5 * @as(f32, @floatFromInt(height)) - 0.5 * fontScale;
+    leftEdge = -0.5 * @as(f32, @floatFromInt(width)) + 0.5 * fontScale;
+}
+
+fn DEBUGTextLine(string: [:0]const u8) void {
+    if (DEBUGrenderGroup) |renderGroup| {
+        var matchVectorFont = h.asset_vector{};
+        var weightVectorFont = h.asset_vector{};
+        weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
+
+        var charScale = fontScale;
+        var colour = h.v4{ 1, 1, 1, 1 };
+        var atX: f32 = leftEdge;
+
+        var at = string[0..].ptr;
+        while (at[0] != 0) {
+            if (at[0] == '\\' and at[1] == '#' and at[2] != 0 and at[3] != 0 and at[4] != 0) {
+                const cScale = 1.0 / 9.0;
+                colour = h.ClampV401(h.v4{
+                    h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0'))),
+                    h.Clampf01(cScale * @as(f32, @floatFromInt(at[3] - '0'))),
+                    h.Clampf01(cScale * @as(f32, @floatFromInt(at[4] - '0'))),
+                    1,
+                });
+                at += 5;
+            } else if (at[0] == '\\' and at[1] == '^' and at[2] != 0) {
+                const cScale = 1.0 / 9.0;
+                charScale = fontScale * h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0')));
+                at += 3;
+            } else {
+                if (at[0] != ' ') {
+                    matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(at[0]);
+                    const bitmapID = h.GetBestMatchBitmapFrom(renderGroup.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
+
+                    renderGroup.PushBitmap2(bitmapID, charScale, .{ atX, atY, 0 }, colour);
+                }
+                atX += charScale;
+
+                at += 1;
+            }
+        }
+
+        atY -= 1.2 * fontScale;
+    }
+}
+
+fn OverlayCycleCounters(gameMemory: *platform.memory) void {
+    const nameTable = [_][:0]const u8{
+        "UpdateAndRender",
+        "RenderGroupToOutput",
+        "DrawRectangleQuickly",
+        "DrawRectangleSlowly",
+        "ProcessPixel",
+    };
+
+    if (HANDMADE_INTERNAL) {
+        DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:\n");
+        for (gameMemory.counters) |counter| {
+            if (counter.hitCount > 0) {
+                // var textbuffer = [1]u16{0} ** 256;
+                // _ = win32.x.wsprintfW(
+                //     @as([*:0]u16, @ptrCast(&textbuffer)),
+                //     win32.L("%S - %I64ucy %dh %I64ucy/h\n"),
+                //     @tagName(counter.t).ptr,
+                //     counter.cycleCount,
+                //     counter.hitCount,
+                //     counter.cycleCount / counter.hitCount,
+                // );
+                // _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&textbuffer)));
+
+                DEBUGTextLine(nameTable[@intFromEnum(counter.t)]);
+            }
+        }
+    }
+}
+
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(
@@ -528,7 +613,6 @@ pub export fn UpdateAndRender(
     }
 
     platform.BEGIN_TIMED_BLOCK(.UpdateAndRender);
-    defer platform.END_TIMED_BLOCK(.UpdateAndRender);
 
     assert(@sizeOf(h.game_state) <= gameMemory.permanentStorageSize);
     const gameState: *h.game_state = @alignCast(@ptrCast(gameMemory.permanentStorage));
@@ -744,6 +828,8 @@ pub export fn UpdateAndRender(
 
         tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(16), tranState);
 
+        DEBUGrenderGroup = h.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(16), false);
+
         gameState.music = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
         const groundBufferCount = 256; // 64
@@ -776,6 +862,11 @@ pub export fn UpdateAndRender(
         }
 
         tranState.initialized = true;
+    }
+
+    if (DEBUGrenderGroup) |rg| {
+        h.BeginRender(rg);
+        DEBUGReset(buffer.width, buffer.height);
     }
 
     if (!NOT_IGNORE and gameInput.executableReloaded) {
@@ -867,6 +958,7 @@ pub export fn UpdateAndRender(
 
     const renderMemory = h.BeginTemporaryMemory(&tranState.tranArena);
     const renderGroup = h.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(4), false);
+    h.BeginRender(renderGroup);
 
     const widthOfMonitorInMeters = 0.635;
     const metersToPixels = @as(f32, @floatFromInt(drawBuffer.width)) * widthOfMonitorInMeters;
@@ -1435,7 +1527,7 @@ pub export fn UpdateAndRender(
     }
 
     renderGroup.TiledRenderGroupToOutput(tranState.highPriorityQueue, drawBuffer);
-    h.FinishRenderGroup(renderGroup);
+    h.EndRender(renderGroup);
 
     h.EndSim(simRegion, gameState); // TODO (Manav): use defer
     h.EndTemporaryMemory(simMemory);
@@ -1443,6 +1535,15 @@ pub export fn UpdateAndRender(
 
     gameState.worldArena.CheckArena();
     tranState.tranArena.CheckArena();
+
+    platform.END_TIMED_BLOCK(.UpdateAndRender);
+
+    OverlayCycleCounters(gameMemory);
+
+    if (DEBUGrenderGroup) |rg| {
+        rg.TiledRenderGroupToOutput(tranState.highPriorityQueue, drawBuffer);
+        h.EndRender(DEBUGrenderGroup);
+    }
 }
 
 pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platform.sound_output_buffer) void {
