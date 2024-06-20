@@ -190,7 +190,11 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
     var result = h.loaded_bitmap{};
 
     if (USE_FONTS_FROM_WINDOWS) {
+        const maxWidth = 1024;
+        const maxHeight = 1024;
+
         const static = struct {
+            var bits: ?*anyopaque = null;
             var deviceContext: ?win32.HDC = null;
         };
 
@@ -216,8 +220,33 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
                 fontName[0.. :0],
             );
 
-            static.deviceContext = win32.CreateCompatibleDC(null);
-            const bitmap = win32.CreateCompatibleBitmap(static.deviceContext, 1024, 1024);
+            static.deviceContext = win32.CreateCompatibleDC(win32.GetDC(null));
+
+            const info: win32.BITMAPINFO = .{
+                .bmiHeader = win32.BITMAPINFOHEADER{
+                    .biSize = @sizeOf(win32.BITMAPINFOHEADER),
+                    .biWidth = maxWidth,
+                    .biHeight = maxHeight,
+                    .biPlanes = 1,
+                    .biBitCount = 32,
+                    .biCompression = win32.BI_RGB,
+                    .biSizeImage = 0,
+                    .biXPelsPerMeter = 0,
+                    .biYPelsPerMeter = 0,
+                    .biClrUsed = 0,
+                    .biClrImportant = 0,
+                },
+                .bmiColors = [1]win32.RGBQUAD{.{
+                    .rgbBlue = 0,
+                    .rgbGreen = 0,
+                    .rgbRed = 0,
+                    .rgbReserved = 0,
+                }},
+            };
+
+            const bitmap = win32.CreateDIBSection(static.deviceContext, &info, win32.DIB_RGB_COLORS, &static.bits, null, 0);
+            // const bitmap = win32.CreateCompatibleBitmap(static.deviceContext, 1024, 1024);
+
             _ = win32.SelectObject(static.deviceContext, bitmap);
             _ = win32.SelectObject(static.deviceContext, font);
             _ = win32.SetBkColor(static.deviceContext, 0x00000000);
@@ -226,13 +255,23 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
             _ = win32.GetTextMetricsW(static.deviceContext, &textMetric);
         }
 
+        const bits: [*]u32 = @alignCast(@ptrCast(static.bits));
+
+        @memset(bits[0 .. maxWidth * maxHeight], 0xffffffff);
+
         const cheesePoint = [1:0]u16{codePoint};
 
         var size: win32.SIZE = undefined;
         _ = win32.GetTextExtentPoint32W(static.deviceContext, cheesePoint[0..], 1, &size);
 
         var width = size.cx;
+        if (width >= maxWidth) {
+            width = maxWidth;
+        }
         var height = size.cy;
+        if (height >= maxHeight) {
+            height = maxHeight;
+        }
 
         // _ = win32.PatBlt(static.deviceContext, 0, 0, width, height, win32.BLACKNESS);
         // _ = win32.SetBkMode(static.deviceContext, win32.TRANSPARENT);
@@ -243,11 +282,14 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
         var minY: i32 = 10000;
         var maxX: i32 = -10000;
         var maxY: i32 = -10000;
-        for (0..@intCast(height)) |y| {
-            for (0..@intCast(width)) |x| {
-                const pixel = win32.GetPixel(static.deviceContext, @intCast(x), @intCast(y));
 
-                if (pixel != 0) {
+        var row: [*]u32 = @as([*]u32, @alignCast(@ptrCast(static.bits.?))) + (maxHeight - 1) * maxWidth;
+        for (0..@intCast(height)) |y| {
+            var pixel = row;
+            for (0..@intCast(width)) |x| {
+                // const refPixel = win32.GetPixel(static.deviceContext, @intCast(x), @intCast(y));
+                // assert(refPixel == pixel[0]);
+                if (pixel[0] != 0) {
                     if (minY > y) {
                         minY = @intCast(y);
                     }
@@ -261,14 +303,17 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
                         maxX = @intCast(x);
                     }
                 }
+
+                pixel += 1;
             }
+            row -= maxWidth;
         }
 
         if (minX <= maxX) {
-            minX -= 1;
-            minY -= 1;
-            maxX += 1;
-            maxY += 1;
+            // minX -= 1;
+            // minY -= 1;
+            // maxX += 1;
+            // maxY += 1;
 
             width = (maxX - minX) + 1;
             height = (maxY - minY) + 1;
@@ -285,19 +330,29 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
             result.free = memory;
 
             var destRow: [*]u8 = result.memory + @as(usize, @intCast((height - 1) * result.pitch));
-            for (@intCast(minY)..@intCast(maxY + 1)) |y| {
+            var sourceRow: [*]u32 = @as([*]u32, @alignCast(@ptrCast(static.bits.?))) + @as(usize, @intCast((maxHeight - 1 - minY) * maxWidth));
+            var y = minY;
+            while (y <= maxY) : (y += 1) {
+                var source: [*]u32 = @as([*]u32, @alignCast(@ptrCast(sourceRow))) + @as(usize, @intCast(minX));
                 var dest: [*]u32 = @alignCast(@ptrCast(destRow));
-                for (@intCast(minX)..@intCast(maxX + 1)) |x| {
-                    const pixel = win32.GetPixel(static.deviceContext, @intCast(x), @intCast(y));
+                var x = minX;
+                while (x <= maxX) : (x += 1) {
+
+                    // const pixel = win32.GetPixel(static.deviceContext, x, y);
+                    // assert(pixel == source[0]);
+                    const pixel = source[0];
 
                     const gray: u32 = pixel & 0xff;
-                    const alpha: u32 = 0xff;
+                    const alpha: u32 = gray;
 
                     dest[0] = ((alpha << 24) | (gray << 16) | (gray << 8) | (gray << 0));
                     dest += 1;
+
+                    source += 1;
                 }
 
                 destRow -= @as(usize, @intCast(result.pitch));
+                sourceRow -= maxWidth;
             }
         }
     } else {
