@@ -193,7 +193,7 @@ pub const get_all_files_of_type_begin = *const fn (fileType: file_type) file_gro
 pub const get_all_files_of_type_end = *const fn (fileGroup: *file_group) void;
 pub const open_next_file = *const fn (fileGroup: *file_group) file_handle;
 pub const read_data_from_file = *const fn (source: *file_handle, offset: u64, size: u64, dest: *anyopaque) void;
-pub const file_error = *const fn (source: *file_handle, message: []const u8) void;
+pub const file_error = *const fn (source: *file_handle, message: [:0]const u8) void;
 
 pub const platform_allocate_memory = *const fn (size: memory_index) ?*anyopaque;
 pub const platform_deallocate_memory = *const fn (memory: ?*anyopaque) void;
