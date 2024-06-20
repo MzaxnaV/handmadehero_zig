@@ -509,10 +509,15 @@ pub inline fn ChunkPosFromTilePos(w: *h.world, absTileX: i32, absTileY: i32, abs
 }
 
 pub var DEBUGrenderGroup: ?*h.render_group = null;
+pub var leftEdge: f32 = 0;
 pub var atY: f32 = 0;
+pub var fontScale: f32 = 0;
 
-fn DEBUGReset() void {
-    atY = 0;
+fn DEBUGReset(width: u32, height: u32) void {
+    fontScale = 20;
+    DEBUGrenderGroup.?.Orthographic(width, height, 1);
+    atY = 0.5 * @as(f32, @floatFromInt(height)) - 0.5 * fontScale;
+    leftEdge = -0.5 * @as(f32, @floatFromInt(width)) + 0.5 * fontScale;
 }
 
 fn DEBUGTextLine(string: []const u8) void {
@@ -521,19 +526,18 @@ fn DEBUGTextLine(string: []const u8) void {
         var weightVectorFont = h.asset_vector{};
         weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
 
-        const scale: f32 = 0.2;
-        var atX: f32 = 0;
+        var atX: f32 = leftEdge;
         for (string) |char| {
             if (char != ' ') {
                 matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(char);
                 const bitmapID = h.GetBestMatchBitmapFrom(renderGroup.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
 
-                renderGroup.PushBitmap2(bitmapID, scale, .{ atX, atY, 0 }, .{ 1, 1, 1, 1 });
+                renderGroup.PushBitmap2(bitmapID, fontScale, .{ atX, atY, 0 }, .{ 1, 1, 1, 1 });
             }
-            atX += scale;
+            atX += fontScale;
         }
 
-        atY -= 1.2 * scale;
+        atY -= 1.2 * fontScale;
     }
 }
 
@@ -841,7 +845,7 @@ pub export fn UpdateAndRender(
 
     if (DEBUGrenderGroup) |rg| {
         h.BeginRender(rg);
-        rg.Orthographic(buffer.width, buffer.height, 100);
+        DEBUGReset(buffer.width, buffer.height);
     }
 
     if (!NOT_IGNORE and gameInput.executableReloaded) {
@@ -1518,7 +1522,6 @@ pub export fn UpdateAndRender(
     if (DEBUGrenderGroup) |rg| {
         rg.TiledRenderGroupToOutput(tranState.highPriorityQueue, drawBuffer);
         h.EndRender(DEBUGrenderGroup);
-        DEBUGReset();
     }
 }
 
