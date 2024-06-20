@@ -509,19 +509,31 @@ pub inline fn ChunkPosFromTilePos(w: *h.world, absTileX: i32, absTileY: i32, abs
 }
 
 pub var DEBUGrenderGroup: ?*h.render_group = null;
+pub var atY: f32 = 0;
 
-pub fn DEBUGTextLine(string: []const u8) void {
+fn DEBUGReset() void {
+    atY = 0;
+}
+
+fn DEBUGTextLine(string: []const u8) void {
     if (DEBUGrenderGroup) |renderGroup| {
         var matchVectorFont = h.asset_vector{};
         var weightVectorFont = h.asset_vector{};
         weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
 
+        const scale: f32 = 0.2;
+        var atX: f32 = 0;
         for (string) |char| {
-            matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(char);
-            const bitmapID = h.GetBestMatchBitmapFrom(renderGroup.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
+            if (char != ' ') {
+                matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(char);
+                const bitmapID = h.GetBestMatchBitmapFrom(renderGroup.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
 
-            renderGroup.PushBitmap2(bitmapID, 1.2, .{ 1, 1, 1 }, .{ 1, 1, 1, 1 });
+                renderGroup.PushBitmap2(bitmapID, scale, .{ atX, atY, 0 }, .{ 1, 1, 1, 1 });
+            }
+            atX += scale;
         }
+
+        atY -= 1.2 * scale;
     }
 }
 
@@ -829,6 +841,7 @@ pub export fn UpdateAndRender(
 
     if (DEBUGrenderGroup) |rg| {
         h.BeginRender(rg);
+        rg.Orthographic(buffer.width, buffer.height, 100);
     }
 
     if (!NOT_IGNORE and gameInput.executableReloaded) {
@@ -1505,6 +1518,7 @@ pub export fn UpdateAndRender(
     if (DEBUGrenderGroup) |rg| {
         rg.TiledRenderGroupToOutput(tranState.highPriorityQueue, drawBuffer);
         h.EndRender(DEBUGrenderGroup);
+        DEBUGReset();
     }
 }
 
