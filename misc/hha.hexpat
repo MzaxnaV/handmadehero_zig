@@ -101,10 +101,11 @@ namespace hha {
 }
 
 namespace vis {
+    // Visualozer from custom plugin, inside ./misc/enhanced_bitmap_visualizer.hexplug
     struct bitmap_data<auto width, auto height> {
         u32 data[width * height];
-    } [[hex::visualize("bitmap", data, width, height)]]; 
-    
+    } [[hex::visualize("custom_bitmap", data, width, height, 0x03020104)]]; // BGRA
+        
     struct sound_data<auto channels, auto samples> {
         u32 sample_rate = 48000;    // fixed sample rate
         u16 data[channels * samples];

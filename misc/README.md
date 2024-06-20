@@ -3,7 +3,7 @@
 1. [LLVM MCA output](/misc/llvm_mca_output.md) for the specific day.
 2. [Execuration units and port details](/misc/cpu_details.md).
 3. [wave generator script](/misc/gen_wav.py).
-4. *.hha [pattern file](/misc/hha.hexpat) for [ImHex editor](https://imhex.werwolv.net/).
+4. *.hha [pattern file](/misc/hha.hexpat) and [plugin file](/misc/enhanced_bitmap_visualizer.hexplug) for [ImHex editor](https://imhex.werwolv.net/) works on v1.32.2.
     ![hha preview](imhex_hha.png)
 5. HHA File Content Sizes:
     ```
