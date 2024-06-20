@@ -318,23 +318,25 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
             width = (maxX - minX) + 1;
             height = (maxY - minY) + 1;
 
-            result.width = width;
-            result.height = height;
+            result.width = width + 2;
+            result.height = height + 2;
             result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
 
-            const memory = allocator.alloc(u8, @intCast(result.pitch * height)) catch |err| {
+            const memory = allocator.alloc(u8, @intCast(result.pitch * result.height)) catch |err| {
                 std.log.err("{}\nCodepoint: {c}\n", .{ err, codePoint });
                 return err;
             };
             result.memory = memory.ptr;
             result.free = memory;
 
-            var destRow: [*]u8 = result.memory + @as(usize, @intCast((height - 1) * result.pitch));
+            @memset(result.memory[0..@intCast(result.pitch * result.height)], 0);
+
+            var destRow: [*]u8 = result.memory + @as(usize, @intCast((result.height - 1 - 1) * result.pitch));
             var sourceRow: [*]u32 = @as([*]u32, @alignCast(@ptrCast(static.bits.?))) + @as(usize, @intCast((maxHeight - 1 - minY) * maxWidth));
             var y = minY;
             while (y <= maxY) : (y += 1) {
                 var source: [*]u32 = @as([*]u32, @alignCast(@ptrCast(sourceRow))) + @as(usize, @intCast(minX));
-                var dest: [*]u32 = @alignCast(@ptrCast(destRow));
+                var dest: [*]u32 = @as([*]u32, @alignCast(@ptrCast(destRow))) + 1;
                 var x = minX;
                 while (x <= maxX) : (x += 1) {
 
