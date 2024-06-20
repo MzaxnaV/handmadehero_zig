@@ -570,9 +570,8 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
         } else {
             asset_.state = @intFromEnum(asset_state.AssetState_Unloaded);
         }
-    } else {
-        // NOTE (Manav): not really needed
-        while (asset_.state == @intFromEnum(asset_state.AssetState_Queued)) {}
+    } else if (immediate) {
+        while (@atomicLoad(u32, &asset_.state, .unordered) == @intFromEnum(asset_state.AssetState_Queued)) {}
     }
 }
 
