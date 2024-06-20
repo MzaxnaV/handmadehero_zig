@@ -520,21 +520,42 @@ fn DEBUGReset(width: u32, height: u32) void {
     leftEdge = -0.5 * @as(f32, @floatFromInt(width)) + 0.5 * fontScale;
 }
 
-fn DEBUGTextLine(string: []const u8) void {
+fn DEBUGTextLine(string: [:0]const u8) void {
     if (DEBUGrenderGroup) |renderGroup| {
         var matchVectorFont = h.asset_vector{};
         var weightVectorFont = h.asset_vector{};
         weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
 
+        var charScale = fontScale;
+        var colour = h.v4{ 1, 1, 1, 1 };
         var atX: f32 = leftEdge;
-        for (string) |char| {
-            if (char != ' ') {
-                matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(char);
-                const bitmapID = h.GetBestMatchBitmapFrom(renderGroup.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
 
-                renderGroup.PushBitmap2(bitmapID, fontScale, .{ atX, atY, 0 }, .{ 1, 1, 1, 1 });
+        var at = string[0..].ptr;
+        while (at[0] != 0) {
+            if (at[0] == '\\' and at[1] == '#' and at[2] != 0 and at[3] != 0 and at[4] != 0) {
+                const cScale = 1.0 / 9.0;
+                colour = h.ClampV401(h.v4{
+                    h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0'))),
+                    h.Clampf01(cScale * @as(f32, @floatFromInt(at[3] - '0'))),
+                    h.Clampf01(cScale * @as(f32, @floatFromInt(at[4] - '0'))),
+                    1,
+                });
+                at += 5;
+            } else if (at[0] == '\\' and at[1] == '^' and at[2] != 0) {
+                const cScale = 1.0 / 9.0;
+                charScale = fontScale * h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0')));
+                at += 3;
+            } else {
+                if (at[0] != ' ') {
+                    matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(at[0]);
+                    const bitmapID = h.GetBestMatchBitmapFrom(renderGroup.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
+
+                    renderGroup.PushBitmap2(bitmapID, charScale, .{ atX, atY, 0 }, colour);
+                }
+                atX += charScale;
+
+                at += 1;
             }
-            atX += fontScale;
         }
 
         atY -= 1.2 * fontScale;
@@ -551,7 +572,7 @@ fn OverlayCycleCounters(gameMemory: *platform.memory) void {
     };
 
     if (HANDMADE_INTERNAL) {
-        DEBUGTextLine("DEBUG CYCLE COUNTS:\n");
+        DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:\n");
         for (gameMemory.counters) |counter| {
             if (counter.hitCount > 0) {
                 // var textbuffer = [1]u16{0} ** 256;
