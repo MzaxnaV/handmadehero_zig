@@ -317,8 +317,8 @@ pub const loaded_bitmap = extern struct {
         // const nZScale = 0.5 * (xAxisLength + yAxisLength);
         // _ = nZScale;
 
-        const invXAxisLengthSq = 1 / h.LengthSq(xAxis);
-        const invYAxisLengthSq = 1 / h.LengthSq(yAxis);
+        const invXAxisLengthSq: f32 = 1.0 / h.LengthSq(xAxis);
+        const invYAxisLengthSq: f32 = 1.0 / h.LengthSq(yAxis);
 
         var fillRect = h.rect2i.InvertedInfinityRectangle();
 
@@ -583,15 +583,15 @@ pub const loaded_bitmap = extern struct {
                         const texelAg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelAag & maskffff);
                         const texelAb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelArb & maskffff);
 
-                        const texelBr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
+                        const texelBr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelBrb, 16));
                         const texelBg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelBag & maskffff);
                         const texelBb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelBrb & maskffff);
 
-                        const texelCr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
+                        const texelCr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelCrb, 16));
                         const texelCg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelCag & maskffff);
                         const texelCb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelCrb & maskffff);
 
-                        const texelDr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelArb, 16));
+                        const texelDr: simd.f32x4 = simd.z._mm_cvtepi32_ps(simd.z._mm_srli_epi32(texelDrb, 16));
                         const texelDg: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelDag & maskffff);
                         const texelDb: simd.f32x4 = simd.z._mm_cvtepi32_ps(texelDrb & maskffff);
 
