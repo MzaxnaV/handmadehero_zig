@@ -186,7 +186,7 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !h.loaded_bitmap 
     return result;
 }
 
-fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8, allocator: std.mem.Allocator) !h.loaded_bitmap {
+fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8, asset: *h.hha_asset, allocator: std.mem.Allocator) !h.loaded_bitmap {
     var result = h.loaded_bitmap{};
 
     if (USE_FONTS_FROM_WINDOWS) {
@@ -196,6 +196,7 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
         const static = struct {
             var bits: ?*anyopaque = null;
             var deviceContext: ?win32.HDC = null;
+            var textMetric: win32.TEXTMETRICW = undefined;
         };
 
         if (static.deviceContext) |_| {} else {
@@ -251,8 +252,7 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
             _ = win32.SelectObject(static.deviceContext, font);
             _ = win32.SetBkColor(static.deviceContext, 0x00000000);
 
-            var textMetric: win32.TEXTMETRICW = undefined;
-            _ = win32.GetTextMetricsW(static.deviceContext, &textMetric);
+            _ = win32.GetTextMetricsW(static.deviceContext, &static.textMetric);
         }
 
         const bits: [*]u32 = @alignCast(@ptrCast(static.bits));
@@ -264,13 +264,13 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
         var size: win32.SIZE = undefined;
         _ = win32.GetTextExtentPoint32W(static.deviceContext, cheesePoint[0..], 1, &size);
 
-        var width = size.cx;
-        if (width >= maxWidth) {
-            width = maxWidth;
+        var boundWidth = size.cx;
+        if (boundWidth >= maxWidth) {
+            boundWidth = maxWidth;
         }
-        var height = size.cy;
-        if (height >= maxHeight) {
-            height = maxHeight;
+        var boundHeight = size.cy;
+        if (boundHeight >= maxHeight) {
+            boundHeight = maxHeight;
         }
 
         // _ = win32.PatBlt(static.deviceContext, 0, 0, width, height, win32.BLACKNESS);
@@ -284,9 +284,10 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
         var maxY: i32 = -10000;
 
         var row: [*]u32 = @as([*]u32, @alignCast(@ptrCast(static.bits.?))) + (maxHeight - 1) * maxWidth;
-        for (0..@intCast(height)) |y| {
+        // const baseline = 0;
+        for (0..@intCast(boundHeight)) |y| {
             var pixel = row;
-            for (0..@intCast(width)) |x| {
+            for (0..@intCast(boundWidth)) |x| {
                 // const refPixel = win32.GetPixel(static.deviceContext, @intCast(x), @intCast(y));
                 // assert(refPixel == pixel[0]);
                 if (pixel[0] != 0) {
@@ -310,13 +311,8 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
         }
 
         if (minX <= maxX) {
-            // minX -= 1;
-            // minY -= 1;
-            // maxX += 1;
-            // maxY += 1;
-
-            width = (maxX - minX) + 1;
-            height = (maxY - minY) + 1;
+            const width = (maxX - minX) + 1;
+            const height = (maxY - minY) + 1;
 
             result.width = width + 2;
             result.height = height + 2;
@@ -344,10 +340,21 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
                     // assert(pixel == source[0]);
                     const pixel = source[0];
 
-                    const gray: u32 = pixel & 0xff;
-                    const alpha: u32 = gray;
+                    const gray: f32 = @floatFromInt(pixel & 0xff);
+                    var texel = h.v4{ 255, 255, 255, gray };
 
-                    dest[0] = ((alpha << 24) | (gray << 16) | (gray << 8) | (gray << 0));
+                    texel = h.SRGB255ToLinear1(texel);
+
+                    // texel.rgb *= texel.a;
+                    texel = h.ToV4(h.Scale(h.RGB(texel), h.A(texel)), h.A(texel));
+
+                    texel = h.Linear1ToSRGB255(texel);
+
+                    dest[0] =
+                        (@as(u32, @intFromFloat((h.A(texel) + 0.5))) << 24 |
+                        @as(u32, @intFromFloat((h.R(texel) + 0.5))) << 16 |
+                        @as(u32, @intFromFloat((h.G(texel) + 0.5))) << 8 |
+                        @as(u32, @intFromFloat((h.B(texel) + 0.5))) << 0);
                     dest += 1;
 
                     source += 1;
@@ -357,6 +364,10 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
                 sourceRow -= maxWidth;
             }
         }
+        asset.data.bitmap.alignPercentage = [2]f32{
+            1.0 / @as(f32, @floatFromInt(result.width - 1)),
+            (1.0 + @as(f32, @floatFromInt(maxY - (boundHeight - static.textMetric.tmDescent)))) / @as(f32, @floatFromInt(result.width)),
+        };
     } else {
         const ttfFile = ReadEntireFile(.{ .name = fileName, .absolute = true }, allocator) catch |err| {
             std.log.err("{}\nFilename: {s}\n", .{ err, fileName });
@@ -828,7 +839,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
                 },
                 .AssetType_Bitmap, .AssetType_Font => {
                     const b = if (source.t == .AssetType_Font)
-                        try LoadGlyphBitmap(source.fileName, source.fontName, source.data.codePoint, allocator)
+                        try LoadGlyphBitmap(source.fileName, source.fontName, source.data.codePoint, dest, allocator)
                     else
                         try LoadBMP(source.fileName, allocator);
 

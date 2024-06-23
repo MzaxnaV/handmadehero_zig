@@ -159,6 +159,11 @@ pub const game_assets = struct {
         return result;
     }
 
+    pub inline fn GetBitmapInfo(self: *game_assets, ID: h.bitmap_id) *h.hha_bitmap {
+        const result = &self.assets[ID.value].hha.data.bitmap;
+        return result;
+    }
+
     pub inline fn GetSoundInfo(self: *game_assets, ID: h.sound_id) *h.hha_sound {
         const result = &self.assets[ID.value].hha.data.sound;
         return result;

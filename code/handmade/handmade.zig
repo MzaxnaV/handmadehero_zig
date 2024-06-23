@@ -514,7 +514,7 @@ pub var atY: f32 = 0;
 pub var fontScale: f32 = 0;
 
 fn DEBUGReset(width: u32, height: u32) void {
-    fontScale = 20;
+    fontScale = 1;
     DEBUGrenderGroup.?.Orthographic(width, height, 1);
     atY = 0.5 * @as(f32, @floatFromInt(height)) - 0.5 * fontScale;
     leftEdge = -0.5 * @as(f32, @floatFromInt(width)) + 0.5 * fontScale;
@@ -546,19 +546,28 @@ fn DEBUGTextLine(string: [:0]const u8) void {
                 charScale = fontScale * h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0')));
                 at += 3;
             } else {
+                var charDim: f32 = charScale * 10.0;
                 if (at[0] != ' ') {
                     matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(at[0]);
-                    const bitmapID = h.GetBestMatchBitmapFrom(renderGroup.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
+                    const bitmapID = h.GetBestMatchBitmapFrom(
+                        renderGroup.assets,
+                        .Asset_Font,
+                        &matchVectorFont,
+                        &weightVectorFont,
+                    );
 
-                    renderGroup.PushBitmap2(bitmapID, charScale, .{ atX, atY, 0 }, colour);
+                    const info = renderGroup.assets.GetBitmapInfo(bitmapID);
+                    charDim = charScale * @as(f32, @floatFromInt(info.dim[0] + 2));
+
+                    renderGroup.PushBitmap2(bitmapID, charScale * @as(f32, @floatFromInt(info.dim[1])), .{ atX, atY, 0 }, colour);
                 }
-                atX += charScale;
+                atX += charDim;
 
                 at += 1;
             }
         }
 
-        atY -= 1.2 * fontScale;
+        atY -= 1.2 * 80 * fontScale;
     }
 }
 
@@ -830,7 +839,7 @@ pub export fn UpdateAndRender(
 
         DEBUGrenderGroup = h.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(16), false);
 
-        gameState.music = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
+        // gameState.music = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
         const groundBufferCount = 256; // 64
         tranState.groundBuffers = tranState.tranArena.PushSlice(h.ground_buffer, groundBufferCount);
@@ -1214,44 +1223,46 @@ pub export fn UpdateAndRender(
                     renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
-                    for (0..3) |_| {
-                        const particle: *h.particle = &gameState.particles[gameState.nextParticle];
-                        gameState.nextParticle += 1;
+                    if (false) {
+                        for (0..3) |_| {
+                            const particle: *h.particle = &gameState.particles[gameState.nextParticle];
+                            gameState.nextParticle += 1;
 
-                        if (gameState.nextParticle >= gameState.particles.len) {
-                            gameState.nextParticle = 0;
+                            if (gameState.nextParticle >= gameState.particles.len) {
+                                gameState.nextParticle = 0;
+                            }
+
+                            particle.p = .{ gameState.effectsEntropy.RandomBetweenF32(-0.05, 0.05), 0, 0 };
+                            particle.dP = .{
+                                gameState.effectsEntropy.RandomBetweenF32(-0.01, 0.01),
+                                7 * gameState.effectsEntropy.RandomBetweenF32(0.7, 1),
+                                0,
+                            };
+                            particle.ddP = .{ 0, -9.8, 0 };
+                            particle.colour = .{
+                                gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
+                                gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
+                                gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
+                                1.0,
+                            };
+                            particle.dColour = .{ 0, 0, 0, -0.25 };
+
+                            var matchVectorFont = h.asset_vector{};
+                            var weightVectorFont = h.asset_vector{};
+
+                            const nothings = "NOTHINGS";
+
+                            matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
+                            weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
+
+                            particle.bitmapID = h.GetBestMatchBitmapFrom(
+                                tranState.assets,
+                                .Asset_Font,
+                                &matchVectorFont,
+                                &weightVectorFont,
+                            );
+                            // particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
                         }
-
-                        particle.p = .{ gameState.effectsEntropy.RandomBetweenF32(-0.05, 0.05), 0, 0 };
-                        particle.dP = .{
-                            gameState.effectsEntropy.RandomBetweenF32(-0.01, 0.01),
-                            7 * gameState.effectsEntropy.RandomBetweenF32(0.7, 1),
-                            0,
-                        };
-                        particle.ddP = .{ 0, -9.8, 0 };
-                        particle.colour = .{
-                            gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
-                            gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
-                            gameState.effectsEntropy.RandomBetweenF32(0.75, 1),
-                            1.0,
-                        };
-                        particle.dColour = .{ 0, 0, 0, -0.25 };
-
-                        var matchVectorFont = h.asset_vector{};
-                        var weightVectorFont = h.asset_vector{};
-
-                        const nothings = "NOTHINGS";
-
-                        matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
-                        weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
-
-                        particle.bitmapID = h.GetBestMatchBitmapFrom(
-                            tranState.assets,
-                            .Asset_Font,
-                            &matchVectorFont,
-                            &weightVectorFont,
-                        );
-                        // particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
                     }
 
                     h.ZeroStruct(@TypeOf(gameState.particleCels), &gameState.particleCels);
