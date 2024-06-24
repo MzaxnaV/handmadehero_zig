@@ -218,7 +218,7 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
                 win32.CLIP_DEFAULT_PRECIS,
                 win32.ANTIALIASED_QUALITY,
                 win32.FF_DONTCARE,
-                fontName[0.. :0],
+                fontName.ptr,
             );
 
             static.deviceContext = win32.CreateCompatibleDC(win32.GetDC(null));
@@ -255,7 +255,7 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
             _ = win32.GetTextMetricsW(static.deviceContext, &static.textMetric);
         }
 
-        const bits: [*]u32 = @alignCast(@ptrCast(static.bits));
+        const bits: [*]u32 = @alignCast(@ptrCast(static.bits.?));
 
         @memset(bits[0 .. maxWidth * maxHeight], 0xffffffff);
 
@@ -283,7 +283,7 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
         var maxX: i32 = -10000;
         var maxY: i32 = -10000;
 
-        var row: [*]u32 = @as([*]u32, @alignCast(@ptrCast(static.bits.?))) + (maxHeight - 1) * maxWidth;
+        var row: [*]u32 = bits + (maxHeight - 1) * maxWidth;
         // const baseline = 0;
         for (0..@intCast(boundHeight)) |y| {
             var pixel = row;
@@ -328,10 +328,10 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
             @memset(result.memory[0..@intCast(result.pitch * result.height)], 0);
 
             var destRow: [*]u8 = result.memory + @as(usize, @intCast((result.height - 1 - 1) * result.pitch));
-            var sourceRow: [*]u32 = @as([*]u32, @alignCast(@ptrCast(static.bits.?))) + @as(usize, @intCast((maxHeight - 1 - minY) * maxWidth));
+            var sourceRow: [*]u32 = bits + @as(usize, @intCast((maxHeight - 1 - minY) * maxWidth));
             var y = minY;
             while (y <= maxY) : (y += 1) {
-                var source: [*]u32 = @as([*]u32, @alignCast(@ptrCast(sourceRow))) + @as(usize, @intCast(minX));
+                var source: [*]u32 = sourceRow + @as(usize, @intCast(minX));
                 var dest: [*]u32 = @as([*]u32, @alignCast(@ptrCast(destRow))) + 1;
                 var x = minX;
                 while (x <= maxX) : (x += 1) {
@@ -365,8 +365,8 @@ fn LoadGlyphBitmap(fileName: [:0]const u8, fontName: [:0]const u8, codePoint: u8
             }
         }
         asset.data.bitmap.alignPercentage = [2]f32{
-            1.0 / @as(f32, @floatFromInt(result.width - 1)),
-            (1.0 + @as(f32, @floatFromInt(maxY - (boundHeight - static.textMetric.tmDescent)))) / @as(f32, @floatFromInt(result.width)),
+            1.0 / @as(f32, @floatFromInt(result.width)),
+            (1.0 + @as(f32, @floatFromInt(maxY - (boundHeight - static.textMetric.tmDescent)))) / @as(f32, @floatFromInt(result.height)),
         };
     } else {
         const ttfFile = ReadEntireFile(.{ .name = fileName, .absolute = true }, allocator) catch |err| {
