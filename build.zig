@@ -15,6 +15,7 @@ pub fn build(b: *std.Build) void {
 
     const simd = b.createModule(.{
         .root_source_file = b.path("./code/simd.zig"),
+        .optimize = .ReleaseFast,
     });
 
     const win32 = b.dependency("zigwin32", .{}).module("zigwin32");

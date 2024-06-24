@@ -36,6 +36,7 @@ pub const asset_type_id = enum(u32) {
     Asset_Torso,
 
     Asset_Font,
+    Asset_FontGlyph,
 
     //
     // Sounds
@@ -80,6 +81,15 @@ pub const bitmap_id = extern struct {
 };
 
 pub const sound_id = extern struct {
+    value: u32 align(1) = 0,
+
+    pub inline fn IsValid(self: sound_id) bool {
+        const result = self.value != 0;
+        return result;
+    }
+};
+
+pub const font_id = extern struct {
     value: u32 align(1) = 0,
 
     pub inline fn IsValid(self: sound_id) bool {
@@ -133,12 +143,28 @@ pub const hha_sound_chain = enum(u32) {
 pub const hha_bitmap = extern struct {
     dim: [2]u32 align(1),
     alignPercentage: [2]f32 align(1),
+    // NOTE: Data is:
+
+    // channels: u32[dim[1]][dim[0]],
 };
 
 pub const hha_sound = extern struct {
     sampleCount: u32 align(1),
     channelCount: u32 align(1),
     chain: hha_sound_chain align(1),
+    // NOTE: Data is:
+
+    // channels: u16[channelCount][sampleCount],
+};
+
+pub const hha_font = extern struct {
+    codePointCount: u32 align(1),
+    lineAdvance: f32 align(1),
+    // NOTE: Data is:
+
+    // info: hha_font_header,
+    // codePoints: bitmap_id[codePointCount],
+    // horizontalAdvance: f32[codePointCount],
 };
 
 pub const hha_asset = extern struct {
@@ -148,5 +174,6 @@ pub const hha_asset = extern struct {
     data: extern union {
         bitmap: hha_bitmap align(1),
         sound: hha_sound align(1),
+        font: hha_font align(1),
     } align(1),
 };

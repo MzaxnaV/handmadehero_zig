@@ -962,8 +962,8 @@ fn WriteNonHero() void {
 
     assets.BeginAssetType(.Asset_Font);
     for ('!'..'~' + 1) |character| {
-        // _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/arial.ttf", "Arial", @intCast(character));
-        _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/cour.ttf", "Courier New", @intCast(character));
+        _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/arial.ttf", "Arial", @intCast(character));
+        // _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/cour.ttf", "Courier New", @intCast(character));
 
         assets.AddTag(.Tag_UnicodeCodepoint, @floatFromInt(character));
     }

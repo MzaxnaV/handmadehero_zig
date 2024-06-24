@@ -59,7 +59,7 @@ pub fn main() !void {
     const source = try std.fs.cwd().openFile(fileName ++ ".txt", .{ .mode = .read_only });
     const dest = try std.fs.cwd().createFile(fileName ++ ".md", .{ .truncate = true });
 
-    var input_buf = try allocator.alloc(u8, 1000);
+    const input_buf = try allocator.alloc(u8, 1000);
     defer allocator.free(input_buf);
 
     var found_heading = false;

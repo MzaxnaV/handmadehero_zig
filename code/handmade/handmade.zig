@@ -524,50 +524,57 @@ fn DEBUGTextLine(string: [:0]const u8) void {
     if (DEBUGrenderGroup) |renderGroup| {
         var matchVectorFont = h.asset_vector{};
         var weightVectorFont = h.asset_vector{};
-        weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
 
-        var charScale = fontScale;
-        var colour = h.v4{ 1, 1, 1, 1 };
-        var atX: f32 = leftEdge;
+        const fontID: h.font_id = h.GetBestMatchFontFrom(
+            renderGroup.assets,
+            .Asset_Font,
+            &matchVectorFont,
+            &weightVectorFont,
+        );
 
-        var at = string[0..].ptr;
-        while (at[0] != 0) {
-            if (at[0] == '\\' and at[1] == '#' and at[2] != 0 and at[3] != 0 and at[4] != 0) {
-                const cScale = 1.0 / 9.0;
-                colour = h.ClampV401(h.v4{
-                    h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0'))),
-                    h.Clampf01(cScale * @as(f32, @floatFromInt(at[3] - '0'))),
-                    h.Clampf01(cScale * @as(f32, @floatFromInt(at[4] - '0'))),
-                    1,
-                });
-                at += 5;
-            } else if (at[0] == '\\' and at[1] == '^' and at[2] != 0) {
-                const cScale = 1.0 / 9.0;
-                charScale = fontScale * h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0')));
-                at += 3;
-            } else {
-                var charDim: f32 = charScale * 10.0;
-                if (at[0] != ' ') {
-                    matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(at[0]);
-                    const bitmapID = h.GetBestMatchBitmapFrom(
-                        renderGroup.assets,
-                        .Asset_Font,
-                        &matchVectorFont,
-                        &weightVectorFont,
-                    );
+        if (renderGroup.assets.GetFont(fontID, renderGroup.generationID)) |font| {
+            const info = renderGroup.assets.GetFontInfo(fontID);
+            var prevCodePoint: u32 = 0;
+            var charScale = fontScale;
+            var colour = h.v4{ 1, 1, 1, 1 };
+            var atX: f32 = leftEdge;
 
-                    const info = renderGroup.assets.GetBitmapInfo(bitmapID);
-                    charDim = charScale * @as(f32, @floatFromInt(info.dim[0] + 2));
+            var at = string[0..].ptr;
+            while (at[0] != 0) {
+                if (at[0] == '\\' and at[1] == '#' and at[2] != 0 and at[3] != 0 and at[4] != 0) {
+                    const cScale = 1.0 / 9.0;
+                    colour = h.ClampV401(h.v4{
+                        h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0'))),
+                        h.Clampf01(cScale * @as(f32, @floatFromInt(at[3] - '0'))),
+                        h.Clampf01(cScale * @as(f32, @floatFromInt(at[4] - '0'))),
+                        1,
+                    });
+                    at += 5;
+                } else if (at[0] == '\\' and at[1] == '^' and at[2] != 0) {
+                    const cScale = 1.0 / 9.0;
+                    charScale = fontScale * h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0')));
+                    at += 3;
+                } else {
+                    const codePoint = at[0];
+                    const advanceX: f32 = charScale * h.GetHorizontalAdvanceForPair(info, font, prevCodePoint, codePoint);
+                    atX += advanceX;
 
-                    renderGroup.PushBitmap2(bitmapID, charScale * @as(f32, @floatFromInt(info.dim[1])), .{ atX, atY, 0 }, colour);
+                    if (codePoint != ' ') {
+                        const bitmapID = h.GetBitmapForGlyph(renderGroup.assets, info, font, codePoint);
+                        const info_ = renderGroup.assets.GetBitmapInfo(bitmapID);
+
+                        // advanceX = charScale * @as(f32, @floatFromInt(info.dim[0] + 2));
+                        renderGroup.PushBitmap2(bitmapID, charScale * @as(f32, @floatFromInt(info_.dim[1])), .{ atX, atY, 0 }, colour);
+                    }
+
+                    prevCodePoint = @intCast(codePoint);
+
+                    at += 1;
                 }
-                atX += charDim;
-
-                at += 1;
             }
-        }
 
-        atY -= 1.2 * 80 * fontScale;
+            atY -= h.GetLineAdvanceFor(info, font) * fontScale;
+        }
     }
 }
 

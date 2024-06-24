@@ -25,6 +25,11 @@ pub const loaded_sound = extern struct {
     channelCount: u32 = 0,
 };
 
+pub const loaded_font = extern struct {
+    codePoints: [*]h.bitmap_id,
+    horizontalAdvance: [*]f32,
+};
+
 pub const asset_state = enum(u32) {
     AssetState_Unloaded,
     AssetState_Queued,
@@ -42,6 +47,7 @@ pub const asset_memory_header = struct {
     data: extern union {
         bitmap: h.loaded_bitmap,
         sound: loaded_sound,
+        font: loaded_font,
     },
 };
 
@@ -159,6 +165,16 @@ pub const game_assets = struct {
         return result;
     }
 
+    pub inline fn GetFont(self: *game_assets, ID: h.font_id, generationID: u32) ?*loaded_font {
+        var result: ?*loaded_font = null;
+
+        if (self.GetAsset(ID.value, generationID)) |header| {
+            result = &header.data.font;
+        }
+
+        return result;
+    }
+
     pub inline fn GetBitmapInfo(self: *game_assets, ID: h.bitmap_id) *h.hha_bitmap {
         const result = &self.assets[ID.value].hha.data.bitmap;
         return result;
@@ -166,6 +182,11 @@ pub const game_assets = struct {
 
     pub inline fn GetSoundInfo(self: *game_assets, ID: h.sound_id) *h.hha_sound {
         const result = &self.assets[ID.value].hha.data.sound;
+        return result;
+    }
+
+    pub inline fn GetFontInfo(self: *game_assets, ID: h.font_id) *h.hha_font {
+        const result = &self.assets[ID.value].hha.data.font;
         return result;
     }
 
@@ -449,7 +470,7 @@ fn AcquireAssetMemory(assets: *game_assets, size_: u32, assetIndex: u32) ?*asset
 
     // NOTE (Manav): Hack, blocks are always aligned (check AllocateGameAssets())
     // and since @sizeOf(asset_memory_block) is 32, we only need to forward align size
-    // so headers in LoadSound() and LoadBitmap() points to aligned memory address.
+    // so headers in LoadSound(), LoadBitmap(), etc, all points to aligned memory address.
     const size: u32 = @intCast(platform.Align(size_, 16));
 
     assets.BeginAssetLock();
@@ -582,6 +603,56 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
 
 pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id) void {
     return LoadBitmap(assets, ID, false);
+}
+
+pub fn LoadFont(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
+    if (ID.value == 0) return;
+
+    const asset_: *asset = &assets.assets[ID.value];
+
+    if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
+        var task: ?*h.task_with_memory = null;
+
+        if (!immediate) {
+            task = h.BeginTaskWithMemory(assets.tranState);
+        }
+        if (immediate or task != null) {
+            const info: h.hha_font = asset_.hha.data.font;
+
+            const horizontalAdvanceSize = info.codePointCount * info.codePointCount * @sizeOf(f32);
+            const codePointsSize = info.codePointCount * @sizeOf(h.bitmap_id);
+            const sizeData = codePointsSize + horizontalAdvanceSize;
+            const sizeTotal = sizeData + @sizeOf(asset_memory_header);
+
+            asset_.header = AcquireAssetMemory(assets, sizeTotal, ID.value).?;
+
+            const font: *loaded_font = &asset_.header.data.font;
+            font.codePoints = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
+            font.horizontalAdvance = @ptrCast(@as([*]u8, @ptrCast(font.codePoints)) + codePointsSize);
+
+            var work = load_asset_work{
+                .task = task,
+                .asset_ = &assets.assets[ID.value],
+                .handle = GetFileHandleFor(assets, asset_.fileIndex),
+                .offset = asset_.hha.dataOffset,
+                .size = sizeData,
+                .destination = font.codePoints,
+                .finalState = @intFromEnum(asset_state.AssetState_Loaded),
+            };
+
+            if (task) |_| {
+                const taskWork: *load_asset_work = task.?.arena.PushStruct(load_asset_work);
+                taskWork.* = work;
+                h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, taskWork);
+            } else {
+                LoadAssetWorkDirectly(&work);
+            }
+        } else {
+            asset_.state = @intFromEnum(asset_state.AssetState_Unloaded);
+        }
+    } else if (immediate) {
+        while (@atomicLoad(u32, &asset_.state, .unordered) == @intFromEnum(asset_state.AssetState_Queued)) {}
+    }
 }
 
 pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
@@ -736,6 +807,41 @@ pub inline fn GetFirstSoundFrom(assets: *game_assets, typeID: h.asset_type_id) h
 
 pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: h.asset_type_id, series: *h.random_series) h.sound_id {
     const result = h.sound_id{ .value = GetRandomAssetFrom(assets, typeID, series) };
+    return result;
+}
+
+pub inline fn GetBestMatchFontFrom(assets: *game_assets, typeID: h.asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) h.font_id {
+    const result = h.font_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
+    return result;
+}
+
+inline fn GetClampedCodePoint(info: *h.hha_font, codePoint: u32) u32 {
+    var result: u32 = 0;
+
+    if (codePoint < info.codePointCount) {
+        result = codePoint;
+    }
+
+    return result;
+}
+
+pub fn GetHorizontalAdvanceForPair(info: *h.hha_font, font: *loaded_font, desiredPrevCodePoint: u32, desiredCodePoint: u32) f32 {
+    const prevCodePoint = GetClampedCodePoint(info, desiredPrevCodePoint);
+    const codePoint = GetClampedCodePoint(info, desiredCodePoint);
+    const result = font.horizontalAdvance[prevCodePoint * info.codePointCount + codePoint];
+
+    return result;
+}
+
+pub fn GetBitmapForGlyph(_: *game_assets, info: *h.hha_font, font: *loaded_font, desiredCodePoint: u32) h.bitmap_id {
+    const codePoint: u32 = GetClampedCodePoint(info, desiredCodePoint);
+    const result = font.codePoints[codePoint];
+    return result;
+}
+
+pub fn GetLineAdvanceFor(info: *h.hha_font, _: *loaded_font) f32 {
+    const result = info.lineAdvance;
+
     return result;
 }
 
