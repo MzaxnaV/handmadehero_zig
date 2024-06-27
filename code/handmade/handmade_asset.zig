@@ -28,6 +28,7 @@ pub const loaded_sound = extern struct {
 pub const loaded_font = extern struct {
     codePoints: [*]h.bitmap_id,
     horizontalAdvance: [*]f32,
+    bitmapIDOffset: u32,
 };
 
 pub const asset_state = enum(u32) {
@@ -79,6 +80,7 @@ pub const asset_file = struct {
     assetTypeArray: []h.hha_asset_type,
 
     tagBase: u32,
+    fontBitmapIDOffset: i32,
 };
 
 pub const asset_memory_block_flags = packed struct(u64) {
@@ -239,6 +241,7 @@ pub const game_assets = struct {
             for (0..assets.files.len) |fileIndex| {
                 var file: *asset_file = &assets.files[fileIndex];
 
+                file.fontBitmapIDOffset = 0;
                 file.tagBase = assets.tagCount;
 
                 h.ZeroStruct(h.hha_header, &file.header);
@@ -296,6 +299,10 @@ pub const game_assets = struct {
                         const sourceType: *h.hha_asset_type = &file.assetTypeArray[sourceIndex];
 
                         if (sourceType.typeID == destTypeID) {
+                            if (sourceType.typeID == @intFromEnum(h.asset_type_id.Asset_FontGlyph)) {
+                                file.fontBitmapIDOffset = @as(i32, @intCast(assetCount)) - @as(i32, @intCast(sourceType.firstAssetIndex));
+                            }
+
                             const assetCountForType: u32 = (sourceType.onePastLastAssetIndex - sourceType.firstAssetIndex);
 
                             const tempMem = h.BeginTemporaryMemory(&tranState.tranArena);
@@ -395,8 +402,13 @@ fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
     h.EndTaskWithMemory(work.task.?);
 }
 
+inline fn GetFile(assets: *game_assets, fileIndex: u32) *asset_file {
+    const result: *asset_file = &assets.files[fileIndex];
+    return result;
+}
+
 inline fn GetFileHandleFor(assets: *game_assets, fileIndex: u32) *platform.file_handle {
-    const result: *platform.file_handle = &assets.files[fileIndex].handle;
+    const result: *platform.file_handle = &GetFile(assets, fileIndex).handle;
     return result;
 }
 
@@ -627,6 +639,7 @@ pub fn LoadFont(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
             asset_.header = AcquireAssetMemory(assets, sizeTotal, ID.value).?;
 
             const font: *loaded_font = &asset_.header.data.font;
+            font.bitmapIDOffset = GetFile(assets, asset_.fileIndex).fontBitmapIDOffset;
             font.codePoints = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
             font.horizontalAdvance = @ptrCast(@as([*]u8, @ptrCast(font.codePoints)) + codePointsSize);
 
@@ -835,7 +848,8 @@ pub fn GetHorizontalAdvanceForPair(info: *h.hha_font, font: *loaded_font, desire
 
 pub fn GetBitmapForGlyph(_: *game_assets, info: *h.hha_font, font: *loaded_font, desiredCodePoint: u32) h.bitmap_id {
     const codePoint: u32 = GetClampedCodePoint(info, desiredCodePoint);
-    const result = font.codePoints[codePoint];
+    var result = font.codePoints[codePoint];
+    result.value += font.bitmapIDOffset;
     return result;
 }
 
