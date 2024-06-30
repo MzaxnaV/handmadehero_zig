@@ -606,6 +606,8 @@ fn OverlayCycleCounters(gameMemory: *platform.memory) void {
             }
         }
     }
+
+    DEBUGTextLine("AVA WA Ta");
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------

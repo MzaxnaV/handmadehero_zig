@@ -336,18 +336,22 @@ fn LoadGlyphBitmap(font: *h.loaded_font, codePoint: u32, asset: *h.hha_asset, al
     if (USE_FONTS_FROM_WINDOWS) {
         _ = win32.SelectObject(global.fontDeviceContext, font.win32Handle);
 
-        var thisABC: win32.ABC = .{ .abcA = 0, .abcB = 0, .abcC = 0 };
-        _ = win32.GetCharABCWidthsW(global.fontDeviceContext, codePoint, codePoint, &thisABC);
+        if (false) {
+            var thisABC: win32.ABC = .{ .abcA = 0, .abcB = 0, .abcC = 0 };
+            _ = win32.GetCharABCWidthsW(global.fontDeviceContext, codePoint, codePoint, &thisABC);
+        }
 
         const globalFontBits: [*]u32 = @alignCast(@ptrCast(global.fontBits.?));
-        @memset(globalFontBits[0 .. MAX_FONT_WIDTH * MAX_FONT_HEIGHT], 0xffffffff);
+        @memset(globalFontBits[0 .. MAX_FONT_WIDTH * MAX_FONT_HEIGHT], 0);
 
         const cheesePoint = [1:0]u16{@intCast(codePoint)};
 
         var size: win32.SIZE = undefined;
         _ = win32.GetTextExtentPoint32W(global.fontDeviceContext, cheesePoint[0..], 1, &size);
 
-        var boundWidth = size.cx;
+        const preStepX = 128;
+
+        var boundWidth = size.cx + 2 * preStepX;
         if (boundWidth >= MAX_FONT_WIDTH) {
             boundWidth = MAX_FONT_WIDTH;
         }
@@ -359,7 +363,7 @@ fn LoadGlyphBitmap(font: *h.loaded_font, codePoint: u32, asset: *h.hha_asset, al
         // _ = win32.PatBlt(static.deviceContext, 0, 0, width, height, win32.BLACKNESS);
         // _ = win32.SetBkMode(static.deviceContext, win32.TRANSPARENT);
         _ = win32.SetTextColor(global.fontDeviceContext, 0x00ffffff); // TODO: Make an RGB macro for this
-        _ = win32.TextOutW(global.fontDeviceContext, 0, 0, cheesePoint[0..], 1);
+        _ = win32.TextOutW(global.fontDeviceContext, preStepX, 0, cheesePoint[0..], 1);
 
         var minX: i32 = 10000;
         var minY: i32 = 10000;
@@ -450,7 +454,7 @@ fn LoadGlyphBitmap(font: *h.loaded_font, codePoint: u32, asset: *h.hha_asset, al
             }
         }
         asset.data.bitmap.alignPercentage = [2]f32{
-            (1.0 - @as(f32, @floatFromInt(thisABC.abcA))) / @as(f32, @floatFromInt(result.width)),
+            (1.0 - @as(f32, @floatFromInt(minX - preStepX))) / @as(f32, @floatFromInt(result.width)),
             (1.0 + @as(f32, @floatFromInt(maxY - (boundHeight - font.textMetric.tmDescent)))) / @as(f32, @floatFromInt(result.height)),
         };
     } else {
