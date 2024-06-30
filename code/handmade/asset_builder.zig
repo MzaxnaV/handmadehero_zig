@@ -336,8 +336,10 @@ fn LoadGlyphBitmap(font: *h.loaded_font, codePoint: u32, asset: *h.hha_asset, al
     if (USE_FONTS_FROM_WINDOWS) {
         _ = win32.SelectObject(global.fontDeviceContext, font.win32Handle);
 
-        const globalFontBits: [*]u32 = @alignCast(@ptrCast(global.fontBits.?));
+        var thisABC: win32.ABC = .{ .abcA = 0, .abcB = 0, .abcC = 0 };
+        _ = win32.GetCharABCWidthsW(global.fontDeviceContext, codePoint, codePoint, &thisABC);
 
+        const globalFontBits: [*]u32 = @alignCast(@ptrCast(global.fontBits.?));
         @memset(globalFontBits[0 .. MAX_FONT_WIDTH * MAX_FONT_HEIGHT], 0xffffffff);
 
         const cheesePoint = [1:0]u16{@intCast(codePoint)};
@@ -448,7 +450,7 @@ fn LoadGlyphBitmap(font: *h.loaded_font, codePoint: u32, asset: *h.hha_asset, al
             }
         }
         asset.data.bitmap.alignPercentage = [2]f32{
-            1.0 / @as(f32, @floatFromInt(result.width)),
+            (1.0 - @as(f32, @floatFromInt(thisABC.abcA))) / @as(f32, @floatFromInt(result.width)),
             (1.0 + @as(f32, @floatFromInt(maxY - (boundHeight - font.textMetric.tmDescent)))) / @as(f32, @floatFromInt(result.height)),
         };
     } else {
