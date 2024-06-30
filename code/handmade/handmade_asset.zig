@@ -631,8 +631,8 @@ pub fn LoadFont(assets: *game_assets, ID: h.font_id, immediate: bool) void {
         if (immediate or task != null) {
             const info: h.hha_font = asset_.hha.data.font;
 
-            const horizontalAdvanceSize = info.codePointCount * info.codePointCount * @sizeOf(f32);
-            const codePointsSize = info.codePointCount * @sizeOf(h.bitmap_id);
+            const horizontalAdvanceSize = info.glyphCount * info.glyphCount * @sizeOf(f32);
+            const codePointsSize = info.glyphCount * @sizeOf(h.bitmap_id);
             const sizeData = codePointsSize + horizontalAdvanceSize;
             const sizeTotal = sizeData + @sizeOf(asset_memory_header);
 
@@ -835,7 +835,7 @@ pub inline fn GetBestMatchFontFrom(assets: *game_assets, typeID: h.asset_type_id
 inline fn GetClampedCodePoint(info: *h.hha_font, codePoint: u32) u32 {
     var result: u32 = 0;
 
-    if (codePoint < info.codePointCount) {
+    if (codePoint < info.glyphCount) {
         result = codePoint;
     }
 
@@ -845,7 +845,7 @@ inline fn GetClampedCodePoint(info: *h.hha_font, codePoint: u32) u32 {
 pub fn GetHorizontalAdvanceForPair(info: *h.hha_font, font: *loaded_font, desiredPrevCodePoint: u32, desiredCodePoint: u32) f32 {
     const prevCodePoint = GetClampedCodePoint(info, desiredPrevCodePoint);
     const codePoint = GetClampedCodePoint(info, desiredCodePoint);
-    const result = font.horizontalAdvance[prevCodePoint * info.codePointCount + codePoint];
+    const result = font.horizontalAdvance[prevCodePoint * info.glyphCount + codePoint];
 
     return result;
 }

@@ -508,6 +508,11 @@ pub inline fn ChunkPosFromTilePos(w: *h.world, absTileX: i32, absTileY: i32, abs
     return result;
 }
 
+// 5c0f - 小
+// 8033 - 耳
+// 6728 - 木
+// 514e - 兎
+
 pub var DEBUGrenderGroup: ?*h.render_group = null;
 pub var leftEdge: f32 = 0;
 pub var atY: f32 = 0;

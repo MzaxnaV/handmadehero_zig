@@ -157,16 +157,21 @@ pub const hha_sound = extern struct {
     // channels: u16[channelCount][sampleCount],
 };
 
+pub const hha_font_glyph = extern struct {
+    unicodeCodePoint: u32,
+    bitmapID: bitmap_id,
+};
+
 pub const hha_font = extern struct {
-    codePointCount: u32 align(1),
+    glyphCount: u32 align(1),
     descenderHeight: f32 align(1),
     ascenderHeight: f32 align(1),
     externalLeading: f32 align(1),
     // NOTE: Data is:
 
     // info: hha_font_header,
-    // codePoints: bitmap_id[codePointCount],
-    // horizontalAdvance: f32[codePointCount],
+    // codePoints: hha_font_glyph[glyphCount],
+    // horizontalAdvance: f32[glyphCount][glyphCount],
 };
 
 pub const hha_asset = extern struct {

@@ -17,6 +17,7 @@ pub const BITMAP_BYTES_PER_PIXEL = 4;
 
 pub const F32MAXIMUM = @import("std").math.floatMax(f32);
 pub const MAXINT32 = @import("std").math.maxInt(i32);
+pub const MAXUINT32 = @import("std").math.maxInt(u32);
 
 // ----------------------------------------------------------------------------------------------------------------------------------------
 
