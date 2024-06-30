@@ -261,9 +261,27 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, codePointCount: u32,
 
     font.horizontalAdvance = try allocator.alloc(f32, codePointCount * codePointCount);
 
+    const abcs: []win32.ABC = try allocator.alloc(win32.ABC, font.codePointCount);
+    _ = win32.GetCharABCWidthsW(global.fontDeviceContext, 0, (font.codePointCount - 1), @ptrCast(abcs.ptr));
     for (0..font.codePointCount) |codePointIndex| {
+        const thisABC = &abcs[codePointIndex];
+        const w: f32 = @as(f32, @floatFromInt(thisABC.abcA)) + @as(f32, @floatFromInt(thisABC.abcB)) + @as(f32, @floatFromInt(thisABC.abcC));
         for (0..font.codePointCount) |otherCodePointIndex| {
-            font.horizontalAdvance[codePointIndex * font.codePointCount + otherCodePointIndex] = @floatFromInt(font.textMetric.tmMaxCharWidth);
+            font.horizontalAdvance[codePointIndex * font.codePointCount + otherCodePointIndex] = w;
+        }
+    }
+
+    const kerningPairCount = win32.GetKerningPairsW(global.fontDeviceContext, 0, null);
+
+    const kerningPairs = try allocator.alloc(win32.KERNINGPAIR, kerningPairCount);
+    defer allocator.free(kerningPairs);
+
+    _ = win32.GetKerningPairsW(global.fontDeviceContext, kerningPairCount, kerningPairs.ptr);
+
+    for (0..kerningPairCount) |kerningPairIndex| {
+        const pair: *win32.KERNINGPAIR = &kerningPairs[kerningPairIndex];
+        if (pair.wFirst < font.codePointCount and pair.wSecond < font.codePointCount) {
+            font.horizontalAdvance[pair.wFirst * font.codePointCount + pair.wSecond] += @floatFromInt(pair.iKernAmount);
         }
     }
 
@@ -754,6 +772,7 @@ const game_assets = struct {
             .dim = .{ 0, 0 },
             .alignPercentage = alignPercentage,
         } };
+
         asset.source.t = .AssetType_Bitmap;
         asset.source.data = .{ .bitmap = .{
             .fileName = fileName,
