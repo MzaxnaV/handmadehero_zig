@@ -857,8 +857,14 @@ pub fn GetBitmapForGlyph(_: *game_assets, info: *h.hha_font, font: *loaded_font,
     return result;
 }
 
-pub fn GetLineAdvanceFor(info: *h.hha_font, _: *loaded_font) f32 {
-    const result = info.lineAdvance;
+pub fn GetLineAdvanceFor(info: *h.hha_font) f32 {
+    const result = info.ascenderHeight + info.descenderHeight + info.externalLeading;
+
+    return result;
+}
+
+pub fn GetStartingBaselineY(info: *h.hha_font) f32 {
+    const result = info.ascenderHeight;
 
     return result;
 }

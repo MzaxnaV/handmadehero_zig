@@ -159,7 +159,9 @@ pub const hha_sound = extern struct {
 
 pub const hha_font = extern struct {
     codePointCount: u32 align(1),
-    lineAdvance: f32 align(1),
+    descenderHeight: f32 align(1),
+    ascenderHeight: f32 align(1),
+    externalLeading: f32 align(1),
     // NOTE: Data is:
 
     // info: hha_font_header,

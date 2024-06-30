@@ -78,7 +78,9 @@ namespace hha {
 
     struct font {
         u32 codePointCount;
-        float lineAdvance;
+        float descenderHeight;
+        float ascenderHeight;
+        float externalLeadin;
     };
     
     union type {

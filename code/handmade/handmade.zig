@@ -512,26 +512,29 @@ pub var DEBUGrenderGroup: ?*h.render_group = null;
 pub var leftEdge: f32 = 0;
 pub var atY: f32 = 0;
 pub var fontScale: f32 = 0;
+pub var fontID: h.font_id = .{ .value = 0 };
 
-fn DEBUGReset(width: u32, height: u32) void {
+fn DEBUGReset(assets: *h.game_assets, width: u32, height: u32) void {
+    var matchVectorFont = h.asset_vector{};
+    var weightVectorFont = h.asset_vector{};
+
+    fontID = h.GetBestMatchFontFrom(
+        assets,
+        .Asset_Font,
+        &matchVectorFont,
+        &weightVectorFont,
+    );
+
     fontScale = 1;
     DEBUGrenderGroup.?.Orthographic(width, height, 1);
-    atY = 0.5 * @as(f32, @floatFromInt(height)) - 0.5 * fontScale;
-    leftEdge = -0.5 * @as(f32, @floatFromInt(width)) + 0.5 * fontScale;
+    leftEdge = -0.5 * @as(f32, @floatFromInt(width));
+
+    const info = assets.GetFontInfo(fontID);
+    atY = 0.5 * @as(f32, @floatFromInt(height)) - h.GetStartingBaselineY(info) * fontScale;
 }
 
 fn DEBUGTextLine(string: [:0]const u8) void {
     if (DEBUGrenderGroup) |renderGroup| {
-        var matchVectorFont = h.asset_vector{};
-        var weightVectorFont = h.asset_vector{};
-
-        const fontID: h.font_id = h.GetBestMatchFontFrom(
-            renderGroup.assets,
-            .Asset_Font,
-            &matchVectorFont,
-            &weightVectorFont,
-        );
-
         if (renderGroup.PushFont(fontID)) |font| {
             const info = renderGroup.assets.GetFontInfo(fontID);
             var prevCodePoint: u32 = 0;
@@ -573,7 +576,7 @@ fn DEBUGTextLine(string: [:0]const u8) void {
                 }
             }
 
-            atY -= h.GetLineAdvanceFor(info, font) * fontScale;
+            atY -= h.GetLineAdvanceFor(info) * fontScale;
         }
     }
 }
@@ -588,7 +591,7 @@ fn OverlayCycleCounters(gameMemory: *platform.memory) void {
     };
 
     if (HANDMADE_INTERNAL) {
-        DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:\n");
+        DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:");
         for (gameMemory.counters) |counter| {
             if (counter.hitCount > 0) {
                 // var textbuffer = [1]u16{0} ** 256;
@@ -884,7 +887,7 @@ pub export fn UpdateAndRender(
 
     if (DEBUGrenderGroup) |rg| {
         h.BeginRender(rg);
-        DEBUGReset(buffer.width, buffer.height);
+        DEBUGReset(tranState.assets, buffer.width, buffer.height);
     }
 
     if (!NOT_IGNORE and gameInput.executableReloaded) {

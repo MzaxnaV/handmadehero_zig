@@ -252,27 +252,15 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, codePointCount: u32,
     _ = win32.SelectObject(global.fontDeviceContext, font.win32Handle);
     _ = win32.GetTextMetricsW(global.fontDeviceContext, &font.textMetric);
 
-    font.lineAdvance = @floatFromInt(font.textMetric.tmHeight + font.textMetric.tmExternalLeading);
     font.codePointCount = codePointCount;
     font.bitmapIDs = try allocator.alloc(h.bitmap_id, codePointCount);
+    font.horizontalAdvance = try allocator.alloc(f32, codePointCount * codePointCount);
 
     // NOTE (Manav): this has to be set to zero otherwise 0xaa will be written which would point to invalid bitmap_ids
     @memset(font.bitmapIDs, h.bitmap_id{ .value = 0 });
-
-    font.horizontalAdvance = try allocator.alloc(f32, codePointCount * codePointCount);
-
-    const abcs: []win32.ABC = try allocator.alloc(win32.ABC, font.codePointCount);
-    _ = win32.GetCharABCWidthsW(global.fontDeviceContext, 0, (font.codePointCount - 1), @ptrCast(abcs.ptr));
-    for (0..font.codePointCount) |codePointIndex| {
-        const thisABC = &abcs[codePointIndex];
-        const w: f32 = @as(f32, @floatFromInt(thisABC.abcA)) + @as(f32, @floatFromInt(thisABC.abcB)) + @as(f32, @floatFromInt(thisABC.abcC));
-        for (0..font.codePointCount) |otherCodePointIndex| {
-            font.horizontalAdvance[codePointIndex * font.codePointCount + otherCodePointIndex] = w;
-        }
-    }
+    @memset(font.horizontalAdvance, 0);
 
     const kerningPairCount = win32.GetKerningPairsW(global.fontDeviceContext, 0, null);
-
     const kerningPairs = try allocator.alloc(win32.KERNINGPAIR, kerningPairCount);
     defer allocator.free(kerningPairs);
 
@@ -335,11 +323,6 @@ fn LoadGlyphBitmap(font: *h.loaded_font, codePoint: u32, asset: *h.hha_asset, al
 
     if (USE_FONTS_FROM_WINDOWS) {
         _ = win32.SelectObject(global.fontDeviceContext, font.win32Handle);
-
-        if (false) {
-            var thisABC: win32.ABC = .{ .abcA = 0, .abcB = 0, .abcC = 0 };
-            _ = win32.GetCharABCWidthsW(global.fontDeviceContext, codePoint, codePoint, &thisABC);
-        }
 
         const globalFontBits: [*]u32 = @alignCast(@ptrCast(global.fontBits.?));
         @memset(globalFontBits[0 .. MAX_FONT_WIDTH * MAX_FONT_HEIGHT], 0);
@@ -453,8 +436,29 @@ fn LoadGlyphBitmap(font: *h.loaded_font, codePoint: u32, asset: *h.hha_asset, al
                 sourceRow -= MAX_FONT_WIDTH;
             }
         }
+
+        var charAdvance: f32 = 0;
+
+        if (false) {
+            var thisABC: win32.ABC = .{ .abcA = 0, .abcB = 0, .abcC = 0 };
+            _ = win32.GetCharABCWidthsW(global.fontDeviceContext, codePoint, codePoint, &thisABC);
+            charAdvance = @as(f32, @floatFromInt(thisABC.abcA)) + @as(f32, @floatFromInt(thisABC.abcB)) + @as(f32, @floatFromInt(thisABC.abcC));
+        } else {
+            var thisWidth: i32 = 0;
+            _ = win32.GetCharWidth32W(global.fontDeviceContext, codePoint, codePoint, &thisWidth);
+            charAdvance = @floatFromInt(thisWidth);
+        }
+
+        const kerningChange: f32 = @floatFromInt(minX - preStepX);
+        for (0..font.codePointCount) |otherCodePointIndex| {
+            font.horizontalAdvance[codePoint * font.codePointCount + otherCodePointIndex] += charAdvance - kerningChange;
+            if (otherCodePointIndex != 0) {
+                font.horizontalAdvance[otherCodePointIndex * font.codePointCount + codePoint] += kerningChange;
+            }
+        }
+
         asset.data.bitmap.alignPercentage = [2]f32{
-            (1.0 - @as(f32, @floatFromInt(minX - preStepX))) / @as(f32, @floatFromInt(result.width)),
+            1.0 / @as(f32, @floatFromInt(result.width)),
             (1.0 + @as(f32, @floatFromInt(maxY - (boundHeight - font.textMetric.tmDescent)))) / @as(f32, @floatFromInt(result.height)),
         };
     } else {
@@ -843,7 +847,9 @@ const game_assets = struct {
 
         asset.hha.data = .{ .font = .{
             .codePointCount = font.codePointCount,
-            .lineAdvance = font.lineAdvance,
+            .ascenderHeight = @floatFromInt(font.textMetric.tmAscent),
+            .descenderHeight = @floatFromInt(font.textMetric.tmDescent),
+            .externalLeading = @floatFromInt(font.textMetric.tmExternalLeading),
         } };
 
         asset.source.t = .AssetType_Font;
@@ -1025,14 +1031,14 @@ fn WriteFonts() void {
     // _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/cour.ttf", "Courier New", @intCast(character));
     // defer FreeFont(debugFont, allocator);
 
-    assets.BeginAssetType(.Asset_Font);
-    _ = assets.AddFontAsset(debugFont);
-    assets.EndAssetType();
-
     assets.BeginAssetType(.Asset_FontGlyph);
     for ('!'..'~' + 1) |character| {
         debugFont.bitmapIDs[character] = assets.AddDefaultCharacterAsset(debugFont, @intCast(character));
     }
+    assets.EndAssetType();
+
+    assets.BeginAssetType(.Asset_Font);
+    _ = assets.AddFontAsset(debugFont);
     assets.EndAssetType();
 
     WriteHHA(&assets, "testfonts.hha") catch |err| {
