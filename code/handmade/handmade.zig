@@ -532,7 +532,7 @@ fn DEBUGTextLine(string: [:0]const u8) void {
             &weightVectorFont,
         );
 
-        if (renderGroup.assets.GetFont(fontID, renderGroup.generationID)) |font| {
+        if (renderGroup.PushFont(fontID)) |font| {
             const info = renderGroup.assets.GetFontInfo(fontID);
             var prevCodePoint: u32 = 0;
             var charScale = fontScale;

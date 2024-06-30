@@ -617,7 +617,7 @@ pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id) void {
     return LoadBitmap(assets, ID, false);
 }
 
-pub fn LoadFont(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
+pub fn LoadFont(assets: *game_assets, ID: h.font_id, immediate: bool) void {
     if (ID.value == 0) return;
 
     const asset_: *asset = &assets.assets[ID.value];
@@ -639,9 +639,9 @@ pub fn LoadFont(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
             asset_.header = AcquireAssetMemory(assets, sizeTotal, ID.value).?;
 
             const font: *loaded_font = &asset_.header.data.font;
-            font.bitmapIDOffset = GetFile(assets, asset_.fileIndex).fontBitmapIDOffset;
+            font.bitmapIDOffset = @intCast(GetFile(assets, asset_.fileIndex).fontBitmapIDOffset);
             font.codePoints = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
-            font.horizontalAdvance = @ptrCast(@as([*]u8, @ptrCast(font.codePoints)) + codePointsSize);
+            font.horizontalAdvance = @alignCast(@ptrCast(@as([*]u8, @ptrCast(font.codePoints)) + codePointsSize));
 
             var work = load_asset_work{
                 .task = task,
@@ -666,6 +666,10 @@ pub fn LoadFont(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
     } else if (immediate) {
         while (@atomicLoad(u32, &asset_.state, .unordered) == @intFromEnum(asset_state.AssetState_Queued)) {}
     }
+}
+
+pub inline fn PrefetchFont(assets: *game_assets, ID: h.font_id) void {
+    return LoadFont(assets, ID, false);
 }
 
 pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {

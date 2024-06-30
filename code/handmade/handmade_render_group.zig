@@ -1125,6 +1125,19 @@ pub const render_group = struct {
         }
     }
 
+    pub fn PushFont(self: *Self, ID: h.font_id) ?*h.loaded_font {
+        const font = self.assets.GetFont(ID, self.generationID);
+        if (font) |f| {
+            _ = f;
+        } else {
+            assert(!self.rendersInBackground);
+            h.LoadFont(self.assets, ID, false);
+            self.missingResourceCount += 1;
+        }
+
+        return font;
+    }
+
     /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
     pub inline fn PushRect(self: *Self, offset: h.v3, dim: h.v2, colour: h.v4) void {
         const p = h.Sub(offset, h.ToV3(h.Scale(dim, 0.5), 0));

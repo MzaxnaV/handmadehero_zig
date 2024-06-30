@@ -255,6 +255,10 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, codePointCount: u32,
     font.lineAdvance = @floatFromInt(font.textMetric.tmHeight + font.textMetric.tmExternalLeading);
     font.codePointCount = codePointCount;
     font.bitmapIDs = try allocator.alloc(h.bitmap_id, codePointCount);
+
+    // NOTE (Manav): this has to be set to zero otherwise 0xaa will be written which would point to invalid bitmap_ids
+    @memset(font.bitmapIDs, h.bitmap_id{ .value = 0 });
+
     font.horizontalAdvance = try allocator.alloc(f32, codePointCount * codePointCount);
 
     for (0..font.codePointCount) |codePointIndex| {
