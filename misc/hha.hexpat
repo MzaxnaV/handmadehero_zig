@@ -26,6 +26,7 @@ enum type_id: u32 {
     Asset_Torso,
 
     Asset_Font,
+    Asset_FontGlyph,
 
     //
     // Sounds
@@ -72,12 +73,18 @@ namespace hha {
     struct sound {
         u32 sampleCount;
         u32 channelCount;
-        asset_id nextIDToPlay;
+        asset_id chain;
+    };
+
+    struct font {
+        u32 codePointCount;
+        float lineAdvance;
     };
     
     union type {
         bitmap bitmap;
         sound sound;
+        font font;
     };
     
     struct asset {
@@ -110,7 +117,11 @@ namespace vis {
         u32 sample_rate = 48000;    // fixed sample rate
         u16 data[channels * samples];
     } [[hex::visualize("sound", data, channels, sample_rate)]];
-    
+
+    struct font_data<auto codePointCount> {
+        hha::asset_id bitmapIDs[codePointCount];
+        float horizontalAdvance[codePointCount * codePointCount];
+    };
     
     fn print_assets() {
         hha::header header @ 0x00;
@@ -121,13 +132,30 @@ namespace vis {
                 (type_id::Asset_NONE) : {
                     //
                 }
-                (type_id::Asset_Test_Bitmap ... type_id::Asset_Font) : {
+                (type_id::Asset_Test_Bitmap ... type_id::Asset_Torso) : {
                     for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
                         u32 width = header.assets[ai].t.bitmap.dim[0];
                         u32 height = header.assets[ai].t.bitmap.dim[1];
                         
                         // print all bitmaps to be copied later
                         std::print("vis::bitmap_data<{}, {}> bmp{} @ header.assets[{}].dataOffset;", width, height, ai, ai);
+                    }
+                }
+                (type_id::Asset_Font) : {
+                    for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
+                        u32 codePointCount = header.assets[ai].t.font.codePointCount;
+
+                        // print all bitmaps to be copied later
+                        std::print("vis::font_data<{}> fnt{} @ header.assets[{}].dataOffset;", codePointCount, ai, ai);
+                    }
+                }
+                (type_id::Asset_FontGlyph) : {
+                    for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
+                        u32 width = header.assets[ai].t.bitmap.dim[0];
+                        u32 height = header.assets[ai].t.bitmap.dim[1];
+                        
+                        // print all bitmaps to be copied later
+                        std::print("vis::bitmap_data<{}, {}> fnt_g{} @ header.assets[{}].dataOffset;", width, height, ai, ai);
                     }
                 }
                 (type_id::Asset_Bloop ... type_id::Asset_test_stereo) : {
@@ -149,8 +177,3 @@ vis::print_assets();
 hha::header header @ 0x00;
 
 // copy the printed outputs here:
-vis::bitmap_data<60, 40> bmp1 @ header.assets[1].dataOffset;
-vis::bitmap_data<144, 217> bmp25 @ header.assets[25].dataOffset;
-
-vis::sound_data<1, 6790> snd26 @ header.assets[26].dataOffset;
-vis::sound_data<1, 48000> snd52 @ header.assets[52].dataOffset;

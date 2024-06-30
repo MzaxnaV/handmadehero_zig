@@ -223,7 +223,7 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !h.loaded_bitmap 
 }
 
 fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, codePointCount: u32, allocator: std.mem.Allocator) !*h.loaded_font {
-    var result = try allocator.create(h.loaded_font);
+    var font = try allocator.create(h.loaded_font);
 
     _ = win32.AddFontResourceExA(
         fileName.ptr,
@@ -232,7 +232,7 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, codePointCount: u32,
     );
 
     const height = 128;
-    result.win32Handle = win32.CreateFontA(
+    font.win32Handle = win32.CreateFontA(
         height,
         0,
         0,
@@ -249,15 +249,43 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, codePointCount: u32,
         fontName.ptr,
     );
 
-    _ = win32.SelectObject(global.fontDeviceContext, result.win32Handle);
-    _ = win32.GetTextMetricsW(global.fontDeviceContext, &result.textMetric);
+    _ = win32.SelectObject(global.fontDeviceContext, font.win32Handle);
+    _ = win32.GetTextMetricsW(global.fontDeviceContext, &font.textMetric);
 
-    result.lineAdvance = @floatFromInt(result.textMetric.tmHeight + result.textMetric.tmExternalLeading);
-    result.codePointCount = codePointCount;
-    result.bitmapIDs = try allocator.alloc(h.bitmap_id, codePointCount);
-    result.horizontalAdvance = try allocator.alloc(f32, codePointCount * codePointCount);
+    font.lineAdvance = @floatFromInt(font.textMetric.tmHeight + font.textMetric.tmExternalLeading);
+    font.codePointCount = codePointCount;
+    font.bitmapIDs = try allocator.alloc(h.bitmap_id, codePointCount);
 
-    return result;
+    // NOTE (Manav): this has to be set to zero otherwise 0xaa will be written which would point to invalid bitmap_ids
+    @memset(font.bitmapIDs, h.bitmap_id{ .value = 0 });
+
+    font.horizontalAdvance = try allocator.alloc(f32, codePointCount * codePointCount);
+
+    const abcs: []win32.ABC = try allocator.alloc(win32.ABC, font.codePointCount);
+    _ = win32.GetCharABCWidthsW(global.fontDeviceContext, 0, (font.codePointCount - 1), @ptrCast(abcs.ptr));
+    for (0..font.codePointCount) |codePointIndex| {
+        const thisABC = &abcs[codePointIndex];
+        const w: f32 = @as(f32, @floatFromInt(thisABC.abcA)) + @as(f32, @floatFromInt(thisABC.abcB)) + @as(f32, @floatFromInt(thisABC.abcC));
+        for (0..font.codePointCount) |otherCodePointIndex| {
+            font.horizontalAdvance[codePointIndex * font.codePointCount + otherCodePointIndex] = w;
+        }
+    }
+
+    const kerningPairCount = win32.GetKerningPairsW(global.fontDeviceContext, 0, null);
+
+    const kerningPairs = try allocator.alloc(win32.KERNINGPAIR, kerningPairCount);
+    defer allocator.free(kerningPairs);
+
+    _ = win32.GetKerningPairsW(global.fontDeviceContext, kerningPairCount, kerningPairs.ptr);
+
+    for (0..kerningPairCount) |kerningPairIndex| {
+        const pair: *win32.KERNINGPAIR = &kerningPairs[kerningPairIndex];
+        if (pair.wFirst < font.codePointCount and pair.wSecond < font.codePointCount) {
+            font.horizontalAdvance[pair.wFirst * font.codePointCount + pair.wSecond] += @floatFromInt(pair.iKernAmount);
+        }
+    }
+
+    return font;
 }
 
 fn FreeFont(font: *h.loaded_font, allocator: std.mem.Allocator) void {
@@ -308,16 +336,22 @@ fn LoadGlyphBitmap(font: *h.loaded_font, codePoint: u32, asset: *h.hha_asset, al
     if (USE_FONTS_FROM_WINDOWS) {
         _ = win32.SelectObject(global.fontDeviceContext, font.win32Handle);
 
-        const globalFontBits: [*]u32 = @alignCast(@ptrCast(global.fontBits.?));
+        if (false) {
+            var thisABC: win32.ABC = .{ .abcA = 0, .abcB = 0, .abcC = 0 };
+            _ = win32.GetCharABCWidthsW(global.fontDeviceContext, codePoint, codePoint, &thisABC);
+        }
 
-        @memset(globalFontBits[0 .. MAX_FONT_WIDTH * MAX_FONT_HEIGHT], 0xffffffff);
+        const globalFontBits: [*]u32 = @alignCast(@ptrCast(global.fontBits.?));
+        @memset(globalFontBits[0 .. MAX_FONT_WIDTH * MAX_FONT_HEIGHT], 0);
 
         const cheesePoint = [1:0]u16{@intCast(codePoint)};
 
         var size: win32.SIZE = undefined;
         _ = win32.GetTextExtentPoint32W(global.fontDeviceContext, cheesePoint[0..], 1, &size);
 
-        var boundWidth = size.cx;
+        const preStepX = 128;
+
+        var boundWidth = size.cx + 2 * preStepX;
         if (boundWidth >= MAX_FONT_WIDTH) {
             boundWidth = MAX_FONT_WIDTH;
         }
@@ -329,7 +363,7 @@ fn LoadGlyphBitmap(font: *h.loaded_font, codePoint: u32, asset: *h.hha_asset, al
         // _ = win32.PatBlt(static.deviceContext, 0, 0, width, height, win32.BLACKNESS);
         // _ = win32.SetBkMode(static.deviceContext, win32.TRANSPARENT);
         _ = win32.SetTextColor(global.fontDeviceContext, 0x00ffffff); // TODO: Make an RGB macro for this
-        _ = win32.TextOutW(global.fontDeviceContext, 0, 0, cheesePoint[0..], 1);
+        _ = win32.TextOutW(global.fontDeviceContext, preStepX, 0, cheesePoint[0..], 1);
 
         var minX: i32 = 10000;
         var minY: i32 = 10000;
@@ -420,13 +454,9 @@ fn LoadGlyphBitmap(font: *h.loaded_font, codePoint: u32, asset: *h.hha_asset, al
             }
         }
         asset.data.bitmap.alignPercentage = [2]f32{
-            1.0 / @as(f32, @floatFromInt(result.width)),
+            (1.0 - @as(f32, @floatFromInt(minX - preStepX))) / @as(f32, @floatFromInt(result.width)),
             (1.0 + @as(f32, @floatFromInt(maxY - (boundHeight - font.textMetric.tmDescent)))) / @as(f32, @floatFromInt(result.height)),
         };
-
-        for (0..font.codePointCount) |otherCodePointIndex| {
-            font.horizontalAdvance[codePoint * font.codePointCount + otherCodePointIndex] = @floatFromInt(result.width);
-        }
     } else {
         //     const ttfFile = ReadEntireFile(.{ .name = fileName, .absolute = true }, allocator) catch |err| {
         //         std.log.err("{}\nFilename: {s}\n", .{ err, fileName });
@@ -748,6 +778,7 @@ const game_assets = struct {
             .dim = .{ 0, 0 },
             .alignPercentage = alignPercentage,
         } };
+
         asset.source.t = .AssetType_Bitmap;
         asset.source.data = .{ .bitmap = .{
             .fileName = fileName,
@@ -769,7 +800,7 @@ const game_assets = struct {
             .alignPercentage = alignPercentage,
         } };
 
-        asset.source.t = .AssetType_Font;
+        asset.source.t = .AssetType_FontGlyph;
         asset.source.data = .{ .glyph = .{
             .font = font,
             .codePoint = codePoint,
@@ -954,7 +985,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
                     platform.Assert(b.pitch == (b.width * 4));
 
                     if (source.t == .AssetType_FontGlyph) {
-                        std.debug.print("\tBitmapFont:\n", .{});
+                        std.debug.print("\tFont Glyph:\n", .{});
                     } else {
                         std.debug.print("\tBitmap filename {s}:\n", .{source.data.bitmap.fileName});
                     }
@@ -974,6 +1005,40 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
         const assetArrayBytes = std.mem.sliceAsBytes(assets.assets[0..header.assetCount]);
         try out.writer().writeAll(assetArrayBytes);
     }
+}
+
+fn WriteFonts() void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .verbose_log = false }){};
+
+    const allocator = gpa.allocator();
+    defer {
+        _ = gpa.detectLeaks();
+    }
+
+    var assets = game_assets{};
+    assets.Initialize();
+
+    const debugFont = LoadFont("c:/windows/fonts/arial.ttf", "Arial", '~' + 1, allocator) catch |err| {
+        std.debug.print("Failed to load debug font, {}\n", .{err});
+        return;
+    };
+    // _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/cour.ttf", "Courier New", @intCast(character));
+    // defer FreeFont(debugFont, allocator);
+
+    assets.BeginAssetType(.Asset_Font);
+    _ = assets.AddFontAsset(debugFont);
+    assets.EndAssetType();
+
+    assets.BeginAssetType(.Asset_FontGlyph);
+    for ('!'..'~' + 1) |character| {
+        debugFont.bitmapIDs[character] = assets.AddDefaultCharacterAsset(debugFont, @intCast(character));
+    }
+    assets.EndAssetType();
+
+    WriteHHA(&assets, "testfonts.hha") catch |err| {
+        std.debug.print("{}\n", .{err});
+        return;
+    };
 }
 
 fn WriteHero() void {
@@ -1027,13 +1092,6 @@ fn WriteHero() void {
 }
 
 fn WriteNonHero() void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .verbose_log = false }){};
-
-    const allocator = gpa.allocator();
-    defer {
-        _ = gpa.detectLeaks();
-    }
-
     var assets = game_assets{};
     assets.Initialize();
 
@@ -1069,24 +1127,6 @@ fn WriteNonHero() void {
     _ = assets.AddDefaultBitmapAsset("test2/ground01.bmp");
     _ = assets.AddDefaultBitmapAsset("test2/ground02.bmp");
     _ = assets.AddDefaultBitmapAsset("test2/ground03.bmp");
-    assets.EndAssetType();
-
-    const debugFont = LoadFont("c:/windows/fonts/arial.ttf", "Arial", '~' + 1, allocator) catch |err| {
-        std.debug.print("Failed to load debug font, {}\n", .{err});
-        return;
-    };
-    // _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/cour.ttf", "Courier New", @intCast(character));
-    // defer FreeFont(debugFont, allocator);
-
-    assets.BeginAssetType(.Asset_Font);
-    _ = assets.AddFontAsset(debugFont);
-    assets.EndAssetType();
-
-    assets.BeginAssetType(.Asset_FontGlyph);
-
-    for ('!'..'~' + 1) |character| {
-        debugFont.bitmapIDs[character] = assets.AddDefaultCharacterAsset(debugFont, @intCast(character));
-    }
     assets.EndAssetType();
 
     WriteHHA(&assets, "test2.hha") catch |err| {
@@ -1154,6 +1194,7 @@ fn WriteSounds() void {
 pub fn main() void {
     InitializeFontDC();
 
+    WriteFonts();
     WriteNonHero();
     WriteHero();
     WriteSounds();
