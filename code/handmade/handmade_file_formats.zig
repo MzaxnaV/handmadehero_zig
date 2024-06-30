@@ -163,6 +163,7 @@ pub const hha_font_glyph = extern struct {
 };
 
 pub const hha_font = extern struct {
+    onePastHighestCodepoint: u32 align(1),
     glyphCount: u32 align(1),
     descenderHeight: f32 align(1),
     ascenderHeight: f32 align(1),

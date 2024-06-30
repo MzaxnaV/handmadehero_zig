@@ -72,6 +72,7 @@ const loaded_font = struct {
 
     glyphCount: u32,
 
+    onePastHighestCodepoint: u32,
     glyphIndexFromCodePoint: []u32,
 };
 
@@ -263,18 +264,24 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, allocator: std.mem.A
     font.minCodePoint = platform.MAXUINT32;
     font.maxCodePoint = 0;
 
+    const maxGlyphCount = 5000;
     font.glyphCount = 0;
 
     font.glyphIndexFromCodePoint = try allocator.alloc(u32, ONE_PAST_MAX_FONT_CODEPOINT);
     @memset(font.glyphIndexFromCodePoint, 0);
 
-    const maxGlyphCount = 5000;
     font.glyphs = try allocator.alloc(h.hha_font_glyph, maxGlyphCount);
     font.horizontalAdvance = try allocator.alloc(f32, font.glyphs.len * font.glyphs.len);
     @memset(font.horizontalAdvance, 0);
 
     // NOTE (Manav): this has to be set to zero otherwise 0xaa will be written which would point to invalid bitmap_ids
     @memset(font.glyphs, h.hha_font_glyph{ .bitmapID = .{ .value = 0 }, .unicodeCodePoint = 0 });
+
+    font.onePastHighestCodepoint = 0;
+
+    font.glyphCount = 1; // NOTE: null glyph
+    font.glyphs[0].unicodeCodePoint = 0;
+    font.glyphs[0].bitmapID.value = 0;
 
     return font;
 }
@@ -292,7 +299,10 @@ fn FinalizeFontKerning(font: *loaded_font, allocator: std.mem.Allocator) !void {
         if (pair.wFirst < ONE_PAST_MAX_FONT_CODEPOINT and pair.wSecond < ONE_PAST_MAX_FONT_CODEPOINT) {
             const first = font.glyphIndexFromCodePoint[pair.wFirst];
             const second = font.glyphIndexFromCodePoint[pair.wSecond];
-            font.horizontalAdvance[first * font.glyphs.len + second] += @floatFromInt(pair.iKernAmount);
+
+            if (first != 0 and second != 0) {
+                font.horizontalAdvance[first * font.glyphs.len + second] += @floatFromInt(pair.iKernAmount);
+            }
         }
     }
 }
@@ -852,6 +862,10 @@ const game_assets = struct {
 
         font.glyphIndexFromCodePoint[codePoint] = glyphIndex;
 
+        if (font.onePastHighestCodepoint <= codePoint) {
+            font.onePastHighestCodepoint = codePoint + 1;
+        }
+
         return result;
     }
 
@@ -888,11 +902,14 @@ const game_assets = struct {
         var asset = self.AddAsset();
 
         asset.hha.data = .{ .font = .{
+            .onePastHighestCodepoint = font.onePastHighestCodepoint,
             .glyphCount = font.glyphCount,
             .ascenderHeight = @floatFromInt(font.textMetric.tmAscent),
             .descenderHeight = @floatFromInt(font.textMetric.tmDescent),
             .externalLeading = @floatFromInt(font.textMetric.tmExternalLeading),
         } };
+
+        std.debug.print("GlyphCount: {}\n", .{font.glyphCount});
 
         asset.source.t = .AssetType_Font;
         asset.source.data = .{ .font = .{
@@ -1006,7 +1023,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
                     const horizontalAdvanceSize = font.glyphCount * font.glyphCount * @sizeOf(f32);
                     const glyphsSize = font.glyphCount * @sizeOf(h.hha_font_glyph);
 
-                    const bytesToWrite1: []u8 = std.mem.sliceAsBytes(font.glyphs);
+                    const bytesToWrite1: []u8 = std.mem.sliceAsBytes(font.glyphs[0..font.glyphCount]);
                     const bytesWritten1: usize = try out.writer().write(bytesToWrite1);
 
                     var horizontalAdvance: [*]u8 = @ptrCast(font.horizontalAdvance.ptr);
@@ -1017,7 +1034,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
                         const horizontalAdvanceSliceSize = font.glyphCount * @sizeOf(f32);
                         const horizontalAdvanceSlice = horizontalAdvance[0..horizontalAdvanceSliceSize];
 
-                        bytesToWrite2 = horizontalAdvanceSlice.len;
+                        bytesToWrite2 += horizontalAdvanceSlice.len;
                         bytesWritten2 += try out.writer().write(horizontalAdvanceSlice);
 
                         horizontalAdvance += font.glyphs.len * @sizeOf(f32);
@@ -1072,7 +1089,7 @@ fn WriteFonts() void {
 
     const allocator = gpa.allocator();
     defer {
-        _ = gpa.detectLeaks();
+        // _ = gpa.detectLeaks();
     }
 
     var assets = game_assets{};

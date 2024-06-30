@@ -230,14 +230,11 @@ pub const transient_state = struct {
 
 pub inline fn ZeroSize(size: platform.memory_index, ptr: [*]u8) void {
     @memset(ptr[0..size], 0);
+}
 
-    // NOTE (Manav): this is slow :/, use memset
-    // var byte = ptr;
-    // var s = size;
-    // while (s > 0) : (s -= 1) {
-    //     byte.* = 0;
-    //     byte += 1;
-    // }
+pub inline fn ZeroSlice(comptime T: type, slice: []T) void {
+    const ptr: [*]u8 = @ptrCast(slice.ptr);
+    @memset(ptr[0 .. slice.len * @sizeOf(T)], 0);
 }
 
 pub inline fn Copy(size: usize, source: *const anyopaque, dest: *anyopaque) void {

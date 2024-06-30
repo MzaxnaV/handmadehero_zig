@@ -26,9 +26,10 @@ pub const loaded_sound = extern struct {
 };
 
 pub const loaded_font = extern struct {
-    codePoints: [*]h.bitmap_id,
+    glyphs: [*]h.hha_font_glyph,
     horizontalAdvance: [*]f32,
     bitmapIDOffset: u32,
+    unicodeMap: [*]u16,
 };
 
 pub const asset_state = enum(u32) {
@@ -366,6 +367,11 @@ fn RemoveAssetHeaderFromList(header: *asset_memory_header) void {
     header.prev = undefined;
 }
 
+const finalize_asset_operation = enum {
+    FinalizeAsset_NONE,
+    FinalizeAsset_Font,
+};
+
 const load_asset_work = struct {
     task: ?*h.task_with_memory,
     asset_: *asset, // TODO: (change code style to match with casey? or switch to zig?)
@@ -376,10 +382,28 @@ const load_asset_work = struct {
     destination: *anyopaque,
 
     finalState: u32,
+
+    finalizeOperation: finalize_asset_operation,
 };
 
 fn LoadAssetWorkDirectly(work: *load_asset_work) void {
     h.platformAPI.ReadDataFromFile(work.handle, work.offset, work.size, work.destination);
+
+    if (platform.NoFileErrors(work.handle)) {
+        switch (work.finalizeOperation) {
+            .FinalizeAsset_Font => {
+                const font = &work.asset_.header.data.font;
+                const hha = &work.asset_.hha.data.font;
+                for (1..hha.glyphCount) |glyphIndex| {
+                    const glyph = &font.glyphs[glyphIndex];
+
+                    assert(glyph.unicodeCodePoint < hha.onePastHighestCodepoint);
+                    font.unicodeMap[glyph.unicodeCodePoint] = @intCast(glyphIndex);
+                }
+            },
+            else => {},
+        }
+    }
 
     @fence(.seq_cst);
 
@@ -596,6 +620,7 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
                 .size = size.data,
                 .destination = bitmap.memory,
                 .finalState = @intFromEnum(asset_state.AssetState_Loaded),
+                .finalizeOperation = .FinalizeAsset_NONE,
             };
 
             if (task) |_| {
@@ -632,16 +657,20 @@ pub fn LoadFont(assets: *game_assets, ID: h.font_id, immediate: bool) void {
             const info: h.hha_font = asset_.hha.data.font;
 
             const horizontalAdvanceSize = info.glyphCount * info.glyphCount * @sizeOf(f32);
-            const codePointsSize = info.glyphCount * @sizeOf(h.bitmap_id);
-            const sizeData = codePointsSize + horizontalAdvanceSize;
-            const sizeTotal = sizeData + @sizeOf(asset_memory_header);
+            const glyphsSize = info.glyphCount * @sizeOf(h.hha_font_glyph);
+            const unicodeMapSize = @sizeOf(u16) * info.onePastHighestCodepoint;
+            const sizeData = glyphsSize + horizontalAdvanceSize;
+            const sizeTotal = sizeData + @sizeOf(asset_memory_header) + unicodeMapSize;
 
             asset_.header = AcquireAssetMemory(assets, sizeTotal, ID.value).?;
 
             const font: *loaded_font = &asset_.header.data.font;
             font.bitmapIDOffset = @intCast(GetFile(assets, asset_.fileIndex).fontBitmapIDOffset);
-            font.codePoints = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
-            font.horizontalAdvance = @alignCast(@ptrCast(@as([*]u8, @ptrCast(font.codePoints)) + codePointsSize));
+            font.glyphs = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
+            font.horizontalAdvance = @alignCast(@ptrCast(@as([*]u8, @ptrCast(font.glyphs)) + glyphsSize));
+            font.unicodeMap = @alignCast(@ptrCast(@as([*]u8, @ptrCast(font.horizontalAdvance)) + horizontalAdvanceSize));
+
+            h.ZeroSize(unicodeMapSize, @ptrCast(font.unicodeMap));
 
             var work = load_asset_work{
                 .task = task,
@@ -649,8 +678,9 @@ pub fn LoadFont(assets: *game_assets, ID: h.font_id, immediate: bool) void {
                 .handle = GetFileHandleFor(assets, asset_.fileIndex),
                 .offset = asset_.hha.dataOffset,
                 .size = sizeData,
-                .destination = font.codePoints,
+                .destination = font.glyphs,
                 .finalState = @intFromEnum(asset_state.AssetState_Loaded),
+                .finalizeOperation = .FinalizeAsset_Font,
             };
 
             if (task) |_| {
@@ -703,14 +733,17 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
                 soundAt += channelSize;
             }
 
-            var work: *load_asset_work = task.arena.PushStruct(load_asset_work);
-            work.task = task;
-            work.asset_ = &assets.assets[ID.value];
-            work.handle = GetFileHandleFor(assets, asset_.fileIndex);
-            work.offset = asset_.hha.dataOffset;
-            work.size = size.data;
-            work.destination = @ptrCast(memory);
-            work.finalState = @intFromEnum(asset_state.AssetState_Loaded);
+            const work: *load_asset_work = task.arena.PushStruct(load_asset_work);
+            work.* = .{
+                .task = task,
+                .asset_ = &assets.assets[ID.value],
+                .handle = GetFileHandleFor(assets, asset_.fileIndex),
+                .offset = asset_.hha.dataOffset,
+                .size = size.data,
+                .destination = @ptrCast(memory),
+                .finalState = @intFromEnum(asset_state.AssetState_Loaded),
+                .finalizeOperation = .FinalizeAsset_NONE,
+            };
 
             h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
@@ -832,27 +865,28 @@ pub inline fn GetBestMatchFontFrom(assets: *game_assets, typeID: h.asset_type_id
     return result;
 }
 
-inline fn GetClampedCodePoint(info: *h.hha_font, codePoint: u32) u32 {
+inline fn GetGlyphFromCodePoint(info: *h.hha_font, font: *loaded_font, codePoint: u32) u32 {
     var result: u32 = 0;
 
-    if (codePoint < info.glyphCount) {
-        result = codePoint;
+    if (codePoint < info.onePastHighestCodepoint) {
+        result = font.unicodeMap[codePoint];
+        assert(result < info.glyphCount);
     }
 
     return result;
 }
 
 pub fn GetHorizontalAdvanceForPair(info: *h.hha_font, font: *loaded_font, desiredPrevCodePoint: u32, desiredCodePoint: u32) f32 {
-    const prevCodePoint = GetClampedCodePoint(info, desiredPrevCodePoint);
-    const codePoint = GetClampedCodePoint(info, desiredCodePoint);
-    const result = font.horizontalAdvance[prevCodePoint * info.glyphCount + codePoint];
+    const prevGlyph = GetGlyphFromCodePoint(info, font, desiredPrevCodePoint);
+    const glyph = GetGlyphFromCodePoint(info, font, desiredCodePoint);
+    const result = font.horizontalAdvance[prevGlyph * info.glyphCount + glyph];
 
     return result;
 }
 
 pub fn GetBitmapForGlyph(_: *game_assets, info: *h.hha_font, font: *loaded_font, desiredCodePoint: u32) h.bitmap_id {
-    const codePoint: u32 = GetClampedCodePoint(info, desiredCodePoint);
-    var result = font.codePoints[codePoint];
+    const glyph = GetGlyphFromCodePoint(info, font, desiredCodePoint);
+    var result = font.glyphs[glyph].bitmapID;
     result.value += font.bitmapIDOffset;
     return result;
 }

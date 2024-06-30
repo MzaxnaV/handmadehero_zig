@@ -538,6 +538,24 @@ fn DEBUGReset(assets: *h.game_assets, width: u32, height: u32) void {
     atY = 0.5 * @as(f32, @floatFromInt(height)) - h.GetStartingBaselineY(info) * fontScale;
 }
 
+inline fn IsHex(char: u8) bool {
+    const result = (((char >= '0') and (char <= '9')) or ((char >= 'A') and (char <= 'F')));
+
+    return result;
+}
+
+inline fn GetHex(char: u8) u32 {
+    var result: u32 = 0;
+
+    if ((char >= '0') and (char <= '9')) {
+        result = char - '0';
+    } else if ((char >= 'A') and (char <= 'F')) {
+        result = 0xA + (char - 'A');
+    }
+
+    return result;
+}
+
 fn DEBUGTextLine(string: [:0]const u8) void {
     if (DEBUGrenderGroup) |renderGroup| {
         if (renderGroup.PushFont(fontID)) |font| {
@@ -563,7 +581,22 @@ fn DEBUGTextLine(string: [:0]const u8) void {
                     charScale = fontScale * h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0')));
                     at += 3;
                 } else {
-                    const codePoint = at[0];
+                    var codePoint: u32 = at[0];
+
+                    if ((at[0] == '\\') and
+                        (IsHex(at[1])) and
+                        (IsHex(at[2])) and
+                        (IsHex(at[3])) and
+                        (IsHex(at[4])))
+                    {
+                        codePoint = ((GetHex(at[1]) << 12) |
+                            (GetHex(at[2]) << 8) |
+                            (GetHex(at[3]) << 4) |
+                            (GetHex(at[4]) << 0));
+
+                        at += 4;
+                    }
+
                     const advanceX: f32 = charScale * h.GetHorizontalAdvanceForPair(info, font, prevCodePoint, codePoint);
                     atX += advanceX;
 
@@ -595,6 +628,9 @@ fn OverlayCycleCounters(gameMemory: *platform.memory) void {
         "ProcessPixel",
     };
 
+    DEBUGTextLine("\\5C0F\\8033\\6728\\514E");
+    DEBUGTextLine("111111");
+    DEBUGTextLine("999999");
     if (HANDMADE_INTERNAL) {
         DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:");
         for (gameMemory.counters) |counter| {

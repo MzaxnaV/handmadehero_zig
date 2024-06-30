@@ -77,12 +77,19 @@ namespace hha {
     };
 
     struct font {
-        u32 codePointCount;
+        u32 onePastHighestCodepoint;
+        u32 glyphCount;
         float descenderHeight;
         float ascenderHeight;
         float externalLeadin;
     };
-    
+
+    struct font_glyph {
+        char16 unicodeCodePoint;
+        u16 [[hidden]]; 
+        asset_id bitmapID;
+    };
+
     union type {
         bitmap bitmap;
         sound sound;
@@ -120,9 +127,9 @@ namespace vis {
         u16 data[channels * samples];
     } [[hex::visualize("sound", data, channels, sample_rate)]];
 
-    struct font_data<auto codePointCount> {
-        hha::asset_id bitmapIDs[codePointCount];
-        float horizontalAdvance[codePointCount * codePointCount];
+    struct font_data<auto glyphCount> {
+        hha::font_glyph codePoints[glyphCount];
+        float horizontalAdvance[glyphCount * glyphCount];
     };
     
     fn print_assets() {
@@ -135,38 +142,46 @@ namespace vis {
                     //
                 }
                 (type_id::Asset_Test_Bitmap ... type_id::Asset_Torso) : {
+                    u32 index = 0;
                     for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
                         u32 width = header.assets[ai].t.bitmap.dim[0];
                         u32 height = header.assets[ai].t.bitmap.dim[1];
                         
                         // print all bitmaps to be copied later
-                        std::print("vis::bitmap_data<{}, {}> bmp{} @ header.assets[{}].dataOffset;", width, height, ai, ai);
-                    }
-                }
-                (type_id::Asset_Font) : {
-                    for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
-                        u32 codePointCount = header.assets[ai].t.font.codePointCount;
-
-                        // print all bitmaps to be copied later
-                        std::print("vis::font_data<{}> fnt{} @ header.assets[{}].dataOffset;", codePointCount, ai, ai);
+                        std::print("vis::bitmap_data<{}, {}> bmp{} @ header.assets[{}].dataOffset;", width, height, index, ai);
+                        index = index + 1;
                     }
                 }
                 (type_id::Asset_FontGlyph) : {
+                    u32 index = 0;
                     for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
                         u32 width = header.assets[ai].t.bitmap.dim[0];
                         u32 height = header.assets[ai].t.bitmap.dim[1];
                         
                         // print all bitmaps to be copied later
-                        std::print("vis::bitmap_data<{}, {}> fnt_g{} @ header.assets[{}].dataOffset;", width, height, ai, ai);
+                        std::print("vis::bitmap_data<{}, {}> fnt_g{} @ header.assets[{}].dataOffset;", width, height, index, ai);
+                        index = index + 1;
+                    }
+                }
+                (type_id::Asset_Font) : {
+                    u32 index = 0;
+                    for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
+                        u32 glyphCount = header.assets[ai].t.font.glyphCount;
+
+                        // print all bitmaps to be copied later
+                        std::print("vis::font_data<{}> fnt{} @ header.assets[{}].dataOffset;", glyphCount, index, ai);
+                        index = index + 1;
                     }
                 }
                 (type_id::Asset_Bloop ... type_id::Asset_test_stereo) : {
+                    u32 index = 0;
                     for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
                         u32 channels = header.assets[ai].t.sound.channelCount;
                         u32 samples = header.assets[ai].t.sound.sampleCount;
         
                         // print all sounds to be copied later
-                        std::print("vis::sound_data<{}, {}> snd{} @ header.assets[{}].dataOffset;", channels, samples, ai, ai);
+                        std::print("vis::sound_data<{}, {}> snd{} @ header.assets[{}].dataOffset;", channels, samples, index, ai);
+                        index = index + 1;
                     }
                 }
             }
