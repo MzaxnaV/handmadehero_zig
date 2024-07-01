@@ -9,6 +9,8 @@ pub fn build(b: *std.Build) void {
     // const options = b.addOptions();
     // options.addOption(bool, "NOTIGNORE", true);
 
+    // TODO (Manav): Should I split handmade hero code into small modules?
+
     const platform = b.createModule(.{
         .root_source_file = b.path("./code/handmade_platform.zig"),
     });
@@ -16,6 +18,14 @@ pub fn build(b: *std.Build) void {
     const simd = b.createModule(.{
         .root_source_file = b.path("./code/simd.zig"),
         .optimize = .ReleaseFast,
+    });
+
+    const debug = b.addModule("debug", .{
+        .root_source_file = b.path("./code/handmade/handmade_debug.zig"),
+        // .optimize = .ReleaseFast,
+        .imports = &.{
+            .{ .name = "handmade_platform", .module = platform },
+        },
     });
 
     const win32 = b.dependency("zigwin32", .{}).module("zigwin32");
@@ -29,6 +39,7 @@ pub fn build(b: *std.Build) void {
     });
     lib.root_module.addImport("handmade_platform", platform);
     lib.root_module.addImport("simd", simd);
+    lib.root_module.addImport("debug", debug);
 
     const lib_tests = b.addTest(.{
         .root_source_file = b.path("./code/handmade/handmade_tests.zig"),

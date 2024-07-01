@@ -31,10 +31,9 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     pub const debug_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
     pub const debug_write_entire_file = *const fn ([*:0]const u8, u32, *anyopaque) bool;
 
-    // move this to someplace proper
-    inline fn __rdtsc() u64 {
-        var low: u64 = undefined;
-        var high: u64 = undefined;
+    pub fn __rdtsc() u64 {
+        var low: u64 = 0;
+        var high: u64 = 0;
 
         asm volatile ("rdtsc"
             : [low] "={eax}" (low),
@@ -236,13 +235,6 @@ pub const memory = struct {
 
     // TODO (Manav): make declaration dependent on HANDMADE_INTERNAL
     counters: [len]handmade_internal.debug_cycle_counter = [1]handmade_internal.debug_cycle_counter{.{}} ** len,
-
-    d: *debug,
-};
-
-pub const debug = struct {
-    flag: bool = false,
-    state: u32 = 0,
 };
 
 // functions ------------------------------------------------------------------------------------------------------------------------------

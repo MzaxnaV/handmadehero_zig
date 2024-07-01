@@ -160,8 +160,6 @@ var globalWindowPosition = win32.WINDOWPLACEMENT{
     .rcNormalPosition = undefined,
 };
 
-var globalDebug: platform.debug = .{};
-
 // library defs ---------------------------------------------------------------------------------------------------------------------------
 
 var XInputGetState: *const fn (u32, ?*win32.XINPUT_STATE) callconv(WINAPI) isize = undefined;
@@ -899,19 +897,6 @@ inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) vo
     // }
 }
 
-// TODO (Manav): Do something about this, rdtsc already exists in handmade_internal
-inline fn rdtsc() u64 {
-    var low: u64 = undefined;
-    var high: u64 = undefined;
-
-    asm volatile ("rdtsc"
-        : [low] "={eax}" (low),
-          [high] "={edx}" (high),
-    );
-
-    return (high << 32) | low;
-}
-
 // !NOT_IGNORE:
 // fn Win32DebugDrawVertical(backBuffer: *win32_offscreen_buffer, x: u32, top: u32, bottom: u32, colour: u32) void {
 //     var safeTop = top;
@@ -1429,8 +1414,6 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     .DEBUGReadEntireFile = DEBUGWin32ReadEntireFile,
                     .DEBUGWriteEntireFile = DEBUGWin32WriteEntireFile,
                 },
-
-                .d = &globalDebug,
             };
 
             win32State.totalSize = gameMemory.permanentStorageSize + gameMemory.transientStorageSize;
@@ -1500,7 +1483,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                 var gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
 
-                var lastCycleCount = rdtsc();
+                var lastCycleCount = handmade_internal.__rdtsc();
 
                 while (globalRunning) {
                     newInput.dtForFrame = targetSecondsPerFrame;
@@ -1821,7 +1804,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         oldInput = temp;
 
                         if (NOT_IGNORE) {
-                            const endCycleCount = rdtsc();
+                            const endCycleCount = handmade_internal.__rdtsc();
                             const cyclesElapsed = endCycleCount - lastCycleCount;
                             lastCycleCount = endCycleCount;
 

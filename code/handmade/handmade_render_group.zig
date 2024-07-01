@@ -12,6 +12,7 @@ const h = struct {
 };
 
 const simd = @import("simd");
+const debug = @import("debug");
 
 /// build constant to dynamically remove code sections
 const NOT_IGNORE = platform.NOT_IGNORE;
@@ -1203,8 +1204,11 @@ pub const render_group = struct {
     }
 
     fn RenderGroupToOutput(self: *Self, outputTarget: *loaded_bitmap, clipRect: h.rect2i, even: bool) void {
-        platform.BEGIN_TIMED_BLOCK(.RenderGroupToOutput);
-        defer platform.END_TIMED_BLOCK(.RenderGroupToOutput);
+        // platform.BEGIN_TIMED_BLOCK(.RenderGroupToOutput);
+        // defer platform.END_TIMED_BLOCK(.RenderGroupToOutput);
+
+        const END_BLOCK = debug.TIMED_BLOCK(.RenderGroupToOutput);
+        defer END_BLOCK();
 
         const nullPixelsToMeters = 1;
 
