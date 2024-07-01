@@ -142,14 +142,12 @@ namespace vis {
                     //
                 }
                 (type_id::Asset_Test_Bitmap ... type_id::Asset_Torso) : {
-                    u32 index = 0;
                     for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
                         u32 width = header.assets[ai].t.bitmap.dim[0];
                         u32 height = header.assets[ai].t.bitmap.dim[1];
                         
                         // print all bitmaps to be copied later
-                        std::print("vis::bitmap_data<{}, {}> bmp{} @ header.assets[{}].dataOffset;", width, height, index, ai);
-                        index = index + 1;
+                        std::print("vis::bitmap_data<{}, {}> bmp{} @ header.assets[{}].dataOffset;", width, height, ai, ai);
                     }
                 }
                 (type_id::Asset_FontGlyph) : {
@@ -174,14 +172,12 @@ namespace vis {
                     }
                 }
                 (type_id::Asset_Bloop ... type_id::Asset_test_stereo) : {
-                    u32 index = 0;
                     for(u32 ai = type.firstAssetIndex, ai < type.onePastAssetIndex, ai = ai + 1) {
                         u32 channels = header.assets[ai].t.sound.channelCount;
                         u32 samples = header.assets[ai].t.sound.sampleCount;
         
                         // print all sounds to be copied later
-                        std::print("vis::sound_data<{}, {}> snd{} @ header.assets[{}].dataOffset;", channels, samples, index, ai);
-                        index = index + 1;
+                        std::print("vis::sound_data<{}, {}> snd{} @ header.assets[{}].dataOffset;", channels, samples, ai, ai);
                     }
                 }
             }
