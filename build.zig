@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
 
     const debug = b.addModule("debug", .{
         .root_source_file = b.path("./code/handmade/handmade_debug.zig"),
-        // .optimize = .ReleaseFast,
+        .optimize = .ReleaseFast,
         .imports = &.{
             .{ .name = "handmade_platform", .module = platform },
         },
@@ -81,25 +81,26 @@ pub fn build(b: *std.Build) void {
     asset_builder.root_module.link_libc = true;
 
     const exe_install_step = b.addInstallArtifact(exe, .{
-        .dest_dir = .{ .override = .{ .custom = "../build" } }, // TODO: change prefix to build instead
-        .pdb_dir = .{ .override = .{ .custom = "../build" } },
+        .dest_dir = .{ .override = .prefix },
+        .pdb_dir = .{ .override = .prefix },
     });
 
     const lib_install_step = b.addInstallArtifact(lib, .{
-        .dest_dir = .{ .override = .{ .custom = "../build" } },
-        .pdb_dir = .{ .override = .{ .custom = "../build" } },
+        .dest_dir = .{ .override = .prefix },
+        .pdb_dir = .{ .override = .prefix },
+        .implib_dir = .{ .override = .prefix },
     });
     const build_step = b.step("lib", "Build the handmade lib");
     build_step.dependOn(&lib_install_step.step);
 
     const asset_builder_install_step = b.addInstallArtifact(asset_builder, .{
-        .dest_dir = .{ .override = .{ .custom = "../build" } },
-        .pdb_dir = .{ .override = .{ .custom = "../build" } },
+        .dest_dir = .{ .override = .prefix },
+        .pdb_dir = .{ .override = .prefix },
     });
     const run_step = b.step("asset", "Build the asset builder");
     run_step.dependOn(&asset_builder_install_step.step);
 
-    const asm_install_step = b.addInstallFile(lib.getEmittedAsm(), "../misc/handmade.s");
+    const asm_install_step = b.addInstallFile(lib.getEmittedAsm(), "handmade.s");
 
     b.getInstallStep().dependOn(&lib_install_step.step);
     b.getInstallStep().dependOn(&asm_install_step.step);
