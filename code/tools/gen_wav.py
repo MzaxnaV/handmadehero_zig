@@ -23,7 +23,7 @@ for i in range(0, len(left_channel_data), sample_width):
     interleaved_data.extend(left_channel_data[i : i + sample_width])
     interleaved_data.extend(right_channel_data[i : i + sample_width])
 
-with wave.open("../data/wave_stereo_test_1min.wav", "wb") as f:
+with wave.open("../../data/wave_stereo_test_1min.wav", "wb") as f:
     f.setnchannels(num_channels)
     f.setsampwidth(sample_width)
     f.setframerate(frame_rate)
