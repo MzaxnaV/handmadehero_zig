@@ -169,8 +169,7 @@ pub fn build(b: *std.Build) void {
     const run_process_timed_blocks = b.addRunArtifact(process_timed_blocks);
     run_process_timed_blocks.setCwd(code_build_path);
 
-    const process_timed_blocks_step = b.step("process_timed_blocks", "Preprocess all timed blocks");
-    process_timed_blocks_step.dependOn(&run_process_timed_blocks.step);
+    lib_install_step.step.dependOn(&run_process_timed_blocks.step);
 
     const process_timed_blocks_test = b.addTest(.{
         .root_source_file = b.path("code/tools/process_timed_blocks.zig"),

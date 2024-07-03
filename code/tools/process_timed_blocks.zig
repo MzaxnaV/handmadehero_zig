@@ -25,7 +25,7 @@ pub fn main() !void {
     var counter: u32 = 0;
 
     if (try processDir(allocator, "./", &counter)) {
-        std.debug.print("Found {} TIMED_BLOCK()s\n", .{counter});
+        std.debug.print("Processed {} TIMED_BLOCK()s\n", .{counter});
     }
 }
 
@@ -103,8 +103,8 @@ fn processFile(allocator: std.mem.Allocator, name: []const u8, buffer: []const u
 
         if (std.mem.indexOf(u8, line, call_site)) |_| {
             found_call = true;
-            counter.* += 1;
             std.debug.print("{s}:{} Found at {s}\n", .{ name, counter.*, line });
+            counter.* += 1;
         }
 
         try out_buffer.appendSlice(line);

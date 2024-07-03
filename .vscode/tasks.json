@@ -10,7 +10,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -p build -Doptimize=ReleaseFast --verbose --summary all & zig build test"
+            "command": "zig build -p build -Doptimize=ReleaseFast --summary all & zig build test"
         },
         {
             "label": "Build and Test Project",
@@ -19,7 +19,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -p build --verbose --summary all & zig build test"
+            "command": "zig build -p build --summary all & zig build test"
         },
         {
             "label": "Build Project",
@@ -37,7 +37,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build lib -p build -Doptimize=ReleaseFast --verbose --summary all"
+            "command": "zig build lib -p build -Doptimize=ReleaseFast --summary all"
         },
         {
             "label": "Build Lib",
@@ -84,16 +84,6 @@
                 "isDefault": true
             },
             "command": "zig build parse_llvm_mca -Doptimize=ReleaseFast --summary all"
-        },
-
-        {
-            "label": "Preprocess all timed blocks",
-            "type": "shell",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "command": "zig build process_timed_blocks --verbose --summary all"
         },
     ]
 }
