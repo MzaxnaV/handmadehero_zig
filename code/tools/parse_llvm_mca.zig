@@ -97,7 +97,7 @@ pub fn main() !void {
 
         if (found_subheading) continue;
 
-        try dest.writer().print("{s}", .{line});
+        try dest.writer().print("{s}\n", .{line});
     }
 
     try dest.writer().print("```\n</details>\n</details>\n", .{});

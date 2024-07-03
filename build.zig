@@ -69,8 +69,6 @@ pub fn build(b: *std.Build) void {
 
     const build_step = b.step("lib", "Build the handmade lib");
     build_step.dependOn(&lib_install_step.step);
-    const emitted_asm = lib.getEmittedAsm();
-    build_step.dependOn(&b.addInstallFile(emitted_asm, "handmade.s").step);
 
     b.getInstallStep().dependOn(&lib_install_step.step);
 
@@ -122,20 +120,20 @@ pub fn build(b: *std.Build) void {
     // ----------------------------------------------------------------------------------------------------
     // Tools - generate wav -------------------------------------------------------------------------------
 
-    const gen_wav_tool = b.addSystemCommand(&.{"py"});
-    gen_wav_tool.setCwd(data_build_path);
-    gen_wav_tool.addFileArg(b.path("code/tools/gen_wav.py"));
+    const run_gen_wave = b.addSystemCommand(&.{"py"});
+    run_gen_wave.setCwd(data_build_path);
+    run_gen_wave.addFileArg(b.path("code/tools/gen_wav.py"));
 
-    const run_gen_wav_tool = b.step("gen_wav", "Run the wav generator");
-    run_gen_wav_tool.dependOn(&gen_wav_tool.step);
+    const run_gen_wave_step = b.step("gen_wav", "Run the wav generator");
+    run_gen_wave_step.dependOn(&run_gen_wave.step);
 
     // ----------------------------------------------------------------------------------------------------
     // Tools - parse llvm ---------------------------------------------------------------------------------
 
-    const llvm_mca_tool = b.addSystemCommand(&.{ "llvm-mca", "-all-stats", "-all-views" });
-    llvm_mca_tool.addFileArg(emitted_asm);
+    const llvm_mca = b.addSystemCommand(&.{ "llvm-mca", "-all-stats", "-all-views" });
+    llvm_mca.addFileArg(lib.getEmittedAsm());
 
-    const output = llvm_mca_tool.captureStdOut();
+    const output = llvm_mca.captureStdOut();
 
     const llvm_mca_parser = b.addExecutable(.{
         .name = "parse_llvm_mca",
@@ -144,12 +142,12 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
 
-    const llvm_mca_parser_step = b.addRunArtifact(llvm_mca_parser);
-    llvm_mca_parser_step.setCwd(misc_build_path);
-    llvm_mca_parser_step.addFileArg(output);
+    const run_llvm_mca_parser = b.addRunArtifact(llvm_mca_parser);
+    run_llvm_mca_parser.setCwd(misc_build_path);
+    run_llvm_mca_parser.addFileArg(output);
 
-    const run_parse_llvm_mca_tool = b.step("parse_llvm_mca", "Parse llvm-mca output generator");
-    run_parse_llvm_mca_tool.dependOn(&llvm_mca_parser_step.step);
+    const run_llvm_mca_parser_step = b.step("parse_llvm_mca", "Parse llvm-mca output generator");
+    run_llvm_mca_parser_step.dependOn(&run_llvm_mca_parser.step);
 
     const llvm_mca_parser_test = b.addTest(.{
         .root_source_file = b.path("code/tools/parse_llvm_mca.zig"),
@@ -157,7 +155,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
 
-    const llvm_mca_parser_test_step = b.addRunArtifact(llvm_mca_parser_test);
+    const run_llvm_mca_parser_test = b.addRunArtifact(llvm_mca_parser_test);
 
     // ----------------------------------------------------------------------------------------------------
     // Tests ----------------------------------------------------------------------------------------------
@@ -169,9 +167,9 @@ pub fn build(b: *std.Build) void {
     lib_tests.root_module.addImport("handmade_platform", platform);
     lib_tests.root_module.addImport("simd", simd);
 
-    const run_test = b.addRunArtifact(lib_tests);
+    const run_lib_test = b.addRunArtifact(lib_tests);
 
     const test_step = b.step("test", "Run handmade tests");
-    test_step.dependOn(&run_test.step);
-    test_step.dependOn(&llvm_mca_parser_test_step.step);
+    test_step.dependOn(&run_lib_test.step);
+    test_step.dependOn(&run_llvm_mca_parser_test.step);
 }
