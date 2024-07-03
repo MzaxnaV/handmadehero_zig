@@ -85,5 +85,15 @@
             },
             "command": "zig build parse_llvm_mca -Doptimize=ReleaseFast --summary all"
         },
+
+        {
+            "label": "Preprocess all timed blocks",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "zig build process_timed_blocks --verbose --summary all"
+        },
     ]
 }

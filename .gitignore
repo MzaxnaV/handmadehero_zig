@@ -11,3 +11,5 @@ zig-out
 /misc/*.s
 /misc/*.ll
 /misc/*.rdbg
+
+*.zig_e

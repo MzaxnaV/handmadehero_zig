@@ -1,6 +1,6 @@
-// const std = @import("std");
-
 const platform = @import("handmade_platform");
+const debug = @import("debug");
+
 const assert = platform.Assert;
 
 const h = struct {
@@ -12,7 +12,6 @@ const h = struct {
 };
 
 const simd = @import("simd");
-const debug = @import("debug");
 
 /// build constant to dynamically remove code sections
 const NOT_IGNORE = platform.NOT_IGNORE;

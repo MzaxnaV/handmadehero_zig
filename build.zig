@@ -45,6 +45,7 @@ pub fn build(b: *std.Build) void {
     const stb_truetype_data = "#define STB_TRUETYPE_IMPLEMENTATION\n#include <stb_truetype.h>\n";
     const misc_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "misc" } };
     const data_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "data" } };
+    const code_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "code/handmade/" } };
 
     // ----------------------------------------------------------------------------------------------------
     // Handmade library -----------------------------------------------------------------------------------
@@ -110,8 +111,8 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .prefix },
         .pdb_dir = .{ .override = .prefix },
     });
-    const run_step = b.step("asset", "Build the asset builder");
-    run_step.dependOn(&asset_builder_install_step.step);
+    const asset_builder_step = b.step("asset", "Build the asset builder");
+    asset_builder_step.dependOn(&asset_builder_install_step.step);
 
     b.getInstallStep().dependOn(&asset_builder_install_step.step);
 
@@ -122,8 +123,8 @@ pub fn build(b: *std.Build) void {
     run_gen_wave.setCwd(data_build_path);
     run_gen_wave.addFileArg(b.path("code/tools/gen_wav.py"));
 
-    const run_gen_wave_step = b.step("gen_wav", "Run the wav generator");
-    run_gen_wave_step.dependOn(&run_gen_wave.step);
+    const gen_wave_step = b.step("gen_wav", "Run the wav generator");
+    gen_wave_step.dependOn(&run_gen_wave.step);
 
     // ----------------------------------------------------------------------------------------------------
     // Tools - parse llvm ---------------------------------------------------------------------------------
@@ -137,23 +138,47 @@ pub fn build(b: *std.Build) void {
         .name = "parse_llvm_mca",
         .root_source_file = b.path("code/tools/parse_llvm_mca.zig"),
         .target = b.graph.host,
-        .optimize = .ReleaseFast,
+        .optimize = .ReleaseSafe,
     });
 
     const run_llvm_mca_parser = b.addRunArtifact(llvm_mca_parser);
     run_llvm_mca_parser.setCwd(misc_build_path);
     run_llvm_mca_parser.addFileArg(output);
 
-    const run_llvm_mca_parser_step = b.step("parse_llvm_mca", "Parse llvm-mca output generator");
-    run_llvm_mca_parser_step.dependOn(&run_llvm_mca_parser.step);
+    const llvm_mca_parser_step = b.step("parse_llvm_mca", "Parse llvm-mca output generator");
+    llvm_mca_parser_step.dependOn(&run_llvm_mca_parser.step);
 
     const llvm_mca_parser_test = b.addTest(.{
         .root_source_file = b.path("code/tools/parse_llvm_mca.zig"),
         .target = b.graph.host,
-        .optimize = .ReleaseFast,
+        .optimize = .ReleaseSafe,
     });
 
     const run_llvm_mca_parser_test = b.addRunArtifact(llvm_mca_parser_test);
+
+    // ----------------------------------------------------------------------------------------------------
+    // Tools - process timed blocks -----------------------------------------------------------------------
+
+    const process_timed_blocks = b.addExecutable(.{
+        .name = "parse_timed_blocks",
+        .root_source_file = b.path("code/tools/process_timed_blocks.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+
+    const run_process_timed_blocks = b.addRunArtifact(process_timed_blocks);
+    run_process_timed_blocks.setCwd(code_build_path);
+
+    const process_timed_blocks_step = b.step("process_timed_blocks", "Preprocess all timed blocks");
+    process_timed_blocks_step.dependOn(&run_process_timed_blocks.step);
+
+    const process_timed_blocks_test = b.addTest(.{
+        .root_source_file = b.path("code/tools/process_timed_blocks.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+
+    const run_process_timed_blocks_test = b.addRunArtifact(process_timed_blocks_test);
 
     // ----------------------------------------------------------------------------------------------------
     // Tests ----------------------------------------------------------------------------------------------
@@ -170,4 +195,5 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run handmade tests");
     test_step.dependOn(&run_lib_test.step);
     test_step.dependOn(&run_llvm_mca_parser_test.step);
+    test_step.dependOn(&run_process_timed_blocks_test.step);
 }
