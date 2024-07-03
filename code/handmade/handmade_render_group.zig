@@ -1,6 +1,6 @@
-// const std = @import("std");
-
 const platform = @import("handmade_platform");
+const debug = @import("debug");
+
 const assert = platform.Assert;
 
 const h = struct {
@@ -12,7 +12,6 @@ const h = struct {
 };
 
 const simd = @import("simd");
-const debug = @import("debug");
 
 /// build constant to dynamically remove code sections
 const NOT_IGNORE = platform.NOT_IGNORE;
@@ -94,8 +93,8 @@ pub const loaded_bitmap = extern struct {
                             pixelsToMeters: f32) void
     // zig fmt: on
     {
-        platform.BEGIN_TIMED_BLOCK(.DrawRectangleSlowly);
-        defer platform.END_TIMED_BLOCK(.DrawRectangleSlowly);
+        const blk6 = debug.TIMED_BLOCK__impl(@src(), 6, .{}).Init();
+        defer blk6.End();
 
         const colour = h.ToV4(h.Scale(h.XYZ(notPremultipliedColour), h.A(notPremultipliedColour)), h.A(notPremultipliedColour));
 
@@ -153,8 +152,8 @@ pub const loaded_bitmap = extern struct {
 
         var row = @as([*]u8, @ptrCast(buffer.memory)) + @as(u32, @intCast(xMin)) * platform.BITMAP_BYTES_PER_PIXEL + @as(u32, @intCast(yMin * buffer.pitch));
 
-        platform.BEGIN_TIMED_BLOCK(.ProcessPixel);
-        defer platform.END_TIMED_BLOCK_COUNTED(.ProcessPixel, @as(u32, @intCast((xMax - xMin + 1) * (yMax - yMin + 1))));
+        const blk3 = debug.TIMED_BLOCK__impl(@src(), 3, .{ .hitCount = @intCast((xMax - xMin + 1) * (yMax - yMin + 1)) }).Init();
+        defer blk3.End();
         var y = yMin;
         while (y <= yMax) : (y += 1) {
             var pixel = @as([*]u32, @alignCast(@ptrCast(row)));
@@ -300,8 +299,8 @@ pub const loaded_bitmap = extern struct {
                                 texture: *const loaded_bitmap, pixelsToMeters: f32, clipRect: h.rect2i, even: bool) void
     // zig fmt: on
     {
-        platform.BEGIN_TIMED_BLOCK(.DrawRectangleQuickly);
-        defer platform.END_TIMED_BLOCK(.DrawRectangleQuickly);
+        const blk1 = debug.TIMED_BLOCK__impl(@src(), 1).Init(.{});
+        defer blk1.End();
 
         _ = pixelsToMeters;
         const colour = h.ToV4(h.Scale(h.XYZ(notPremultipliedColour), h.A(notPremultipliedColour)), h.A(notPremultipliedColour));
@@ -428,8 +427,8 @@ pub const loaded_bitmap = extern struct {
             const xMax = fillRect.xMax;
             const xMin = fillRect.xMin;
 
-            platform.BEGIN_TIMED_BLOCK(.ProcessPixel);
-            defer platform.END_TIMED_BLOCK_COUNTED(.ProcessPixel, @as(u32, @intCast(@divFloor(fillRect.GetClampedRectArea(), 2))));
+            const blk2 = debug.TIMED_BLOCK__impl(@src(), 2).Init(.{ .hitCount = @intCast(@divFloor(fillRect.GetClampedRectArea(), 2)) });
+            defer blk2.End();
 
             var y = yMin;
             while (y < yMax) : (y += 2) {
@@ -1204,11 +1203,8 @@ pub const render_group = struct {
     }
 
     fn RenderGroupToOutput(self: *Self, outputTarget: *loaded_bitmap, clipRect: h.rect2i, even: bool) void {
-        // platform.BEGIN_TIMED_BLOCK(.RenderGroupToOutput);
-        // defer platform.END_TIMED_BLOCK(.RenderGroupToOutput);
-
-        const END_BLOCK = debug.TIMED_BLOCK(.RenderGroupToOutput);
-        defer END_BLOCK();
+        const blk5 = debug.TIMED_BLOCK__impl(@src(), 5).Init(.{});
+        defer blk5.End();
 
         const nullPixelsToMeters = 1;
 

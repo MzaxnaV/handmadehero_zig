@@ -848,28 +848,28 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platfor
     }
 }
 
-fn HandleDebugCycleCounters(gameMemory: *platform.memory) void {
-    if (HANDMADE_INTERNAL) {
-        _ = win32.OutputDebugStringW(win32.L("DEBUG CYCLE COUNTS:\n"));
-        for (&gameMemory.counters) |*counter| {
-            if (counter.hitCount > 0) {
-                var textbuffer = [1]u16{0} ** 256;
-                _ = win32.x.wsprintfW(
-                    @as([*:0]u16, @ptrCast(&textbuffer)),
-                    win32.L("%S - %I64ucy %dh %I64ucy/h\n"),
-                    @tagName(counter.t).ptr,
-                    counter.cycleCount,
-                    counter.hitCount,
-                    counter.cycleCount / counter.hitCount,
-                );
-                _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&textbuffer)));
+// fn HandleDebugCycleCounters(_: *platform.memory) void {
+//     if (HANDMADE_INTERNAL) {
+//         _ = win32.OutputDebugStringW(win32.L("DEBUG CYCLE COUNTS:\n"));
+//         for (&gameMemory.counters) |*counter| {
+//             if (counter.hitCount > 0) {
+//                 var textbuffer = [1]u16{0} ** 256;
+//                 _ = win32.x.wsprintfW(
+//                     @as([*:0]u16, @ptrCast(&textbuffer)),
+//                     win32.L("%S - %I64ucy %dh %I64ucy/h\n"),
+//                     @tagName(counter.t).ptr,
+//                     counter.cycleCount,
+//                     counter.hitCount,
+//                     counter.cycleCount / counter.hitCount,
+//                 );
+//                 _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&textbuffer)));
 
-                counter.hitCount = 0;
-                counter.cycleCount = 0;
-            }
-        }
-    }
-}
+//                 counter.hitCount = 0;
+//                 counter.cycleCount = 0;
+//             }
+//         }
+//     }
+// }
 
 // inline defs ----------------------------------------------------------------------------------------------------------------------------
 
@@ -1648,7 +1648,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                         if (gameCode.UpdateAndRender) |UpdateAndRender| {
                             UpdateAndRender(&gameMemory, newInput, &buffer);
-                            HandleDebugCycleCounters(&gameMemory);
+                            // HandleDebugCycleCounters(&gameMemory);
                         }
 
                         const audioWallClock = Win32GetWallClock();

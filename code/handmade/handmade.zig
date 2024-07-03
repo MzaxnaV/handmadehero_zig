@@ -1,4 +1,6 @@
 const platform = @import("handmade_platform");
+const debug = @import("debug");
+
 const h = struct {
     usingnamespace @import("handmade_audio.zig");
     usingnamespace @import("handmade_asset.zig");
@@ -520,6 +522,8 @@ pub var fontScale: f32 = 0;
 pub var fontID: h.font_id = .{ .value = 0 };
 
 fn DEBUGReset(assets: *h.game_assets, width: u32, height: u32) void {
+    const blk0 = debug.TIMED_BLOCK__impl(@src(), 0).Init(.{});
+    defer blk0.End();
     var matchVectorFont = h.asset_vector{};
     var weightVectorFont = h.asset_vector{};
 
@@ -556,7 +560,7 @@ inline fn GetHex(char: u8) u32 {
     return result;
 }
 
-fn DEBUGTextLine(string: [:0]const u8) void {
+fn DEBUGTextLine(string: []const u8) void {
     if (DEBUGrenderGroup) |renderGroup| {
         if (renderGroup.PushFont(fontID)) |font| {
             const info = renderGroup.assets.GetFontInfo(fontID);
@@ -619,39 +623,34 @@ fn DEBUGTextLine(string: [:0]const u8) void {
     }
 }
 
-fn OverlayCycleCounters(gameMemory: *platform.memory) void {
-    const nameTable = [_][:0]const u8{
-        "UpdateAndRender",
-        "RenderGroupToOutput",
-        "DrawRectangleQuickly",
-        "DrawRectangleSlowly",
-        "ProcessPixel",
-    };
-
-    DEBUGTextLine("\\5C0F\\8033\\6728\\514E");
-    DEBUGTextLine("111111");
-    DEBUGTextLine("999999");
+fn OverlayCycleCounters(_: *platform.memory) void {
+    // DEBUGTextLine("\\5C0F\\8033\\6728\\514E");
+    // DEBUGTextLine("111111");
+    // DEBUGTextLine("999999");
     if (HANDMADE_INTERNAL) {
         DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:");
-        for (gameMemory.counters) |counter| {
+        for (0..debug.recordArray.len) |counterIndex| {
+            var counter = &debug.recordArray[counterIndex];
             if (counter.hitCount > 0) {
-                // var textbuffer = [1]u16{0} ** 256;
-                // _ = win32.x.wsprintfW(
-                //     @as([*:0]u16, @ptrCast(&textbuffer)),
-                //     win32.L("%S - %I64ucy %dh %I64ucy/h\n"),
-                //     @tagName(counter.t).ptr,
-                //     counter.cycleCount,
-                //     counter.hitCount,
-                //     counter.cycleCount / counter.hitCount,
-                // );
-                // _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&textbuffer)));
+                var textBuffer = [1]u8{0} ** 256;
+                const buffer = @import("std").fmt.bufPrint(textBuffer[0..], "{s} - {}cy {}h {}cy/h\n", .{
+                    counter.functionName,
+                    counter.cycleCount,
+                    counter.hitCount,
+                    counter.cycleCount / counter.hitCount,
+                }) catch |err| {
+                    @import("std").debug.print("{}\n", .{err});
+                    return;
+                };
 
-                DEBUGTextLine(nameTable[@intFromEnum(counter.t)]);
+                DEBUGTextLine(buffer);
+                counter.hitCount = 0;
+                counter.cycleCount = 0;
             }
         }
     }
 
-    DEBUGTextLine("AVA WA Ta");
+    // DEBUGTextLine("AVA WA Ta");
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
@@ -671,10 +670,10 @@ pub export fn UpdateAndRender(
     h.platformAPI = gameMemory.platformAPI;
 
     if (HANDMADE_INTERNAL) {
-        handmade_internal.debugGlobalMemory = gameMemory;
+        // handmade_internal.debugGlobalMemory = gameMemory;
     }
 
-    platform.BEGIN_TIMED_BLOCK(.UpdateAndRender);
+    const blk4 = debug.TIMED_BLOCK__impl(@src(), 4).Init(.{});
 
     assert(@sizeOf(h.game_state) <= gameMemory.permanentStorageSize);
     const gameState: *h.game_state = @alignCast(@ptrCast(gameMemory.permanentStorage));
@@ -1600,7 +1599,7 @@ pub export fn UpdateAndRender(
     gameState.worldArena.CheckArena();
     tranState.tranArena.CheckArena();
 
-    platform.END_TIMED_BLOCK(.UpdateAndRender);
+    blk4.End();
 
     OverlayCycleCounters(gameMemory);
 

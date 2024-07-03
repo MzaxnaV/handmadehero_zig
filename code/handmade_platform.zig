@@ -32,58 +32,38 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     pub const debug_write_entire_file = *const fn ([*:0]const u8, u32, *anyopaque) bool;
 
     pub fn __rdtsc() u64 {
-        var low: u64 = 0;
-        var high: u64 = 0;
+        var low: u32 = 0;
+        var high: u32 = 0;
 
         asm volatile ("rdtsc"
             : [low] "={eax}" (low),
               [high] "={edx}" (high),
         );
 
-        return (high << 32) | low;
+        return (@as(u64, high) << 32) | @as(u64, low);
     }
 
-    pub const debug_cycle_counter_type = enum(u32) {
-        UpdateAndRender = 0,
-        RenderGroupToOutput,
-        DrawRectangleQuickly,
-        DrawRectangleSlowly,
-        ProcessPixel,
-    };
-
-    pub const debug_cycle_counter = struct {
-        t: debug_cycle_counter_type = undefined,
-        startCyleCount: u64 = 0,
-
-        cycleCount: u64 = 0,
-        hitCount: u32 = 0,
-    };
-
-    pub var debugGlobalMemory: ?*memory = null;
-
-    inline fn BeginTimedBlock(comptime id: debug_cycle_counter_type) void {
-        if (debugGlobalMemory) |m| {
-            m.counters[@intFromEnum(id)].t = id;
-            m.counters[@intFromEnum(id)].startCyleCount = __rdtsc();
-        }
-    }
-
-    inline fn EndTimedBlock(comptime id: debug_cycle_counter_type) void {
-        if (debugGlobalMemory) |m| {
-            const startCycleCount = m.counters[@intFromEnum(id)].startCyleCount;
-            // TODO things are busted.
-            m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% startCycleCount;
-            m.counters[@intFromEnum(id)].hitCount +%= 1;
-        }
-    }
-
-    inline fn EndTimedBlockCounted(comptime id: debug_cycle_counter_type, count: u32) void {
-        if (debugGlobalMemory) |m| {
-            // TODO things are busted.
-            m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% m.counters[@intFromEnum(id)].startCyleCount;
-            m.counters[@intFromEnum(id)].hitCount +%= count;
-        }
-    }
+    // inline fn BeginTimedBlock(comptime id: debug_cycle_counter_type) void {
+    //     if (debugGlobalMemory) |m| {
+    //         m.counters[@intFromEnum(id)].t = id;
+    //         m.counters[@intFromEnum(id)].startCyleCount = __rdtsc();
+    //     }
+    // }
+    // inline fn EndTimedBlock(comptime id: debug_cycle_counter_type) void {
+    //     if (debugGlobalMemory) |m| {
+    //         const startCycleCount = m.counters[@intFromEnum(id)].startCyleCount;
+    //         // TODO things are busted.
+    //         m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% startCycleCount;
+    //         m.counters[@intFromEnum(id)].hitCount +%= 1;
+    //     }
+    // }
+    // inline fn EndTimedBlockCounted(comptime id: debug_cycle_counter_type, count: u32) void {
+    //     if (debugGlobalMemory) |m| {
+    //         // TODO things are busted.
+    //         m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% m.counters[@intFromEnum(id)].startCyleCount;
+    //         m.counters[@intFromEnum(id)].hitCount +%= count;
+    //     }
+    // }
 } else {};
 
 // platform data types --------------------------------------------------------------------------------------------------------------------
@@ -232,9 +212,6 @@ pub const memory = struct {
     lowPriorityQueue: *work_queue,
 
     platformAPI: api,
-
-    // TODO (Manav): make declaration dependent on HANDMADE_INTERNAL
-    counters: [len]handmade_internal.debug_cycle_counter = [1]handmade_internal.debug_cycle_counter{.{}} ** len,
 };
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
@@ -270,10 +247,6 @@ pub inline fn Assert(expression: bool) void {
 pub fn InvalidCodePath(comptime _: []const u8) noreturn {
     unreachable;
 }
-
-pub const BEGIN_TIMED_BLOCK = handmade_internal.BeginTimedBlock; // TODO (Manav): make it portable
-pub const END_TIMED_BLOCK = handmade_internal.EndTimedBlock; // TODO (Manav): make it portable
-pub const END_TIMED_BLOCK_COUNTED = handmade_internal.EndTimedBlockCounted;
 
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 

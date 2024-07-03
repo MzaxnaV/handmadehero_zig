@@ -24,8 +24,6 @@ const sub_headings = [_][]const u8{
     "Average Wait times",
 };
 
-const fileName = "llvm_mca_output";
-
 const StringIterator = struct {
     const Self = @This();
 
@@ -56,8 +54,12 @@ pub fn main() !void {
         _ = gpa.detectLeaks();
     }
 
-    const source = try std.fs.cwd().openFile(fileName ++ ".txt", .{ .mode = .read_only });
-    const dest = try std.fs.cwd().createFile(fileName ++ ".md", .{ .truncate = true });
+    const args = try std.process.argsAlloc(allocator);
+
+    if (args.len != 2) fatal("wrong number of arguments", .{});
+
+    const source = try std.fs.cwd().openFile(args[1], .{ .mode = .read_only });
+    const dest = try std.fs.cwd().createFile("llvm_mca_output.md", .{ .truncate = true });
 
     const input_buf = try allocator.alloc(u8, 1000);
     defer allocator.free(input_buf);
@@ -72,10 +74,10 @@ pub fn main() !void {
         if (line_iterator.findSubStr(heading)) |_| {
             found_heading = true;
             if (first_heading) {
-                try dest.writer().print("<details><summary>{s}</summary>\n\n```", .{line[0 .. line.len - 1]});
+                try dest.writer().print("<details><summary>{s}</summary>\n\n```", .{line[0..line.len]});
                 first_heading = false;
             } else {
-                try dest.writer().print("\n```\n</details>\n\n</details>\n\n<details><summary>{s}</summary>\n\n```", .{line[0 .. line.len - 1]});
+                try dest.writer().print("\n```\n</details>\n\n</details>\n\n<details><summary>{s}</summary>\n\n```", .{line[0..line.len]});
             }
 
             continue;
@@ -86,22 +88,27 @@ pub fn main() !void {
                 found_subheading = true;
                 if (found_heading) {
                     found_heading = false;
-                    break try dest.writer().print("```\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0 .. line.len - 1]});
+                    break try dest.writer().print("```\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0..line.len]});
                 } else {
-                    break try dest.writer().print("```\n</details>\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0 .. line.len - 1]});
+                    break try dest.writer().print("```\n</details>\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0..line.len]});
                 }
             }
         }
 
         if (found_subheading) continue;
 
-        try dest.writer().print("{s}", .{line});
+        try dest.writer().print("{s}\n", .{line});
     }
 
     try dest.writer().print("```\n</details>\n</details>\n", .{});
 
     dest.close();
     source.close();
+}
+
+fn fatal(comptime format: []const u8, args: anytype) noreturn {
+    std.debug.print(format, args);
+    std.process.exit(1);
 }
 
 test "find substring" {

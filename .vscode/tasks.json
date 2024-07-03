@@ -10,7 +10,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -Doptimize=ReleaseFast --verbose & zig build test"
+            "command": "zig build -p build -Doptimize=ReleaseFast --summary all & zig build test"
         },
         {
             "label": "Build and Test Project",
@@ -19,7 +19,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build --verbose & zig build test"
+            "command": "zig build -p build --summary all & zig build test"
         },
         {
             "label": "Build Project",
@@ -37,7 +37,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -Doptimize=ReleaseFast --verbose lib"
+            "command": "zig build lib -p build -Doptimize=ReleaseFast --summary all"
         },
         {
             "label": "Build Lib",
@@ -46,7 +46,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build --verbose lib"
+            "command": "zig build lib -p build --verbose"
         },
         {
             "label": "Test Project",
@@ -55,7 +55,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build --verbose test"
+            "command": "zig build test -p build --verbose --summary all"
         },
         {
             "label": "Build Assets",
@@ -64,13 +64,26 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -Doptimize=ReleaseFast --verbose asset"
+            "command": "zig build asset -p build -Doptimize=ReleaseFast --verbose --summary all"
         },
         {
-            "label": "Run llvm-mca",
+            "label": "Run llvm-mca lib Debug",
             "type": "shell",
-            "command": "${workspaceFolder}/misc/llvm_mca_output.bat",
-            "problemMatcher": []
-        }
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "zig build parse_llvm_mca --summary all"
+        },
+
+        {
+            "label": "Run llvm-mca on lib Release",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "command": "zig build parse_llvm_mca -Doptimize=ReleaseFast --summary all"
+        },
     ]
 }

@@ -1,4 +1,5 @@
 const platform = @import("handmade_platform");
+const debug = @import("debug");
 
 const h = struct {
     usingnamespace @import("handmade_data.zig");
