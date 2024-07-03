@@ -45,7 +45,52 @@ pub fn build(b: *std.Build) void {
     // ----------------------------------------------------------------------------------------------------
 
     const stb_truetype_data = "#define STB_TRUETYPE_IMPLEMENTATION\n#include <stb_truetype.h>\n";
-    const misc_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "data" } };
+    const misc_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "misc" } };
+    const data_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "data" } };
+
+    // ----------------------------------------------------------------------------------------------------
+    // Handmade library -----------------------------------------------------------------------------------
+    const lib = b.addSharedLibrary(.{
+        .name = lib_name,
+        .root_source_file = b.path("./code/handmade/handmade.zig"),
+        .version = .{ .major = 0, .minor = 1, .patch = 0 },
+        .target = target,
+        .optimize = optimize,
+    });
+    lib.root_module.addImport("handmade_platform", platform);
+    lib.root_module.addImport("simd", simd);
+    lib.root_module.addImport("debug", debug);
+
+    const lib_install_step = b.addInstallArtifact(lib, .{
+        .dest_dir = .{ .override = .prefix },
+        .pdb_dir = .{ .override = .prefix },
+        .implib_dir = .{ .override = .prefix },
+    });
+
+    const build_step = b.step("lib", "Build the handmade lib");
+    build_step.dependOn(&lib_install_step.step);
+    const emitted_asm = lib.getEmittedAsm();
+    build_step.dependOn(&b.addInstallFile(emitted_asm, "handmade.s").step);
+
+    b.getInstallStep().dependOn(&lib_install_step.step);
+
+    // ----------------------------------------------------------------------------------------------------
+    // Handmade exe ---------------------------------------------------------------------------------------
+    const exe = b.addExecutable(.{
+        .name = "win32_handmade",
+        .root_source_file = b.path("./code/win32_handmade.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("win32", win32);
+    exe.root_module.addImport("handmade_platform", platform);
+
+    const exe_install_step = b.addInstallArtifact(exe, .{
+        .dest_dir = .{ .override = .prefix },
+        .pdb_dir = .{ .override = .prefix },
+    });
+
+    b.getInstallStep().dependOn(&exe_install_step.step);
 
     // ----------------------------------------------------------------------------------------------------
     // Tools - asset builder ------------------------------------------------------------------------------
@@ -78,54 +123,41 @@ pub fn build(b: *std.Build) void {
     // Tools - generate wav -------------------------------------------------------------------------------
 
     const gen_wav_tool = b.addSystemCommand(&.{"py"});
-    gen_wav_tool.setCwd(misc_build_path);
+    gen_wav_tool.setCwd(data_build_path);
     gen_wav_tool.addFileArg(b.path("code/tools/gen_wav.py"));
 
     const run_gen_wav_tool = b.step("gen_wav", "Run the wav generator");
     run_gen_wav_tool.dependOn(&gen_wav_tool.step);
 
     // ----------------------------------------------------------------------------------------------------
-    // Handmade library -----------------------------------------------------------------------------------
-    const lib = b.addSharedLibrary(.{
-        .name = lib_name,
-        .root_source_file = b.path("./code/handmade/handmade.zig"),
-        .version = .{ .major = 0, .minor = 1, .patch = 0 },
-        .target = target,
-        .optimize = optimize,
-    });
-    lib.root_module.addImport("handmade_platform", platform);
-    lib.root_module.addImport("simd", simd);
-    lib.root_module.addImport("debug", debug);
+    // Tools - parse llvm ---------------------------------------------------------------------------------
 
-    const lib_install_step = b.addInstallArtifact(lib, .{
-        .dest_dir = .{ .override = .prefix },
-        .pdb_dir = .{ .override = .prefix },
-        .implib_dir = .{ .override = .prefix },
+    const llvm_mca_tool = b.addSystemCommand(&.{ "llvm-mca", "-all-stats", "-all-views" });
+    llvm_mca_tool.addFileArg(emitted_asm);
+
+    const output = llvm_mca_tool.captureStdOut();
+
+    const llvm_mca_parser = b.addExecutable(.{
+        .name = "parse_llvm_mca",
+        .root_source_file = b.path("code/tools/parse_llvm_mca.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseFast,
     });
 
-    const build_step = b.step("lib", "Build the handmade lib");
-    build_step.dependOn(&lib_install_step.step);
-    build_step.dependOn(&b.addInstallFile(lib.getEmittedAsm(), "handmade.s").step);
+    const llvm_mca_parser_step = b.addRunArtifact(llvm_mca_parser);
+    llvm_mca_parser_step.setCwd(misc_build_path);
+    llvm_mca_parser_step.addFileArg(output);
 
-    b.getInstallStep().dependOn(&lib_install_step.step);
+    const run_parse_llvm_mca_tool = b.step("parse_llvm_mca", "Parse llvm-mca output generator");
+    run_parse_llvm_mca_tool.dependOn(&llvm_mca_parser_step.step);
 
-    // ----------------------------------------------------------------------------------------------------
-    // Handmade exe ---------------------------------------------------------------------------------------
-    const exe = b.addExecutable(.{
-        .name = "win32_handmade",
-        .root_source_file = b.path("./code/win32_handmade.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.root_module.addImport("win32", win32);
-    exe.root_module.addImport("handmade_platform", platform);
-
-    const exe_install_step = b.addInstallArtifact(exe, .{
-        .dest_dir = .{ .override = .prefix },
-        .pdb_dir = .{ .override = .prefix },
+    const llvm_mca_parser_test = b.addTest(.{
+        .root_source_file = b.path("code/tools/parse_llvm_mca.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseFast,
     });
 
-    b.getInstallStep().dependOn(&exe_install_step.step);
+    const llvm_mca_parser_test_step = b.addRunArtifact(llvm_mca_parser_test);
 
     // ----------------------------------------------------------------------------------------------------
     // Tests ----------------------------------------------------------------------------------------------
@@ -141,4 +173,5 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run handmade tests");
     test_step.dependOn(&run_test.step);
+    test_step.dependOn(&llvm_mca_parser_test_step.step);
 }

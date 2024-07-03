@@ -24,8 +24,6 @@ const sub_headings = [_][]const u8{
     "Average Wait times",
 };
 
-const fileName = "llvm_mca_output";
-
 const StringIterator = struct {
     const Self = @This();
 
@@ -56,8 +54,12 @@ pub fn main() !void {
         _ = gpa.detectLeaks();
     }
 
-    const source = try std.fs.cwd().openFile(fileName ++ ".txt", .{ .mode = .read_only });
-    const dest = try std.fs.cwd().createFile(fileName ++ ".md", .{ .truncate = true });
+    const args = try std.process.argsAlloc(allocator);
+
+    if (args.len != 2) fatal("wrong number of arguments", .{});
+
+    const source = try std.fs.cwd().openFile(args[1], .{ .mode = .read_only });
+    const dest = try std.fs.cwd().createFile("llvm_mca_output.md", .{ .truncate = true });
 
     const input_buf = try allocator.alloc(u8, 1000);
     defer allocator.free(input_buf);
@@ -102,6 +104,11 @@ pub fn main() !void {
 
     dest.close();
     source.close();
+}
+
+fn fatal(comptime format: []const u8, args: anytype) noreturn {
+    std.debug.print(format, args);
+    std.process.exit(1);
 }
 
 test "find substring" {
