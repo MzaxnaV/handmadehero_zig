@@ -522,9 +522,6 @@ pub var fontScale: f32 = 0;
 pub var fontID: h.font_id = .{ .value = 0 };
 
 fn DEBUGReset(assets: *h.game_assets, width: u32, height: u32) void {
-    const blk0 = debug.TIMED_BLOCK__impl(@src(), 0){};
-    defer blk0.End();
-
     var matchVectorFont = h.asset_vector{};
     var weightVectorFont = h.asset_vector{};
 
@@ -624,7 +621,7 @@ fn DEBUGTextLine(string: [:0]const u8) void {
     }
 }
 
-fn OverlayCycleCounters(gameMemory: *platform.memory) void {
+fn OverlayCycleCounters(_: *platform.memory) void {
     const nameTable = [_][:0]const u8{
         "UpdateAndRender",
         "RenderGroupToOutput",
@@ -638,7 +635,8 @@ fn OverlayCycleCounters(gameMemory: *platform.memory) void {
     DEBUGTextLine("999999");
     if (HANDMADE_INTERNAL) {
         DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:");
-        for (gameMemory.counters) |counter| {
+        for (0..debug.recordArray.len) |counterIndex| {
+            const counter = debug.recordArray[counterIndex];
             if (counter.hitCount > 0) {
                 // var textbuffer = [1]u16{0} ** 256;
                 // _ = win32.x.wsprintfW(
@@ -651,7 +649,7 @@ fn OverlayCycleCounters(gameMemory: *platform.memory) void {
                 // );
                 // _ = win32.OutputDebugStringW(@as([*:0]u16, @ptrCast(&textbuffer)));
 
-                DEBUGTextLine(nameTable[@intFromEnum(counter.t)]);
+                DEBUGTextLine(nameTable[counterIndex]);
             }
         }
     }
@@ -676,10 +674,10 @@ pub export fn UpdateAndRender(
     h.platformAPI = gameMemory.platformAPI;
 
     if (HANDMADE_INTERNAL) {
-        handmade_internal.debugGlobalMemory = gameMemory;
+        // handmade_internal.debugGlobalMemory = gameMemory;
     }
 
-    platform.BEGIN_TIMED_BLOCK(.UpdateAndRender);
+    const blk4 = debug.TIMED_BLOCK__impl(@src(), 4).Init(.{});
 
     assert(@sizeOf(h.game_state) <= gameMemory.permanentStorageSize);
     const gameState: *h.game_state = @alignCast(@ptrCast(gameMemory.permanentStorage));
@@ -1605,7 +1603,7 @@ pub export fn UpdateAndRender(
     gameState.worldArena.CheckArena();
     tranState.tranArena.CheckArena();
 
-    platform.END_TIMED_BLOCK(.UpdateAndRender);
+    blk4.End();
 
     OverlayCycleCounters(gameMemory);
 

@@ -208,9 +208,6 @@ pub const game_assets = struct {
     }
 
     pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
-        const blk1 = debug.TIMED_BLOCK__impl(@src(), 1){};
-        defer blk1.End();
-
         var assets: *game_assets = arena.PushStruct(game_assets);
 
         assets.nextGenerationID = 0;

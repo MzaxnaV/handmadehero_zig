@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) void {
     // ----------------------------------------------------------------------------------------------------
 
     const options = b.addOptions();
-    // NOTE (Manav)L for now this are independent of OptimizeMode
+    // NOTE (Manav): for now this are independent of OptimizeMode
     options.addOption(bool, "IGNORE", false);
     options.addOption(bool, "HANDMADE_INTERNAL", true);
     options.addOption(bool, "HANDMADE_SLOW", true);
