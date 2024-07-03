@@ -74,10 +74,10 @@ pub fn main() !void {
         if (line_iterator.findSubStr(heading)) |_| {
             found_heading = true;
             if (first_heading) {
-                try dest.writer().print("<details><summary>{s}</summary>\n\n```", .{line[0 .. line.len - 1]});
+                try dest.writer().print("<details><summary>{s}</summary>\n\n```", .{line[0..line.len]});
                 first_heading = false;
             } else {
-                try dest.writer().print("\n```\n</details>\n\n</details>\n\n<details><summary>{s}</summary>\n\n```", .{line[0 .. line.len - 1]});
+                try dest.writer().print("\n```\n</details>\n\n</details>\n\n<details><summary>{s}</summary>\n\n```", .{line[0..line.len]});
             }
 
             continue;
@@ -88,9 +88,9 @@ pub fn main() !void {
                 found_subheading = true;
                 if (found_heading) {
                     found_heading = false;
-                    break try dest.writer().print("```\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0 .. line.len - 1]});
+                    break try dest.writer().print("```\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0..line.len]});
                 } else {
-                    break try dest.writer().print("```\n</details>\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0 .. line.len - 1]});
+                    break try dest.writer().print("```\n</details>\n\n<details><summary>{s}</summary>\n\n```\n", .{line[0..line.len]});
                 }
             }
         }

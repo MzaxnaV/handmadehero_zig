@@ -1207,8 +1207,8 @@ pub const render_group = struct {
         // platform.BEGIN_TIMED_BLOCK(.RenderGroupToOutput);
         // defer platform.END_TIMED_BLOCK(.RenderGroupToOutput);
 
-        const END_BLOCK = debug.TIMED_BLOCK(.RenderGroupToOutput);
-        defer END_BLOCK();
+        // const END_BLOCK = debug.TIMED_BLOCK(.RenderGroupToOutput);
+        // defer END_BLOCK();
 
         const nullPixelsToMeters = 1;
 

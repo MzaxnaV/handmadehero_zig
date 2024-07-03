@@ -30,6 +30,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
 
+    // NOTE (Manav): Debug import is assumed to be placed on the very top of the file.
     const debug = b.addModule("debug", .{
         .root_source_file = b.path("./code/handmade/handmade_debug.zig"),
         .optimize = .ReleaseFast,

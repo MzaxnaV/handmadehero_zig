@@ -1,5 +1,5 @@
 
-<details><summary>[0] Code Region - OPS_ClearingChanne</summary>
+<details><summary>[0] Code Region - OPS_ClearingChannel</summary>
 
 ```
 Iterations:        100
@@ -18,7 +18,7 @@ No resource or data dependency bottlenecks discovered.
 
 ```
 
-<details><summary>Instruction Info</summary>
+<details><summary>Instruction Info:</summary>
 
 ```
 [1]: #uOps
@@ -60,7 +60,7 @@ No resource or data dependency bottlenecks discovered.
 ```
 </details>
 
-<details><summary>Dynamic Dispatch Stall Cycles</summary>
+<details><summary>Dynamic Dispatch Stall Cycles:</summary>
 
 ```
 RAT     - Register unavailable:                      0
@@ -75,7 +75,7 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Dispatch Logic - number of cycles where we saw N micro opcodes dispatched</summary>
+<details><summary>Dispatch Logic - number of cycles where we saw N micro opcodes dispatched:</summary>
 
 ```
 [# dispatched], [# cycles]
@@ -87,7 +87,7 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Schedulers - number of cycles where we saw N micro opcodes issued</summary>
+<details><summary>Schedulers - number of cycles where we saw N micro opcodes issued:</summary>
 
 ```
 [# issued], [# cycles]
@@ -104,7 +104,7 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Scheduler's queue usage</summary>
+<details><summary>Scheduler's queue usage:</summary>
 
 ```
 [1] Resource name.
@@ -119,7 +119,7 @@ ICXPortAny       13         15         60
 ```
 </details>
 
-<details><summary>Retire Control Unit - number of cycles where we saw N instructions retired</summary>
+<details><summary>Retire Control Unit - number of cycles where we saw N instructions retired:</summary>
 
 ```
 [# retired], [# cycles]
@@ -132,7 +132,7 @@ ICXPortAny       13         15         60
 ```
 </details>
 
-<details><summary>Total ROB Entries:                35</summary>
+<details><summary>Total ROB Entries:                352</summary>
 
 ```
 Max Used ROB Entries:             48  ( 13.6% )
@@ -142,7 +142,7 @@ Average Used ROB Entries per cy:  39  ( 11.1% )
 ```
 </details>
 
-<details><summary>Register File statistics</summary>
+<details><summary>Register File statistics:</summary>
 
 ```
 Total number of mappings created:    1300
@@ -152,7 +152,7 @@ Max number of mappings used:         24
 ```
 </details>
 
-<details><summary>Resources</summary>
+<details><summary>Resources:</summary>
 
 ```
 [0]   - ICXDivider
@@ -206,7 +206,7 @@ Resource pressure by instruction:
 ```
 </details>
 
-<details><summary>Timeline view</summary>
+<details><summary>Timeline view:</summary>
 
 ```
                     0123456789          0123456789          0123456
@@ -477,7 +477,7 @@ Index     0123456789          0123456789          0123456789
 ```
 </details>
 
-<details><summary>Average Wait times (based on the timeline view)</summary>
+<details><summary>Average Wait times (based on the timeline view):</summary>
 
 ```
 [0]: Executions
@@ -520,7 +520,7 @@ Index     0123456789          0123456789          0123456789
 
 </details>
 
-<details><summary>[1] Code Region - OPS_Mixin</summary>
+<details><summary>[1] Code Region - OPS_Mixing</summary>
 
 ```
 Iterations:        100
@@ -553,7 +553,7 @@ Throughput Bottlenecks:
 
 ```
 
-<details><summary>Critical sequence based on the simulation</summary>
+<details><summary>Critical sequence based on the simulation:</summary>
 
 ```
 
@@ -1464,7 +1464,7 @@ Throughput Bottlenecks:
 ```
 </details>
 
-<details><summary>Instruction Info</summary>
+<details><summary>Instruction Info:</summary>
 
 ```
 [1]: #uOps
@@ -2381,7 +2381,7 @@ Throughput Bottlenecks:
 ```
 </details>
 
-<details><summary>Dynamic Dispatch Stall Cycles</summary>
+<details><summary>Dynamic Dispatch Stall Cycles:</summary>
 
 ```
 RAT     - Register unavailable:                      0
@@ -2396,7 +2396,7 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Dispatch Logic - number of cycles where we saw N micro opcodes dispatched</summary>
+<details><summary>Dispatch Logic - number of cycles where we saw N micro opcodes dispatched:</summary>
 
 ```
 [# dispatched], [# cycles]
@@ -2412,7 +2412,7 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Schedulers - number of cycles where we saw N micro opcodes issued</summary>
+<details><summary>Schedulers - number of cycles where we saw N micro opcodes issued:</summary>
 
 ```
 [# issued], [# cycles]
@@ -2430,7 +2430,7 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Scheduler's queue usage</summary>
+<details><summary>Scheduler's queue usage:</summary>
 
 ```
 [1] Resource name.
@@ -2445,7 +2445,7 @@ ICXPortAny       48         60         60
 ```
 </details>
 
-<details><summary>Retire Control Unit - number of cycles where we saw N instructions retired</summary>
+<details><summary>Retire Control Unit - number of cycles where we saw N instructions retired:</summary>
 
 ```
 [# retired], [# cycles]
@@ -2475,7 +2475,7 @@ ICXPortAny       48         60         60
 ```
 </details>
 
-<details><summary>Total ROB Entries:                35</summary>
+<details><summary>Total ROB Entries:                352</summary>
 
 ```
 Max Used ROB Entries:             352  ( 100.0% )
@@ -2485,7 +2485,7 @@ Average Used ROB Entries per cy:  226  ( 64.2% )
 ```
 </details>
 
-<details><summary>Register File statistics</summary>
+<details><summary>Register File statistics:</summary>
 
 ```
 Total number of mappings created:    71500
@@ -2495,7 +2495,7 @@ Max number of mappings used:         271
 ```
 </details>
 
-<details><summary>Resources</summary>
+<details><summary>Resources:</summary>
 
 ```
 [0]   - ICXDivider
@@ -3424,7 +3424,7 @@ Resource pressure by instruction:
 ```
 </details>
 
-<details><summary>Timeline view</summary>
+<details><summary>Timeline view:</summary>
 
 ```
                     0123456789          0123456789          0123456789          0123456789
@@ -3582,7 +3582,7 @@ Truncated display due to cycle limit
 ```
 </details>
 
-<details><summary>Average Wait times (based on the timeline view)</summary>
+<details><summary>Average Wait times (based on the timeline view):</summary>
 
 ```
 [0]: Executions
@@ -4500,7 +4500,7 @@ Truncated display due to cycle limit
 
 </details>
 
-<details><summary>[2] Code Region - OPS_FillSoundBuffe</summary>
+<details><summary>[2] Code Region - OPS_FillSoundBuffer</summary>
 
 ```
 Iterations:        100
@@ -4519,7 +4519,7 @@ No resource or data dependency bottlenecks discovered.
 
 ```
 
-<details><summary>Instruction Info</summary>
+<details><summary>Instruction Info:</summary>
 
 ```
 [1]: #uOps
@@ -4552,7 +4552,7 @@ No resource or data dependency bottlenecks discovered.
 ```
 </details>
 
-<details><summary>Dynamic Dispatch Stall Cycles</summary>
+<details><summary>Dynamic Dispatch Stall Cycles:</summary>
 
 ```
 RAT     - Register unavailable:                      0
@@ -4567,7 +4567,7 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Dispatch Logic - number of cycles where we saw N micro opcodes dispatched</summary>
+<details><summary>Dispatch Logic - number of cycles where we saw N micro opcodes dispatched:</summary>
 
 ```
 [# dispatched], [# cycles]
@@ -4581,7 +4581,7 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Schedulers - number of cycles where we saw N micro opcodes issued</summary>
+<details><summary>Schedulers - number of cycles where we saw N micro opcodes issued:</summary>
 
 ```
 [# issued], [# cycles]
@@ -4598,7 +4598,7 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Scheduler's queue usage</summary>
+<details><summary>Scheduler's queue usage:</summary>
 
 ```
 [1] Resource name.
@@ -4613,7 +4613,7 @@ ICXPortAny       22         25         60
 ```
 </details>
 
-<details><summary>Retire Control Unit - number of cycles where we saw N instructions retired</summary>
+<details><summary>Retire Control Unit - number of cycles where we saw N instructions retired:</summary>
 
 ```
 [# retired], [# cycles]
@@ -4627,7 +4627,7 @@ ICXPortAny       22         25         60
 ```
 </details>
 
-<details><summary>Total ROB Entries:                35</summary>
+<details><summary>Total ROB Entries:                352</summary>
 
 ```
 Max Used ROB Entries:             117  ( 33.2% )
@@ -4637,7 +4637,7 @@ Average Used ROB Entries per cy:  98  ( 27.8% )
 ```
 </details>
 
-<details><summary>Register File statistics</summary>
+<details><summary>Register File statistics:</summary>
 
 ```
 Total number of mappings created:    1500
@@ -4647,7 +4647,7 @@ Max number of mappings used:         82
 ```
 </details>
 
-<details><summary>Resources</summary>
+<details><summary>Resources:</summary>
 
 ```
 [0]   - ICXDivider
@@ -4692,7 +4692,7 @@ Resource pressure by instruction:
 ```
 </details>
 
-<details><summary>Timeline view</summary>
+<details><summary>Timeline view:</summary>
 
 ```
                     0123456789          0123456789          0123456789
@@ -4873,7 +4873,7 @@ Index     0123456789          0123456789          0123456789
 ```
 </details>
 
-<details><summary>Average Wait times (based on the timeline view)</summary>
+<details><summary>Average Wait times (based on the timeline view):</summary>
 
 ```
 [0]: Executions
@@ -4907,7 +4907,7 @@ Index     0123456789          0123456789          0123456789
 
 </details>
 
-<details><summary>[3] Code Region - ProcessPixe</summary>
+<details><summary>[3] Code Region - ProcessPixel</summary>
 
 ```
 Iterations:        100
@@ -4923,8 +4923,8 @@ Block RThroughput: 66.5
 
 Cycles with backend pressure increase [ 91.38% ]
 Throughput Bottlenecks: 
-  Resource Pressure       [ 54.53% ]
-  - ICXPort0  [ 46.45% ]
+  Resource Pressure       [ 53.64% ]
+  - ICXPort0  [ 45.56% ]
   - ICXPort1  [ 42.88% ]
   - ICXPort2  [ 1.79% ]
   - ICXPort3  [ 1.79% ]
@@ -4936,14 +4936,14 @@ Throughput Bottlenecks:
 
 ```
 
-<details><summary>Critical sequence based on the simulation</summary>
+<details><summary>Critical sequence based on the simulation:</summary>
 
 ```
 
               Instruction                                 Dependency Information
         0.    mov	edx, ebp
         1.    sub	edx, r14d
-        2.    jle	.LBB15_40
+        2.    jle	.LBB15_38
         3.    vcvtsi2ss	xmm0, xmm18, edi
         4.    vsubss	xmm0, xmm0, dword ptr [rsp + 112]
         5.    vmulss	xmm1, xmm0, dword ptr [rsp + 44]
@@ -4954,11 +4954,11 @@ Throughput Bottlenecks:
         10.   kmovq	k2, k0
         11.   vmovaps	xmm13, xmmword ptr [rsp + 96]
         12.   mov	r11, r13
-        13.   jmp	.LBB15_44
+        13.   jmp	.LBB15_42
         14.   add	r11, 16
         15.   add	r12d, 4
         16.   cmp	r12d, ebp
-        17.   jge	.LBB15_40
+        17.   jge	.LBB15_38
         18.   vmulps	xmm0, xmm28, xmm13
         19.   vaddps	xmm1, xmm11, xmm0
         20.   vmulps	xmm0, xmm29, xmm13
@@ -4996,12 +4996,12 @@ Throughput Bottlenecks:
  |      52.   vmovd	xmm1, dword ptr [rcx + 4]
  |      53.   vpinsrd	xmm1, xmm1, dword ptr [r8 + 4], 1
  |      54.   vpinsrd	xmm1, xmm1, dword ptr [r10 + 4], 2
- |      55.   vpxor	xmm14, xmm14, xmm14
+ |      55.   kxnorw	k3, k0, k0
  |      56.   vpinsrd	xmm1, xmm1, dword ptr [r15 + 4], 3
  |      57.   vmovd	xmm2, dword ptr [rcx + rbx]
  |      58.   vpinsrd	xmm2, xmm2, dword ptr [r8 + rbx], 1
  |      59.   vpinsrd	xmm2, xmm2, dword ptr [r10 + rbx], 2
- |      60.   kxnorw	k3, k0, k0
+ |      60.   vpxor	xmm14, xmm14, xmm14
  |      61.   vpinsrd	xmm2, xmm2, dword ptr [r15 + rbx], 3
  |      62.   vmovd	xmm3, dword ptr [rcx + rbx + 4]
  |      63.   vpinsrd	xmm3, xmm3, dword ptr [r8 + rbx + 4], 1
@@ -5118,7 +5118,7 @@ Throughput Bottlenecks:
  |      174.  vpandd	xmm0, xmm4, dword ptr [rip + .LCPI15_7]{1to4}
  |      175.  vcvtdq2ps	xmm0, xmm0
  |      176.  vmulps	xmm0, xmm0, xmm0
- +----> 177.  vmulps	xmm0, xmm0, xmm17                 ## RESOURCE interference:  ICXPort0 [ probability: 99% ]
+ +----> 177.  vmulps	xmm0, xmm0, xmm17                 ## RESOURCE interference:  ICXPort1 [ probability: 99% ]
  |      178.  vaddps	xmm3, xmm0, xmm5
  |      179.  vmovaps	xmm0, xmm1
  |      180.  rsqrtps	xmm0, xmm0
@@ -5137,7 +5137,7 @@ Throughput Bottlenecks:
  |      193.  vpternlogd	xmm2, xmm0, xmm1, 254
  |      194.  vpsrld	xmm0, xmm4, 24
  |      195.  vcvtdq2ps	xmm0, xmm0
- +----> 196.  vmulps	xmm0, xmm17, xmm0                 ## RESOURCE interference:  ICXPort0 [ probability: 99% ]
+ +----> 196.  vmulps	xmm0, xmm17, xmm0                 ## RESOURCE interference:  ICXPort1 [ probability: 99% ]
  +----> 197.  vaddps	xmm0, xmm20, xmm0                 ## REGISTER dependency:  xmm0
  +----> 198.  cvtps2dq	xmm0, xmm0                        ## REGISTER dependency:  xmm0
  +----> 199.  vpslld	xmm0, xmm0, 24                    ## REGISTER dependency:  xmm0
@@ -5149,7 +5149,7 @@ Throughput Bottlenecks:
 ```
 </details>
 
-<details><summary>Instruction Info</summary>
+<details><summary>Instruction Info:</summary>
 
 ```
 [1]: #uOps
@@ -5162,7 +5162,7 @@ Throughput Bottlenecks:
 [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
  1      1     0.25                        mov	edx, ebp
  1      1     0.25                        sub	edx, r14d
- 1      1     0.50                        jle	.LBB15_40
+ 1      1     0.50                        jle	.LBB15_38
  2      5     1.00                        vcvtsi2ss	xmm0, xmm18, edi
  2      9     0.50    *                   vsubss	xmm0, xmm0, dword ptr [rsp + 112]
  2      9     0.50    *                   vmulss	xmm1, xmm0, dword ptr [rsp + 44]
@@ -5173,11 +5173,11 @@ Throughput Bottlenecks:
  1      1     1.00                        kmovq	k2, k0
  1      6     0.50    *                   vmovaps	xmm13, xmmword ptr [rsp + 96]
  1      1     0.25                        mov	r11, r13
- 1      1     0.50                        jmp	.LBB15_44
+ 1      1     0.50                        jmp	.LBB15_42
  1      1     0.25                        add	r11, 16
  1      1     0.25                        add	r12d, 4
  1      1     0.25                        cmp	r12d, ebp
- 1      1     0.50                        jge	.LBB15_40
+ 1      1     0.50                        jge	.LBB15_38
  1      4     0.50                        vmulps	xmm0, xmm28, xmm13
  1      4     0.50                        vaddps	xmm1, xmm11, xmm0
  1      4     0.50                        vmulps	xmm0, xmm29, xmm13
@@ -5215,12 +5215,12 @@ Throughput Bottlenecks:
  1      5     0.50    *                   vmovd	xmm1, dword ptr [rcx + 4]
  2      6     1.00    *                   vpinsrd	xmm1, xmm1, dword ptr [r8 + 4], 1
  2      6     1.00    *                   vpinsrd	xmm1, xmm1, dword ptr [r10 + 4], 2
- 1      0     0.17                        vpxor	xmm14, xmm14, xmm14
+ 1      1     1.00                        kxnorw	k3, k0, k0
  2      6     1.00    *                   vpinsrd	xmm1, xmm1, dword ptr [r15 + 4], 3
  1      5     0.50    *                   vmovd	xmm2, dword ptr [rcx + rbx]
  2      6     1.00    *                   vpinsrd	xmm2, xmm2, dword ptr [r8 + rbx], 1
  2      6     1.00    *                   vpinsrd	xmm2, xmm2, dword ptr [r10 + rbx], 2
- 1      1     1.00                        kxnorw	k3, k0, k0
+ 1      0     0.17                        vpxor	xmm14, xmm14, xmm14
  2      6     1.00    *                   vpinsrd	xmm2, xmm2, dword ptr [r15 + rbx], 3
  1      5     0.50    *                   vmovd	xmm3, dword ptr [rcx + rbx + 4]
  2      6     1.00    *                   vpinsrd	xmm3, xmm3, dword ptr [r8 + rbx + 4], 1
@@ -5368,12 +5368,12 @@ Throughput Bottlenecks:
 ```
 </details>
 
-<details><summary>Dynamic Dispatch Stall Cycles</summary>
+<details><summary>Dynamic Dispatch Stall Cycles:</summary>
 
 ```
 RAT     - Register unavailable:                      0
 RCU     - Retire tokens unavailable:                 0
-SCHEDQ  - Scheduler full:                            10570  (94.8%)
+SCHEDQ  - Scheduler full:                            10471  (94.0%)
 LQ      - Load queue full:                           0
 SQ      - Store queue full:                          0
 GROUP   - Static restrictions on the dispatch group: 0
@@ -5383,29 +5383,29 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Dispatch Logic - number of cycles where we saw N micro opcodes dispatched</summary>
+<details><summary>Dispatch Logic - number of cycles where we saw N micro opcodes dispatched:</summary>
 
 ```
 [# dispatched], [# cycles]
- 0,              1864  (16.7%)
+ 0,              1963  (17.6%)
  1,              1896  (17.0%)
- 2,              3485  (31.3%)
- 3,              2392  (21.5%)
+ 2,              3386  (30.4%)
+ 3,              2293  (20.6%)
  4,              994  (8.9%)
- 5,              402  (3.6%)
+ 5,              501  (4.5%)
  6,              112  (1.0%)
 
 
 ```
 </details>
 
-<details><summary>Schedulers - number of cycles where we saw N micro opcodes issued</summary>
+<details><summary>Schedulers - number of cycles where we saw N micro opcodes issued:</summary>
 
 ```
 [# issued], [# cycles]
- 0,          1834  (16.5%)
- 1,          1011  (9.1%)
- 2,          4509  (40.5%)
+ 0,          1934  (17.4%)
+ 1,          811  (7.3%)
+ 2,          4609  (41.4%)
  3,          2694  (24.2%)
  4,          996  (8.9%)
  5,          1  (0.0%)
@@ -5414,7 +5414,7 @@ USH     - Uncategorised Structural Hazard:           0
 ```
 </details>
 
-<details><summary>Scheduler's queue usage</summary>
+<details><summary>Scheduler's queue usage:</summary>
 
 ```
 [1] Resource name.
@@ -5429,7 +5429,7 @@ ICXPortAny       59         60         60
 ```
 </details>
 
-<details><summary>Retire Control Unit - number of cycles where we saw N instructions retired</summary>
+<details><summary>Retire Control Unit - number of cycles where we saw N instructions retired:</summary>
 
 ```
 [# retired], [# cycles]
@@ -5453,7 +5453,7 @@ ICXPortAny       59         60         60
 ```
 </details>
 
-<details><summary>Total ROB Entries:                35</summary>
+<details><summary>Total ROB Entries:                352</summary>
 
 ```
 Max Used ROB Entries:             137  ( 38.9% )
@@ -5463,7 +5463,7 @@ Average Used ROB Entries per cy:  105  ( 29.8% )
 ```
 </details>
 
-<details><summary>Register File statistics</summary>
+<details><summary>Register File statistics:</summary>
 
 ```
 Total number of mappings created:    20200
@@ -5473,7 +5473,7 @@ Max number of mappings used:         114
 ```
 </details>
 
-<details><summary>Resources</summary>
+<details><summary>Resources:</summary>
 
 ```
 [0]   - ICXDivider
@@ -5498,7 +5498,7 @@ Resource pressure by instruction:
 [0]    [1]    [2]    [3]    [4]    [5]    [6]    [7]    [8]    [9]    [10]   [11]   Instructions:
  -      -      -      -      -      -      -      -     1.00    -      -      -     mov	edx, ebp
  -      -     0.01    -      -      -      -      -     0.99    -      -      -     sub	edx, r14d
- -      -      -      -      -      -      -      -     1.00    -      -      -     jle	.LBB15_40
+ -      -      -      -      -      -      -      -     1.00    -      -      -     jle	.LBB15_38
  -      -     0.99   0.01    -      -      -     1.00    -      -      -      -     vcvtsi2ss	xmm0, xmm18, edi
  -      -     0.99   0.01    -     1.00    -      -      -      -      -      -     vsubss	xmm0, xmm0, dword ptr [rsp + 112]
  -      -      -     1.00   0.01   0.99    -      -      -      -      -      -     vmulss	xmm1, xmm0, dword ptr [rsp + 44]
@@ -5509,11 +5509,11 @@ Resource pressure by instruction:
  -      -     1.00    -      -      -      -      -      -      -      -      -     kmovq	k2, k0
  -      -      -      -     1.00    -      -      -      -      -      -      -     vmovaps	xmm13, xmmword ptr [rsp + 96]
  -      -      -      -      -      -      -     0.99   0.01    -      -      -     mov	r11, r13
- -      -     0.01    -      -      -      -      -     0.99    -      -      -     jmp	.LBB15_44
+ -      -     0.01    -      -      -      -      -     0.99    -      -      -     jmp	.LBB15_42
  -      -      -     0.01    -      -      -     0.99    -      -      -      -     add	r11, 16
  -      -      -      -      -      -      -     0.01   0.99    -      -      -     add	r12d, 4
  -      -      -      -      -      -      -     0.99   0.01    -      -      -     cmp	r12d, ebp
- -      -      -      -      -      -      -      -     1.00    -      -      -     jge	.LBB15_40
+ -      -      -      -      -      -      -      -     1.00    -      -      -     jge	.LBB15_38
  -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm28, xmm13
  -      -     0.99   0.01    -      -      -      -      -      -      -      -     vaddps	xmm1, xmm11, xmm0
  -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm29, xmm13
@@ -5523,10 +5523,10 @@ Resource pressure by instruction:
  -      -      -      -      -      -      -     1.00    -      -      -      -     vcmpleps	k2 {k2}, xmm6, xmm1
  -      -      -      -      -      -      -     1.00    -      -      -      -     vcmpleps	k2 {k2}, xmm6, xmm2
  -      -      -      -      -      -      -     1.00    -      -      -      -     vcmpleps	k2 {k2}, xmm2, xmm0
- -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmaxps	xmm1, xmm1, xmm6
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmaxps	xmm1, xmm1, xmm6
  -      -      -     1.00    -      -      -      -      -      -      -      -     vminps	xmm1, xmm1, xmm0
  -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm1, xmm31, xmm1
- -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmaxps	xmm2, xmm2, xmm6
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmaxps	xmm2, xmm2, xmm6
  -      -     1.00    -      -      -      -      -      -      -      -      -     vminps	xmm2, xmm2, xmm0
  -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmulps	xmm2, xmm16, xmm2
  -      -      -      -     1.00    -      -      -      -      -      -      -     vbroadcastss	xmm3, dword ptr [rip + .LCPI15_5]
@@ -5551,12 +5551,12 @@ Resource pressure by instruction:
  -      -      -      -      -     1.00    -      -      -      -      -      -     vmovd	xmm1, dword ptr [rcx + 4]
  -      -      -      -     1.00    -      -     1.00    -      -      -      -     vpinsrd	xmm1, xmm1, dword ptr [r8 + 4], 1
  -      -      -      -      -     1.00    -     1.00    -      -      -      -     vpinsrd	xmm1, xmm1, dword ptr [r10 + 4], 2
- -      -      -      -      -      -      -      -      -      -      -      -     vpxor	xmm14, xmm14, xmm14
+ -      -     1.00    -      -      -      -      -      -      -      -      -     kxnorw	k3, k0, k0
  -      -      -      -     1.00    -      -     1.00    -      -      -      -     vpinsrd	xmm1, xmm1, dword ptr [r15 + 4], 3
  -      -      -      -     1.00    -      -      -      -      -      -      -     vmovd	xmm2, dword ptr [rcx + rbx]
  -      -      -      -      -     1.00    -     1.00    -      -      -      -     vpinsrd	xmm2, xmm2, dword ptr [r8 + rbx], 1
  -      -      -      -     1.00    -      -     1.00    -      -      -      -     vpinsrd	xmm2, xmm2, dword ptr [r10 + rbx], 2
- -      -     1.00    -      -      -      -      -      -      -      -      -     kxnorw	k3, k0, k0
+ -      -      -      -      -      -      -      -      -      -      -      -     vpxor	xmm14, xmm14, xmm14
  -      -      -      -      -     1.00    -     1.00    -      -      -      -     vpinsrd	xmm2, xmm2, dword ptr [r15 + rbx], 3
  -      -      -      -      -     1.00    -      -      -      -      -      -     vmovd	xmm3, dword ptr [rcx + rbx + 4]
  -      -      -      -     1.00    -      -     1.00    -      -      -      -     vpinsrd	xmm3, xmm3, dword ptr [r8 + rbx + 4], 1
@@ -5663,17 +5663,17 @@ Resource pressure by instruction:
  -      -      -      -      -      -      -     1.00    -      -      -      -     vpshufb	xmm0, xmm4, xmm19
  -      -      -     1.00    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm0, xmm0
  -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm0
- -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm17
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm17
  -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm1, xmm0, xmm1
  -      -      -      -      -      -      -     1.00    -      -      -      -     vpshufb	xmm0, xmm4, xmm18
  -      -     1.00    -      -      -      -      -      -      -      -      -     vcvtdq2ps	xmm0, xmm0
  -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm0
- -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm17
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm17
  -      -     1.00    -      -      -      -      -      -      -      -      -     vaddps	xmm2, xmm0, xmm3
  -      -      -      -      -     1.00    -     1.00    -      -      -      -     vpandd	xmm0, xmm4, dword ptr [rip + .LCPI15_7]{1to4}
  -      -      -     1.00    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm0, xmm0
  -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm0
- -      -     0.99   0.01    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm17
+ -      -      -     1.00    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm0, xmm17
  -      -      -     1.00    -      -      -      -      -      -      -      -     vaddps	xmm3, xmm0, xmm5
  -      -      -      -      -      -      -     1.00    -      -      -      -     vmovaps	xmm0, xmm1
  -      -     1.00    -      -      -      -      -      -      -      -      -     rsqrtps	xmm0, xmm0
@@ -5692,7 +5692,7 @@ Resource pressure by instruction:
  -      -      -      -      -      -      -     1.00    -      -      -      -     vpternlogd	xmm2, xmm0, xmm1, 254
  -      -     1.00    -      -      -      -      -      -      -      -      -     vpsrld	xmm0, xmm4, 24
  -      -      -     1.00    -      -      -      -      -      -      -      -     vcvtdq2ps	xmm0, xmm0
- -      -     0.01   0.99    -      -      -      -      -      -      -      -     vmulps	xmm0, xmm17, xmm0
+ -      -     1.00    -      -      -      -      -      -      -      -      -     vmulps	xmm0, xmm17, xmm0
  -      -     1.00    -      -      -      -      -      -      -      -      -     vaddps	xmm0, xmm20, xmm0
  -      -      -     1.00    -      -      -      -      -      -      -      -     cvtps2dq	xmm0, xmm0
  -      -     0.01   0.99    -      -      -      -      -      -      -      -     vpslld	xmm0, xmm0, 24
@@ -5704,7 +5704,7 @@ Resource pressure by instruction:
 ```
 </details>
 
-<details><summary>Timeline view</summary>
+<details><summary>Timeline view:</summary>
 
 ```
                     0123456789          0123456789          0123456789          0123456789
@@ -5712,7 +5712,7 @@ Index     0123456789          0123456789          0123456789          0123456789
 
 [0,0]     DeER .    .    .    .    .    .    .    .    .    .    .    .    .    .    .   .   mov	edx, ebp
 [0,1]     D=eER.    .    .    .    .    .    .    .    .    .    .    .    .    .    .   .   sub	edx, r14d
-[0,2]     D==eER    .    .    .    .    .    .    .    .    .    .    .    .    .    .   .   jle	.LBB15_40
+[0,2]     D==eER    .    .    .    .    .    .    .    .    .    .    .    .    .    .   .   jle	.LBB15_38
 [0,3]     DeeeeeER  .    .    .    .    .    .    .    .    .    .    .    .    .    .   .   vcvtsi2ss	xmm0, xmm18, edi
 [0,4]     .DeeeeeeeeeER  .    .    .    .    .    .    .    .    .    .    .    .    .   .   vsubss	xmm0, xmm0, dword ptr [rsp + 112]
 [0,5]     .D====eeeeeeeeeER   .    .    .    .    .    .    .    .    .    .    .    .   .   vmulss	xmm1, xmm0, dword ptr [rsp + 44]
@@ -5723,11 +5723,11 @@ Index     0123456789          0123456789          0123456789          0123456789
 [0,10]    . DeE------------R  .    .    .    .    .    .    .    .    .    .    .    .   .   kmovq	k2, k0
 [0,11]    . DeeeeeeE-------R  .    .    .    .    .    .    .    .    .    .    .    .   .   vmovaps	xmm13, xmmword ptr [rsp + 96]
 [0,12]    .  DeE-----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   mov	r11, r13
-[0,13]    .  DeE-----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   jmp	.LBB15_44
+[0,13]    .  DeE-----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   jmp	.LBB15_42
 [0,14]    .  D=eE----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   add	r11, 16
 [0,15]    .  DeE-----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   add	r12d, 4
 [0,16]    .  D=eE----------R  .    .    .    .    .    .    .    .    .    .    .    .   .   cmp	r12d, ebp
-[0,17]    .  D==eE---------R  .    .    .    .    .    .    .    .    .    .    .    .   .   jge	.LBB15_40
+[0,17]    .  D==eE---------R  .    .    .    .    .    .    .    .    .    .    .    .   .   jge	.LBB15_38
 [0,18]    .   D====eeeeE---R  .    .    .    .    .    .    .    .    .    .    .    .   .   vmulps	xmm0, xmm28, xmm13
 [0,19]    .   D===========eeeeER   .    .    .    .    .    .    .    .    .    .    .   .   vaddps	xmm1, xmm11, xmm0
 [0,20]    .   D====eeeeE-------R   .    .    .    .    .    .    .    .    .    .    .   .   vmulps	xmm0, xmm29, xmm13
@@ -5765,12 +5765,12 @@ Index     0123456789          0123456789          0123456789          0123456789
 [0,52]    .    .    D===============================================eeeeeER.    .    .   .   vmovd	xmm1, dword ptr [rcx + 4]
 [0,53]    .    .    D==================================================eeeeeeER .    .   .   vpinsrd	xmm1, xmm1, dword ptr [r8 + 4], 1
 [0,54]    .    .    .D==================================================eeeeeeER.    .   .   vpinsrd	xmm1, xmm1, dword ptr [r10 + 4], 2
-[0,55]    .    .    .D---------------------------------------------------------R.    .   .   vpxor	xmm14, xmm14, xmm14
+[0,55]    .    .    .DeE-------------------------------------------------------R.    .   .   kxnorw	k3, k0, k0
 [0,56]    .    .    .D===================================================eeeeeeER    .   .   vpinsrd	xmm1, xmm1, dword ptr [r15 + 4], 3
 [0,57]    .    .    .D==============================================eeeeeE------R    .   .   vmovd	xmm2, dword ptr [rcx + rbx]
 [0,58]    .    .    . D===================================================eeeeeeER   .   .   vpinsrd	xmm2, xmm2, dword ptr [r8 + rbx], 1
 [0,59]    .    .    . D====================================================eeeeeeER  .   .   vpinsrd	xmm2, xmm2, dword ptr [r10 + rbx], 2
-[0,60]    .    .    . DeE---------------------------------------------------------R  .   .   kxnorw	k3, k0, k0
+[0,60]    .    .    . D-----------------------------------------------------------R  .   .   vpxor	xmm14, xmm14, xmm14
 [0,61]    .    .    .  D====================================================eeeeeeER .   .   vpinsrd	xmm2, xmm2, dword ptr [r15 + rbx], 3
 [0,62]    .    .    .  D=============================================eeeeeE--------R .   .   vmovd	xmm3, dword ptr [rcx + rbx + 4]
 [0,63]    .    .    .  D=====================================================eeeeeeER.   .   vpinsrd	xmm3, xmm3, dword ptr [r8 + rbx + 4], 1
@@ -5793,7 +5793,7 @@ Truncated display due to cycle limit
 ```
 </details>
 
-<details><summary>Average Wait times (based on the timeline view)</summary>
+<details><summary>Average Wait times (based on the timeline view):</summary>
 
 ```
 [0]: Executions
@@ -5804,7 +5804,7 @@ Truncated display due to cycle limit
       [0]    [1]    [2]    [3]
 0.     10    1.0    1.0    51.3      mov	edx, ebp
 1.     10    1.1    0.0    50.4      sub	edx, r14d
-2.     10    2.1    0.0    49.5      jle	.LBB15_40
+2.     10    2.1    0.0    49.5      jle	.LBB15_38
 3.     10    10.9   10.9   36.9      vcvtsi2ss	xmm0, xmm18, edi
 4.     10    11.8   1.9    31.5      vsubss	xmm0, xmm0, dword ptr [rsp + 112]
 5.     10    15.8   0.0    27.9      vmulss	xmm1, xmm0, dword ptr [rsp + 44]
@@ -5815,11 +5815,11 @@ Truncated display due to cycle limit
 10.    10    10.9   10.9   39.0      kmovq	k2, k0
 11.    10    1.0    1.0    43.9      vmovaps	xmm13, xmmword ptr [rsp + 96]
 12.    10    1.0    1.0    48.8      mov	r11, r13
-13.    10    1.0    1.0    47.9      jmp	.LBB15_44
+13.    10    1.0    1.0    47.9      jmp	.LBB15_42
 14.    10    1.1    0.0    47.8      add	r11, 16
 15.    10    1.9    1.8    47.0      add	r12d, 4
 16.    10    2.9    0.0    46.0      cmp	r12d, ebp
-17.    10    3.0    0.0    45.0      jge	.LBB15_40
+17.    10    3.0    0.0    45.0      jge	.LBB15_38
 18.    10    9.5    4.5    35.4      vmulps	xmm0, xmm28, xmm13
 19.    10    21.9   0.0    23.4      vaddps	xmm1, xmm11, xmm0
 20.    10    10.4   5.4    34.9      vmulps	xmm0, xmm29, xmm13
@@ -5857,17 +5857,17 @@ Truncated display due to cycle limit
 52.    10    46.2   0.0    0.0       vmovd	xmm1, dword ptr [rcx + 4]
 53.    10    48.3   1.0    0.0       vpinsrd	xmm1, xmm1, dword ptr [r8 + 4], 1
 54.    10    49.2   0.0    0.0       vpinsrd	xmm1, xmm1, dword ptr [r10 + 4], 2
-55.    10    0.0    0.0    55.2      vpxor	xmm14, xmm14, xmm14
+55.    10    1.0    1.0    53.2      kxnorw	k3, k0, k0
 56.    10    49.3   0.0    0.0       vpinsrd	xmm1, xmm1, dword ptr [r15 + 4], 3
 57.    10    44.3   0.0    6.0       vmovd	xmm2, dword ptr [rcx + rbx]
 58.    10    47.5   4.0    0.0       vpinsrd	xmm2, xmm2, dword ptr [r8 + rbx], 1
 59.    10    48.5   0.0    0.0       vpinsrd	xmm2, xmm2, dword ptr [r10 + rbx], 2
-60.    10    2.8    2.8    50.7      kxnorw	k3, k0, k0
+60.    10    0.0    0.0    54.5      vpxor	xmm14, xmm14, xmm14
 61.    10    48.5   0.0    0.0       vpinsrd	xmm2, xmm2, dword ptr [r15 + rbx], 3
 62.    10    41.5   1.0    8.0       vmovd	xmm3, dword ptr [rcx + rbx + 4]
-63.    10    48.6   7.0    0.0       vpinsrd	xmm3, xmm3, dword ptr [r8 + rbx + 4], 1
+63.    10    49.5   7.0    0.0       vpinsrd	xmm3, xmm3, dword ptr [r8 + rbx + 4], 1
 64.    10    49.5   0.0    0.0       vpinsrd	xmm3, xmm3, dword ptr [r10 + rbx + 4], 2
-65.    10    49.6   0.0    0.0       vpinsrd	xmm3, xmm3, dword ptr [r15 + rbx + 4], 3
+65.    10    50.5   0.0    0.0       vpinsrd	xmm3, xmm3, dword ptr [r15 + rbx + 4], 3
 66.    10    1.1    1.1    46.6      vpbroadcastw	xmm9, word ptr [rip + .LCPI15_6]
 67.    10    30.7   0.0    4.0       vpgatherdd	xmm14 {k3}, xmmword ptr [rsi + xmm4]
 68.    10    49.7   0.0    3.0       vpand	xmm4, xmm14, xmm9
@@ -6005,7 +6005,7 @@ Truncated display due to cycle limit
 200.   10    58.0   0.0    0.0       vpord	xmm4 {k2}, xmm2, xmm0
 201.   10    59.0   0.0    0.0       vmovdqa	xmmword ptr [r11], xmm4
 202.   10    12.0   12.0   46.0      kxnorw	k2, k0, k0
-       10    32.8   1.3    13.5      <total>
+       10    32.8   1.3    13.6      <total>
 ```
 </details>
 </details>

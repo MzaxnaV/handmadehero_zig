@@ -1,4 +1,6 @@
 const platform = @import("handmade_platform");
+const debug = @import("debug");
+
 const h = struct {
     usingnamespace @import("handmade_audio.zig");
     usingnamespace @import("handmade_asset.zig");
@@ -520,6 +522,9 @@ pub var fontScale: f32 = 0;
 pub var fontID: h.font_id = .{ .value = 0 };
 
 fn DEBUGReset(assets: *h.game_assets, width: u32, height: u32) void {
+    const blk0 = debug.TIMED_BLOCK__impl(@src(), 0){};
+    defer blk0.End();
+
     var matchVectorFont = h.asset_vector{};
     var weightVectorFont = h.asset_vector{};
 
