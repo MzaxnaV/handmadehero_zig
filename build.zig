@@ -34,9 +34,6 @@ pub fn build(b: *std.Build) void {
     const debug = b.addModule("debug", .{
         .root_source_file = b.path("./code/handmade/handmade_debug.zig"),
         .optimize = .ReleaseFast,
-        .imports = &.{
-            .{ .name = "handmade_platform", .module = platform },
-        },
     });
 
     const win32 = b.dependency("zigwin32", .{}).module("zigwin32");

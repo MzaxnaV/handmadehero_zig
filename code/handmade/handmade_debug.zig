@@ -1,10 +1,7 @@
-const platform = @import("handmade_platform");
-const hi = platform.handmade_internal;
-
 const SourceLocation = @import("std").builtin.SourceLocation;
 
 pub const debug_record = struct {
-    clocks: u64 = 0,
+    cycleCount: u64 = 0,
 
     fileName: []const u8 = "",
     functionName: []const u8 = "",
@@ -12,6 +9,18 @@ pub const debug_record = struct {
     lineNumber: u32 = 0,
     hitCount: u32 = 0,
 };
+
+pub fn __rdtsc() u64 {
+    var low: u32 = 0;
+    var high: u32 = 0;
+
+    asm volatile ("rdtsc"
+        : [low] "={eax}" (low),
+          [high] "={edx}" (high),
+    );
+
+    return (@as(u64, high) << 32) | @as(u64, low);
+}
 
 /// NOTE (Manav): We don't need two sets of theses because of how `TIMED_BLOCK()` works
 pub var recordArray = [1]debug_record{.{}} ** __COUNTER__();
@@ -60,14 +69,15 @@ pub fn TIMED_BLOCK__impl(comptime source: SourceLocation, comptime __counter__: 
             self.record.fileName = source.file;
             self.record.lineNumber = source.line;
             self.record.functionName = source.fn_name;
-            self.record.clocks -%= hi.__rdtsc();
+            // TODO (Manav): the calculations here are incorrect
+            self.record.cycleCount -%= __rdtsc();
             self.record.hitCount +%= args.hitCount;
 
             return self;
         }
 
         pub inline fn End(self: Self) void {
-            self.record.clocks +%= hi.__rdtsc();
+            self.record.cycleCount +%= __rdtsc();
         }
 
         record: *debug_record,

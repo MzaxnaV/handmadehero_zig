@@ -94,8 +94,8 @@ pub const loaded_bitmap = extern struct {
                             pixelsToMeters: f32) void
     // zig fmt: on
     {
-        const blk2 = debug.TIMED_BLOCK__impl(@src(), 2, .{}).Init();
-        defer blk2.End();
+        const blk6 = debug.TIMED_BLOCK__impl(@src(), 6, .{}).Init();
+        defer blk6.End();
 
         const colour = h.ToV4(h.Scale(h.XYZ(notPremultipliedColour), h.A(notPremultipliedColour)), h.A(notPremultipliedColour));
 
@@ -300,8 +300,8 @@ pub const loaded_bitmap = extern struct {
                                 texture: *const loaded_bitmap, pixelsToMeters: f32, clipRect: h.rect2i, even: bool) void
     // zig fmt: on
     {
-        const blk0 = debug.TIMED_BLOCK__impl(@src(), 0).Init(.{});
-        defer blk0.End();
+        const blk1 = debug.TIMED_BLOCK__impl(@src(), 1).Init(.{});
+        defer blk1.End();
 
         _ = pixelsToMeters;
         const colour = h.ToV4(h.Scale(h.XYZ(notPremultipliedColour), h.A(notPremultipliedColour)), h.A(notPremultipliedColour));
@@ -428,8 +428,8 @@ pub const loaded_bitmap = extern struct {
             const xMax = fillRect.xMax;
             const xMin = fillRect.xMin;
 
-            const blk1 = debug.TIMED_BLOCK__impl(@src(), 1).Init(.{ .hitCount = @intCast(@divFloor(fillRect.GetClampedRectArea(), 2)) });
-            defer blk1.End();
+            const blk2 = debug.TIMED_BLOCK__impl(@src(), 2).Init(.{ .hitCount = @intCast(@divFloor(fillRect.GetClampedRectArea(), 2)) });
+            defer blk2.End();
 
             var y = yMin;
             while (y < yMax) : (y += 2) {
