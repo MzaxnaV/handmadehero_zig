@@ -10,7 +10,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -p build -Doptimize=ReleaseFast --verbose & zig build test"
+            "command": "zig build -p build -Doptimize=ReleaseFast --verbose --summary all & zig build test"
         },
         {
             "label": "Build and Test Project",
@@ -19,7 +19,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -p build --verbose & zig build test"
+            "command": "zig build -p build --verbose --summary all & zig build test"
         },
         {
             "label": "Build Project",
@@ -37,7 +37,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -p build -Doptimize=ReleaseFast --verbose lib"
+            "command": "zig build -p build -Doptimize=ReleaseFast --verbose --summary all lib"
         },
         {
             "label": "Build Lib",
@@ -64,7 +64,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build -p build -Doptimize=ReleaseFast --verbose asset"
+            "command": "zig build -p build -Doptimize=ReleaseFast --verbose --summary all asset"
         },
         {
             "label": "Run llvm-mca",
