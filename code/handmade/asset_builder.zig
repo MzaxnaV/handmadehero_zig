@@ -231,7 +231,7 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !loaded_bitmap {
     return result;
 }
 
-fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, allocator: std.mem.Allocator) !*loaded_font {
+fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, pixelHeight: i32, allocator: std.mem.Allocator) !*loaded_font {
     var font = try allocator.create(loaded_font);
 
     _ = win32.AddFontResourceExA(
@@ -240,9 +240,8 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, allocator: std.mem.A
         null,
     );
 
-    const height = 128;
     font.win32Handle = win32.CreateFontA(
-        height,
+        pixelHeight,
         0,
         0,
         0,
@@ -1096,11 +1095,11 @@ fn WriteFonts() void {
     assets.Initialize();
 
     const fonts = [_]*loaded_font{
-        LoadFont("c:/windows/fonts/arial.ttf", "Arial", allocator) catch |err| {
+        LoadFont("c:/windows/fonts/arial.ttf", "Arial", 128, allocator) catch |err| {
             std.debug.print("Failed to load debug font, {}\n", .{err});
             return;
         },
-        LoadFont("c:/windows/fonts/LiberationMono-Regular.ttf", "Liberation Mono", allocator) catch |err| {
+        LoadFont("c:/windows/fonts/LiberationMono-Regular.ttf", "Liberation Mono", 20, allocator) catch |err| {
             std.debug.print("Failed to load debug font, {}\n", .{err});
             return;
         },
