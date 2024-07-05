@@ -1095,29 +1095,39 @@ fn WriteFonts() void {
     var assets = game_assets{};
     assets.Initialize();
 
-    const debugFont = LoadFont("c:/windows/fonts/arial.ttf", "Arial", allocator) catch |err| {
-        std.debug.print("Failed to load debug font, {}\n", .{err});
-        return;
+    const fonts = [_]*loaded_font{
+        LoadFont("c:/windows/fonts/arial.ttf", "Arial", allocator) catch |err| {
+            std.debug.print("Failed to load debug font, {}\n", .{err});
+            return;
+        },
+        LoadFont("c:/windows/fonts/LiberationMono-Regular.ttf", "Liberation Mono", allocator) catch |err| {
+            std.debug.print("Failed to load debug font, {}\n", .{err});
+            return;
+        },
     };
-    // _ = assets.AddDefaultCharacterAsset("c:/windows/fonts/cour.ttf", "Courier New", @intCast(character));
-    // defer FreeFont(debugFont, allocator);
 
     assets.BeginAssetType(.Asset_FontGlyph);
-    _ = assets.AddDefaultCharacterAsset(debugFont, ' ');
+    for (fonts) |font| {
+        _ = assets.AddDefaultCharacterAsset(font, ' ');
 
-    for ('!'..'~' + 1) |character| {
-        _ = assets.AddDefaultCharacterAsset(debugFont, @intCast(character));
+        for ('!'..'~' + 1) |character| {
+            _ = assets.AddDefaultCharacterAsset(font, @intCast(character));
+        }
+
+        _ = assets.AddDefaultCharacterAsset(font, '小'); // 5c0f - 小
+        _ = assets.AddDefaultCharacterAsset(font, '耳'); // 8033 - 耳
+        _ = assets.AddDefaultCharacterAsset(font, '木'); // 6728 - 木
+        _ = assets.AddDefaultCharacterAsset(font, '兎'); // 514e - 兎
+
     }
-
-    _ = assets.AddDefaultCharacterAsset(debugFont, '小'); // 5c0f - 小
-    _ = assets.AddDefaultCharacterAsset(debugFont, '耳'); // 8033 - 耳
-    _ = assets.AddDefaultCharacterAsset(debugFont, '木'); // 6728 - 木
-    _ = assets.AddDefaultCharacterAsset(debugFont, '兎'); // 514e - 兎
-
     assets.EndAssetType();
 
     assets.BeginAssetType(.Asset_Font);
-    _ = assets.AddFontAsset(debugFont);
+    _ = assets.AddFontAsset(fonts[0]);
+    _ = assets.AddTag(.Tag_FontType, @floatFromInt(@as(u32, @intFromEnum(h.asset_font_type.FontType_Default))));
+    _ = assets.AddFontAsset(fonts[1]);
+    _ = assets.AddTag(.Tag_FontType, @floatFromInt(@as(u32, @intFromEnum(h.asset_font_type.FontType_Debug))));
+
     assets.EndAssetType();
 
     WriteHHA(&assets, "testfonts.hha") catch |err| {

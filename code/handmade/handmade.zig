@@ -527,6 +527,9 @@ fn DEBUGReset(assets: *h.game_assets, width: u32, height: u32) void {
     var matchVectorFont = h.asset_vector{};
     var weightVectorFont = h.asset_vector{};
 
+    matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_FontType)] = @floatFromInt(@as(i32, @intFromEnum(h.asset_font_type.FontType_Debug)));
+    weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_FontType)] = 1.0;
+
     fontID = h.GetBestMatchFontFrom(
         assets,
         .Asset_Font,
