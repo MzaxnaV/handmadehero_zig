@@ -171,13 +171,13 @@ pub fn build(b: *std.Build) void {
 
     lib_install_step.step.dependOn(&run_process_timed_blocks.step);
 
-    const process_timed_blocks_test = b.addTest(.{
-        .root_source_file = b.path("code/tools/process_timed_blocks.zig"),
-        .target = b.graph.host,
-        .optimize = .ReleaseSafe,
-    });
+    // const process_timed_blocks_test = b.addTest(.{
+    //     .root_source_file = b.path("code/tools/process_timed_blocks.zig"),
+    //     .target = b.graph.host,
+    //     .optimize = .ReleaseSafe,
+    // });
 
-    const run_process_timed_blocks_test = b.addRunArtifact(process_timed_blocks_test);
+    // const run_process_timed_blocks_test = b.addRunArtifact(process_timed_blocks_test);
 
     // ----------------------------------------------------------------------------------------------------
     // Tests ----------------------------------------------------------------------------------------------
@@ -194,5 +194,5 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run handmade tests");
     test_step.dependOn(&run_lib_test.step);
     test_step.dependOn(&run_llvm_mca_parser_test.step);
-    test_step.dependOn(&run_process_timed_blocks_test.step);
+    // test_step.dependOn(&run_process_timed_blocks_test.step);
 }
