@@ -20,10 +20,14 @@ pub fn build(b: *std.Build) void {
     // Modules --------------------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------------------------
 
-    // TODO (Manav): Should I split handmade hero code into small modules?
     const platform = b.createModule(.{
         .root_source_file = b.path("./code/handmade_platform.zig"),
     });
+
+    // TODO (Manav): Should I split handmade hero code into small modules?
+    // const intrinsics = b.createModule(.{
+    //     .root_source_file = b.path("./code/handmade/handmade_intrinsics.zig"),
+    // });
 
     const simd = b.createModule(.{
         .root_source_file = b.path("./code/simd.zig"),
@@ -33,6 +37,7 @@ pub fn build(b: *std.Build) void {
     // NOTE (Manav): Debug import is assumed to be placed on the very top of the file.
     const debug = b.addModule("debug", .{
         .root_source_file = b.path("./code/handmade/handmade_debug.zig"),
+        // .imports = &.{.{ .name = "instrinsics", .module = intrinsics }},
         .optimize = .ReleaseFast,
     });
 
