@@ -6,8 +6,5 @@
 	],
 	"settings": {
 		"zig.zls.enableInlayHints": false,
-		"files.associations": {
-			"*.zig_e": "zig"
-		},
 	}
 }
