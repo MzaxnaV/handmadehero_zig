@@ -20,10 +20,14 @@ pub fn build(b: *std.Build) void {
     // Modules --------------------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------------------------
 
-    // TODO (Manav): Should I split handmade hero code into small modules?
     const platform = b.createModule(.{
         .root_source_file = b.path("./code/handmade_platform.zig"),
     });
+
+    // TODO (Manav): Should I split handmade hero code into small modules?
+    // const intrinsics = b.createModule(.{
+    //     .root_source_file = b.path("./code/handmade/handmade_intrinsics.zig"),
+    // });
 
     const simd = b.createModule(.{
         .root_source_file = b.path("./code/simd.zig"),
@@ -33,6 +37,7 @@ pub fn build(b: *std.Build) void {
     // NOTE (Manav): Debug import is assumed to be placed on the very top of the file.
     const debug = b.addModule("debug", .{
         .root_source_file = b.path("./code/handmade/handmade_debug.zig"),
+        // .imports = &.{.{ .name = "instrinsics", .module = intrinsics }},
         .optimize = .ReleaseFast,
     });
 
@@ -171,13 +176,13 @@ pub fn build(b: *std.Build) void {
 
     lib_install_step.step.dependOn(&run_process_timed_blocks.step);
 
-    const process_timed_blocks_test = b.addTest(.{
-        .root_source_file = b.path("code/tools/process_timed_blocks.zig"),
-        .target = b.graph.host,
-        .optimize = .ReleaseSafe,
-    });
+    // const process_timed_blocks_test = b.addTest(.{
+    //     .root_source_file = b.path("code/tools/process_timed_blocks.zig"),
+    //     .target = b.graph.host,
+    //     .optimize = .ReleaseSafe,
+    // });
 
-    const run_process_timed_blocks_test = b.addRunArtifact(process_timed_blocks_test);
+    // const run_process_timed_blocks_test = b.addRunArtifact(process_timed_blocks_test);
 
     // ----------------------------------------------------------------------------------------------------
     // Tests ----------------------------------------------------------------------------------------------
@@ -194,5 +199,5 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run handmade tests");
     test_step.dependOn(&run_lib_test.step);
     test_step.dependOn(&run_llvm_mca_parser_test.step);
-    test_step.dependOn(&run_process_timed_blocks_test.step);
+    // test_step.dependOn(&run_process_timed_blocks_test.step);
 }

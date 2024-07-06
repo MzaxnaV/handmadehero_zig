@@ -28,7 +28,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "command": "zig build --verbose"
+            "command": "zig build -p build --summary all"
         },
         {
             "label": "Build Lib optimized",

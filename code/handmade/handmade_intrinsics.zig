@@ -1,4 +1,5 @@
-const math = @import("std").math;
+const std = @import("std");
+const math = std.math;
 
 // intrinsics -----------------------------------------------------------------------------------------------------------------------------
 
@@ -107,4 +108,13 @@ pub inline fn FindLeastSignificantSetBit(value: u32) u32 {
 /// ```
 pub inline fn AtomicCompareExchange(comptime T: type, ptr: *T, new_value: T, expected_value: T) ?T {
     return @cmpxchgStrong(T, ptr, expected_value, new_value, .seq_cst, .seq_cst);
+}
+
+/// Performs an atomic add and returns the previous value
+pub inline fn AtomicIncrement(comptime T: type, ptr: *T, addend: T) T {
+    return @atomicRmw(T, ptr, .Add, addend, .seq_cst);
+}
+
+pub inline fn AtomicExchange(comptime T: type, ptr: *T, new_value: T) T {
+    return @atomicRmw(T, ptr, .Xchg, new_value, .seq_cst);
 }

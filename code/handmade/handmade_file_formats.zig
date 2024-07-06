@@ -58,11 +58,17 @@ pub const asset_type_id = enum(u32) {
     }
 };
 
+pub const asset_font_type = enum(u32) {
+    FontType_Default = 0,
+    FontType_Debug = 10,
+};
+
 pub const asset_tag_id = enum {
     Tag_Smoothness,
     Tag_Flatness,
     Tag_FacingDirection,
     Tag_UnicodeCodepoint,
+    Tag_FontType,
 
     pub fn len() comptime_int {
         comptime {

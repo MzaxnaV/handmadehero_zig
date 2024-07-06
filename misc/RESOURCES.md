@@ -52,5 +52,8 @@ Collection of stuff, not all are related to Handmade Hero.
 ## V
 - [V-COLLIDE, Collision library](https://gamma.cs.unc.edu/V-COLLIDE/)
 
+## W
+- [Wait-Free Synchronization](https://cs.brown.edu/~mph/Herlihy91/p124-herlihy.pdf)
+
 ## Z
 - [ZachLikes](https://www.zachtronics.com/zach-like/)
