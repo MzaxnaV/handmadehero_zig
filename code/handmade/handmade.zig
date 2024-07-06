@@ -1647,27 +1647,31 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
 
 // debug ----------------------------------------------------------------------------------------------------------------------------------
 
-fn UpdateDebugRecords(counters: []debug.record) void {
+fn UpdateDebugRecords(debugState: *debug.state, counters: []debug.record) void {
     for (0..debug.recordArray.len) |counterIndex| {
-        var counter: *debug.record = &counters[counterIndex];
+        const source: *debug.record = &counters[counterIndex];
+        const dest: *debug.counter_state = &debugState.counterStates[debugState.counterCount];
+        debugState.counterCount += 1;
 
-        const hitCount_CycleCount = h.AtomicExchange(u64, @as(*u64, @ptrCast(&counter.counts)), 0);
+        const hitCount_CycleCount = h.AtomicExchange(u64, @as(*u64, @ptrCast(&source.counts)), 0);
 
-        const hitCount: u32 = @intCast(hitCount_CycleCount >> 32);
-        const cycleCount: u32 = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
-        _ = cycleCount;
-
-        if (hitCount > 0) {}
+        dest.fileName = source.fileName;
+        dest.functionName = source.functionName;
+        dest.lineNumber = source.lineNumber;
+        dest.snapshots[0].hitCount = @intCast(hitCount_CycleCount >> 32);
+        dest.snapshots[0].cycleCount = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
     }
 }
 
-pub export fn DEBUGFrameEnd(_: *platform.memory, _: *platform.debug_frame_end_info) void {
+pub export fn DEBUGFrameEnd(memory: *platform.memory, _: *platform.debug_frame_end_info) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(platform.DEBUGFrameEndsFnPtrType).Pointer.child != @TypeOf(DEBUGFrameEnd)) {
             @compileError("Function signature mismatch!");
         }
     }
-
-    UpdateDebugRecords(debug.recordArray[0..]);
+    if (@as(?*debug.state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
+        debugState.counterCount = 0;
+        UpdateDebugRecords(debugState, debug.recordArray[0..]);
+    }
 }

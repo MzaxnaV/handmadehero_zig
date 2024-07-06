@@ -1399,7 +1399,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 .transientStorageSize = platform.GigaBytes(1),
                 .transientStorage = undefined,
 
-                .debugStorageSize = 0,
+                .debugStorageSize = platform.MegaBytes(64),
                 .debugStorage = null,
 
                 .highPriorityQueue = highPriorityQueue.to(),
@@ -1424,11 +1424,12 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 },
             };
 
-            win32State.totalSize = gameMemory.permanentStorageSize + gameMemory.transientStorageSize;
+            win32State.totalSize = gameMemory.permanentStorageSize + gameMemory.transientStorageSize + gameMemory.debugStorageSize;
             win32State.gameMemoryBlock = win32.VirtualAlloc(baseAddress, win32State.totalSize, allocationReserveCommit, win32.PAGE_READWRITE).?;
 
             gameMemory.permanentStorage = @ptrCast(win32State.gameMemoryBlock);
             gameMemory.transientStorage = gameMemory.permanentStorage + gameMemory.permanentStorageSize;
+            gameMemory.debugStorage = gameMemory.transientStorage + gameMemory.transientStorageSize;
 
             for (1..win32State.replayBuffers.len) |replayIndex| {
                 var replayBuffer = &win32State.replayBuffers[replayIndex];
