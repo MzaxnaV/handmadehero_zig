@@ -119,7 +119,7 @@ fn processFile(allocator: std.mem.Allocator, name: []const u8, buffer: []const u
                 const gen_blk = try std.fmt.allocPrint(allocator, gen, .{ indent, indent, counter.*, counter.*, argument, indent, counter.*, indent });
                 defer allocator.free(gen_blk);
 
-                std.debug.print("Overwriting at file, {s}:\n {}: {s}\n", .{ name, counter.*, line });
+                std.debug.print("Overwriting file, {s}:\n {}: {s}\n", .{ name, counter.*, line });
 
                 counter.* += 1;
 
