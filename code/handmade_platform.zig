@@ -1,9 +1,10 @@
-/// Debug
-pub const NOT_IGNORE = true;
+const config = @import("config");
+/// Debug: build constant to dynamically ignore code sections
+pub const ignore = !config.ignore;
 /// Debug: `False` - slow code not allowed, `True` - slow code welcome.
-pub const HANDMADE_SLOW = true;
+pub const HANDMADE_SLOW = config.HANDMADE_SLOW;
 /// Debug: `False` - Build for public release, `True` - Build for developer only
-pub const HANDMADE_INTERNAL = true;
+pub const HANDMADE_INTERNAL = config.HANDMADE_INTERNAL;
 
 pub const native_endian = @import("builtin").target.cpu.arch.endian();
 
@@ -208,6 +209,9 @@ pub const memory = struct {
     transientStorageSize: u64,
     transientStorage: [*]u8,
 
+    debugStorageSize: u64,
+    debugStorage: ?[*]u8,
+
     highPriorityQueue: *work_queue,
     lowPriorityQueue: *work_queue,
 
@@ -248,7 +252,18 @@ pub fn InvalidCodePath(comptime _: []const u8) noreturn {
     unreachable;
 }
 
+pub const debug_frame_end_info = struct {
+    executableReady: f32 = 0,
+    inputProcessed: f32 = 0,
+    gameUpdated: f32 = 0,
+    audioUpdated: f32 = 0,
+    framerateWaitComplete: f32 = 0,
+    endOfFrame: f32 = 0,
+};
+
 // exported functions ---------------------------------------------------------------------------------------------------------------------
+
+pub const DEBUGFrameEndsFnPtrType = *const fn (*memory, *debug_frame_end_info) callconv(.C) void;
 
 pub const GetSoundSamplesFnPtrType = *const fn (*memory, *sound_output_buffer) callconv(.C) void;
 pub const UpdateAndRenderFnPtrType = *const fn (*memory, *input, *offscreen_buffer) callconv(.C) void;

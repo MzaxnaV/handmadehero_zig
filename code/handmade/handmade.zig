@@ -16,11 +16,11 @@ const h = struct {
 };
 
 const assert = platform.Assert;
-const handmade_internal = platform.handmade_internal;
+const hi = platform.handmade_internal;
 
 // build constants ------------------------------------------------------------------------------------------------------------------------
 
-const NOT_IGNORE = platform.NOT_IGNORE;
+const ignore = platform.ignore;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
@@ -277,7 +277,7 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
                 var colour = h.v4{ 1, 1, 1, 1 };
 
-                if (!NOT_IGNORE) {
+                if (ignore) {
                     colour = h.v4{ 1, 0, 0, 1 };
                     if (@mod(chunkX, 2) == @mod(chunkY, 2)) {
                         colour = h.v4{ 0, 0, 1, 1 };
@@ -637,48 +637,100 @@ fn DEBUGTextLine(string: []const u8) void {
     }
 }
 
-fn OutputDebugRecords(counters: []debug.record) void {
-    for (0..debug.recordArray.len) |counterIndex| {
-        var counter: *debug.record = &counters[counterIndex];
+const debug_statistic = struct {
+    min: f64,
+    max: f64,
+    avg: f64,
+    count: u32,
 
-        const hitCount_CycleCount = h.AtomicExchange(u64, @as(*u64, @ptrCast(&counter.counts)), 0);
+    const Self = @This();
 
-        const hitCount: u32 = @intCast(hitCount_CycleCount >> 32);
-        const cycleCount: u32 = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
+    fn BeginDebugStatistic(stat: *Self) void {
+        stat.min = platform.F32MAXIMUM;
+        stat.max = -platform.F32MAXIMUM;
+        stat.avg = 0;
+        stat.count = 0;
+    }
 
-        // counter.counts = .{}; // NOTE (Manav): this should suffice
-
-        if (hitCount > 0) {
-            var textBuffer = [1]u8{0} ** 256;
-            const buffer = @import("std").fmt.bufPrint(textBuffer[0..], "{s:32}({:4}) - {:10}cy {:8}h {:10}cy/h\n", .{
-                counter.functionName,
-                counter.lineNumber,
-                cycleCount,
-                hitCount,
-                cycleCount / hitCount,
-            }) catch |err| {
-                @import("std").debug.print("{}\n", .{err});
-                return;
-            };
-
-            DEBUGTextLine(buffer);
+    fn EndDebugStatistic(stat: *Self) void {
+        if (stat.count != 0) {
+            stat.avg /= @floatFromInt(stat.count);
+        } else {
+            stat.min = 0;
+            stat.max = 0;
         }
     }
-}
 
-fn OverlayCycleCounters(_: *platform.memory) void {
-    // DEBUGTextLine("\\5C0F\\8033\\6728\\514E");
-    // DEBUGTextLine("111111");
-    // DEBUGTextLine("999999");
-    if (HANDMADE_INTERNAL) {
-        DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:");
-        OutputDebugRecords(debug.recordArray[0..]);
+    fn AccumDebugStatistic(stat: *Self, value: f64) void {
+        stat.count += 1;
+        if (stat.min > value) {
+            stat.min = value;
+        }
+
+        if (stat.max < value) {
+            stat.max = value;
+        }
+
+        stat.avg += value;
     }
+};
 
-    // DEBUGTextLine("AVA WA Ta");
+fn OverlayCycleCounters(memory: *platform.memory) void {
+    if (@as(?*debug.state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
+        for (0..debugState.counterCount) |counterIndex| {
+            const counter = &debugState.counterStates[counterIndex];
+
+            var hitCount: debug_statistic = undefined;
+            var cycleCount: debug_statistic = undefined;
+            var cycleOverHit: debug_statistic = undefined;
+
+            hitCount.BeginDebugStatistic();
+            cycleCount.BeginDebugStatistic();
+            cycleOverHit.BeginDebugStatistic();
+
+            for (counter.snapshots) |snapshot| {
+                hitCount.AccumDebugStatistic(@floatFromInt(snapshot.hitCount));
+                cycleCount.AccumDebugStatistic(@floatFromInt(snapshot.cycleCount));
+
+                var coh: f64 = 0;
+                if (snapshot.hitCount != 0) {
+                    coh = @as(f64, @floatFromInt(snapshot.cycleCount)) / @as(f64, @floatFromInt(snapshot.hitCount));
+                }
+                cycleOverHit.AccumDebugStatistic(coh);
+            }
+
+            hitCount.EndDebugStatistic();
+            cycleCount.EndDebugStatistic();
+            cycleOverHit.EndDebugStatistic();
+
+            if (hitCount.max > 0) {
+                var textBuffer = [1]u8{0} ** 256;
+                const buffer = @import("std").fmt.bufPrint(textBuffer[0..], "{s:32}({:4}) - {:10}cy {:8}h {:10}cy/h\n", .{
+                    counter.functionName,
+                    counter.lineNumber,
+                    @as(u32, @intFromFloat(cycleCount.avg)),
+                    @as(u32, @intFromFloat(hitCount.avg)),
+                    @as(u32, @intFromFloat(cycleOverHit.avg)),
+                }) catch |err| {
+                    @import("std").debug.print("{}\n", .{err});
+                    return;
+                };
+
+                DEBUGTextLine(buffer);
+            }
+        }
+
+        // DEBUGTextLine("\\5C0F\\8033\\6728\\514E");
+        // DEBUGTextLine("111111");
+        // DEBUGTextLine("999999");
+        // DEBUGTextLine("AVA WA Ta");
+
+    }
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
+
+var debugGlobalMemory: ?*platform.memory = null;
 
 pub export fn UpdateAndRender(
     gameMemory: *platform.memory,
@@ -695,7 +747,7 @@ pub export fn UpdateAndRender(
     h.platformAPI = gameMemory.platformAPI;
 
     if (HANDMADE_INTERNAL) {
-        // handmade_internal.debugGlobalMemory = gameMemory;
+        debugGlobalMemory = gameMemory;
     }
 
     debug.TIMED_BLOCK(.{});
@@ -774,7 +826,7 @@ pub export fn UpdateAndRender(
         var screenIndex: u32 = 0;
         while (screenIndex < 2000) : (screenIndex += 1) {
             var doorDirection = @as(u32, 0);
-            if (NOT_IGNORE) {
+            if (!ignore) {
                 doorDirection = series.RandomChoice(if (doorUp or doorDown) 2 else 4);
             } else {
                 doorDirection = series.RandomChoice(2);
@@ -864,7 +916,7 @@ pub export fn UpdateAndRender(
             }
         }
 
-        if (!NOT_IGNORE) {
+        if (ignore) {
             while (gameState.lowEntityCount < (gameState.lowEntities.len - 16)) {
                 const coordinate = 1024 + gameState.lowEntityCount;
                 AddWall(gameState, coordinate, coordinate, coordinate);
@@ -959,7 +1011,7 @@ pub export fn UpdateAndRender(
         DEBUGReset(tranState.assets, buffer.width, buffer.height);
     }
 
-    if (!NOT_IGNORE and gameInput.executableReloaded) {
+    if (ignore and gameInput.executableReloaded) {
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
@@ -1041,7 +1093,7 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
-    if (!NOT_IGNORE) {
+    if (ignore) {
         drawBuffer.width = 1279;
         drawBuffer.height = 719;
     }
@@ -1070,7 +1122,7 @@ pub export fn UpdateAndRender(
     cameraBoundsInMeters.min[2] = -3 * gameState.typicalFloorHeight;
     cameraBoundsInMeters.max[2] = 1 * gameState.typicalFloorHeight;
 
-    if (NOT_IGNORE) {
+    if (!ignore) {
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
@@ -1081,7 +1133,7 @@ pub export fn UpdateAndRender(
                 if ((h.Z(delta) >= -1.0) and (h.Z(delta) < 1.0)) {
                     const groundSideInMeters = h.X(world.chunkDimInMeters);
                     renderGroup.PushBitmap(bitmap, 1.0 * groundSideInMeters, delta, .{ 1, 1, 1, 1 });
-                    if (!NOT_IGNORE) {
+                    if (ignore) {
                         renderGroup.PushRectOutline(delta, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
                     }
                 }
@@ -1252,7 +1304,7 @@ pub export fn UpdateAndRender(
                 .Familiar => {
                     var closestHero: ?*h.sim_entity = null;
                     var closestHeroDSq = h.Square(10);
-                    if (!NOT_IGNORE) {
+                    if (ignore) {
                         var testEntityIndex = @as(u32, 0);
                         while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
                             const testEntity: *h.sim_entity = &simRegion.entities[testEntityIndex];
@@ -1381,7 +1433,7 @@ pub export fn UpdateAndRender(
                         h.AddTo(&cel.velocityTimesDensity, h.Scale(particle.dP, density));
                     }
 
-                    if (!NOT_IGNORE) {
+                    if (ignore) {
                         for (0..h.PARTICLE_CEL_DIM) |y| {
                             for (0..h.PARTICLE_CEL_DIM) |x| {
                                 const cel: *h.particle_cel = &gameState.particleCels[y][x];
@@ -1499,7 +1551,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Space => {
-                    if (!NOT_IGNORE) {
+                    if (ignore) {
                         var volumeIndex = @as(u32, 0);
                         while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
                             const volume = entity.collision.volumes[volumeIndex];
@@ -1517,7 +1569,7 @@ pub export fn UpdateAndRender(
 
     renderGroup.globalAlpha = 1.0;
 
-    if (!NOT_IGNORE) {
+    if (ignore) {
         gameState.time += gameInput.dtForFrame;
 
         const mapColour = [_]h.v3{
@@ -1561,11 +1613,11 @@ pub export fn UpdateAndRender(
         const origin = screenCenter;
 
         const angle = 0.1 * gameState.time;
-        const disp: h.v2 = if (NOT_IGNORE) .{ 100 * h.Cos(5 * angle), 100 * h.Sin(3 * angle) } else .{ 0, 0 };
+        const disp: h.v2 = if (!ignore) .{ 100 * h.Cos(5 * angle), 100 * h.Sin(3 * angle) } else .{ 0, 0 };
 
         var xAxis: h.v2 = undefined;
         var yAxis: h.v2 = undefined;
-        if (NOT_IGNORE) {
+        if (!ignore) {
             xAxis = h.Scale(h.v2{ h.Cos(10 * angle), h.Sin(10 * angle) }, 100);
             yAxis = h.Perp(xAxis);
         } else {
@@ -1577,7 +1629,7 @@ pub export fn UpdateAndRender(
 
         var colour: h.v4 = undefined;
 
-        if (!NOT_IGNORE) {
+        if (ignore) {
             colour = .{
                 0.5 + 0.5 * h.Sin(cAngle),
                 0.5 + 0.5 * h.Sin(2.9 * cAngle),
@@ -1649,4 +1701,39 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
 
     h.OutputPlayingSounds(&gameState.audioState, soundBuffer, tranState.assets, &tranState.tranArena);
     // h.OutputTestSineWave(gameState, soundBuffer, 400);
+}
+
+// debug ----------------------------------------------------------------------------------------------------------------------------------
+
+fn UpdateDebugRecords(debugState: *debug.state, counters: []debug.record) void {
+    for (0..debug.recordArray.len) |counterIndex| {
+        const source: *debug.record = &counters[counterIndex];
+        const dest: *debug.counter_state = &debugState.counterStates[debugState.counterCount];
+        debugState.counterCount += 1;
+
+        const hitCount_CycleCount = h.AtomicExchange(u64, @as(*u64, @ptrCast(&source.counts)), 0);
+
+        dest.fileName = source.fileName;
+        dest.functionName = source.functionName;
+        dest.lineNumber = source.lineNumber;
+        dest.snapshots[debugState.snapshotIndex].hitCount = @intCast(hitCount_CycleCount >> 32);
+        dest.snapshots[debugState.snapshotIndex].cycleCount = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
+    }
+}
+
+pub export fn DEBUGFrameEnd(memory: *platform.memory, _: *platform.debug_frame_end_info) void {
+    comptime {
+        // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
+        if (@typeInfo(platform.DEBUGFrameEndsFnPtrType).Pointer.child != @TypeOf(DEBUGFrameEnd)) {
+            @compileError("Function signature mismatch!");
+        }
+    }
+    if (@as(?*debug.state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
+        debugState.counterCount = 0;
+        UpdateDebugRecords(debugState, debug.recordArray[0..]);
+        debugState.snapshotIndex += 1;
+        if (debugState.snapshotIndex >= debug.DEBUG_SNAPSHOT_COUNT) {
+            debugState.snapshotIndex = 0;
+        }
+    }
 }

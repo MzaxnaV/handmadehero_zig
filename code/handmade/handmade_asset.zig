@@ -15,7 +15,7 @@ const h = struct {
 const hi = platform.handmade_internal;
 const assert = platform.Assert;
 
-const NOT_IGNORE = platform.NOT_IGNORE;
+const ignore = platform.ignore;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 

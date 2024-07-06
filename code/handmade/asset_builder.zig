@@ -206,7 +206,7 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !loaded_bitmap {
 
         texel = h.SRGB255ToLinear1(texel);
 
-        // if (NOT_IGNORE)
+        // if (!ignore)
         {
             // texel.rgb *= texel.a;
             texel = h.ToV4(h.Scale(h.RGB(texel), h.A(texel)), h.A(texel));

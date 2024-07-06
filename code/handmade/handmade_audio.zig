@@ -12,7 +12,7 @@ const h = struct {
 
 // build constants ------------------------------------------------------------------------------------------------------------------------
 
-const NOT_IGNORE = platform.NOT_IGNORE;
+const ignore = platform.ignore;
 const assert = platform.Assert;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
@@ -48,7 +48,7 @@ fn OutputTestSineWave(gameState: *h.game_state, soundBuffer: *platform.sound_out
     while (sampleIndex < 2 * soundBuffer.sampleCount) : (sampleIndex += 2) {
         var sineValue: f32 = 0;
         var sampleValue: i16 = 0;
-        if (NOT_IGNORE) {
+        if (!ignore) {
             sineValue = h.Sin(gameState.tSine);
             sampleValue = @intFromFloat(sineValue * toneVolume);
         } else {
@@ -60,7 +60,7 @@ fn OutputTestSineWave(gameState: *h.game_state, soundBuffer: *platform.sound_out
         sampleOut[sampleIndex + 1] = sampleValue;
         // sampleOut += 1;
 
-        if (NOT_IGNORE) {
+        if (!ignore) {
             gameState.tSine += platform.Tau32 * 1.0 / @as(f32, @floatFromInt(wavePeriod));
             if (gameState.tSine > platform.Tau32) {
                 gameState.tSine -= platform.Tau32;
@@ -232,7 +232,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *platform.soun
 
                     var sampleValue: simd.f32x4 = .{ 0, 0, 0, 0 };
 
-                    if (NOT_IGNORE) {
+                    if (!ignore) {
                         const samplePos = simd.f32x4{
                             samplePosition + 0.0 * dSample,
                             samplePosition + 1.0 * dSample,

@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
 
     const options = b.addOptions();
     // NOTE (Manav): for now this are independent of OptimizeMode
-    options.addOption(bool, "IGNORE", false);
+    options.addOption(bool, "ignore", true); // NOTE: true to ignore sections of code.
     options.addOption(bool, "HANDMADE_INTERNAL", true);
     options.addOption(bool, "HANDMADE_SLOW", true);
 
@@ -23,6 +23,7 @@ pub fn build(b: *std.Build) void {
     const platform = b.createModule(.{
         .root_source_file = b.path("./code/handmade_platform.zig"),
     });
+    platform.addOptions("config", options);
 
     // TODO (Manav): Should I split handmade hero code into small modules?
     // const intrinsics = b.createModule(.{
