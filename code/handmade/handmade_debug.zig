@@ -29,16 +29,19 @@ pub const counter_snapshot = struct {
     cycleCount: u32 = 0,
 };
 
+pub const DEBUG_SNAPSHOT_COUNT = 128;
+
 pub const counter_state = struct {
     fileName: []const u8,
     functionName: []const u8,
 
     lineNumber: u32,
 
-    snapshots: [120]counter_snapshot,
+    snapshots: [DEBUG_SNAPSHOT_COUNT]counter_snapshot,
 };
 
 pub const state = struct {
+    snapshotIndex: u32,
     counterCount: u32,
     counterStates: [512]counter_state,
 };

@@ -637,22 +637,80 @@ fn DEBUGTextLine(string: []const u8) void {
     }
 }
 
+const debug_statistic = struct {
+    min: f64,
+    max: f64,
+    avg: f64,
+    count: u32,
+
+    const Self = @This();
+
+    fn BeginDebugStatistic(stat: *Self) void {
+        stat.min = platform.F32MAXIMUM;
+        stat.max = -platform.F32MAXIMUM;
+        stat.avg = 0;
+        stat.count = 0;
+    }
+
+    fn EndDebugStatistic(stat: *Self) void {
+        if (stat.count != 0) {
+            stat.avg /= @floatFromInt(stat.count);
+        } else {
+            stat.min = 0;
+            stat.max = 0;
+        }
+    }
+
+    fn AccumDebugStatistic(stat: *Self, value: f64) void {
+        stat.count += 1;
+        if (stat.min > value) {
+            stat.min = value;
+        }
+
+        if (stat.max < value) {
+            stat.max = value;
+        }
+
+        stat.avg += value;
+    }
+};
+
 fn OverlayCycleCounters(memory: *platform.memory) void {
     if (@as(?*debug.state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
         for (0..debugState.counterCount) |counterIndex| {
             const counter = &debugState.counterStates[counterIndex];
 
-            const hitCount: u32 = counter.snapshots[0].hitCount;
-            const cycleCount: u32 = counter.snapshots[0].cycleCount;
+            var hitCount: debug_statistic = undefined;
+            var cycleCount: debug_statistic = undefined;
+            var cycleOverHit: debug_statistic = undefined;
 
-            if (hitCount > 0) {
+            hitCount.BeginDebugStatistic();
+            cycleCount.BeginDebugStatistic();
+            cycleOverHit.BeginDebugStatistic();
+
+            for (counter.snapshots) |snapshot| {
+                hitCount.AccumDebugStatistic(@floatFromInt(snapshot.hitCount));
+                cycleCount.AccumDebugStatistic(@floatFromInt(snapshot.cycleCount));
+
+                var coh: f64 = 0;
+                if (snapshot.hitCount != 0) {
+                    coh = @as(f64, @floatFromInt(snapshot.cycleCount)) / @as(f64, @floatFromInt(snapshot.hitCount));
+                }
+                cycleOverHit.AccumDebugStatistic(coh);
+            }
+
+            hitCount.EndDebugStatistic();
+            cycleCount.EndDebugStatistic();
+            cycleOverHit.EndDebugStatistic();
+
+            if (hitCount.max > 0) {
                 var textBuffer = [1]u8{0} ** 256;
                 const buffer = @import("std").fmt.bufPrint(textBuffer[0..], "{s:32}({:4}) - {:10}cy {:8}h {:10}cy/h\n", .{
                     counter.functionName,
                     counter.lineNumber,
-                    cycleCount,
-                    hitCount,
-                    cycleCount / hitCount,
+                    @as(u32, @intFromFloat(cycleCount.avg)),
+                    @as(u32, @intFromFloat(hitCount.avg)),
+                    @as(u32, @intFromFloat(cycleOverHit.avg)),
                 }) catch |err| {
                     @import("std").debug.print("{}\n", .{err});
                     return;
@@ -1658,8 +1716,8 @@ fn UpdateDebugRecords(debugState: *debug.state, counters: []debug.record) void {
         dest.fileName = source.fileName;
         dest.functionName = source.functionName;
         dest.lineNumber = source.lineNumber;
-        dest.snapshots[0].hitCount = @intCast(hitCount_CycleCount >> 32);
-        dest.snapshots[0].cycleCount = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
+        dest.snapshots[debugState.snapshotIndex].hitCount = @intCast(hitCount_CycleCount >> 32);
+        dest.snapshots[debugState.snapshotIndex].cycleCount = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
     }
 }
 
@@ -1673,5 +1731,9 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory, _: *platform.debug_frame_e
     if (@as(?*debug.state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
         debugState.counterCount = 0;
         UpdateDebugRecords(debugState, debug.recordArray[0..]);
+        debugState.snapshotIndex += 1;
+        if (debugState.snapshotIndex >= debug.DEBUG_SNAPSHOT_COUNT) {
+            debugState.snapshotIndex = 0;
+        }
     }
 }
