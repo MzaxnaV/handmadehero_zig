@@ -650,7 +650,7 @@ fn OutputDebugRecords(counters: []debug.record) void {
 
         if (hitCount > 0) {
             var textBuffer = [1]u8{0} ** 256;
-            const buffer = @import("std").fmt.bufPrint(textBuffer[0..], "{s}({}) - {}cy {}h {}cy/h\n", .{
+            const buffer = @import("std").fmt.bufPrint(textBuffer[0..], "{s:32}({:4}) - {:10}cy {:8}h {:10}cy/h\n", .{
                 counter.functionName,
                 counter.lineNumber,
                 cycleCount,
