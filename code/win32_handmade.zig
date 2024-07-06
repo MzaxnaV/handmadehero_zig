@@ -47,7 +47,7 @@ const win32 = struct {
 const atomic = std.atomic;
 
 const platform = @import("handmade_platform");
-const handmade_internal = platform.handmade_internal;
+const hi = platform.handmade_internal;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -117,6 +117,7 @@ const win32_game_code = struct {
     dllLastWriteTime: win32.FILETIME = undefined,
     UpdateAndRender: ?platform.UpdateAndRenderFnPtrType = null,
     GetSoundSamples: ?platform.GetSoundSamplesFnPtrType = null,
+    DEBUGFrameEnd: ?platform.DEBUGFrameEndsFnPtrType = null,
 
     isValid: bool = false,
 };
@@ -196,8 +197,8 @@ fn DEBUGWin32FreeFileMemory(memory: *anyopaque) void {
     _ = win32.VirtualFree(memory, 0, win32.MEM_RELEASE);
 }
 
-fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) handmade_internal.debug_read_file_result {
-    var result = handmade_internal.debug_read_file_result{};
+fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) hi.debug_read_file_result {
+    var result = hi.debug_read_file_result{};
     const fileHandle = win32.CreateFileA(filename, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
 
     if (fileHandle != win32.INVALID_HANDLE_VALUE) {
@@ -292,6 +293,7 @@ fn Win32LoadGameCode(sourceDLLName: [:0]const u16, tempDLLName: [:0]const u16, l
         if (result.gameCodeDLL != null) {
             result.UpdateAndRender = @ptrCast(win32.GetProcAddress(result.gameCodeDLL, "UpdateAndRender"));
             result.GetSoundSamples = @ptrCast(win32.GetProcAddress(result.gameCodeDLL, "GetSoundSamples"));
+            result.DEBUGFrameEnd = @ptrCast(win32.GetProcAddress(result.gameCodeDLL, "DEBUGFrameEnd"));
 
             result.isValid = (result.UpdateAndRender != null and result.GetSoundSamples != null);
         }
@@ -1392,11 +1394,17 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
             var gameMemory = platform.memory{
                 .permanentStorageSize = platform.MegaBytes(256),
-                .transientStorageSize = platform.GigaBytes(1),
                 .permanentStorage = undefined,
+
+                .transientStorageSize = platform.GigaBytes(1),
                 .transientStorage = undefined,
+
+                .debugStorageSize = 0,
+                .debugStorage = null,
+
                 .highPriorityQueue = highPriorityQueue.to(),
                 .lowPriorityQueue = lowPriorityQueue.to(),
+
                 .platformAPI = platform.api{
                     .AddEntry = Win32AddEntry,
                     .CompleteAllWork = Win32CompleteAllWork,
@@ -1474,7 +1482,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 var lastCounter = Win32GetWallClock();
                 var flipWallClock = Win32GetWallClock();
 
-                var debugTimeMarkerIndex: u32 = 0;
+                const debugTimeMarkerIndex: u32 = 0;
                 var debugTimeMarkers = [1]win32_debug_time_marker{.{}} ** 30;
 
                 var audioLatencyBytes: DWORD = 0;
@@ -1483,9 +1491,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                 var gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
 
-                var lastCycleCount = handmade_internal.__rdtsc();
+                var lastCycleCount = hi.__rdtsc();
 
                 while (globalRunning) {
+                    var frameEndInfo: platform.debug_frame_end_info = .{};
+
                     newInput.dtForFrame = targetSecondsPerFrame;
 
                     newInput.executableReloaded = false;
@@ -1498,6 +1508,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
                         newInput.executableReloaded = true;
                     }
+
+                    frameEndInfo.executableReady = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
 
                     const oldKeyboardController: *platform.controller_input = &oldInput.controllers[0];
                     const newKeyboardController: *platform.controller_input = &newInput.controllers[0];
@@ -1630,7 +1642,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 newController.isConnected = false;
                             }
                         }
+                    }
 
+                    frameEndInfo.inputProcessed = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+
+                    if (!globalPause) {
                         var buffer = platform.offscreen_buffer{
                             .memory = globalBackBuffer.memory,
                             .width = globalBackBuffer.width,
@@ -1648,9 +1664,12 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                         if (gameCode.UpdateAndRender) |UpdateAndRender| {
                             UpdateAndRender(&gameMemory, newInput, &buffer);
-                            // HandleDebugCycleCounters(&gameMemory);
                         }
+                    }
 
+                    frameEndInfo.gameUpdated = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+
+                    if (!globalPause) {
                         const audioWallClock = Win32GetWallClock();
                         const fromBeginToAudioSeconds = Win32GetSecondsElapsed(flipWallClock, audioWallClock);
 
@@ -1747,7 +1766,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         } else {
                             soundIsValid = false;
                         }
+                    }
 
+                    frameEndInfo.audioUpdated = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+
+                    if (!globalPause) {
                         const workCounter = Win32GetWallClock();
                         const workSecondsElapsed = Win32GetSecondsElapsed(lastCounter, workCounter);
 
@@ -1771,58 +1794,37 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             // TODO: missed frame rate!,
                             // TODO: logging
                         }
+                    }
 
-                        const endCounter: win32.LARGE_INTEGER = Win32GetWallClock();
-                        const msPerFrame = 1000 * Win32GetSecondsElapsed(lastCounter, endCounter);
-                        lastCounter = endCounter;
+                    frameEndInfo.framerateWaitComplete = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
 
-                        const dimension = Win32GetWindowDimenstion(windowHandle);
+                    const dimension = Win32GetWindowDimenstion(windowHandle);
 
-                        if (win32.GetDC(windowHandle)) |deviceContext| {
-                            defer _ = win32.ReleaseDC(windowHandle, deviceContext);
+                    if (win32.GetDC(windowHandle)) |deviceContext| {
+                        defer _ = win32.ReleaseDC(windowHandle, deviceContext);
 
-                            Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
-                        }
+                        Win32DisplayBufferInWindow(&globalBackBuffer, deviceContext, dimension.width, dimension.height);
+                    }
 
-                        flipWallClock = Win32GetWallClock();
+                    flipWallClock = Win32GetWallClock();
 
-                        if (HANDMADE_INTERNAL) {
-                            const play: DWORD = 0;
-                            const write: DWORD = 0;
+                    const temp = newInput;
+                    newInput = oldInput;
+                    oldInput = temp;
 
-                            if (win32.SUCCEEDED((globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor)))) {
-                                std.debug.assert(debugTimeMarkerIndex < debugTimeMarkers.len);
-                                const marker: *win32_debug_time_marker = &debugTimeMarkers[debugTimeMarkerIndex];
+                    const endCounter: win32.LARGE_INTEGER = Win32GetWallClock();
+                    lastCounter = endCounter;
 
-                                marker.flipPlayCursor = play;
-                                marker.flipWriteCursor = write;
-                            }
-                        }
+                    if (HANDMADE_INTERNAL) {
+                        frameEndInfo.endOfFrame = Win32GetSecondsElapsed(lastCounter, endCounter);
 
-                        const temp = newInput;
-                        newInput = oldInput;
-                        oldInput = temp;
+                        const endCycleCount = hi.__rdtsc();
+                        const cyclesElapsed = endCycleCount - lastCycleCount;
+                        _ = cyclesElapsed;
+                        lastCycleCount = endCycleCount;
 
-                        if (!ignore) {
-                            const endCycleCount = handmade_internal.__rdtsc();
-                            const cyclesElapsed = endCycleCount - lastCycleCount;
-                            lastCycleCount = endCycleCount;
-
-                            const mcpf = @as(f64, @floatFromInt(cyclesElapsed)) / (1000 * 1000);
-                            const fps: f64 = 1000 / msPerFrame;
-                            var fpsBuffer = [1:0]u8{0} ** 256;
-
-                            _ = std.fmt.bufPrintZ(fpsBuffer[0.. :0], "{d:.02}ms/f, {d:.02}f/s, {d:.02}mc/f\n", .{ msPerFrame, fps, mcpf }) catch |err| {
-                                std.debug.print("{}\n", .{err});
-                            };
-                            _ = win32.OutputDebugStringA(@ptrCast(fpsBuffer[0.. :0].ptr));
-                        }
-
-                        if (HANDMADE_INTERNAL) {
-                            debugTimeMarkerIndex += 1;
-                            if (debugTimeMarkerIndex == debugTimeMarkers.len) {
-                                debugTimeMarkerIndex = 0;
-                            }
+                        if (gameCode.DEBUGFrameEnd) |DEBUGFrameEnd| {
+                            DEBUGFrameEnd(&gameMemory, &frameEndInfo);
                         }
                     }
                 }

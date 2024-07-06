@@ -1,5 +1,17 @@
 const SourceLocation = @import("std").builtin.SourceLocation;
 
+fn __rdtsc() u64 {
+    var low: u32 = 0;
+    var high: u32 = 0;
+
+    asm volatile ("rdtsc"
+        : [low] "={eax}" (low),
+          [high] "={edx}" (high),
+    );
+
+    return (@as(u64, high) << 32) | @as(u64, low);
+}
+
 pub const record = struct {
     fileName: []const u8 = "",
     functionName: []const u8 = "",
@@ -12,17 +24,24 @@ pub const record = struct {
     } = .{},
 };
 
-pub fn __rdtsc() u64 {
-    var low: u32 = 0;
-    var high: u32 = 0;
+pub const counter_snapshot = struct {
+    hitCount: u32 = 0,
+    cycleCount: u32 = 0,
+};
 
-    asm volatile ("rdtsc"
-        : [low] "={eax}" (low),
-          [high] "={edx}" (high),
-    );
+pub const counter_state = struct {
+    fileName: []const u8,
+    functionName: []const u8,
 
-    return (@as(u64, high) << 32) | @as(u64, low);
-}
+    lineNumber: u32,
+
+    snapshots: [120]counter_snapshot,
+};
+
+pub const state = struct {
+    counterCount: u32,
+    counterStates: [512]counter_state,
+};
 
 /// NOTE (Manav): We don't need two sets of theses because of how `TIMED_BLOCK()` works
 pub var recordArray = [1]record{.{}} ** __COUNTER__();

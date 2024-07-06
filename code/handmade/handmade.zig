@@ -16,7 +16,7 @@ const h = struct {
 };
 
 const assert = platform.Assert;
-const handmade_internal = platform.handmade_internal;
+const hi = platform.handmade_internal;
 
 // build constants ------------------------------------------------------------------------------------------------------------------------
 
@@ -637,46 +637,42 @@ fn DEBUGTextLine(string: []const u8) void {
     }
 }
 
-fn OutputDebugRecords(counters: []debug.record) void {
-    for (0..debug.recordArray.len) |counterIndex| {
-        var counter: *debug.record = &counters[counterIndex];
+fn OverlayCycleCounters(memory: *platform.memory) void {
+    if (@as(?*debug.state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
+        for (0..debugState.counterCount) |counterIndex| {
+            const counter = &debugState.counterStates[counterIndex];
 
-        const hitCount_CycleCount = h.AtomicExchange(u64, @as(*u64, @ptrCast(&counter.counts)), 0);
+            const hitCount: u32 = counter.snapshots[0].hitCount;
+            const cycleCount: u32 = counter.snapshots[0].cycleCount;
 
-        const hitCount: u32 = @intCast(hitCount_CycleCount >> 32);
-        const cycleCount: u32 = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
+            if (hitCount > 0) {
+                var textBuffer = [1]u8{0} ** 256;
+                const buffer = @import("std").fmt.bufPrint(textBuffer[0..], "{s:32}({:4}) - {:10}cy {:8}h {:10}cy/h\n", .{
+                    counter.functionName,
+                    counter.lineNumber,
+                    cycleCount,
+                    hitCount,
+                    cycleCount / hitCount,
+                }) catch |err| {
+                    @import("std").debug.print("{}\n", .{err});
+                    return;
+                };
 
-        if (hitCount > 0) {
-            var textBuffer = [1]u8{0} ** 256;
-            const buffer = @import("std").fmt.bufPrint(textBuffer[0..], "{s:32}({:4}) - {:10}cy {:8}h {:10}cy/h\n", .{
-                counter.functionName,
-                counter.lineNumber,
-                cycleCount,
-                hitCount,
-                cycleCount / hitCount,
-            }) catch |err| {
-                @import("std").debug.print("{}\n", .{err});
-                return;
-            };
-
-            DEBUGTextLine(buffer);
+                DEBUGTextLine(buffer);
+            }
         }
-    }
-}
 
-fn OverlayCycleCounters(_: *platform.memory) void {
-    // DEBUGTextLine("\\5C0F\\8033\\6728\\514E");
-    // DEBUGTextLine("111111");
-    // DEBUGTextLine("999999");
-    if (HANDMADE_INTERNAL) {
-        DEBUGTextLine("\\#900DEBUG \\#090CYCLE \\#990\\^5COUNTS:");
-        OutputDebugRecords(debug.recordArray[0..]);
-    }
+        // DEBUGTextLine("\\5C0F\\8033\\6728\\514E");
+        // DEBUGTextLine("111111");
+        // DEBUGTextLine("999999");
+        // DEBUGTextLine("AVA WA Ta");
 
-    // DEBUGTextLine("AVA WA Ta");
+    }
 }
 
 // public functions -----------------------------------------------------------------------------------------------------------------------
+
+var debugGlobalMemory: ?*platform.memory = null;
 
 pub export fn UpdateAndRender(
     gameMemory: *platform.memory,
@@ -693,7 +689,7 @@ pub export fn UpdateAndRender(
     h.platformAPI = gameMemory.platformAPI;
 
     if (HANDMADE_INTERNAL) {
-        // handmade_internal.debugGlobalMemory = gameMemory;
+        debugGlobalMemory = gameMemory;
     }
 
     debug.TIMED_BLOCK(.{});
@@ -1647,4 +1643,31 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
 
     h.OutputPlayingSounds(&gameState.audioState, soundBuffer, tranState.assets, &tranState.tranArena);
     // h.OutputTestSineWave(gameState, soundBuffer, 400);
+}
+
+// debug ----------------------------------------------------------------------------------------------------------------------------------
+
+fn UpdateDebugRecords(counters: []debug.record) void {
+    for (0..debug.recordArray.len) |counterIndex| {
+        var counter: *debug.record = &counters[counterIndex];
+
+        const hitCount_CycleCount = h.AtomicExchange(u64, @as(*u64, @ptrCast(&counter.counts)), 0);
+
+        const hitCount: u32 = @intCast(hitCount_CycleCount >> 32);
+        const cycleCount: u32 = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
+        _ = cycleCount;
+
+        if (hitCount > 0) {}
+    }
+}
+
+pub export fn DEBUGFrameEnd(_: *platform.memory, _: *platform.debug_frame_end_info) void {
+    comptime {
+        // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
+        if (@typeInfo(platform.DEBUGFrameEndsFnPtrType).Pointer.child != @TypeOf(DEBUGFrameEnd)) {
+            @compileError("Function signature mismatch!");
+        }
+    }
+
+    UpdateDebugRecords(debug.recordArray[0..]);
 }

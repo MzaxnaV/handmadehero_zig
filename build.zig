@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
 
     const options = b.addOptions();
     // NOTE (Manav): for now this are independent of OptimizeMode
-    options.addOption(bool, "ignore", false);
+    options.addOption(bool, "ignore", true); // NOTE: true to ignore sections of code.
     options.addOption(bool, "HANDMADE_INTERNAL", true);
     options.addOption(bool, "HANDMADE_SLOW", true);
 

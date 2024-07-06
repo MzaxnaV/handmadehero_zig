@@ -13,7 +13,6 @@ const h = struct {
 
 const simd = @import("simd");
 
-/// build constant to dynamically remove code sections
 const ignore = platform.ignore;
 
 const perf_analyzer = simd.perf_analyzer;
