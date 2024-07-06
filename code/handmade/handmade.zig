@@ -20,7 +20,7 @@ const handmade_internal = platform.handmade_internal;
 
 // build constants ------------------------------------------------------------------------------------------------------------------------
 
-const NOT_IGNORE = platform.NOT_IGNORE;
+const ignore = platform.ignore;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
@@ -277,7 +277,7 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
                 var colour = h.v4{ 1, 1, 1, 1 };
 
-                if (!NOT_IGNORE) {
+                if (ignore) {
                     colour = h.v4{ 1, 0, 0, 1 };
                     if (@mod(chunkX, 2) == @mod(chunkY, 2)) {
                         colour = h.v4{ 0, 0, 1, 1 };
@@ -646,8 +646,6 @@ fn OutputDebugRecords(counters: []debug.record) void {
         const hitCount: u32 = @intCast(hitCount_CycleCount >> 32);
         const cycleCount: u32 = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
 
-        // counter.counts = .{}; // NOTE (Manav): this should suffice
-
         if (hitCount > 0) {
             var textBuffer = [1]u8{0} ** 256;
             const buffer = @import("std").fmt.bufPrint(textBuffer[0..], "{s:32}({:4}) - {:10}cy {:8}h {:10}cy/h\n", .{
@@ -774,7 +772,7 @@ pub export fn UpdateAndRender(
         var screenIndex: u32 = 0;
         while (screenIndex < 2000) : (screenIndex += 1) {
             var doorDirection = @as(u32, 0);
-            if (NOT_IGNORE) {
+            if (!ignore) {
                 doorDirection = series.RandomChoice(if (doorUp or doorDown) 2 else 4);
             } else {
                 doorDirection = series.RandomChoice(2);
@@ -864,7 +862,7 @@ pub export fn UpdateAndRender(
             }
         }
 
-        if (!NOT_IGNORE) {
+        if (ignore) {
             while (gameState.lowEntityCount < (gameState.lowEntities.len - 16)) {
                 const coordinate = 1024 + gameState.lowEntityCount;
                 AddWall(gameState, coordinate, coordinate, coordinate);
@@ -959,7 +957,7 @@ pub export fn UpdateAndRender(
         DEBUGReset(tranState.assets, buffer.width, buffer.height);
     }
 
-    if (!NOT_IGNORE and gameInput.executableReloaded) {
+    if (ignore and gameInput.executableReloaded) {
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
@@ -1041,7 +1039,7 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
-    if (!NOT_IGNORE) {
+    if (ignore) {
         drawBuffer.width = 1279;
         drawBuffer.height = 719;
     }
@@ -1070,7 +1068,7 @@ pub export fn UpdateAndRender(
     cameraBoundsInMeters.min[2] = -3 * gameState.typicalFloorHeight;
     cameraBoundsInMeters.max[2] = 1 * gameState.typicalFloorHeight;
 
-    if (NOT_IGNORE) {
+    if (!ignore) {
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
@@ -1081,7 +1079,7 @@ pub export fn UpdateAndRender(
                 if ((h.Z(delta) >= -1.0) and (h.Z(delta) < 1.0)) {
                     const groundSideInMeters = h.X(world.chunkDimInMeters);
                     renderGroup.PushBitmap(bitmap, 1.0 * groundSideInMeters, delta, .{ 1, 1, 1, 1 });
-                    if (!NOT_IGNORE) {
+                    if (ignore) {
                         renderGroup.PushRectOutline(delta, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
                     }
                 }
@@ -1252,7 +1250,7 @@ pub export fn UpdateAndRender(
                 .Familiar => {
                     var closestHero: ?*h.sim_entity = null;
                     var closestHeroDSq = h.Square(10);
-                    if (!NOT_IGNORE) {
+                    if (ignore) {
                         var testEntityIndex = @as(u32, 0);
                         while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
                             const testEntity: *h.sim_entity = &simRegion.entities[testEntityIndex];
@@ -1381,7 +1379,7 @@ pub export fn UpdateAndRender(
                         h.AddTo(&cel.velocityTimesDensity, h.Scale(particle.dP, density));
                     }
 
-                    if (!NOT_IGNORE) {
+                    if (ignore) {
                         for (0..h.PARTICLE_CEL_DIM) |y| {
                             for (0..h.PARTICLE_CEL_DIM) |x| {
                                 const cel: *h.particle_cel = &gameState.particleCels[y][x];
@@ -1499,7 +1497,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Space => {
-                    if (!NOT_IGNORE) {
+                    if (ignore) {
                         var volumeIndex = @as(u32, 0);
                         while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
                             const volume = entity.collision.volumes[volumeIndex];
@@ -1517,7 +1515,7 @@ pub export fn UpdateAndRender(
 
     renderGroup.globalAlpha = 1.0;
 
-    if (!NOT_IGNORE) {
+    if (ignore) {
         gameState.time += gameInput.dtForFrame;
 
         const mapColour = [_]h.v3{
@@ -1561,11 +1559,11 @@ pub export fn UpdateAndRender(
         const origin = screenCenter;
 
         const angle = 0.1 * gameState.time;
-        const disp: h.v2 = if (NOT_IGNORE) .{ 100 * h.Cos(5 * angle), 100 * h.Sin(3 * angle) } else .{ 0, 0 };
+        const disp: h.v2 = if (!ignore) .{ 100 * h.Cos(5 * angle), 100 * h.Sin(3 * angle) } else .{ 0, 0 };
 
         var xAxis: h.v2 = undefined;
         var yAxis: h.v2 = undefined;
-        if (NOT_IGNORE) {
+        if (!ignore) {
             xAxis = h.Scale(h.v2{ h.Cos(10 * angle), h.Sin(10 * angle) }, 100);
             yAxis = h.Perp(xAxis);
         } else {
@@ -1577,7 +1575,7 @@ pub export fn UpdateAndRender(
 
         var colour: h.v4 = undefined;
 
-        if (!NOT_IGNORE) {
+        if (ignore) {
             colour = .{
                 0.5 + 0.5 * h.Sin(cAngle),
                 0.5 + 0.5 * h.Sin(2.9 * cAngle),

@@ -13,7 +13,7 @@ const h = struct {
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
-const NOT_IGNORE = platform.NOT_IGNORE;
+const ignore = platform.ignore;
 
 pub const HIT_POINT_SUB_COUNT = 4;
 
@@ -334,7 +334,7 @@ pub fn EndSim(region: *sim_region, gameState: *h.game_state) void {
             var newCameraP = gameState.cameraP;
             newCameraP.chunkZ = stored.p.chunkZ;
 
-            if (!NOT_IGNORE) {
+            if (ignore) {
                 // if (cameraFollowingEntity.high.?.p[0] > (9 * world.tileSideInMeters)) {
                 //     newCameraP.absTileX += 17;
                 // }
@@ -483,7 +483,7 @@ pub fn SpeculativeCollide(mover: *sim_entity, region: *sim_entity, testP: h.v3) 
         const moverGroundPoint = h.GetEntityGroundPointForEntityP(mover, testP);
         const ground = h.GetStairGround(region, moverGroundPoint);
 
-        // !NOT_IGNORE
+        // ignore
         // result = (h.AbsoluteValue(h.Z(h.GetEntityGroundPoint(mover)) - ground) > stepHeight) or ((h.Y(bary) > 0.1) and (h.Y(bary) < 0.9));
         result = (h.AbsoluteValue(h.Z(h.GetEntityGroundPoint(mover)) - ground) > stepHeight);
     }

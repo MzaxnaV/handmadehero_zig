@@ -51,7 +51,7 @@ const handmade_internal = platform.handmade_internal;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
-const NOT_IGNORE = platform.NOT_IGNORE;
+const ignore = platform.ignore;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 const WIN32_STATE_FILE_NAME_COUNT = win32.MAX_PATH;
 
@@ -484,7 +484,7 @@ fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: wi
         var offsetX: i32 = 0;
         var offsetY: i32 = 0;
 
-        if (!NOT_IGNORE) {
+        if (ignore) {
             offsetX = 10;
             offsetY = 10;
 
@@ -527,7 +527,7 @@ fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32
         },
 
         win32.WM_ACTIVATEAPP => {
-            if (!NOT_IGNORE) {
+            if (ignore) {
                 if (wParam == win32.TRUE) {
                     _ = win32.SetLayeredWindowAttributes(windowHandle, @as(u32, @bitCast(win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 })), 255, win32.LWA_ALPHA);
                 } else {
@@ -678,7 +678,7 @@ fn Win32BeginRecordingInput(state: *win32_state, inputRecordingIndex: u32) void 
             std.debug.print("Failed to create File Handle: {s}\n", .{"Win32BeginRecordingInput"});
         }
 
-        if (!NOT_IGNORE) {
+        if (ignore) {
             var filePosition: win32.LARGE_INTEGER = undefined;
             filePosition.QuadPart = state.totalSize;
             _ = win32.SetFilePointerEx(state.recordingHandle, filePosition, null, win32.FILE_BEGIN);
@@ -710,7 +710,7 @@ fn Win32BeginInputPlayBack(state: *win32_state, inputPlayingIndex: u32) void {
             std.debug.print("Failed to create File Handle: {s}\n", .{"Win32BeginInputPlayBack"});
         }
 
-        if (!NOT_IGNORE) {
+        if (ignore) {
             var filePosition: win32.LARGE_INTEGER = undefined;
             filePosition.QuadPart = state.totalSize;
             _ = win32.SetFilePointerEx(state.playBackHandle, filePosition, null, win32.FILE_BEGIN);
@@ -897,7 +897,7 @@ inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) vo
     // }
 }
 
-// !NOT_IGNORE:
+// ignore:
 // fn Win32DebugDrawVertical(backBuffer: *win32_offscreen_buffer, x: u32, top: u32, bottom: u32, colour: u32) void {
 //     var safeTop = top;
 //     var safeBottom = bottom;
@@ -1236,7 +1236,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     var lowPriorityQueue = win32_work_queue{};
     lowPriorityQueue.MakeQueue(1);
 
-    if (!NOT_IGNORE) {
+    if (ignore) {
         var a0 = "String A0".*;
         var a1 = "String A1".*;
         var a2 = "String A2".*;
@@ -1376,7 +1376,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
             globalRunning = true;
 
-            if (!NOT_IGNORE) {
+            if (ignore) {
                 while (globalRunning) {
                     var playCursor: DWORD = 0;
                     var writeCursor: DWORD = 0;
@@ -1727,7 +1727,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 audioLatencyBytes = unwrappedWriteCursor - playCursor;
                                 audioLatencySeconds = (@as(f32, @floatFromInt(audioLatencyBytes)) / @as(f32, @floatFromInt(soundOutput.bytesPerSample))) / @as(f32, @floatFromInt(soundOutput.samplesPerSecond));
 
-                                if (!NOT_IGNORE) {
+                                if (ignore) {
                                     var textbuffer = [1:0]u8{0} ** 256;
                                     std.fmt.bufPrintZ(textbuffer[0.. :0], "BTL:{} TC:{} BTW:{} - PC:{} WC:{} DELTA:{} ({}s)", .{
                                         byteToLock,
@@ -1803,7 +1803,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         newInput = oldInput;
                         oldInput = temp;
 
-                        if (NOT_IGNORE) {
+                        if (!ignore) {
                             const endCycleCount = handmade_internal.__rdtsc();
                             const cyclesElapsed = endCycleCount - lastCycleCount;
                             lastCycleCount = endCycleCount;

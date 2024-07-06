@@ -1,9 +1,10 @@
+const config = @import("config");
 /// Debug
-pub const NOT_IGNORE = true;
+pub const ignore = config.ignore;
 /// Debug: `False` - slow code not allowed, `True` - slow code welcome.
-pub const HANDMADE_SLOW = true;
+pub const HANDMADE_SLOW = config.HANDMADE_SLOW;
 /// Debug: `False` - Build for public release, `True` - Build for developer only
-pub const HANDMADE_INTERNAL = true;
+pub const HANDMADE_INTERNAL = config.HANDMADE_INTERNAL;
 
 pub const native_endian = @import("builtin").target.cpu.arch.endian();
 

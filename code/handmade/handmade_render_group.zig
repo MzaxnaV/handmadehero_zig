@@ -14,7 +14,7 @@ const h = struct {
 const simd = @import("simd");
 
 /// build constant to dynamically remove code sections
-const NOT_IGNORE = platform.NOT_IGNORE;
+const ignore = platform.ignore;
 
 const perf_analyzer = simd.perf_analyzer;
 
@@ -173,7 +173,7 @@ pub const loaded_bitmap = extern struct {
             var index = @as(u32, 0);
             var x = xMin;
             while (x <= xMax) : (x += 1) {
-                if (NOT_IGNORE) {
+                if (!ignore) {
                     const pixelP = h.V2(x, y);
                     const d = h.Sub(pixelP, origin);
 
@@ -261,7 +261,7 @@ pub const loaded_bitmap = extern struct {
                             }
 
                             h.AddTo(&texel, h.Scale(h.ToV4(lightColour, 0), h.A(texel)));
-                            if (!NOT_IGNORE) {
+                            if (ignore) {
                                 texel = h.ToV4(h.Add(h.Scale(bounceDirection, 0.5), h.v3{ 0.5, 0.5, 0.5 }), h.A(texel));
                                 texel = h.Hammard(texel, .{ h.A(texel), h.A(texel), h.A(texel), 1 });
 
@@ -1001,7 +1001,7 @@ fn GetRenderEntityBasisP(transform: *const render_transform, originalP: h.v3) en
         const offsetZ = 0;
         var distanceAboveTarget = transform.distanceAboveTarget;
 
-        if (!NOT_IGNORE) { // DEBUG CAMERA
+        if (ignore) { // DEBUG CAMERA
             distanceAboveTarget += 50;
         }
 
@@ -1289,7 +1289,7 @@ pub const render_group = struct {
                     const xAxis = h.v2{ 1, 0 };
                     const yAxis = h.v2{ 0, 1 };
 
-                    if (!NOT_IGNORE) {
+                    if (ignore) {
                         // outputTarget.DrawBitmap(entry.bitmap, h.X(basis.p), h.Y(basis.p), h.A(entry.colour));
                         outputTarget.DrawRectangleSlowly(
                             entry.p,
@@ -1328,7 +1328,7 @@ pub const render_group = struct {
 
                 .CoordinateSystem => {
                     const entry = @as(*align(1) render_entry_coordinate_system, @ptrCast(data));
-                    if (!NOT_IGNORE) {
+                    if (ignore) {
                         const vMax: h.v2 = h.Add(entry.origin, h.Add(entry.xAxis, entry.yAxis));
                         outputTarget.DrawRectangleSlowly(
                             entry.origin,
@@ -1459,7 +1459,7 @@ pub const render_group = struct {
                 work.outputTarget = outputTarget;
                 work.clipRect = clipRect;
 
-                if (NOT_IGNORE) {
+                if (!ignore) {
                     h.platformAPI.AddEntry(renderQueue, DoTiledRenderWork, work);
                 } else {
                     DoTiledRenderWork(renderQueue, work);
@@ -1584,7 +1584,7 @@ fn SampleEnvironmentMap(screenSpaceUV: h.v2, sampleDirection: h.v3, roughness: f
     assert((x >= 0) and (x < lod.width));
     assert((y >= 0) and (y < lod.height));
 
-    if (!NOT_IGNORE) {
+    if (ignore) {
         const ptrOffset = y * lod.pitch + x * @sizeOf(u32);
         const texelPtr = if (ptrOffset > 0) lod.memory + @as(usize, @intCast(ptrOffset)) else lod.memory - @as(usize, @intCast(-ptrOffset));
         const ptr = @as(*align(1) u32, @ptrCast(texelPtr));
