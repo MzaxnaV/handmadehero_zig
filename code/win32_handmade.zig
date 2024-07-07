@@ -1225,6 +1225,14 @@ fn Win32DeallocateMemory(memory: ?*anyopaque) void {
 //     _ = win32.CloseHandle(fileHandle);
 // }
 
+fn Win32RecordTimeStamp(info: *platform.debug_frame_end_info, name: []const u8, seconds: f32) void {
+    var timeStamp = &info.timestamps[info.timestampCount];
+    info.timestampCount += 1;
+
+    timeStamp.name = name;
+    timeStamp.seconds = seconds;
+}
+
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
     var win32State = win32_state{
         .gameMemoryBlock = undefined,
@@ -1510,7 +1518,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         newInput.executableReloaded = true;
                     }
 
-                    frameEndInfo.executableReady = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+                    Win32RecordTimeStamp(&frameEndInfo, "executableReady", Win32GetSecondsElapsed(lastCounter, Win32GetWallClock()));
 
                     const oldKeyboardController: *platform.controller_input = &oldInput.controllers[0];
                     const newKeyboardController: *platform.controller_input = &newInput.controllers[0];
@@ -1645,7 +1653,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    frameEndInfo.inputProcessed = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+                    Win32RecordTimeStamp(&frameEndInfo, "inputProcessed", Win32GetSecondsElapsed(lastCounter, Win32GetWallClock()));
 
                     if (!globalPause) {
                         var buffer = platform.offscreen_buffer{
@@ -1668,7 +1676,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    frameEndInfo.gameUpdated = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+                    Win32RecordTimeStamp(&frameEndInfo, "gameUpdated", Win32GetSecondsElapsed(lastCounter, Win32GetWallClock()));
 
                     if (!globalPause) {
                         const audioWallClock = Win32GetWallClock();
@@ -1769,7 +1777,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    frameEndInfo.audioUpdated = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+                    Win32RecordTimeStamp(&frameEndInfo, "audioUpdated", Win32GetSecondsElapsed(lastCounter, Win32GetWallClock()));
 
                     if (!globalPause) {
                         const workCounter = Win32GetWallClock();
@@ -1797,7 +1805,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    frameEndInfo.framerateWaitComplete = Win32GetSecondsElapsed(lastCounter, Win32GetWallClock());
+                    Win32RecordTimeStamp(&frameEndInfo, "framerateWaitComplete", Win32GetSecondsElapsed(lastCounter, Win32GetWallClock()));
 
                     const dimension = Win32GetWindowDimenstion(windowHandle);
 
@@ -1817,7 +1825,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     lastCounter = endCounter;
 
                     if (HANDMADE_INTERNAL) {
-                        frameEndInfo.endOfFrame = Win32GetSecondsElapsed(lastCounter, endCounter);
+                        Win32RecordTimeStamp(&frameEndInfo, "endOfFrame", Win32GetSecondsElapsed(lastCounter, endCounter));
 
                         const endCycleCount = __rdtsc();
                         const cyclesElapsed = endCycleCount - lastCycleCount;
@@ -1826,6 +1834,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                         if (gameCode.DEBUGFrameEnd) |DEBUGFrameEnd| {
                             DEBUGFrameEnd(&gameMemory, &frameEndInfo);
+                        } else {
+                            std.debug.print("DEBUGFrameEnd not present.\n", .{});
                         }
                     }
                 }

@@ -1468,9 +1468,8 @@ pub export fn UpdateAndRender(
     gameState.worldArena.CheckArena();
     tranState.tranArena.CheckArena();
 
-    debug.OverlayCycleCounters(gameMemory);
-
     if (debug.renderGroup) |debugRenderGroup| {
+        debug.Overlay(gameMemory);
         debugRenderGroup.TiledRenderGroupToOutput(tranState.highPriorityQueue, drawBuffer);
         h.EndRender(debug.renderGroup);
     }
@@ -1489,21 +1488,4 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
 
     h.OutputPlayingSounds(&gameState.audioState, soundBuffer, tranState.assets, &tranState.tranArena);
     // h.OutputTestSineWave(gameState, soundBuffer, 400);
-}
-
-pub export fn DEBUGFrameEnd(memory: *platform.memory, _: *platform.debug_frame_end_info) void {
-    comptime {
-        // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
-        if (@typeInfo(platform.DEBUGFrameEndsFnPtrType).Pointer.child != @TypeOf(DEBUGFrameEnd)) {
-            @compileError("Function signature mismatch!");
-        }
-    }
-    if (@as(?*debug.state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
-        debugState.counterCount = 0;
-        debug.UpdateDebugRecords(debugState, debug.recordArray[0..]);
-        debugState.snapshotIndex += 1;
-        if (debugState.snapshotIndex >= debug.DEBUG_SNAPSHOT_COUNT) {
-            debugState.snapshotIndex = 0;
-        }
-    }
 }
