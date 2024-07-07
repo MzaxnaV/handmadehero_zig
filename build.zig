@@ -25,30 +25,10 @@ pub fn build(b: *std.Build) void {
     });
     platform.addOptions("config", options);
 
-    // TODO (Manav): think carefully about modules
     const intrinsics = b.createModule(.{
         .root_source_file = b.path("code/handmade/handmade_intrinsics.zig"),
         .imports = &.{
             .{ .name = "handmade_platform", .module = platform },
-        },
-        .optimize = .ReleaseFast,
-    });
-
-    const math = b.createModule(.{
-        .root_source_file = b.path("code/handmade/handmade_math.zig"),
-        .imports = &.{
-            .{ .name = "handmade_platform", .module = platform },
-            .{ .name = "intrinsics", .module = intrinsics },
-        },
-        .optimize = .ReleaseSafe,
-    });
-
-    // NOTE (Manav): Debug import is assumed to be placed on the very top of the file.
-    const debug = b.addModule("debug", .{
-        .root_source_file = b.path("code/handmade/handmade_debug.zig"),
-        .imports = &.{
-            // .{ .name = "handmade_platform", .module = platform },
-            .{ .name = "intrinsics", .module = intrinsics },
         },
         .optimize = .ReleaseFast,
     });
@@ -75,8 +55,7 @@ pub fn build(b: *std.Build) void {
     });
     lib.root_module.addImport("handmade_platform", platform);
     lib.root_module.addImport("intrinsics", intrinsics);
-    lib.root_module.addImport("math", math);
-    lib.root_module.addImport("debug", debug);
+    // lib.root_module.addImport("math", math);
 
     const lib_install_step = b.addInstallArtifact(lib, .{
         .dest_dir = .{ .override = .prefix },
@@ -118,7 +97,6 @@ pub fn build(b: *std.Build) void {
     asset_builder.root_module.addImport("win32", win32);
     asset_builder.root_module.addImport("handmade_platform", platform);
     asset_builder.root_module.addImport("intrinsics", intrinsics);
-    asset_builder.root_module.addImport("math", math);
 
     asset_builder.root_module.addCSourceFile(.{
         // NOTE: Need to add a source file to make zig compile the stb_truetype implementation
@@ -209,7 +187,6 @@ pub fn build(b: *std.Build) void {
     });
     lib_tests.root_module.addImport("handmade_platform", platform);
     lib_tests.root_module.addImport("intrinsics", intrinsics);
-    lib_tests.root_module.addImport("math", math);
 
     const run_lib_test = b.addRunArtifact(lib_tests);
 

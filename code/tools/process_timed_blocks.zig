@@ -48,7 +48,7 @@ fn processDir(allocator: std.mem.Allocator, dir_path: []const u8, counter: *u32)
                     for (0..LINES_SEARCHED_FOR_DEBUG_IMPORT) |_| {
                         if (try file.reader().readUntilDelimiterOrEofAlloc(allocator, '\n', 1000)) |line| {
                             defer allocator.free(line);
-                            if (std.mem.indexOf(u8, line, "@import(\"debug\");")) |_| {
+                            if (std.mem.indexOf(u8, line, "const debug = @import(")) |_| {
                                 found = true;
 
                                 try file.seekTo(0);

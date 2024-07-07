@@ -14,9 +14,9 @@ const win32 = struct {
 };
 
 const h = struct {
-    usingnamespace @import("math");
     usingnamespace @import("intrinsics");
 
+    usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_file_formats.zig");
 };
 

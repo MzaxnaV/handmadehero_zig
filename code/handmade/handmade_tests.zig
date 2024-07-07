@@ -3,9 +3,9 @@ const testing = std.testing;
 
 const h = struct {
     usingnamespace @import("intrinsics");
-    usingnamespace @import("math");
 
     usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_random.zig");
 };
 
