@@ -1,7 +1,7 @@
 const platform = @import("handmade_platform");
 
 const h = struct {
-    usingnamespace @import("math");
+    usingnamespace @import("handmade_math.zig");
 
     usingnamespace @import("handmade_audio.zig");
     usingnamespace @import("handmade_asset.zig");

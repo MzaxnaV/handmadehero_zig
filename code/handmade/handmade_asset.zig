@@ -1,11 +1,11 @@
 const platform = @import("handmade_platform");
-const debug = @import("debug");
+const debug = @import("handmade_debug.zig");
 
 const h = struct {
     usingnamespace @import("intrinsics");
-    usingnamespace @import("math");
 
     usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_random.zig");
     usingnamespace @import("handmade_render_group.zig");
     usingnamespace @import("handmade.zig");

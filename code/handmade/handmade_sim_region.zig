@@ -1,13 +1,13 @@
 const platform = @import("handmade_platform");
-const debug = @import("debug");
+const debug = @import("handmade_debug.zig");
 
 const h = struct {
-    usingnamespace @import("math");
-
-    usingnamespace @import("handmade_world.zig");
-    usingnamespace @import("handmade_data.zig");
-    usingnamespace @import("handmade_entity.zig");
     usingnamespace @import("intrinsics");
+
+    usingnamespace @import("handmade_entity.zig");
+    usingnamespace @import("handmade_math.zig");
+    usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_world.zig");
 };
 
 const assert = platform.Assert;

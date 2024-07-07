@@ -252,13 +252,14 @@ pub fn InvalidCodePath(comptime _: []const u8) noreturn {
     unreachable;
 }
 
+pub const debug_frame_timestamp = struct {
+    name: []const u8 = "",
+    seconds: f32 = 0,
+};
+
 pub const debug_frame_end_info = struct {
-    executableReady: f32 = 0,
-    inputProcessed: f32 = 0,
-    gameUpdated: f32 = 0,
-    audioUpdated: f32 = 0,
-    framerateWaitComplete: f32 = 0,
-    endOfFrame: f32 = 0,
+    timestampCount: u32 = 0,
+    timestamps: [64]debug_frame_timestamp = [1]debug_frame_timestamp{.{}} ** 64,
 };
 
 // exported functions ---------------------------------------------------------------------------------------------------------------------
