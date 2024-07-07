@@ -1306,6 +1306,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     var tempGameCodeDLLFullPath = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
     Win32BuildEXEPathFileName(&win32State, win32.L("handmade_temp.dll"), tempGameCodeDLLFullPath[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
+    // NOTE (Manav): we don't need lock
     var gameCodeLockFullPath = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
     Win32BuildEXEPathFileName(&win32State, win32.L("lock.tmp"), gameCodeLockFullPath[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
