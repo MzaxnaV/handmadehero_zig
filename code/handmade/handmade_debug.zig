@@ -384,24 +384,44 @@ pub fn Overlay(memory: *platform.memory) void {
                 const chartLeft = leftEdge + 10;
                 const chartHeight = 300.0;
                 const chartWidth = barSpacing * SNAPSHOT_COUNT;
-                const chartMinY = atY - (chartHeight + 10);
+                const chartMinY = atY - (chartHeight + 80);
                 const scale = 1.0 / 0.03333;
+
+                const colours = [_]h.v3{
+                    .{ 1, 0, 0 }, // ExecutableReady
+                    .{ 0, 1, 0 }, // InputProcessed
+                    .{ 0, 0, 1 }, // GameUpdated
+                    .{ 1, 1, 0 }, // AudioUpdated
+                    .{ 0, 1, 1 }, // FramerateWaitComplete
+                    .{ 1, 0, 1 }, // EndOfFrame
+                    .{ 1, 0.5, 0 },
+                    .{ 1, 0, 0.5 },
+                    .{ 0.5, 1, 0 },
+                    .{ 0, 1, 0.5 },
+                    .{ 0.5, 0, 1 },
+                    .{ 0, 0.5, 1 },
+                };
 
                 for (0..SNAPSHOT_COUNT) |snapshotIndex| {
                     const frameEndInfo = &debugState.frameEndInfos[snapshotIndex];
+
+                    var stackY: f32 = chartMinY;
                     var previousTimestampSeconds: f32 = 0;
                     for (0..frameEndInfo.timestampCount) |timestampIndex| {
                         const timestamp = &frameEndInfo.timestamps[timestampIndex];
                         const thisSecondElapsed = timestamp.seconds - previousTimestampSeconds;
                         previousTimestampSeconds = timestamp.seconds;
 
+                        const colour = colours[timestampIndex % colours.len];
                         const thisProportion = scale * thisSecondElapsed;
                         const thisHeight = chartHeight * thisProportion;
                         debugRenderGroup.PushRect(
-                            .{ chartLeft + @as(f32, @floatFromInt(snapshotIndex)) * barSpacing + 0.5 * barWidth, chartMinY + 0.5 * thisHeight, 0 },
+                            .{ chartLeft + @as(f32, @floatFromInt(snapshotIndex)) * barSpacing + 0.5 * barWidth, stackY + 0.5 * thisHeight, 0 },
                             .{ barWidth, thisHeight },
-                            .{ thisProportion, 1, 0, 1 },
+                            h.ToV4(colour, 1),
                         );
+
+                        stackY += thisHeight;
                     }
                 }
 
