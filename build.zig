@@ -21,24 +21,35 @@ pub fn build(b: *std.Build) void {
     // ----------------------------------------------------------------------------------------------------
 
     const platform = b.createModule(.{
-        .root_source_file = b.path("./code/handmade_platform.zig"),
+        .root_source_file = b.path("code/handmade_platform.zig"),
     });
     platform.addOptions("config", options);
 
-    // TODO (Manav): Should I split handmade hero code into small modules?
-    // const intrinsics = b.createModule(.{
-    //     .root_source_file = b.path("./code/handmade/handmade_intrinsics.zig"),
-    // });
-
-    const simd = b.createModule(.{
-        .root_source_file = b.path("./code/simd.zig"),
+    // TODO (Manav): think carefully about modules
+    const intrinsics = b.createModule(.{
+        .root_source_file = b.path("code/handmade/handmade_intrinsics.zig"),
+        .imports = &.{
+            .{ .name = "handmade_platform", .module = platform },
+        },
         .optimize = .ReleaseFast,
+    });
+
+    const math = b.createModule(.{
+        .root_source_file = b.path("code/handmade/handmade_math.zig"),
+        .imports = &.{
+            .{ .name = "handmade_platform", .module = platform },
+            .{ .name = "intrinsics", .module = intrinsics },
+        },
+        .optimize = .ReleaseSafe,
     });
 
     // NOTE (Manav): Debug import is assumed to be placed on the very top of the file.
     const debug = b.addModule("debug", .{
-        .root_source_file = b.path("./code/handmade/handmade_debug.zig"),
-        // .imports = &.{.{ .name = "instrinsics", .module = intrinsics }},
+        .root_source_file = b.path("code/handmade/handmade_debug.zig"),
+        .imports = &.{
+            // .{ .name = "handmade_platform", .module = platform },
+            .{ .name = "intrinsics", .module = intrinsics },
+        },
         .optimize = .ReleaseFast,
     });
 
@@ -57,13 +68,14 @@ pub fn build(b: *std.Build) void {
     // Handmade library -----------------------------------------------------------------------------------
     const lib = b.addSharedLibrary(.{
         .name = lib_name,
-        .root_source_file = b.path("./code/handmade/handmade.zig"),
+        .root_source_file = b.path("code/handmade/handmade.zig"),
         .version = .{ .major = 0, .minor = 1, .patch = 0 },
         .target = target,
         .optimize = optimize,
     });
     lib.root_module.addImport("handmade_platform", platform);
-    lib.root_module.addImport("simd", simd);
+    lib.root_module.addImport("intrinsics", intrinsics);
+    lib.root_module.addImport("math", math);
     lib.root_module.addImport("debug", debug);
 
     const lib_install_step = b.addInstallArtifact(lib, .{
@@ -81,7 +93,7 @@ pub fn build(b: *std.Build) void {
     // Handmade exe ---------------------------------------------------------------------------------------
     const exe = b.addExecutable(.{
         .name = "win32_handmade",
-        .root_source_file = b.path("./code/win32_handmade.zig"),
+        .root_source_file = b.path("code/win32_handmade.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -105,12 +117,15 @@ pub fn build(b: *std.Build) void {
     });
     asset_builder.root_module.addImport("win32", win32);
     asset_builder.root_module.addImport("handmade_platform", platform);
+    asset_builder.root_module.addImport("intrinsics", intrinsics);
+    asset_builder.root_module.addImport("math", math);
+
     asset_builder.root_module.addCSourceFile(.{
         // NOTE: Need to add a source file to make zig compile the stb_truetype implementation
         .file = b.addWriteFiles().add("std_truetype.c", stb_truetype_data),
         .flags = &.{""},
     });
-    asset_builder.root_module.addIncludePath(b.path("./code/handmade/"));
+    asset_builder.root_module.addIncludePath(b.path("code/handmade/"));
     asset_builder.root_module.link_libc = true;
 
     const asset_builder_install_step = b.addInstallArtifact(asset_builder, .{
@@ -188,12 +203,13 @@ pub fn build(b: *std.Build) void {
     // ----------------------------------------------------------------------------------------------------
     // Tests ----------------------------------------------------------------------------------------------
     const lib_tests = b.addTest(.{
-        .root_source_file = b.path("./code/handmade/handmade_tests.zig"),
+        .root_source_file = b.path("code/handmade/handmade_tests.zig"),
         .target = target,
         .optimize = optimize,
     });
     lib_tests.root_module.addImport("handmade_platform", platform);
-    lib_tests.root_module.addImport("simd", simd);
+    lib_tests.root_module.addImport("intrinsics", intrinsics);
+    lib_tests.root_module.addImport("math", math);
 
     const run_lib_test = b.addRunArtifact(lib_tests);
 

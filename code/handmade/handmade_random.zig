@@ -1,5 +1,5 @@
 const h = struct {
-    usingnamespace @import("handmade_math.zig");
+    usingnamespace @import("math");
 };
 
 // data -----------------------------------------------------------------------------------------------------------------------------------

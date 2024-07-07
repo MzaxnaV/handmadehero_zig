@@ -2,24 +2,23 @@ const platform = @import("handmade_platform");
 const debug = @import("debug");
 
 const h = struct {
+    usingnamespace @import("intrinsics");
+    usingnamespace @import("math");
+
     usingnamespace @import("handmade_audio.zig");
     usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_data.zig");
     usingnamespace @import("handmade_entity.zig");
     usingnamespace @import("handmade_file_formats.zig");
-    usingnamespace @import("handmade_intrinsics.zig");
-    usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_random.zig");
     usingnamespace @import("handmade_render_group.zig");
     usingnamespace @import("handmade_sim_region.zig");
     usingnamespace @import("handmade_world.zig");
 };
 
-const assert = platform.Assert;
 const hi = platform.handmade_internal;
 
-// build constants ------------------------------------------------------------------------------------------------------------------------
-
+const assert = platform.Assert;
 const ignore = platform.ignore;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
@@ -1703,24 +1702,6 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
     // h.OutputTestSineWave(gameState, soundBuffer, 400);
 }
 
-// debug ----------------------------------------------------------------------------------------------------------------------------------
-
-fn UpdateDebugRecords(debugState: *debug.state, counters: []debug.record) void {
-    for (0..debug.recordArray.len) |counterIndex| {
-        const source: *debug.record = &counters[counterIndex];
-        const dest: *debug.counter_state = &debugState.counterStates[debugState.counterCount];
-        debugState.counterCount += 1;
-
-        const hitCount_CycleCount = h.AtomicExchange(u64, @as(*u64, @ptrCast(&source.counts)), 0);
-
-        dest.fileName = source.fileName;
-        dest.functionName = source.functionName;
-        dest.lineNumber = source.lineNumber;
-        dest.snapshots[debugState.snapshotIndex].hitCount = @intCast(hitCount_CycleCount >> 32);
-        dest.snapshots[debugState.snapshotIndex].cycleCount = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
-    }
-}
-
 pub export fn DEBUGFrameEnd(memory: *platform.memory, _: *platform.debug_frame_end_info) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
@@ -1730,7 +1711,7 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory, _: *platform.debug_frame_e
     }
     if (@as(?*debug.state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
         debugState.counterCount = 0;
-        UpdateDebugRecords(debugState, debug.recordArray[0..]);
+        debug.UpdateDebugRecords(debugState, debug.recordArray[0..]);
         debugState.snapshotIndex += 1;
         if (debugState.snapshotIndex >= debug.DEBUG_SNAPSHOT_COUNT) {
             debugState.snapshotIndex = 0;

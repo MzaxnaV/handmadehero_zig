@@ -1,10 +1,11 @@
 const platform = @import("handmade_platform");
 
 const h = struct {
+    usingnamespace @import("math");
+
     usingnamespace @import("handmade_audio.zig");
     usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_file_formats.zig");
-    usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_random.zig");
     usingnamespace @import("handmade_render_group.zig");
     usingnamespace @import("handmade_sim_region.zig");

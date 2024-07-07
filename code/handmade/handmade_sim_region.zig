@@ -1,19 +1,19 @@
 const platform = @import("handmade_platform");
 const debug = @import("debug");
 
-const assert = platform.Assert;
-
 const h = struct {
+    usingnamespace @import("math");
+
     usingnamespace @import("handmade_world.zig");
     usingnamespace @import("handmade_data.zig");
-    usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_entity.zig");
-    usingnamespace @import("handmade_intrinsics.zig");
+    usingnamespace @import("intrinsics");
 };
 
-// constants ------------------------------------------------------------------------------------------------------------------------------
-
+const assert = platform.Assert;
 const ignore = platform.ignore;
+
+// constants ------------------------------------------------------------------------------------------------------------------------------
 
 pub const HIT_POINT_SUB_COUNT = 4;
 

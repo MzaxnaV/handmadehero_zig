@@ -1,16 +1,28 @@
 const SourceLocation = @import("std").builtin.SourceLocation;
 
-fn __rdtsc() u64 {
-    var low: u32 = 0;
-    var high: u32 = 0;
+const h = struct {
+    usingnamespace @import("intrinsics");
+};
 
-    asm volatile ("rdtsc"
-        : [low] "={eax}" (low),
-          [high] "={edx}" (high),
-    );
+pub const perf_analyzer = struct {
+    const method = enum {
+        llvm_mca,
+    };
 
-    return (@as(u64, high) << 32) | @as(u64, low);
-}
+    pub fn Start(comptime m: method, comptime region: []const u8) void {
+        @fence(.seq_cst);
+        switch (m) {
+            .llvm_mca => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: "memory"),
+        }
+    }
+
+    pub fn End(comptime m: method, comptime region: []const u8) void {
+        switch (m) {
+            .llvm_mca => asm volatile ("# LLVM-MCA-END " ++ region ::: "memory"),
+        }
+        @fence(.seq_cst);
+    }
+};
 
 pub const record = struct {
     fileName: []const u8 = "",
@@ -95,13 +107,13 @@ pub fn TIMED_BLOCK__impl(comptime __counter__: usize, comptime source: SourceLoc
             self.record.lineNumber = source.line;
             self.record.functionName = source.fn_name;
 
-            self.startCycles = __rdtsc();
+            self.startCycles = h.__rdtsc();
 
             return self;
         }
 
         pub inline fn End(self: *Self) void {
-            const delta: u64 = __rdtsc() - self.startCycles | @as(u64, self.hitCount) << 32;
+            const delta: u64 = h.__rdtsc() - self.startCycles | @as(u64, self.hitCount) << 32;
             _ = @atomicRmw(u64, @as(*u64, @ptrCast(&self.record.counts)), .Add, delta, .seq_cst);
         }
 
@@ -109,4 +121,20 @@ pub fn TIMED_BLOCK__impl(comptime __counter__: usize, comptime source: SourceLoc
         startCycles: u64,
         hitCount: u32,
     };
+}
+
+pub fn UpdateDebugRecords(debugState: *state, counters: []record) void {
+    for (0..recordArray.len) |counterIndex| {
+        const source: *record = &counters[counterIndex];
+        const dest: *counter_state = &debugState.counterStates[debugState.counterCount];
+        debugState.counterCount += 1;
+
+        const hitCount_CycleCount = h.AtomicExchange(u64, @as(*u64, @ptrCast(&source.counts)), 0);
+
+        dest.fileName = source.fileName;
+        dest.functionName = source.functionName;
+        dest.lineNumber = source.lineNumber;
+        dest.snapshots[debugState.snapshotIndex].hitCount = @intCast(hitCount_CycleCount >> 32);
+        dest.snapshots[debugState.snapshotIndex].cycleCount = @intCast(hitCount_CycleCount & 0xffffffff); //TODO (Manav): use @truncate() ?
+    }
 }

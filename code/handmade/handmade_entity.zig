@@ -1,7 +1,8 @@
 const assert = @import("handmade_platform").Assert;
 
 const h = struct {
-    usingnamespace @import("handmade_math.zig");
+    usingnamespace @import("math");
+
     usingnamespace @import("handmade_sim_region.zig");
 };
 

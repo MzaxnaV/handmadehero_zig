@@ -32,18 +32,6 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     pub const debug_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
     pub const debug_write_entire_file = *const fn ([*:0]const u8, u32, *anyopaque) bool;
 
-    pub fn __rdtsc() u64 {
-        var low: u32 = 0;
-        var high: u32 = 0;
-
-        asm volatile ("rdtsc"
-            : [low] "={eax}" (low),
-              [high] "={edx}" (high),
-        );
-
-        return (@as(u64, high) << 32) | @as(u64, low);
-    }
-
     // inline fn BeginTimedBlock(comptime id: debug_cycle_counter_type) void {
     //     if (debugGlobalMemory) |m| {
     //         m.counters[@intFromEnum(id)].t = id;
@@ -66,6 +54,18 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     //     }
     // }
 } else {};
+
+pub fn __rdtsc() u64 {
+    var low: u32 = 0;
+    var high: u32 = 0;
+
+    asm volatile ("rdtsc"
+        : [low] "={eax}" (low),
+          [high] "={edx}" (high),
+    );
+
+    return (@as(u64, high) << 32) | @as(u64, low);
+}
 
 // platform data types --------------------------------------------------------------------------------------------------------------------
 

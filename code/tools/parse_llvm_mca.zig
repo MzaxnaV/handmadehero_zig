@@ -55,11 +55,15 @@ pub fn main() !void {
     }
 
     const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
 
     if (args.len != 2) fatal("wrong number of arguments", .{});
 
     const source = try std.fs.cwd().openFile(args[1], .{ .mode = .read_only });
+    defer source.close();
+
     const dest = try std.fs.cwd().createFile("llvm_mca_output.md", .{ .truncate = true });
+    defer dest.close();
 
     const input_buf = try allocator.alloc(u8, 1000);
     defer allocator.free(input_buf);
@@ -101,9 +105,6 @@ pub fn main() !void {
     }
 
     try dest.writer().print("```\n</details>\n</details>\n", .{});
-
-    dest.close();
-    source.close();
 }
 
 fn fatal(comptime format: []const u8, args: anytype) noreturn {

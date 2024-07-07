@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
 const platform = @import("handmade_platform");
 
@@ -15,19 +14,13 @@ const win32 = struct {
 };
 
 const h = struct {
+    usingnamespace @import("math");
+    usingnamespace @import("intrinsics");
+
     usingnamespace @import("handmade_file_formats.zig");
-    usingnamespace @import("handmade_math.zig");
-
-    // NOTE (Manav): Read this. https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_globalFontBitscanForward&expand=375&ig_expand=465,5629,463
-    inline fn FindLeastSignificantSetBit(value: u32) u32 {
-        const result = asm ("bsf %[val], %[ret]"
-            : [ret] "=r" (-> u32),
-            : [val] "rm" (value),
-        );
-
-        return result;
-    }
 };
+
+const assert = std.debug.assert;
 
 const USE_FONTS_FROM_WINDOWS = true;
 

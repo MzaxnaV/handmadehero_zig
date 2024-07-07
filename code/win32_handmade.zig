@@ -1,9 +1,6 @@
-const std = @import("std");
-
-const WINAPI = std.os.windows.WINAPI;
-const DWORD = std.os.windows.DWORD;
-
 pub const UNICODE = true;
+
+const std = @import("std");
 
 const win32 = struct {
     usingnamespace @import("win32").foundation;
@@ -45,9 +42,12 @@ const win32 = struct {
 };
 
 const atomic = std.atomic;
+const DWORD = std.os.windows.DWORD;
+const WINAPI = std.os.windows.WINAPI;
 
 const platform = @import("handmade_platform");
 const hi = platform.handmade_internal;
+const __rdtsc = platform.__rdtsc;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -1492,7 +1492,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                 var gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
 
-                var lastCycleCount = hi.__rdtsc();
+                var lastCycleCount = __rdtsc();
 
                 while (globalRunning) {
                     var frameEndInfo: platform.debug_frame_end_info = .{};
@@ -1819,7 +1819,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     if (HANDMADE_INTERNAL) {
                         frameEndInfo.endOfFrame = Win32GetSecondsElapsed(lastCounter, endCounter);
 
-                        const endCycleCount = hi.__rdtsc();
+                        const endCycleCount = __rdtsc();
                         const cyclesElapsed = endCycleCount - lastCycleCount;
                         _ = cyclesElapsed;
                         lastCycleCount = endCycleCount;

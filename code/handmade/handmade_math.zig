@@ -1,8 +1,10 @@
+const platform = @import("handmade_platform");
+
 const h = struct {
-    usingnamespace @import("handmade_intrinsics.zig");
+    usingnamespace @import("intrinsics");
 };
 
-const MaxInt = @import("std").math.maxInt;
+// const MaxInt = @import("std").math.maxInt;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -51,10 +53,10 @@ pub const rect2i = struct {
 
     pub inline fn InvertedInfinityRectangle() Self {
         const result = Self{
-            .xMin = MaxInt(i32),
-            .yMin = MaxInt(i32),
-            .xMax = -MaxInt(i32),
-            .yMax = -MaxInt(i32),
+            .xMin = platform.MAXINT32,
+            .yMin = platform.MAXINT32,
+            .xMax = -platform.MAXINT32,
+            .yMax = -platform.MAXINT32,
         };
 
         return result;
