@@ -139,7 +139,7 @@ pub inline fn AtomicCompareExchange(comptime T: type, ptr: *T, new_value: T, exp
 }
 
 /// Performs an atomic add and returns the previous value
-pub inline fn AtomicIncrement(comptime T: type, ptr: *T, addend: T) T {
+pub inline fn AtomicAdd(comptime T: type, ptr: *T, addend: T) T {
     return @atomicRmw(T, ptr, .Add, addend, .seq_cst);
 }
 

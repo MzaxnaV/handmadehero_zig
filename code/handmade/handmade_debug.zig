@@ -18,6 +18,8 @@ const h = struct {
     usingnamespace @import("handmade_file_formats.zig");
 };
 
+const ignore = platform.ignore;
+
 pub const perf_analyzer = struct {
     const method = enum {
         llvm_mca,
@@ -38,7 +40,7 @@ pub const perf_analyzer = struct {
     }
 };
 
-const record = struct {
+const debug_record = struct {
     fileName: []const u8 = "",
     functionName: []const u8 = "",
 
@@ -50,31 +52,62 @@ const record = struct {
     } = .{},
 };
 
-const counter_snapshot = struct {
+const debug_event_type = enum {
+    DebugEvent_BeginBlock,
+    DebugEvent_EndBlock,
+};
+
+const debug_event = struct {
+    clock: u64 = 0,
+    threadIndex: u16 = 0,
+    coreIndex: u16 = 0,
+    debugRecordIndex: u16 = 0,
+    debugRecordArrayIndex: u8 = 0, // NOTE (Manav): we won't be using this.
+    eventType: debug_event_type = undefined,
+};
+
+const debug_counter_snapshot = struct {
     hitCount: u32 = 0,
-    cycleCount: u32 = 0,
+    cycleCount: u64 = 0,
 };
 
 const SNAPSHOT_COUNT = 128;
 
-const counter_state = struct {
+const debug_counter_state = struct {
     fileName: []const u8,
     functionName: []const u8,
 
     lineNumber: u32,
 
-    snapshots: [SNAPSHOT_COUNT]counter_snapshot,
+    snapshots: [SNAPSHOT_COUNT]debug_counter_snapshot,
 };
 
-const state = struct {
+const debug_state = struct {
     snapshotIndex: u32,
     counterCount: u32,
-    counterStates: [512]counter_state,
+    counterStates: [512]debug_counter_state,
     frameEndInfos: [SNAPSHOT_COUNT]platform.debug_frame_end_info,
 };
 
 /// NOTE (Manav): We don't need two sets of theses because of how `TIMED_BLOCK()` works
-pub var recordArray = [1]record{.{}} ** __COUNTER__();
+var recordArray = [1]debug_record{.{}} ** __COUNTER__();
+
+const MAX_DEBUG_EVENT_COUNT = 65536 * 16;
+const debugRecordArrayIndexConstant = 0; // NOTE (Manav): we only have one array so set this to zero.
+
+pub var globalDebugEventIndex: u32 = 0;
+pub var globalDebugEventArray = [1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT;
+
+inline fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debug_event_type) void {
+    const eventIndex = h.AtomicAdd(u32, &globalDebugEventIndex, 1);
+    var event: *debug_event = &globalDebugEventArray[eventIndex];
+    event.clock = h.__rdtsc();
+    event.threadIndex = 0;
+    event.coreIndex = 0;
+    event.debugRecordIndex = recordIndex;
+    event.debugRecordArrayIndex = debugRecordArrayIndexConstant;
+    event.eventType = eventType;
+}
 
 /// The function at call site  will be replaced, using a preprocesing tool, with
 /// ```
@@ -108,12 +141,18 @@ pub fn __COUNTER__() comptime_int {
 /// It relies on `__counter__` is to be supplied at build time using a preprocessing tool,
 /// called everytime lib is built. For now use this with hardcoded `__counter__` values until we have one
 // NOTE (Manav): zig (0.13) by design, doesn't allow for a way to have a global comptime counter and we don't have unity build.
-pub fn TIMED_BLOCK__impl(comptime __counter__: usize, comptime source: SourceLocation) type {
+pub fn TIMED_BLOCK__impl(comptime __counter__: comptime_int, comptime source: SourceLocation) type {
     return struct {
         const Self = @This();
 
+        record: *debug_record,
+        startCycles: u64,
+        hitCount: u32,
+        // counter: u32, // NOTE (Manav): don't need this atm.
+
         pub inline fn Init(args: struct { hitCount: u32 = 1 }) Self {
             var self = Self{
+                // .counter = __counter__,
                 .record = &recordArray[__counter__],
                 .startCycles = 0,
                 .hitCount = args.hitCount,
@@ -125,24 +164,26 @@ pub fn TIMED_BLOCK__impl(comptime __counter__: usize, comptime source: SourceLoc
 
             self.startCycles = h.__rdtsc();
 
+            //
+
+            RecordDebugEvent(__counter__, .DebugEvent_BeginBlock);
+
             return self;
         }
 
         pub inline fn End(self: *Self) void {
             const delta: u64 = h.__rdtsc() - self.startCycles | @as(u64, self.hitCount) << 32;
-            _ = @atomicRmw(u64, @as(*u64, @ptrCast(&self.record.counts)), .Add, delta, .seq_cst);
-        }
+            _ = h.AtomicAdd(u64, @as(*u64, @ptrCast(&self.record.counts)), delta);
 
-        record: *record,
-        startCycles: u64,
-        hitCount: u32,
+            RecordDebugEvent(__counter__, .DebugEvent_EndBlock);
+        }
     };
 }
 
-fn UpdateDebugRecords(debugState: *state, counters: []record) void {
+fn UpdateDebugRecords(debugState: *debug_state, counters: []debug_record) void {
     for (0..recordArray.len) |counterIndex| {
-        const source: *record = &counters[counterIndex];
-        const dest: *counter_state = &debugState.counterStates[debugState.counterCount];
+        const source: *debug_record = &counters[counterIndex];
+        const dest: *debug_counter_state = &debugState.counterStates[debugState.counterCount];
         debugState.counterCount += 1;
 
         const hitCount_CycleCount = h.AtomicExchange(u64, @as(*u64, @ptrCast(&source.counts)), 0);
@@ -311,7 +352,7 @@ const debug_statistic = struct {
 };
 
 pub fn Overlay(memory: *platform.memory) void {
-    if (@as(?*state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
+    if (@as(?*debug_state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
         if (renderGroup) |debugRenderGroup| {
             if (debugRenderGroup.PushFont(fontID)) |_| {
                 const info = debugRenderGroup.assets.GetFontInfo(fontID);
@@ -328,8 +369,9 @@ pub fn Overlay(memory: *platform.memory) void {
                     cycleOverHit.BeginDebugStatistic();
 
                     for (counter.snapshots) |snapshot| {
+                        const cycles: u32 = @truncate(snapshot.cycleCount);
                         hitCount.AccumDebugStatistic(@floatFromInt(snapshot.hitCount));
-                        cycleCount.AccumDebugStatistic(@floatFromInt(snapshot.cycleCount));
+                        cycleCount.AccumDebugStatistic(@floatFromInt(cycles));
 
                         var coh: f64 = 0;
                         if (snapshot.hitCount != 0) {
@@ -440,6 +482,38 @@ pub fn Overlay(memory: *platform.memory) void {
     }
 }
 
+fn CollateDebugRecords(debugState: *debug_state, eventCount: u32, events: []debug_event) void {
+    for (0..recordArray.len) |_| {
+        const dest: *debug_counter_state = &debugState.counterStates[debugState.counterCount];
+        debugState.counterCount += 1;
+
+        dest.snapshots[debugState.snapshotIndex].hitCount = 0;
+        dest.snapshots[debugState.snapshotIndex].cycleCount = 0;
+    }
+
+    for (0..eventCount) |eventIndex| {
+        const event = &events[eventIndex];
+
+        const dest: *debug_counter_state = &debugState.counterStates[event.debugRecordIndex];
+        const source: *debug_record = &recordArray[event.debugRecordIndex];
+
+        dest.fileName = source.fileName;
+        dest.functionName = source.functionName;
+        dest.lineNumber = source.lineNumber;
+
+        switch (event.eventType) {
+            .DebugEvent_BeginBlock => {
+                dest.snapshots[debugState.snapshotIndex].hitCount += 1;
+                // NOTE (Manav): ignore overflow issues for now.
+                dest.snapshots[debugState.snapshotIndex].cycleCount -%= event.clock;
+            },
+            .DebugEvent_EndBlock => {
+                dest.snapshots[debugState.snapshotIndex].cycleCount +%= event.clock;
+            },
+        }
+    }
+}
+
 pub export fn DEBUGFrameEnd(memory: *platform.memory, info: *platform.debug_frame_end_info) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
@@ -447,9 +521,18 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory, info: *platform.debug_fram
             @compileError("Function signature mismatch!");
         }
     }
-    if (@as(?*state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
+
+    // NOTE (Manav): no need to switch since we don't need it.
+    const eventIndex = h.AtomicExchange(u32, &globalDebugEventIndex, 0);
+    const eventCount = eventIndex;
+
+    if (@as(?*debug_state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
         debugState.counterCount = 0;
-        UpdateDebugRecords(debugState, recordArray[0..]);
+        if (ignore) {
+            UpdateDebugRecords(debugState, recordArray[0..]);
+        } else {
+            CollateDebugRecords(debugState, eventCount, globalDebugEventArray[0..]);
+        }
 
         debugState.frameEndInfos[debugState.snapshotIndex] = info.*;
 

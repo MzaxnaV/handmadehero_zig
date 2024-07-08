@@ -238,6 +238,10 @@ pub inline fn ZeroSlice(comptime T: type, slice: []T) void {
     @memset(ptr[0 .. slice.len * @sizeOf(T)], 0);
 }
 
+pub inline fn ZeroStruct(comptime T: type, ptr: *T) void {
+    ZeroSize(@sizeOf(T), @as([*]u8, @ptrCast(ptr)));
+}
+
 pub inline fn Copy(size: usize, source: *const anyopaque, dest: *anyopaque) void {
     const d: [*]u8 = @ptrCast(dest);
     const s: [*]const u8 = @ptrCast(source);
@@ -267,11 +271,6 @@ pub inline fn EndTemporaryMemory(tempMem: temporary_memory) void {
     arena.used = tempMem.used;
     platform.Assert(tempMem.arena.tempCount > 0);
     arena.tempCount -= 1;
-}
-
-// NOTE (Manav): works for slices too.
-pub inline fn ZeroStruct(comptime T: type, ptr: *T) void {
-    ZeroSize(@sizeOf(T), @as([*]u8, @ptrCast(ptr)));
 }
 
 pub inline fn GetLowEntity(gameState: *game_state, index: u32) ?*low_entity {
