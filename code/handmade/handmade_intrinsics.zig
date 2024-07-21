@@ -147,6 +147,25 @@ pub inline fn AtomicExchange(comptime T: type, ptr: *T, new_value: T) T {
     return @atomicRmw(T, ptr, .Xchg, new_value, .seq_cst);
 }
 
+inline fn __readgsqword() *anyopaque {
+    return asm ("movq %%gs:0x30, %[res]"
+        : [res] "=r" (-> *anyopaque),
+    );
+}
+
+// inline fn __readgsqword(comptime offset: comptime_int) *anyopaque {
+//     return asm volatile ("movq %%gs:" ++ std.fmt.comptimePrint("{}", .{offset}) ++ ", %[res]"
+//         : [res] "=r" (-> *anyopaque),
+//     );
+// }
+
+pub inline fn GetThreadID() u32 {
+    const threadlocalStorage: [*]u8 = @ptrCast(__readgsqword());
+    const threadID: *u32 = @alignCast(@ptrCast(threadlocalStorage + 0x48));
+
+    return threadID.*;
+}
+
 // simd -----------------------------------------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------------------------------------------
 

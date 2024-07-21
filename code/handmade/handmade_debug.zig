@@ -102,7 +102,7 @@ inline fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventTyp
     const eventIndex = h.AtomicAdd(u32, &globalDebugEventIndex, 1);
     var event: *debug_event = &globalDebugEventArray[eventIndex];
     event.clock = h.__rdtsc();
-    event.threadIndex = 0;
+    event.threadIndex = @intCast(h.GetThreadID());
     event.coreIndex = 0;
     event.debugRecordIndex = recordIndex;
     event.debugRecordArrayIndex = debugRecordArrayIndexConstant;
