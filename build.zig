@@ -15,6 +15,7 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "ignore", true); // NOTE: true to ignore sections of code.
     options.addOption(bool, "HANDMADE_INTERNAL", true);
     options.addOption(bool, "HANDMADE_SLOW", true);
+    options.addOption(u32, "TRANSLATION_UNIT_INDEX", 0);
 
     // ----------------------------------------------------------------------------------------------------
     // Modules --------------------------------------------------------------------------------------------

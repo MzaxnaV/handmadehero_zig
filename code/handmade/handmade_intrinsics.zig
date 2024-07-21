@@ -121,50 +121,19 @@ pub inline fn FindLeastSignificantSetBit(value: u32) u32 {
 
 pub const __rdtsc = platform.__rdtsc;
 
-/// Performs a strong atomic compare exchange operation. It's the equivalent of this code, except atomic:
-///
-/// ```
-/// fn CompareExchange(comptime T: type, ptr: *T, new_value: T, expected_value: T) ?T {
-///     const old_value = ptr.*;
-///     if (old_value == expected_value) {
-///         ptr.* = new_value;
-///         return null;        // successful exchange
-///     } else {
-///         return old_value;   // otherwise
-///     }
-/// }
-/// ```
-pub inline fn AtomicCompareExchange(comptime T: type, ptr: *T, new_value: T, expected_value: T) ?T {
-    return @cmpxchgStrong(T, ptr, expected_value, new_value, .seq_cst, .seq_cst);
-}
+pub const AtomicCompareExchange = platform.AtomicCompareExchange;
 
-/// Performs an atomic add and returns the previous value
-pub inline fn AtomicAdd(comptime T: type, ptr: *T, addend: T) T {
-    return @atomicRmw(T, ptr, .Add, addend, .seq_cst);
-}
+pub const AtomicAdd = platform.AtomicAdd;
 
-pub inline fn AtomicExchange(comptime T: type, ptr: *T, new_value: T) T {
-    return @atomicRmw(T, ptr, .Xchg, new_value, .seq_cst);
-}
+pub const AtomicExchange = platform.AtomicExchange;
 
-inline fn __readgsqword() *anyopaque {
-    return asm ("movq %%gs:0x30, %[res]"
-        : [res] "=r" (-> *anyopaque),
-    );
-}
+pub const GetThreadID = platform.GetThreadID;
 
 // inline fn __readgsqword(comptime offset: comptime_int) *anyopaque {
 //     return asm volatile ("movq %%gs:" ++ std.fmt.comptimePrint("{}", .{offset}) ++ ", %[res]"
 //         : [res] "=r" (-> *anyopaque),
 //     );
 // }
-
-pub inline fn GetThreadID() u32 {
-    const threadlocalStorage: [*]u8 = @ptrCast(__readgsqword());
-    const threadID: *u32 = @alignCast(@ptrCast(threadlocalStorage + 0x48));
-
-    return threadID.*;
-}
 
 // simd -----------------------------------------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------------------------------------------
