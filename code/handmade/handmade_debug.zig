@@ -58,7 +58,6 @@ const debug_state = struct {
     snapshotIndex: u32,
     counterCount: u32,
     counterStates: [512]debug_counter_state,
-    frameEndInfos: [SNAPSHOT_COUNT]platform.debug_frame_end_info,
 };
 
 pub const debugRecordsCount = __COUNTER__();
@@ -348,26 +347,28 @@ pub fn Overlay(memory: *platform.memory) void {
                     .{ 0, 0.5, 1 },
                 };
 
-                for (0..SNAPSHOT_COUNT) |snapshotIndex| {
-                    const frameEndInfo = &debugState.frameEndInfos[snapshotIndex];
+                if (ignore) {
+                    for (0..SNAPSHOT_COUNT) |snapshotIndex| {
+                        const frameEndInfo = &debugState.frameEndInfos[snapshotIndex];
 
-                    var stackY: f32 = chartMinY;
-                    var previousTimestampSeconds: f32 = 0;
-                    for (0..frameEndInfo.timestampCount) |timestampIndex| {
-                        const timestamp = &frameEndInfo.timestamps[timestampIndex];
-                        const thisSecondElapsed = timestamp.seconds - previousTimestampSeconds;
-                        previousTimestampSeconds = timestamp.seconds;
+                        var stackY: f32 = chartMinY;
+                        var previousTimestampSeconds: f32 = 0;
+                        for (0..frameEndInfo.timestampCount) |timestampIndex| {
+                            const timestamp = &frameEndInfo.timestamps[timestampIndex];
+                            const thisSecondElapsed = timestamp.seconds - previousTimestampSeconds;
+                            previousTimestampSeconds = timestamp.seconds;
 
-                        const colour = colours[timestampIndex % colours.len];
-                        const thisProportion = scale * thisSecondElapsed;
-                        const thisHeight = chartHeight * thisProportion;
-                        debugRenderGroup.PushRect(
-                            .{ chartLeft + @as(f32, @floatFromInt(snapshotIndex)) * barSpacing + 0.5 * barWidth, stackY + 0.5 * thisHeight, 0 },
-                            .{ barWidth, thisHeight },
-                            h.ToV4(colour, 1),
-                        );
+                            const colour = colours[timestampIndex % colours.len];
+                            const thisProportion = scale * thisSecondElapsed;
+                            const thisHeight = chartHeight * thisProportion;
+                            debugRenderGroup.PushRect(
+                                .{ chartLeft + @as(f32, @floatFromInt(snapshotIndex)) * barSpacing + 0.5 * barWidth, stackY + 0.5 * thisHeight, 0 },
+                                .{ barWidth, thisHeight },
+                                h.ToV4(colour, 1),
+                            );
 
-                        stackY += thisHeight;
+                            stackY += thisHeight;
+                        }
                     }
                 }
 
@@ -422,7 +423,7 @@ fn CollateDebugRecords(debugState: *debug_state, events: []platform.debug_event)
     }
 }
 
-pub export fn DEBUGFrameEnd(memory: *platform.memory, info: *platform.debug_frame_end_info) void {
+pub export fn DEBUGFrameEnd(memory: *platform.memory) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(platform.DEBUGFrameEndsFnPtrType).Pointer.child != @TypeOf(DEBUGFrameEnd)) {
@@ -448,8 +449,6 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory, info: *platform.debug_fram
         debugState.counterCount = 0;
 
         CollateDebugRecords(debugState, platform.globalDebugTable.events[eventArrayIndex][0..eventCount]);
-
-        debugState.frameEndInfos[debugState.snapshotIndex] = info.*;
 
         debugState.snapshotIndex += 1;
         if (debugState.snapshotIndex >= SNAPSHOT_COUNT) {

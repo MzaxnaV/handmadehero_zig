@@ -37,28 +37,6 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     pub const debug_free_file_memory = *const fn (*anyopaque) void;
     pub const debug_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
     pub const debug_write_entire_file = *const fn ([*:0]const u8, u32, *anyopaque) bool;
-
-    // inline fn BeginTimedBlock(comptime id: debug_cycle_counter_type) void {
-    //     if (debugGlobalMemory) |m| {
-    //         m.counters[@intFromEnum(id)].t = id;
-    //         m.counters[@intFromEnum(id)].startCyleCount = __rdtsc();
-    //     }
-    // }
-    // inline fn EndTimedBlock(comptime id: debug_cycle_counter_type) void {
-    //     if (debugGlobalMemory) |m| {
-    //         const startCycleCount = m.counters[@intFromEnum(id)].startCyleCount;
-    //         // TODO things are busted.
-    //         m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% startCycleCount;
-    //         m.counters[@intFromEnum(id)].hitCount +%= 1;
-    //     }
-    // }
-    // inline fn EndTimedBlockCounted(comptime id: debug_cycle_counter_type, count: u32) void {
-    //     if (debugGlobalMemory) |m| {
-    //         // TODO things are busted.
-    //         m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% m.counters[@intFromEnum(id)].startCyleCount;
-    //         m.counters[@intFromEnum(id)].hitCount +%= count;
-    //     }
-    // }
 } else {};
 
 pub fn __rdtsc() u64 {
@@ -327,6 +305,10 @@ pub fn TIMED_BLOCK__impl(comptime __counter__: comptime_int, comptime source: So
 /// - debug is assumed to be imported at the very top.
 pub inline fn TIMED_BLOCK(_: struct { hitCount: u32 = 1 }) void {}
 
+pub inline fn BEGIN_BLOCK(comptime _: []const u8) void {}
+
+pub inline fn END_BLOCK(comptime _: []const u8) void {}
+
 // functions ------------------------------------------------------------------------------------------------------------------------------
 
 /// Performs a strong atomic compare exchange operation. It's the equivalent of this code, except atomic:
@@ -400,19 +382,9 @@ pub fn InvalidCodePath(comptime _: []const u8) noreturn {
     unreachable;
 }
 
-pub const debug_frame_timestamp = struct {
-    name: []const u8 = "",
-    seconds: f32 = 0,
-};
-
-pub const debug_frame_end_info = struct {
-    timestampCount: u32 = 0,
-    timestamps: [64]debug_frame_timestamp = [1]debug_frame_timestamp{.{}} ** 64,
-};
-
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 
-pub const DEBUGFrameEndsFnPtrType = *const fn (*memory, *debug_frame_end_info) callconv(.C) void;
+pub const DEBUGFrameEndsFnPtrType = *const fn (*memory) callconv(.C) void;
 
 pub const GetSoundSamplesFnPtrType = *const fn (*memory, *sound_output_buffer) callconv(.C) void;
 pub const UpdateAndRenderFnPtrType = *const fn (*memory, *input, *offscreen_buffer) callconv(.C) void;
