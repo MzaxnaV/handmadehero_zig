@@ -433,7 +433,7 @@ fn CollateDebugRecords(debugState: *debug_state, events: []platform.debug_event)
     }
 }
 
-pub export fn DEBUGFrameEnd(memory: *platform.memory) void {
+pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
         if (@typeInfo(platform.DEBUGFrameEndsFnPtrType).Pointer.child != @TypeOf(DEBUGFrameEnd)) {
@@ -465,4 +465,6 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory) void {
             debugState.snapshotIndex = 0;
         }
     }
+
+    return platform.globalDebugTable;
 }

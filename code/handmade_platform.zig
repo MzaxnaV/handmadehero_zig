@@ -249,7 +249,7 @@ pub const debug_table = extern struct {
 };
 
 var globalDebugTable_ = debug_table{};
-pub export var globalDebugTable = &globalDebugTable_;
+pub export var globalDebugTable: *debug_table = &globalDebugTable_;
 
 inline fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debug_event_type) void {
     const arrayIndex_eventIndex = AtomicAdd(u64, @ptrCast(&globalDebugTable.indices), 1);
@@ -415,7 +415,7 @@ pub fn InvalidCodePath(comptime _: []const u8) noreturn {
 
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 
-pub const DEBUGFrameEndsFnPtrType = *const fn (*memory) callconv(.C) void;
+pub const DEBUGFrameEndsFnPtrType = *const fn (*memory) callconv(.C) *debug_table;
 
 pub const GetSoundSamplesFnPtrType = *const fn (*memory, *sound_output_buffer) callconv(.C) void;
 pub const UpdateAndRenderFnPtrType = *const fn (*memory, *input, *offscreen_buffer) callconv(.C) void;

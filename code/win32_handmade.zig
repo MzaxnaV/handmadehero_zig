@@ -1225,6 +1225,8 @@ fn Win32DeallocateMemory(memory: ?*anyopaque) void {
 //     _ = win32.CloseHandle(fileHandle);
 // }
 
+var globalDebugTable_: platform.debug_table = .{};
+
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
     var win32State = win32_state{
         .gameMemoryBlock = undefined,
@@ -1515,6 +1517,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         Win32CompleteAllWork(@ptrCast(&highPriorityQueue));
                         Win32CompleteAllWork(@ptrCast(&lowPriorityQueue));
 
+                        platform.globalDebugTable = &globalDebugTable_;
                         Win32UnloadGameCode(&gameCode);
                         gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
                         newInput.executableReloaded = true;
@@ -1875,10 +1878,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         lastCycleCount = endCycleCount;
 
                         if (gameCode.DEBUGFrameEnd) |DEBUGFrameEnd| {
-                            DEBUGFrameEnd(&gameMemory);
+                            platform.globalDebugTable = DEBUGFrameEnd(&gameMemory);
                         } else {
                             std.debug.print("DEBUGFrameEnd not present.\n", .{});
                         }
+                        globalDebugTable_.indices = .{};
                     }
                 }
             } else {
