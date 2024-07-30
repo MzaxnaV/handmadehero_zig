@@ -60,14 +60,14 @@ const debug_state = struct {
     counterStates: [512]debug_counter_state,
 };
 
-/// TODO (Manav): for now this is hardcoded, use process_timed_block to remove it, merge with `__COUNTER__()`
-const totalBlocks = 6;
+/// TODO (Manav): remove this`
+const onWin32Handmade = 7;
 
-/// TODO (Manav), for now hardcoded, and +2 because of timed block in DEBUGReset and timed block in win32_handmade
-pub const totalTimedBlocks = __COUNTER__() + 2;
+/// TODO (Manav), for now hardcoded, and +1 because of timed block in DEBUGReset
+pub const totalTimedBlocks = __COUNTER__() + 1;
 
 /// sum of all counters (timed  + named)
-pub const debugRecordsCount = totalTimedBlocks + totalBlocks; // TOOD (Manav), replace this with __COUNTER()__
+pub const debugRecordsCount = totalTimedBlocks + onWin32Handmade; // TOOD (Manav), replace this with __COUNTER()__
 
 pub const TIMED_FUNCTION = platform.TIMED_FUNCTION;
 pub const TIMED_FUNCTION__impl = platform.TIMED_FUNCTION__impl;
@@ -438,6 +438,7 @@ fn CollateDebugRecords(debugState: *debug_state, events: []platform.debug_event)
             .DebugEvent_EndBlock => {
                 dest.snapshots[debugState.snapshotIndex].cycleCount +%= event.clock;
             },
+            else => {},
         }
     }
 }

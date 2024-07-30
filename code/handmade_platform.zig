@@ -223,6 +223,7 @@ pub const debug_record = extern struct {
 };
 
 const debug_event_type = enum(u8) {
+    DebugEvent_FrameMarker,
     DebugEvent_BeginBlock,
     DebugEvent_EndBlock,
 };
@@ -343,6 +344,20 @@ inline fn END_BLOCK_(comptime __counter__: comptime_int) void {
 pub inline fn BEGIN_BLOCK(comptime _: []const u8) void {}
 
 pub inline fn END_BLOCK(comptime _: []const u8) void {}
+
+pub inline fn FRAME_MARKER__impl(comptime __counter__: comptime_int, comptime source: SourceLocation) void {
+    const record: *debug_record = &globalDebugTable.records[TRANSLATION_UNIT_INDEX][__counter__];
+
+    const block_name = "Frame marker";
+
+    record.fileName = source.file;
+    record.lineNumber = source.line;
+    record.blockName = block_name.ptr;
+
+    RecordDebugEvent(__counter__, .DebugEvent_FrameMarker);
+}
+
+pub inline fn FRAME_MARKER() void {}
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
 

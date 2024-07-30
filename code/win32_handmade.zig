@@ -1498,9 +1498,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 var lastCycleCount = __rdtsc();
 
                 while (globalRunning) {
-                    platform.TIMED_BLOCK("Win32Loop", .{});
-                    var __t_blk__39 = platform.TIMED_BLOCK__impl("Win32Loop", 39, @src()).Init(.{});
-                    defer __t_blk__39.End();
+                    platform.FRAME_MARKER();
+                    platform.FRAME_MARKER__impl(39, @src());
 
                     //
                     //
@@ -1879,7 +1878,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                         if (gameCode.DEBUGFrameEnd) |DEBUGFrameEnd| {
                             platform.globalDebugTable = DEBUGFrameEnd(&gameMemory);
-                            // platform.globalDebugTable.recordCount[1] = ...;
+                            // platform.globalDebugTable.recordCount[1] = ...; // NOTE (Manav): not needed
                         } else {
                             std.debug.print("DEBUGFrameEnd not present.\n", .{});
                         }
