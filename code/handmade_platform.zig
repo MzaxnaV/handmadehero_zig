@@ -246,8 +246,8 @@ pub const debug_table = extern struct {
 
     currentEventArrayIndex: u32 = 0,
     indices: packed_indices = .{},
-    /// NOTE (Manav): We don't need two sets of theses because of how `TIMED_BLOCK()` works
-    events: [1][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT},
+    // TODO (Manav): it seems stack size can never exceed a certain limit and gives permission-denied errors
+    events: [32][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT} ** 32,
 
     recordCount: [MAX_DEBUG_TRANSLATION_UNITS]u32 = .{0},
     records: [MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_EVENT_RECORD_COUNT]debug_record = .{[1]debug_record{.{}} ** MAX_DEBUG_EVENT_RECORD_COUNT},

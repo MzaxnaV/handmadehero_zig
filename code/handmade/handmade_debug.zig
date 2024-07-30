@@ -453,8 +453,10 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
 
     platform.globalDebugTable.recordCount[0] = debugRecordsCount;
 
-    // NOTE (Manav): no need to switch since we don't need it.
-    platform.globalDebugTable.currentEventArrayIndex = 0; // !platform.globalDebugTable.currentEventArrayIndex;
+    platform.globalDebugTable.currentEventArrayIndex += 1;
+    if (platform.globalDebugTable.currentEventArrayIndex >= platform.globalDebugTable.events.len) {
+        platform.globalDebugTable.currentEventArrayIndex = 0;
+    }
 
     const arrayIndex_eventIndex = h.AtomicExchange(
         u64,
