@@ -1496,13 +1496,17 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 var lastCycleCount = __rdtsc();
 
                 while (globalRunning) {
-                    platform.TIMED_BLOCK(.{});
+                    platform.TIMED_BLOCK("Win32Loop", .{});
+                    var __t_blk__39 = platform.TIMED_BLOCK__impl("Win32Loop", 39, @src()).Init(.{});
+                    defer __t_blk__39.End();
 
                     //
                     //
                     //
 
                     platform.BEGIN_BLOCK("ExecutableRefresh");
+                    platform.BEGIN_BLOCK__impl(39 + 1, @src(), "ExecutableRefresh");
+
                     newInput.dtForFrame = targetSecondsPerFrame;
 
                     newInput.executableReloaded = false;
@@ -1516,12 +1520,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         newInput.executableReloaded = true;
                     }
                     platform.END_BLOCK("ExecutableRefresh");
+                    platform.END_BLOCK__impl(39 + 1, "ExecutableRefresh");
 
                     //
                     //
                     //
 
                     platform.BEGIN_BLOCK("InputProcessing");
+                    platform.BEGIN_BLOCK__impl(39 + 2, @src(), "InputProcessing");
 
                     const oldKeyboardController: *platform.controller_input = &oldInput.controllers[0];
                     const newKeyboardController: *platform.controller_input = &newInput.controllers[0];
@@ -1657,12 +1663,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     }
 
                     platform.END_BLOCK("InputProcessing");
+                    platform.END_BLOCK__impl(39 + 2, "InputProcessing");
 
                     //
                     //
                     //
 
                     platform.BEGIN_BLOCK("GameUpdate");
+                    platform.BEGIN_BLOCK__impl(39 + 3, @src(), "GameUpdate");
 
                     if (!globalPause) {
                         var buffer = platform.offscreen_buffer{
@@ -1686,12 +1694,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     }
 
                     platform.END_BLOCK("GameUpdate");
+                    platform.END_BLOCK__impl(39 + 3, "GameUpdate");
 
                     //
                     //
                     //
 
                     platform.BEGIN_BLOCK("AudioUpdate");
+                    platform.BEGIN_BLOCK__impl(39 + 4, @src(), "AudioUpdate");
 
                     if (!globalPause) {
                         const audioWallClock = Win32GetWallClock();
@@ -1793,12 +1803,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     }
 
                     platform.END_BLOCK("AudioUpdate");
+                    platform.END_BLOCK__impl(39 + 4, "AudioUpdate");
 
                     //
                     //
                     //
 
                     platform.BEGIN_BLOCK("FramerateWait");
+                    platform.BEGIN_BLOCK__impl(39 + 5, @src(), "FramerateWait");
 
                     if (!globalPause) {
                         const workCounter = Win32GetWallClock();
@@ -1827,12 +1839,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     }
 
                     platform.END_BLOCK("FramerateWait");
+                    platform.END_BLOCK__impl(39 + 5, "FramerateWait");
 
                     //
                     //
                     //
 
                     platform.BEGIN_BLOCK("FrameDisplay");
+                    platform.BEGIN_BLOCK__impl(39 + 6, @src(), "FrameDisplay");
 
                     const dimension = Win32GetWindowDimenstion(windowHandle);
 
@@ -1852,6 +1866,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     lastCounter = endCounter;
 
                     platform.END_BLOCK("FrameDisplay");
+                    platform.END_BLOCK__impl(39 + 6, "FrameDisplay");
 
                     if (HANDMADE_INTERNAL) {
                         const endCycleCount = __rdtsc();

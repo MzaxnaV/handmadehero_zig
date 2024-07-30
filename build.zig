@@ -43,7 +43,7 @@ pub fn build(b: *std.Build) void {
     const stb_truetype_data = "#define STB_TRUETYPE_IMPLEMENTATION\n#include <stb_truetype.h>\n";
     const misc_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "misc" } };
     const data_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "data" } };
-    const code_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "code/handmade/" } };
+    // const code_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "code/handmade/" } };
 
     // ----------------------------------------------------------------------------------------------------
     // Handmade library -----------------------------------------------------------------------------------
@@ -159,17 +159,17 @@ pub fn build(b: *std.Build) void {
     // ----------------------------------------------------------------------------------------------------
     // Tools - process timed blocks -----------------------------------------------------------------------
 
-    const process_timed_blocks = b.addExecutable(.{
-        .name = "parse_timed_blocks",
-        .root_source_file = b.path("code/tools/process_timed_blocks.zig"),
-        .target = b.graph.host,
-        .optimize = .ReleaseSafe,
-    });
+    // const process_timed_blocks = b.addExecutable(.{
+    //     .name = "parse_timed_blocks",
+    //     .root_source_file = b.path("code/tools/process_timed_blocks.zig"),
+    //     .target = b.graph.host,
+    //     .optimize = .ReleaseSafe,
+    // });
 
-    const run_process_timed_blocks = b.addRunArtifact(process_timed_blocks);
-    run_process_timed_blocks.setCwd(code_build_path);
+    // const run_process_timed_blocks = b.addRunArtifact(process_timed_blocks);
+    // run_process_timed_blocks.setCwd(code_build_path);
 
-    lib_install_step.step.dependOn(&run_process_timed_blocks.step);
+    // lib_install_step.step.dependOn(&run_process_timed_blocks.step);
 
     // const process_timed_blocks_test = b.addTest(.{
     //     .root_source_file = b.path("code/tools/process_timed_blocks.zig"),
