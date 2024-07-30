@@ -1879,6 +1879,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                         if (gameCode.DEBUGFrameEnd) |DEBUGFrameEnd| {
                             platform.globalDebugTable = DEBUGFrameEnd(&gameMemory);
+                            // platform.globalDebugTable.recordCount[1] = ...;
                         } else {
                             std.debug.print("DEBUGFrameEnd not present.\n", .{});
                         }

@@ -202,7 +202,9 @@ pub const memory = struct {
     platformAPI: api,
 };
 
-const MAX_DEBUG_TRANSLATION_UNITS = 1;
+/// NOTE (Manav): should be 2 for win32 and handmadelib, but for now it's 1
+pub const MAX_DEBUG_TRANSLATION_UNITS = 1;
+
 const MAX_DEBUG_EVENT_COUNT = 65536 * 16;
 const MAX_DEBUG_EVENT_RECORD_COUNT = 65536;
 
@@ -244,8 +246,10 @@ pub const debug_table = extern struct {
     currentEventArrayIndex: u32 = 0,
     indices: packed_indices = .{},
     /// NOTE (Manav): We don't need two sets of theses because of how `TIMED_BLOCK()` works
-    records: [1][MAX_DEBUG_EVENT_RECORD_COUNT]debug_record = .{[1]debug_record{.{}} ** MAX_DEBUG_EVENT_RECORD_COUNT},
-    events: [MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT},
+    events: [1][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT},
+
+    recordCount: [MAX_DEBUG_TRANSLATION_UNITS]u32 = .{0},
+    records: [MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_EVENT_RECORD_COUNT]debug_record = .{[1]debug_record{.{}} ** MAX_DEBUG_EVENT_RECORD_COUNT},
 };
 
 var globalDebugTable_ = debug_table{};

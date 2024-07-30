@@ -398,7 +398,17 @@ pub fn Overlay(memory: *platform.memory) void {
 }
 
 fn CollateDebugRecords(debugState: *debug_state, events: []platform.debug_event) void {
-    debugState.counterCount = debugRecordsCount;
+    var counterArray = [1][*]debug_counter_state{undefined} ** platform.MAX_DEBUG_TRANSLATION_UNITS;
+    var currentCounter: [*]debug_counter_state = debugState.counterStates[0..].ptr;
+    var totalRecordCount: u32 = 0;
+    for (0..platform.MAX_DEBUG_TRANSLATION_UNITS) |unitIndex| {
+        counterArray[unitIndex] = currentCounter;
+        totalRecordCount += platform.globalDebugTable.recordCount[unitIndex];
+
+        currentCounter += platform.globalDebugTable.recordCount[unitIndex];
+    }
+
+    debugState.counterCount = totalRecordCount;
 
     for (0..debugState.counterCount) |counterIndex| {
         const dest: *debug_counter_state = &debugState.counterStates[counterIndex];
@@ -407,7 +417,6 @@ fn CollateDebugRecords(debugState: *debug_state, events: []platform.debug_event)
         dest.snapshots[debugState.snapshotIndex].cycleCount = 0;
     }
 
-    // const counterArray = .{debugState.counterStates};
     var debugRecords = platform.globalDebugTable.records;
 
     for (0..events.len) |eventIndex| {
@@ -440,6 +449,8 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
             @compileError("Function signature mismatch!");
         }
     }
+
+    platform.globalDebugTable.recordCount[0] = debugRecordsCount;
 
     // NOTE (Manav): no need to switch since we don't need it.
     platform.globalDebugTable.currentEventArrayIndex = 0; // !platform.globalDebugTable.currentEventArrayIndex;
