@@ -1225,13 +1225,7 @@ fn Win32DeallocateMemory(memory: ?*anyopaque) void {
 //     _ = win32.CloseHandle(fileHandle);
 // }
 
-fn Win32RecordTimeStamp(info: *platform.debug_frame_end_info, name: []const u8, seconds: f32) void {
-    var timeStamp = &info.timestamps[info.timestampCount];
-    info.timestampCount += 1;
-
-    timeStamp.name = name;
-    timeStamp.seconds = seconds;
-}
+var globalDebugTable_: platform.debug_table = .{};
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
     var win32State = win32_state{
@@ -1504,7 +1498,15 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 var lastCycleCount = __rdtsc();
 
                 while (globalRunning) {
-                    var frameEndInfo: platform.debug_frame_end_info = .{};
+                    platform.FRAME_MARKER();
+                    platform.FRAME_MARKER__impl(39, @src());
+
+                    //
+                    //
+                    //
+
+                    platform.BEGIN_BLOCK("ExecutableRefresh");
+                    platform.BEGIN_BLOCK__impl(39 + 1, @src(), "ExecutableRefresh");
 
                     newInput.dtForFrame = targetSecondsPerFrame;
 
@@ -1514,12 +1516,20 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         Win32CompleteAllWork(@ptrCast(&highPriorityQueue));
                         Win32CompleteAllWork(@ptrCast(&lowPriorityQueue));
 
+                        platform.globalDebugTable = &globalDebugTable_;
                         Win32UnloadGameCode(&gameCode);
                         gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
                         newInput.executableReloaded = true;
                     }
+                    platform.END_BLOCK("ExecutableRefresh");
+                    platform.END_BLOCK__impl(39 + 1, "ExecutableRefresh");
 
-                    Win32RecordTimeStamp(&frameEndInfo, "executableReady", Win32GetSecondsElapsed(lastCounter, Win32GetWallClock()));
+                    //
+                    //
+                    //
+
+                    platform.BEGIN_BLOCK("InputProcessing");
+                    platform.BEGIN_BLOCK__impl(39 + 2, @src(), "InputProcessing");
 
                     const oldKeyboardController: *platform.controller_input = &oldInput.controllers[0];
                     const newKeyboardController: *platform.controller_input = &newInput.controllers[0];
@@ -1654,7 +1664,15 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    Win32RecordTimeStamp(&frameEndInfo, "inputProcessed", Win32GetSecondsElapsed(lastCounter, Win32GetWallClock()));
+                    platform.END_BLOCK("InputProcessing");
+                    platform.END_BLOCK__impl(39 + 2, "InputProcessing");
+
+                    //
+                    //
+                    //
+
+                    platform.BEGIN_BLOCK("GameUpdate");
+                    platform.BEGIN_BLOCK__impl(39 + 3, @src(), "GameUpdate");
 
                     if (!globalPause) {
                         var buffer = platform.offscreen_buffer{
@@ -1677,7 +1695,15 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    Win32RecordTimeStamp(&frameEndInfo, "gameUpdated", Win32GetSecondsElapsed(lastCounter, Win32GetWallClock()));
+                    platform.END_BLOCK("GameUpdate");
+                    platform.END_BLOCK__impl(39 + 3, "GameUpdate");
+
+                    //
+                    //
+                    //
+
+                    platform.BEGIN_BLOCK("AudioUpdate");
+                    platform.BEGIN_BLOCK__impl(39 + 4, @src(), "AudioUpdate");
 
                     if (!globalPause) {
                         const audioWallClock = Win32GetWallClock();
@@ -1778,7 +1804,15 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    Win32RecordTimeStamp(&frameEndInfo, "audioUpdated", Win32GetSecondsElapsed(lastCounter, Win32GetWallClock()));
+                    platform.END_BLOCK("AudioUpdate");
+                    platform.END_BLOCK__impl(39 + 4, "AudioUpdate");
+
+                    //
+                    //
+                    //
+
+                    platform.BEGIN_BLOCK("FramerateWait");
+                    platform.BEGIN_BLOCK__impl(39 + 5, @src(), "FramerateWait");
 
                     if (!globalPause) {
                         const workCounter = Win32GetWallClock();
@@ -1806,7 +1840,15 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    Win32RecordTimeStamp(&frameEndInfo, "framerateWaitComplete", Win32GetSecondsElapsed(lastCounter, Win32GetWallClock()));
+                    platform.END_BLOCK("FramerateWait");
+                    platform.END_BLOCK__impl(39 + 5, "FramerateWait");
+
+                    //
+                    //
+                    //
+
+                    platform.BEGIN_BLOCK("FrameDisplay");
+                    platform.BEGIN_BLOCK__impl(39 + 6, @src(), "FrameDisplay");
 
                     const dimension = Win32GetWindowDimenstion(windowHandle);
 
@@ -1825,19 +1867,22 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     const endCounter: win32.LARGE_INTEGER = Win32GetWallClock();
                     lastCounter = endCounter;
 
-                    if (HANDMADE_INTERNAL) {
-                        Win32RecordTimeStamp(&frameEndInfo, "endOfFrame", Win32GetSecondsElapsed(lastCounter, endCounter));
+                    platform.END_BLOCK("FrameDisplay");
+                    platform.END_BLOCK__impl(39 + 6, "FrameDisplay");
 
+                    if (HANDMADE_INTERNAL) {
                         const endCycleCount = __rdtsc();
                         const cyclesElapsed = endCycleCount - lastCycleCount;
                         _ = cyclesElapsed;
                         lastCycleCount = endCycleCount;
 
                         if (gameCode.DEBUGFrameEnd) |DEBUGFrameEnd| {
-                            DEBUGFrameEnd(&gameMemory, &frameEndInfo);
+                            platform.globalDebugTable = DEBUGFrameEnd(&gameMemory);
+                            // platform.globalDebugTable.recordCount[1] = ...; // NOTE (Manav): not needed
                         } else {
                             std.debug.print("DEBUGFrameEnd not present.\n", .{});
                         }
+                        globalDebugTable_.indices = .{};
                     }
                 }
             } else {

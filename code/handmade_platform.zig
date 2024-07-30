@@ -37,28 +37,6 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     pub const debug_free_file_memory = *const fn (*anyopaque) void;
     pub const debug_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
     pub const debug_write_entire_file = *const fn ([*:0]const u8, u32, *anyopaque) bool;
-
-    // inline fn BeginTimedBlock(comptime id: debug_cycle_counter_type) void {
-    //     if (debugGlobalMemory) |m| {
-    //         m.counters[@intFromEnum(id)].t = id;
-    //         m.counters[@intFromEnum(id)].startCyleCount = __rdtsc();
-    //     }
-    // }
-    // inline fn EndTimedBlock(comptime id: debug_cycle_counter_type) void {
-    //     if (debugGlobalMemory) |m| {
-    //         const startCycleCount = m.counters[@intFromEnum(id)].startCyleCount;
-    //         // TODO things are busted.
-    //         m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% startCycleCount;
-    //         m.counters[@intFromEnum(id)].hitCount +%= 1;
-    //     }
-    // }
-    // inline fn EndTimedBlockCounted(comptime id: debug_cycle_counter_type, count: u32) void {
-    //     if (debugGlobalMemory) |m| {
-    //         // TODO things are busted.
-    //         m.counters[@intFromEnum(id)].cycleCount +%= __rdtsc() -% m.counters[@intFromEnum(id)].startCyleCount;
-    //         m.counters[@intFromEnum(id)].hitCount +%= count;
-    //     }
-    // }
 } else {};
 
 pub fn __rdtsc() u64 {
@@ -224,7 +202,9 @@ pub const memory = struct {
     platformAPI: api,
 };
 
-const MAX_DEBUG_TRANSLATION_UNITS = 1;
+/// NOTE (Manav): should be 2 for win32 and handmadelib, but for now it's 1
+pub const MAX_DEBUG_TRANSLATION_UNITS = 1;
+
 const MAX_DEBUG_EVENT_COUNT = 65536 * 16;
 const MAX_DEBUG_EVENT_RECORD_COUNT = 65536;
 
@@ -235,7 +215,7 @@ pub const debug_record = extern struct {
     };
 
     fileName: ?[*:0]const u8 = null,
-    functionName: ?[*:0]const u8 = null,
+    blockName: ?[*:0]const u8 = null,
 
     lineNumber: u32 = 0,
 
@@ -243,6 +223,7 @@ pub const debug_record = extern struct {
 };
 
 const debug_event_type = enum(u8) {
+    DebugEvent_FrameMarker,
     DebugEvent_BeginBlock,
     DebugEvent_EndBlock,
 };
@@ -265,12 +246,15 @@ pub const debug_table = extern struct {
 
     currentEventArrayIndex: u32 = 0,
     indices: packed_indices = .{},
-    /// NOTE (Manav): We don't need two sets of theses because of how `TIMED_BLOCK()` works
-    records: [1][MAX_DEBUG_EVENT_RECORD_COUNT]debug_record = .{[1]debug_record{.{}} ** MAX_DEBUG_EVENT_RECORD_COUNT},
-    events: [MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT},
+    // TODO (Manav): it seems stack size can never exceed a certain limit and gives permission-denied errors
+    events: [32][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT} ** 32,
+
+    recordCount: [MAX_DEBUG_TRANSLATION_UNITS]u32 = .{0},
+    records: [MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_EVENT_RECORD_COUNT]debug_record = .{[1]debug_record{.{}} ** MAX_DEBUG_EVENT_RECORD_COUNT},
 };
 
-pub export var globalDebugTable: debug_table = .{};
+var globalDebugTable_ = debug_table{};
+pub export var globalDebugTable: *debug_table = &globalDebugTable_;
 
 inline fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debug_event_type) void {
     const arrayIndex_eventIndex = AtomicAdd(u64, @ptrCast(&globalDebugTable.indices), 1);
@@ -284,48 +268,96 @@ inline fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventTyp
     event.eventType = eventType;
 }
 
+/// TODO (Manav): fix the description
 /// It relies on `__counter__` is to be supplied at build time using a preprocessing tool,
 /// called everytime lib is built. For now use this with hardcoded `__counter__` values until we have one
 // NOTE (Manav): zig (0.13) by design, doesn't allow for a way to have a global comptime counter and we don't have unity build.
-pub fn TIMED_BLOCK__impl(comptime __counter__: comptime_int, comptime source: SourceLocation) type {
-    return struct {
+pub fn TIMED_BLOCK__impl(comptime name: [:0]const u8, comptime __counter__: comptime_int, comptime source: SourceLocation) type {
+    const timed_block = struct {
         const Self = @This();
 
-        // counter: u32, // NOTE (Manav): don't need this atm.
+        counter: u32, // NOTE (Manav): don't need this atm.
 
         pub inline fn Init(_: struct { hitCount: u32 = 1 }) Self {
             const self = Self{
-                // .counter = __counter__,
+                .counter = __counter__,
             };
 
-            const record: *debug_record = &globalDebugTable.records[TRANSLATION_UNIT_INDEX][__counter__];
-
-            record.fileName = source.file;
-            record.lineNumber = source.line;
-            record.functionName = source.fn_name;
-
-            RecordDebugEvent(__counter__, .DebugEvent_BeginBlock);
+            BEGIN_BLOCK_(__counter__, source, name);
 
             return self;
         }
 
         pub inline fn End(_: *Self) void {
-            RecordDebugEvent(__counter__, .DebugEvent_EndBlock);
+            END_BLOCK_(__counter__);
         }
     };
+
+    return timed_block;
 }
 
+/// TODO (Manav): fix the description
+/// It relies on `__counter__` is to be supplied at build time using a preprocessing tool,
+/// called everytime lib is built. For now use this with hardcoded `__counter__` values until we have one
+// NOTE (Manav): zig (0.13) by design, doesn't allow for a way to have a global comptime counter and we don't have unity build.
+pub fn TIMED_FUNCTION__impl(comptime __counter__: comptime_int, comptime source: SourceLocation) type {
+    return TIMED_BLOCK__impl(source.fn_name, __counter__, source);
+}
+
+/// TODO (Manav): fix the description
 /// The function at call site  will be replaced, using a preprocesing tool, with
 /// ```
-/// debug.TIMED_BLOCK(...);
+/// debug.TIMED_FUNCTION(...);
 /// // AUTOGENERATED ----------------------------------------------------------
-/// var __t_blk__#counter = debug.TIMED_BLOCK__impl(#counter, @src()).Init(...);
+/// var __t_blk__#counter = debug.TIMED_FUNCTION__impl(#counter, @src()).Init(...);
 /// defer __t_blk__#counter.End()
 /// // AUTOGENERATED ----------------------------------------------------------
 /// ```
 /// - #counter will be generated based on `TIMED_BLOCK` call sites.
 /// - debug is assumed to be imported at the very top.
-pub inline fn TIMED_BLOCK(_: struct { hitCount: u32 = 1 }) void {}
+pub inline fn TIMED_FUNCTION(_: struct { hitCount: u32 = 1 }) void {}
+
+pub inline fn TIMED_BLOCK(comptime _: [:0]const u8, _: struct { hitCount: u32 = 1 }) void {}
+
+pub inline fn BEGIN_BLOCK__impl(comptime __counter__: comptime_int, comptime source: SourceLocation, comptime name: [:0]const u8) void {
+    BEGIN_BLOCK_(__counter__, source, name);
+}
+
+pub inline fn END_BLOCK__impl(comptime __counter__: comptime_int, comptime _: []const u8) void {
+    END_BLOCK_(__counter__);
+}
+
+inline fn BEGIN_BLOCK_(comptime __counter__: comptime_int, comptime source: SourceLocation, comptime block_name: [:0]const u8) void {
+    const record: *debug_record = &globalDebugTable.records[TRANSLATION_UNIT_INDEX][__counter__];
+
+    record.fileName = source.file;
+    record.lineNumber = source.line;
+    record.blockName = block_name.ptr;
+
+    RecordDebugEvent(__counter__, .DebugEvent_BeginBlock);
+}
+
+inline fn END_BLOCK_(comptime __counter__: comptime_int) void {
+    RecordDebugEvent(__counter__, .DebugEvent_EndBlock);
+}
+
+pub inline fn BEGIN_BLOCK(comptime _: []const u8) void {}
+
+pub inline fn END_BLOCK(comptime _: []const u8) void {}
+
+pub inline fn FRAME_MARKER__impl(comptime __counter__: comptime_int, comptime source: SourceLocation) void {
+    const record: *debug_record = &globalDebugTable.records[TRANSLATION_UNIT_INDEX][__counter__];
+
+    const block_name = "Frame marker";
+
+    record.fileName = source.file;
+    record.lineNumber = source.line;
+    record.blockName = block_name.ptr;
+
+    RecordDebugEvent(__counter__, .DebugEvent_FrameMarker);
+}
+
+pub inline fn FRAME_MARKER() void {}
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
 
@@ -400,19 +432,9 @@ pub fn InvalidCodePath(comptime _: []const u8) noreturn {
     unreachable;
 }
 
-pub const debug_frame_timestamp = struct {
-    name: []const u8 = "",
-    seconds: f32 = 0,
-};
-
-pub const debug_frame_end_info = struct {
-    timestampCount: u32 = 0,
-    timestamps: [64]debug_frame_timestamp = [1]debug_frame_timestamp{.{}} ** 64,
-};
-
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 
-pub const DEBUGFrameEndsFnPtrType = *const fn (*memory, *debug_frame_end_info) callconv(.C) void;
+pub const DEBUGFrameEndsFnPtrType = *const fn (*memory) callconv(.C) *debug_table;
 
 pub const GetSoundSamplesFnPtrType = *const fn (*memory, *sound_output_buffer) callconv(.C) void;
 pub const UpdateAndRenderFnPtrType = *const fn (*memory, *input, *offscreen_buffer) callconv(.C) void;
