@@ -10,6 +10,7 @@ const h = struct {
     usingnamespace @import("intrinsics");
 
     usingnamespace @import("handmade_asset.zig");
+    usingnamespace @import("handmade_data.zig");
     usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_render_group.zig");
 
@@ -43,21 +44,38 @@ const debug_counter_snapshot = struct {
     cycleCount: u64 = 0,
 };
 
-const SNAPSHOT_COUNT = 128;
-
 const debug_counter_state = struct {
     fileName: ?[*:0]const u8,
     blockName: ?[*:0]const u8,
 
     lineNumber: u32,
+};
 
-    snapshots: [SNAPSHOT_COUNT]debug_counter_snapshot,
+const debug_frame_region = struct {
+    minT: f32,
+    maxT: f32,
+    laneIndex: u32,
+};
+
+const debug_frame = struct {
+    beginClock: u64,
+    endClock: u64,
+
+    regionCount: u32,
+    regions: []debug_frame_region,
 };
 
 const debug_state = struct {
-    snapshotIndex: u32,
-    counterCount: u32,
-    counterStates: [512]debug_counter_state,
+    initialized: bool,
+
+    collateArena: h.memory_arena,
+    collateTemp: h.temporary_memory,
+
+    frameBarLaneCount: u32,
+    frameCount: u32,
+    frameBarScale: f32,
+
+    frames: []debug_frame,
 };
 
 /// TODO (Manav): remove this`
@@ -270,85 +288,89 @@ pub fn Overlay(memory: *platform.memory) void {
             if (debugRenderGroup.PushFont(fontID)) |_| {
                 const info = debugRenderGroup.assets.GetFontInfo(fontID);
 
-                for (0..debugState.counterCount) |counterIndex| {
-                    const counter = &debugState.counterStates[counterIndex];
+                if (platform.ignore) {
+                    for (0..debugState.counterCount) |counterIndex| {
+                        const counter = &debugState.counterStates[counterIndex];
 
-                    var hitCount: debug_statistic = undefined;
-                    var cycleCount: debug_statistic = undefined;
-                    var cycleOverHit: debug_statistic = undefined;
+                        var hitCount: debug_statistic = undefined;
+                        var cycleCount: debug_statistic = undefined;
+                        var cycleOverHit: debug_statistic = undefined;
 
-                    hitCount.BeginDebugStatistic();
-                    cycleCount.BeginDebugStatistic();
-                    cycleOverHit.BeginDebugStatistic();
+                        hitCount.BeginDebugStatistic();
+                        cycleCount.BeginDebugStatistic();
+                        cycleOverHit.BeginDebugStatistic();
 
-                    for (counter.snapshots) |snapshot| {
-                        const cycles: u32 = @truncate(snapshot.cycleCount);
-                        hitCount.AccumDebugStatistic(@floatFromInt(snapshot.hitCount));
-                        cycleCount.AccumDebugStatistic(@floatFromInt(cycles));
+                        for (counter.snapshots) |snapshot| {
+                            const cycles: u32 = @truncate(snapshot.cycleCount);
+                            hitCount.AccumDebugStatistic(@floatFromInt(snapshot.hitCount));
+                            cycleCount.AccumDebugStatistic(@floatFromInt(cycles));
 
-                        var coh: f64 = 0;
-                        if (snapshot.hitCount != 0) {
-                            coh = @as(f64, @floatFromInt(snapshot.cycleCount)) / @as(f64, @floatFromInt(snapshot.hitCount));
-                        }
-                        cycleOverHit.AccumDebugStatistic(coh);
-                    }
-
-                    hitCount.EndDebugStatistic();
-                    cycleCount.EndDebugStatistic();
-                    cycleOverHit.EndDebugStatistic();
-
-                    if (counter.blockName) |blockName| {
-                        if (cycleCount.max > 0) {
-                            const barWidth = 4;
-                            const chartLeft = 0;
-                            const chartMinY = atY;
-                            const chartHeight = info.ascenderHeight * fontScale;
-
-                            const scale: f32 = @floatCast(1 / cycleCount.max);
-                            for (0..counter.snapshots.len) |snapshotIndex| {
-                                const thisProportion = scale * @as(f32, @floatFromInt(counter.snapshots[snapshotIndex].cycleCount));
-                                const thisHeight = chartHeight * thisProportion;
-                                debugRenderGroup.PushRect(
-                                    .{ chartLeft + @as(f32, @floatFromInt(snapshotIndex)) * barWidth + 0.5 * barWidth, chartMinY + 0.5 * thisHeight, 0 },
-                                    .{ barWidth, thisHeight },
-                                    .{ thisProportion, 1, 0, 1 },
-                                );
+                            var coh: f64 = 0;
+                            if (snapshot.hitCount != 0) {
+                                coh = @as(f64, @floatFromInt(snapshot.cycleCount)) / @as(f64, @floatFromInt(snapshot.hitCount));
                             }
+                            cycleOverHit.AccumDebugStatistic(coh);
                         }
 
-                        if (!platform.ignore) {
-                            var textBuffer = [1]u8{0} ** 256;
-                            const buffer = std.fmt.bufPrint(textBuffer[0..], "{s:32}({:4}) - {:10}cy {:8}h {:10}cy/h\n", .{
-                                blockName,
-                                counter.lineNumber,
-                                @as(u32, @intFromFloat(cycleCount.avg)),
-                                @as(u32, @intFromFloat(hitCount.avg)),
-                                @as(u32, @intFromFloat(cycleOverHit.avg)),
-                            }) catch |err| {
-                                std.debug.print("{}\n", .{err});
-                                return;
-                            };
+                        hitCount.EndDebugStatistic();
+                        cycleCount.EndDebugStatistic();
+                        cycleOverHit.EndDebugStatistic();
 
-                            DEBUGTextLine(buffer);
+                        if (counter.blockName) |blockName| {
+                            if (cycleCount.max > 0) {
+                                const barWidth = 4;
+                                const chartLeft = 0;
+                                const chartMinY = atY;
+                                const chartHeight = info.ascenderHeight * fontScale;
+
+                                const scale: f32 = @floatCast(1 / cycleCount.max);
+                                for (0..counter.snapshots.len) |snapshotIndex| {
+                                    const thisProportion = scale * @as(f32, @floatFromInt(counter.snapshots[snapshotIndex].cycleCount));
+                                    const thisHeight = chartHeight * thisProportion;
+                                    debugRenderGroup.PushRect(
+                                        .{ chartLeft + @as(f32, @floatFromInt(snapshotIndex)) * barWidth + 0.5 * barWidth, chartMinY + 0.5 * thisHeight, 0 },
+                                        .{ barWidth, thisHeight },
+                                        .{ thisProportion, 1, 0, 1 },
+                                    );
+                                }
+                            }
+
+                            if (!platform.ignore) {
+                                var textBuffer = [1]u8{0} ** 256;
+                                const buffer = std.fmt.bufPrint(textBuffer[0..], "{s:32}({:4}) - {:10}cy {:8}h {:10}cy/h\n", .{
+                                    blockName,
+                                    counter.lineNumber,
+                                    @as(u32, @intFromFloat(cycleCount.avg)),
+                                    @as(u32, @intFromFloat(hitCount.avg)),
+                                    @as(u32, @intFromFloat(cycleOverHit.avg)),
+                                }) catch |err| {
+                                    std.debug.print("{}\n", .{err});
+                                    return;
+                                };
+
+                                DEBUGTextLine(buffer);
+                            }
                         }
                     }
                 }
 
-                const barWidth = 8;
-                const barSpacing = 10;
-                const chartLeft = leftEdge + 10;
+                const laneWidth = 8.0;
+                const laneCount: f32 = @floatFromInt(debugState.frameBarLaneCount);
+                const barWidth = laneWidth * laneCount;
+                const barSpacing = barWidth + 4.0;
+                const chartLeft = leftEdge + 10.0;
                 const chartHeight = 300.0;
-                const chartWidth = barSpacing * SNAPSHOT_COUNT;
-                const chartMinY = atY - (chartHeight + 80);
-                const scale = 1.0 / 0.03333;
+                const chartWidth = barSpacing * @as(f32, @floatFromInt(debugState.frameCount));
+                const chartMinY = atY - (chartHeight + 80.0);
+                const scale = debugState.frameBarScale;
 
                 const colours = [_]h.v3{
-                    .{ 1, 0, 0 }, // ExecutableReady
-                    .{ 0, 1, 0 }, // InputProcessed
-                    .{ 0, 0, 1 }, // GameUpdated
-                    .{ 1, 1, 0 }, // AudioUpdated
-                    .{ 0, 1, 1 }, // FramerateWaitComplete
-                    .{ 1, 0, 1 }, // EndOfFrame
+                    .{ 1, 0, 0 },
+                    .{ 0, 1, 0 },
+                    .{ 0, 0, 1 },
+                    .{ 1, 1, 0 },
+                    .{ 0, 1, 1 },
+                    .{ 1, 0, 1 },
                     .{ 1, 0.5, 0 },
                     .{ 1, 0, 0.5 },
                     .{ 0.5, 1, 0 },
@@ -357,28 +379,23 @@ pub fn Overlay(memory: *platform.memory) void {
                     .{ 0, 0.5, 1 },
                 };
 
-                if (ignore) {
-                    for (0..SNAPSHOT_COUNT) |snapshotIndex| {
-                        const frameEndInfo = &debugState.frameEndInfos[snapshotIndex];
+                for (0..debugState.frameCount) |frameIndex| {
+                    const frame: *debug_frame = &debugState.frames[frameIndex];
 
-                        var stackY: f32 = chartMinY;
-                        var previousTimestampSeconds: f32 = 0;
-                        for (0..frameEndInfo.timestampCount) |timestampIndex| {
-                            const timestamp = &frameEndInfo.timestamps[timestampIndex];
-                            const thisSecondElapsed = timestamp.seconds - previousTimestampSeconds;
-                            previousTimestampSeconds = timestamp.seconds;
+                    const stackX: f32 = chartLeft + @as(f32, @floatFromInt(frameIndex)) * barSpacing;
+                    const stackY: f32 = chartMinY;
 
-                            const colour = colours[timestampIndex % colours.len];
-                            const thisProportion = scale * thisSecondElapsed;
-                            const thisHeight = chartHeight * thisProportion;
-                            debugRenderGroup.PushRect(
-                                .{ chartLeft + @as(f32, @floatFromInt(snapshotIndex)) * barSpacing + 0.5 * barWidth, stackY + 0.5 * thisHeight, 0 },
-                                .{ barWidth, thisHeight },
-                                h.ToV4(colour, 1),
-                            );
+                    for (0..frame.regionCount) |regionIndex| {
+                        const region: *debug_frame_region = &frame.regions[regionIndex];
 
-                            stackY += thisHeight;
-                        }
+                        const colour = colours[regionIndex % colours.len];
+                        const thisMinY = stackY + scale * region.minT;
+                        const thisMaxY = stackY + scale * region.maxT;
+                        debugRenderGroup.PushRect(
+                            .{ stackX + 0.5 * laneWidth + laneWidth * @as(f32, @floatFromInt(region.laneIndex)), 0.5 * (thisMinY + thisMaxY), 0 },
+                            .{ laneWidth, thisMaxY - thisMinY },
+                            h.ToV4(colour, 1),
+                        );
                     }
                 }
 
@@ -397,50 +414,107 @@ pub fn Overlay(memory: *platform.memory) void {
     }
 }
 
-fn CollateDebugRecords(debugState: *debug_state, events: []platform.debug_event) void {
-    var counterArray = [1][*]debug_counter_state{undefined} ** platform.MAX_DEBUG_TRANSLATION_UNITS;
-    var currentCounter: [*]debug_counter_state = debugState.counterStates[0..].ptr;
-    var totalRecordCount: u32 = 0;
-    for (0..platform.MAX_DEBUG_TRANSLATION_UNITS) |unitIndex| {
-        counterArray[unitIndex] = currentCounter;
-        totalRecordCount += platform.globalDebugTable.recordCount[unitIndex];
+inline fn GetLaneFromThreadIndex(debugState: *debug_state, threadIndex: u32) u32 {
+    const result: u32 = 0;
 
-        currentCounter += platform.globalDebugTable.recordCount[unitIndex];
-    }
+    _ = debugState;
+    _ = threadIndex;
 
-    debugState.counterCount = totalRecordCount;
+    return result;
+}
 
-    for (0..debugState.counterCount) |counterIndex| {
-        const dest: *debug_counter_state = &debugState.counterStates[counterIndex];
+fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
+    debugState.frameBarLaneCount = 0;
+    debugState.frameCount = 0;
+    debugState.frameBarScale = 0;
 
-        dest.snapshots[debugState.snapshotIndex].hitCount = 0;
-        dest.snapshots[debugState.snapshotIndex].cycleCount = 0;
-    }
+    var currentFrame: ?*debug_frame = null;
+    var eventArrayIndex = invalidArrayIndex + 1;
+    while (true) : (eventArrayIndex += 1) {
+        if (eventArrayIndex == platform.MAX_DEBUG_FRAME_COUNT) {
+            eventArrayIndex = 0;
+        }
 
-    var debugRecords = platform.globalDebugTable.records;
+        if (eventArrayIndex == invalidArrayIndex) {
+            break;
+        }
 
-    for (0..events.len) |eventIndex| {
-        const event = &events[eventIndex];
+        for (0..platform.MAX_DEBUG_FRAME_COUNT) |eventIndex| {
+            const event: *platform.debug_event = &platform.globalDebugTable.events[eventArrayIndex][eventIndex];
+            const source: *platform.debug_record = &platform.globalDebugTable.records[event.translationUnit][event.debugRecordIndex];
+            _ = source;
 
-        var dest: *debug_counter_state = &debugState.counterStates[event.debugRecordIndex];
-        const source: *platform.debug_record = &debugRecords[event.translationUnit][event.debugRecordIndex];
+            if (event.eventType == .DebugEvent_FrameMarker) {
+                if (currentFrame) |_| {
+                    currentFrame.?.endClock = event.clock;
+                }
 
-        dest.fileName = source.fileName;
-        dest.blockName = source.blockName;
-        dest.lineNumber = source.lineNumber;
+                currentFrame = &debugState.frames[debugState.frameCount];
+                debugState.frameCount += 1;
+                currentFrame.?.beginClock = event.clock;
+                currentFrame.?.endClock = 0;
+                currentFrame.?.regionCount = 0;
+            } else if (currentFrame) |_| {
+                const relativeClock = event.clock - currentFrame.?.beginClock;
+                const laneIndex = GetLaneFromThreadIndex(debugState, event.threadIndex);
 
-        switch (event.eventType) {
-            .DebugEvent_BeginBlock => {
-                dest.snapshots[debugState.snapshotIndex].hitCount += 1;
-                // NOTE (Manav): ignore overflow issues for now.
-                dest.snapshots[debugState.snapshotIndex].cycleCount -%= event.clock;
-            },
-            .DebugEvent_EndBlock => {
-                dest.snapshots[debugState.snapshotIndex].cycleCount +%= event.clock;
-            },
-            else => {},
+                _ = relativeClock;
+                _ = laneIndex;
+
+                if (event.eventType == .DebugEvent_BeginBlock) {
+                    //
+                } else if (event.eventType == .DebugEvent_EndBlock) {
+                    //
+                } else {
+                    platform.InvalidCodePath("Invalid event type");
+                }
+            }
         }
     }
+
+    // var counterArray = [1][*]debug_counter_state{undefined} ** platform.MAX_DEBUG_TRANSLATION_UNITS;
+    // var currentCounter: [*]debug_counter_state = debugState.counterStates[0..].ptr;
+    // var totalRecordCount: u32 = 0;
+    // for (0..platform.MAX_DEBUG_TRANSLATION_UNITS) |unitIndex| {
+    //     counterArray[unitIndex] = currentCounter;
+    //     totalRecordCount += platform.globalDebugTable.recordCount[unitIndex];
+
+    //     currentCounter += platform.globalDebugTable.recordCount[unitIndex];
+    // }
+
+    // debugState.counterCount = totalRecordCount;
+
+    // for (0..debugState.counterCount) |counterIndex| {
+    //     const dest: *debug_counter_state = &debugState.counterStates[counterIndex];
+
+    //     dest.snapshots[debugState.snapshotIndex].hitCount = 0;
+    //     dest.snapshots[debugState.snapshotIndex].cycleCount = 0;
+    // }
+
+    // var debugRecords = platform.globalDebugTable.records;
+
+    // for (0..events.len) |eventIndex| {
+    //     const event = &events[eventIndex];
+
+    //     var dest: *debug_counter_state = &debugState.counterStates[event.debugRecordIndex];
+    //     const source: *platform.debug_record = &debugRecords[event.translationUnit][event.debugRecordIndex];
+
+    //     dest.fileName = source.fileName;
+    //     dest.blockName = source.blockName;
+    //     dest.lineNumber = source.lineNumber;
+
+    //     switch (event.eventType) {
+    //         .DebugEvent_BeginBlock => {
+    //             dest.snapshots[debugState.snapshotIndex].hitCount += 1;
+    //             // NOTE (Manav): ignore overflow issues for now.
+    //             dest.snapshots[debugState.snapshotIndex].cycleCount -%= event.clock;
+    //         },
+    //         .DebugEvent_EndBlock => {
+    //             dest.snapshots[debugState.snapshotIndex].cycleCount +%= event.clock;
+    //         },
+    //         else => {},
+    //     }
+    // }
 }
 
 pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
@@ -468,16 +542,22 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
 
     const eventArrayIndex = indices.eventArrayIndex;
     const eventCount = indices.eventIndex;
+    platform.globalDebugTable.eventCount[eventArrayIndex] = eventCount;
 
     if (@as(?*debug_state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
-        debugState.counterCount = 0;
+        if (!debugState.initialized) {
+            debugState.collateArena.Initialize(
+                memory.debugStorageSize - @sizeOf(debug_state),
+                @ptrCast(@as([*]debug_state, @ptrCast(debugState)) + 1),
+            );
 
-        CollateDebugRecords(debugState, platform.globalDebugTable.events[eventArrayIndex][0..eventCount]);
-
-        debugState.snapshotIndex += 1;
-        if (debugState.snapshotIndex >= SNAPSHOT_COUNT) {
-            debugState.snapshotIndex = 0;
+            debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
         }
+
+        h.EndTemporaryMemory(debugState.collateTemp);
+        debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
+
+        CollateDebugRecords(debugState, platform.globalDebugTable.currentEventArrayIndex);
     }
 
     return platform.globalDebugTable;

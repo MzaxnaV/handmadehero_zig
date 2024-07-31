@@ -204,22 +204,17 @@ pub const memory = struct {
 
 /// NOTE (Manav): should be 2 for win32 and handmadelib, but for now it's 1
 pub const MAX_DEBUG_TRANSLATION_UNITS = 1;
-
+/// TODO (Manav): it seems stack size can never exceed a certain limit
+/// and gives permission-denied errors so keep it at 32
+pub const MAX_DEBUG_FRAME_COUNT = 32;
 const MAX_DEBUG_EVENT_COUNT = 65536 * 16;
 const MAX_DEBUG_EVENT_RECORD_COUNT = 65536;
 
 pub const debug_record = extern struct {
-    pub const packed_counts = packed struct(u64) {
-        cycle: u32 = 0,
-        hit: u32 = 0,
-    };
-
     fileName: ?[*:0]const u8 = null,
     blockName: ?[*:0]const u8 = null,
 
     lineNumber: u32 = 0,
-
-    counts: packed_counts = .{},
 };
 
 const debug_event_type = enum(u8) {
@@ -246,8 +241,8 @@ pub const debug_table = extern struct {
 
     currentEventArrayIndex: u32 = 0,
     indices: packed_indices = .{},
-    // TODO (Manav): it seems stack size can never exceed a certain limit and gives permission-denied errors
-    events: [32][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT} ** 32,
+    eventCount: [MAX_DEBUG_FRAME_COUNT]u32 = .{0} ** MAX_DEBUG_FRAME_COUNT,
+    events: [MAX_DEBUG_FRAME_COUNT][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT} ** MAX_DEBUG_FRAME_COUNT,
 
     recordCount: [MAX_DEBUG_TRANSLATION_UNITS]u32 = .{0},
     records: [MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_EVENT_RECORD_COUNT]debug_record = .{[1]debug_record{.{}} ** MAX_DEBUG_EVENT_RECORD_COUNT},
@@ -256,12 +251,12 @@ pub const debug_table = extern struct {
 var globalDebugTable_ = debug_table{};
 pub export var globalDebugTable: *debug_table = &globalDebugTable_;
 
-inline fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debug_event_type) void {
+fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debug_event_type) void {
     const arrayIndex_eventIndex = AtomicAdd(u64, @ptrCast(&globalDebugTable.indices), 1);
     const indices: debug_table.packed_indices = @bitCast(arrayIndex_eventIndex);
     var event: *debug_event = &globalDebugTable.events[indices.eventArrayIndex][indices.eventIndex];
     event.clock = __rdtsc();
-    event.threadIndex = @intCast(GetThreadID());
+    event.threadIndex = @truncate(GetThreadID());
     event.coreIndex = 0;
     event.debugRecordIndex = recordIndex;
     event.translationUnit = TRANSLATION_UNIT_INDEX;
