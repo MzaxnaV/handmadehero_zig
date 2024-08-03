@@ -202,13 +202,14 @@ pub const memory = struct {
     platformAPI: api,
 };
 
+pub const MAX_DEBUG_THREAD_COUNT = 256;
 /// NOTE (Manav): should be 2 for win32 and handmadelib, but for now it's 1
 pub const MAX_DEBUG_TRANSLATION_UNITS = 1;
 /// TODO (Manav): it seems stack size can never exceed a certain limit
 /// and gives permission-denied errors so keep it at 32
-pub const MAX_DEBUG_FRAME_COUNT = 32;
-const MAX_DEBUG_EVENT_COUNT = 65536 * 16;
-const MAX_DEBUG_EVENT_RECORD_COUNT = 65536;
+pub const MAX_DEBUG_EVENT_ARRAY_COUNT = 32;
+pub const MAX_DEBUG_EVENT_COUNT = 65536 * 16;
+pub const MAX_DEBUG_EVENT_RECORD_COUNT = 65536;
 
 pub const debug_record = extern struct {
     fileName: ?[*:0]const u8 = null,
@@ -225,7 +226,7 @@ const debug_event_type = enum(u8) {
 
 pub const debug_event = extern struct {
     clock: u64 = 0,
-    threadIndex: u16 = 0,
+    threadID: u16 = 0,
     coreIndex: u16 = 0,
     debugRecordIndex: u16 = 0,
     translationUnit: u8 = 0,
@@ -241,8 +242,8 @@ pub const debug_table = extern struct {
 
     currentEventArrayIndex: u32 = 0,
     indices: packed_indices = .{},
-    eventCount: [MAX_DEBUG_FRAME_COUNT]u32 = .{0} ** MAX_DEBUG_FRAME_COUNT,
-    events: [MAX_DEBUG_FRAME_COUNT][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT} ** MAX_DEBUG_FRAME_COUNT,
+    eventCount: [MAX_DEBUG_EVENT_ARRAY_COUNT]u32 = .{0} ** MAX_DEBUG_EVENT_ARRAY_COUNT,
+    events: [MAX_DEBUG_EVENT_ARRAY_COUNT][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT} ** MAX_DEBUG_EVENT_ARRAY_COUNT,
 
     recordCount: [MAX_DEBUG_TRANSLATION_UNITS]u32 = .{0},
     records: [MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_EVENT_RECORD_COUNT]debug_record = .{[1]debug_record{.{}} ** MAX_DEBUG_EVENT_RECORD_COUNT},
@@ -256,7 +257,7 @@ fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debu
     const indices: debug_table.packed_indices = @bitCast(arrayIndex_eventIndex);
     var event: *debug_event = &globalDebugTable.events[indices.eventArrayIndex][indices.eventIndex];
     event.clock = __rdtsc();
-    event.threadIndex = @truncate(GetThreadID());
+    event.threadID = @truncate(GetThreadID()); // NOTE (Manav): we should not be truncating this.
     event.coreIndex = 0;
     event.debugRecordIndex = recordIndex;
     event.translationUnit = TRANSLATION_UNIT_INDEX;

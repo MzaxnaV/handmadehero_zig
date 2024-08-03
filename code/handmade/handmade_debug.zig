@@ -57,12 +57,28 @@ const debug_frame_region = struct {
     laneIndex: u32,
 };
 
+const MAX_REGIONS_PER_FRAME = 1024; // NOTE (Manav): we need a bigger number
 const debug_frame = struct {
     beginClock: u64,
     endClock: u64,
 
     regionCount: u32,
     regions: []debug_frame_region,
+};
+
+const open_debug_block = struct {
+    startingFrameIndex: u32,
+    openingEvent: *platform.debug_event,
+    parent: ?*open_debug_block,
+
+    nextFree: ?*open_debug_block,
+};
+
+const debug_thread = struct {
+    id: u32,
+    laneIndex: u32,
+    firstOpenBlock: ?*open_debug_block,
+    next: ?*debug_thread,
 };
 
 const debug_state = struct {
@@ -76,6 +92,8 @@ const debug_state = struct {
     frameBarScale: f32,
 
     frames: []debug_frame,
+    firstThread: ?*debug_thread,
+    firstFreeBlock: ?*open_debug_block,
 };
 
 /// TODO (Manav): remove this`
@@ -362,7 +380,7 @@ pub fn Overlay(memory: *platform.memory) void {
                 const chartHeight = 300.0;
                 const chartWidth = barSpacing * @as(f32, @floatFromInt(debugState.frameCount));
                 const chartMinY = atY - (chartHeight + 80.0);
-                const scale = debugState.frameBarScale;
+                const scale = chartHeight * debugState.frameBarScale;
 
                 const colours = [_]h.v3{
                     .{ 1, 0, 0 },
@@ -423,15 +441,47 @@ inline fn GetLaneFromThreadIndex(debugState: *debug_state, threadIndex: u32) u32
     return result;
 }
 
+fn GetDebugThread(debugState: *debug_state, threadID: u32) *debug_thread {
+    var result: ?*debug_thread = null;
+    var thread = debugState.firstThread;
+    while (thread != null) : (thread = thread.?.next) {
+        if (thread.?.id == threadID) {
+            result = thread;
+            break;
+        }
+    }
+
+    if (result == null) {
+        result = debugState.collateArena.PushStruct(debug_thread);
+        result.?.id = threadID;
+        result.?.laneIndex = debugState.frameBarLaneCount;
+        debugState.frameBarLaneCount += 1;
+        result.?.firstOpenBlock = null;
+        result.?.next = debugState.firstThread;
+        debugState.firstThread = result;
+    }
+
+    return result.?;
+}
+
+fn AddRegion(_: *debug_state, currentFrame: *debug_frame) *debug_frame_region {
+    platform.Assert(currentFrame.regionCount < MAX_REGIONS_PER_FRAME);
+    const result: *debug_frame_region = &currentFrame.regions[currentFrame.regionCount];
+    currentFrame.regionCount += 1;
+
+    return result;
+}
+
 fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
+    debugState.frames = debugState.collateArena.PushSlice(debug_frame, platform.MAX_DEBUG_EVENT_ARRAY_COUNT * 4);
     debugState.frameBarLaneCount = 0;
     debugState.frameCount = 0;
-    debugState.frameBarScale = 0;
+    debugState.frameBarScale = 1.0 / 60000000.0;
 
     var currentFrame: ?*debug_frame = null;
     var eventArrayIndex = invalidArrayIndex + 1;
     while (true) : (eventArrayIndex += 1) {
-        if (eventArrayIndex == platform.MAX_DEBUG_FRAME_COUNT) {
+        if (eventArrayIndex == platform.MAX_DEBUG_EVENT_ARRAY_COUNT) {
             eventArrayIndex = 0;
         }
 
@@ -439,7 +489,7 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
             break;
         }
 
-        for (0..platform.MAX_DEBUG_FRAME_COUNT) |eventIndex| {
+        for (0..platform.globalDebugTable.eventCount[eventArrayIndex]) |eventIndex| {
             const event: *platform.debug_event = &platform.globalDebugTable.events[eventArrayIndex][eventIndex];
             const source: *platform.debug_record = &platform.globalDebugTable.records[event.translationUnit][event.debugRecordIndex];
             _ = source;
@@ -447,6 +497,15 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
             if (event.eventType == .DebugEvent_FrameMarker) {
                 if (currentFrame) |_| {
                     currentFrame.?.endClock = event.clock;
+
+                    // const clockRange: f32 = @floatFromInt(currentFrame.?.endClock - currentFrame.?.beginClock);
+
+                    // if (clockRange > 0) {
+                    //     const frameBarScale = 1 / clockRange;
+                    //     if (debugState.frameBarScale > frameBarScale) {
+                    //         debugState.frameBarScale = frameBarScale;
+                    //     }
+                    // }
                 }
 
                 currentFrame = &debugState.frames[debugState.frameCount];
@@ -454,17 +513,52 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
                 currentFrame.?.beginClock = event.clock;
                 currentFrame.?.endClock = 0;
                 currentFrame.?.regionCount = 0;
+                currentFrame.?.regions = debugState.collateArena.PushSlice(debug_frame_region, MAX_REGIONS_PER_FRAME);
             } else if (currentFrame) |_| {
-                const relativeClock = event.clock - currentFrame.?.beginClock;
-                const laneIndex = GetLaneFromThreadIndex(debugState, event.threadIndex);
-
+                const frameIndex: u32 = debugState.frameCount - 1;
+                const thread: *debug_thread = GetDebugThread(debugState, event.threadID);
+                const relativeClock = event.clock -% currentFrame.?.beginClock;
                 _ = relativeClock;
-                _ = laneIndex;
 
                 if (event.eventType == .DebugEvent_BeginBlock) {
-                    //
+                    var debugBlock = debugState.firstFreeBlock;
+                    if (debugBlock) |_| {
+                        debugState.firstFreeBlock = debugBlock.?.nextFree;
+                    } else {
+                        debugBlock = debugState.collateArena.PushStruct(open_debug_block);
+                    }
+
+                    debugBlock.?.startingFrameIndex = frameIndex;
+                    debugBlock.?.openingEvent = event;
+                    debugBlock.?.parent = thread.firstOpenBlock;
+                    thread.firstOpenBlock = debugBlock;
+                    debugBlock.?.nextFree = null;
                 } else if (event.eventType == .DebugEvent_EndBlock) {
-                    //
+                    if (thread.firstOpenBlock) |_| {
+                        const matchingBlock: *open_debug_block = thread.firstOpenBlock.?;
+                        const openingEvent: *platform.debug_event = matchingBlock.openingEvent;
+                        if (openingEvent.threadID == event.threadID and
+                            openingEvent.debugRecordIndex == event.debugRecordIndex and
+                            openingEvent.translationUnit == event.translationUnit)
+                        {
+                            if (matchingBlock.startingFrameIndex == frameIndex) {
+                                if (thread.firstOpenBlock.?.parent == null) {
+                                    const region: *debug_frame_region = AddRegion(debugState, currentFrame.?);
+                                    region.laneIndex = thread.laneIndex;
+                                    region.minT = @floatFromInt(openingEvent.clock - currentFrame.?.beginClock);
+                                    region.maxT = @floatFromInt(event.clock - currentFrame.?.beginClock);
+                                }
+                            } else {
+                                // record all frames in between and begin/end spans
+                            }
+
+                            thread.firstOpenBlock.?.nextFree = debugState.firstFreeBlock;
+                            debugState.firstFreeBlock = thread.firstOpenBlock;
+                            thread.firstOpenBlock = matchingBlock.parent;
+                        } else {
+                            // record span that goes to the beginning of the frames series?
+                        }
+                    }
                 } else {
                     platform.InvalidCodePath("Invalid event type");
                 }
@@ -556,6 +650,9 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
 
         h.EndTemporaryMemory(debugState.collateTemp);
         debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
+
+        debugState.firstThread = null;
+        debugState.firstFreeBlock = null;
 
         CollateDebugRecords(debugState, platform.globalDebugTable.currentEventArrayIndex);
     }
