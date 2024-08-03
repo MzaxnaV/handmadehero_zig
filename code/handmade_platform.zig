@@ -257,7 +257,8 @@ fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debu
     const indices: debug_table.packed_indices = @bitCast(arrayIndex_eventIndex);
     var event: *debug_event = &globalDebugTable.events[indices.eventArrayIndex][indices.eventIndex];
     event.clock = __rdtsc();
-    event.threadID = @truncate(GetThreadID()); // NOTE (Manav): we should not be truncating this.
+    const threadID = GetThreadID();
+    event.threadID = @intCast(threadID); // NOTE (Manav): this seems to be the bug.
     event.coreIndex = 0;
     event.debugRecordIndex = recordIndex;
     event.translationUnit = TRANSLATION_UNIT_INDEX;

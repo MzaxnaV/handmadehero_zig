@@ -1077,6 +1077,10 @@ fn Win32CompleteAllWork(q: *platform.work_queue) void {
 fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
     const queue: *win32_work_queue = @alignCast(@ptrCast(lpParameter.?));
 
+    const testThreadID = platform.GetThreadID();
+
+    platform.Assert(testThreadID == std.os.windows.GetCurrentThreadId());
+
     while (true) {
         if (Win32DoNextWorkQueueEntry(queue)) {
             _ = win32.WaitForSingleObjectEx(queue.semaphoreHandle, win32.x.INFINITE, win32.FALSE);
