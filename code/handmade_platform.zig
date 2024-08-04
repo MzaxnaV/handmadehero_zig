@@ -224,10 +224,17 @@ const debug_event_type = enum(u8) {
     DebugEvent_EndBlock,
 };
 
-pub const debug_event = extern struct {
-    clock: u64 = 0,
+const threadid_coreIndex = packed struct(u32) {
     threadID: u16 = 0,
     coreIndex: u16 = 0,
+};
+
+pub const debug_event = extern struct {
+    clock: u64 = 0,
+    data: extern union {
+        tc: threadid_coreIndex,
+        secondsElapsed: f32,
+    } = .{ .tc = .{} },
     debugRecordIndex: u16 = 0,
     translationUnit: u8 = 0,
     eventType: debug_event_type = undefined,
@@ -252,17 +259,28 @@ pub const debug_table = extern struct {
 var globalDebugTable_ = debug_table{};
 pub export var globalDebugTable: *debug_table = &globalDebugTable_;
 
-fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debug_event_type) void {
+fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debug_event_type, secondsElapsed: f32) void {
     const arrayIndex_eventIndex = AtomicAdd(u64, @ptrCast(&globalDebugTable.indices), 1);
     const indices: debug_table.packed_indices = @bitCast(arrayIndex_eventIndex);
     var event: *debug_event = &globalDebugTable.events[indices.eventArrayIndex][indices.eventIndex];
     event.clock = __rdtsc();
-    const threadID = GetThreadID();
-    event.threadID = @intCast(threadID); // NOTE (Manav): this seems to be the bug.
-    event.coreIndex = 0;
     event.debugRecordIndex = recordIndex;
     event.translationUnit = TRANSLATION_UNIT_INDEX;
     event.eventType = eventType;
+
+    switch (eventType) {
+        .DebugEvent_FrameMarker => {
+            event.data = .{ .secondsElapsed = secondsElapsed };
+        },
+        else => {
+            event.data = .{
+                .tc = .{
+                    .coreIndex = 0,
+                    .threadID = @intCast(GetThreadID()), // NOTE (Manav): this seems to be the bug.
+                },
+            };
+        },
+    }
 }
 
 /// TODO (Manav): fix the description
@@ -270,25 +288,36 @@ fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debu
 /// called everytime lib is built. For now use this with hardcoded `__counter__` values until we have one
 // NOTE (Manav): zig (0.13) by design, doesn't allow for a way to have a global comptime counter and we don't have unity build.
 pub fn TIMED_BLOCK__impl(comptime name: [:0]const u8, comptime __counter__: comptime_int, comptime source: SourceLocation) type {
-    const timed_block = struct {
-        const Self = @This();
+    const timed_block = if (config.PROFILE)
+        struct {
+            const Self = @This();
 
-        counter: u32, // NOTE (Manav): don't need this atm.
+            counter: u32, // NOTE (Manav): don't need this atm.
 
-        pub inline fn Init(_: struct { hitCount: u32 = 1 }) Self {
-            const self = Self{
-                .counter = __counter__,
-            };
+            pub inline fn Init(_: struct { hitCount: u32 = 1 }) Self {
+                const self = Self{
+                    .counter = __counter__,
+                };
 
-            BEGIN_BLOCK_(__counter__, source, name);
+                BEGIN_BLOCK_(__counter__, source, name);
 
-            return self;
+                return self;
+            }
+
+            pub inline fn End(_: *Self) void {
+                END_BLOCK_(__counter__);
+            }
         }
+    else
+        struct {
+            const Self = @This();
 
-        pub inline fn End(_: *Self) void {
-            END_BLOCK_(__counter__);
-        }
-    };
+            pub inline fn Init(_: struct { hitCount: u32 = 1 }) Self {
+                return Self{};
+            }
+
+            pub inline fn End(_: *Self) void {}
+        };
 
     return timed_block;
 }
@@ -317,11 +346,15 @@ pub inline fn TIMED_FUNCTION(_: struct { hitCount: u32 = 1 }) void {}
 pub inline fn TIMED_BLOCK(comptime _: [:0]const u8, _: struct { hitCount: u32 = 1 }) void {}
 
 pub inline fn BEGIN_BLOCK__impl(comptime __counter__: comptime_int, comptime source: SourceLocation, comptime name: [:0]const u8) void {
-    BEGIN_BLOCK_(__counter__, source, name);
+    if (config.PROFILE) {
+        BEGIN_BLOCK_(__counter__, source, name);
+    }
 }
 
 pub inline fn END_BLOCK__impl(comptime __counter__: comptime_int, comptime _: []const u8) void {
-    END_BLOCK_(__counter__);
+    if (config.PROFILE) {
+        END_BLOCK_(__counter__);
+    }
 }
 
 inline fn BEGIN_BLOCK_(comptime __counter__: comptime_int, comptime source: SourceLocation, comptime block_name: [:0]const u8) void {
@@ -331,18 +364,18 @@ inline fn BEGIN_BLOCK_(comptime __counter__: comptime_int, comptime source: Sour
     record.lineNumber = source.line;
     record.blockName = block_name.ptr;
 
-    RecordDebugEvent(__counter__, .DebugEvent_BeginBlock);
+    RecordDebugEvent(__counter__, .DebugEvent_BeginBlock, 0);
 }
 
 inline fn END_BLOCK_(comptime __counter__: comptime_int) void {
-    RecordDebugEvent(__counter__, .DebugEvent_EndBlock);
+    RecordDebugEvent(__counter__, .DebugEvent_EndBlock, 0);
 }
 
 pub inline fn BEGIN_BLOCK(comptime _: []const u8) void {}
 
 pub inline fn END_BLOCK(comptime _: []const u8) void {}
 
-pub inline fn FRAME_MARKER__impl(comptime __counter__: comptime_int, comptime source: SourceLocation) void {
+pub inline fn FRAME_MARKER__impl(comptime __counter__: comptime_int, comptime source: SourceLocation, secondsElapsed: f32) void {
     const record: *debug_record = &globalDebugTable.records[TRANSLATION_UNIT_INDEX][__counter__];
 
     const block_name = "Frame marker";
@@ -351,10 +384,10 @@ pub inline fn FRAME_MARKER__impl(comptime __counter__: comptime_int, comptime so
     record.lineNumber = source.line;
     record.blockName = block_name.ptr;
 
-    RecordDebugEvent(__counter__, .DebugEvent_FrameMarker);
+    RecordDebugEvent(__counter__, .DebugEvent_FrameMarker, secondsElapsed);
 }
 
-pub inline fn FRAME_MARKER() void {}
+pub inline fn FRAME_MARKER(_: f32) void {}
 
 // functions ------------------------------------------------------------------------------------------------------------------------------
 

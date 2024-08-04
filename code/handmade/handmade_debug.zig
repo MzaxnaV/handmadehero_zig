@@ -57,10 +57,11 @@ const debug_frame_region = struct {
     laneIndex: u32,
 };
 
-const MAX_REGIONS_PER_FRAME = 1024; // NOTE (Manav): we need a bigger number
+const MAX_REGIONS_PER_FRAME = 4096; // NOTE (Manav): we need a bigger number
 const debug_frame = struct {
     beginClock: u64,
     endClock: u64,
+    wallSecondsElapsed: f32,
 
     regionCount: u32,
     regions: []debug_frame_region,
@@ -97,7 +98,7 @@ const debug_state = struct {
 };
 
 /// TODO (Manav): remove this`
-const onWin32Handmade = 7;
+const onWin32Handmade = 8;
 
 /// TODO (Manav), for now hardcoded, and +1 because of timed block in DEBUGReset
 pub const totalTimedBlocks = __COUNTER__() + 1;
@@ -370,6 +371,18 @@ pub fn Overlay(memory: *platform.memory) void {
                     }
                 }
 
+                if (debugState.frameCount != 0) {
+                    var textBuffer = [1]u8{0} ** 256;
+                    const buffer = std.fmt.bufPrint(textBuffer[0..], "Last Frame Time: {d:5.2}ms\n", .{
+                        debugState.frames[debugState.frameCount - 1].wallSecondsElapsed * 1000,
+                    }) catch |err| {
+                        std.debug.print("{}\n", .{err});
+                        return;
+                    };
+
+                    DEBUGTextLine(buffer);
+                }
+
                 atY -= 300;
 
                 const laneWidth = 8.0;
@@ -515,6 +528,7 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
             if (event.eventType == .DebugEvent_FrameMarker) {
                 if (currentFrame) |_| {
                     currentFrame.?.endClock = event.clock;
+                    currentFrame.?.wallSecondsElapsed = event.data.secondsElapsed;
 
                     // const clockRange: f32 = @floatFromInt(currentFrame.?.endClock - currentFrame.?.beginClock);
 
@@ -532,9 +546,10 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
                 currentFrame.?.endClock = 0;
                 currentFrame.?.regionCount = 0;
                 currentFrame.?.regions = debugState.collateArena.PushSlice(debug_frame_region, MAX_REGIONS_PER_FRAME);
+                currentFrame.?.wallSecondsElapsed = 0;
             } else if (currentFrame) |_| {
                 const frameIndex: u32 = debugState.frameCount - 1;
-                const thread: *debug_thread = GetDebugThread(debugState, event.threadID);
+                const thread: *debug_thread = GetDebugThread(debugState, event.data.tc.threadID);
                 const relativeClock = event.clock -% currentFrame.?.beginClock;
                 _ = relativeClock;
 
@@ -559,16 +574,22 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
                     if (thread.firstOpenBlock) |_| {
                         const matchingBlock: *open_debug_block = thread.firstOpenBlock.?;
                         const openingEvent: *platform.debug_event = matchingBlock.openingEvent;
-                        if (openingEvent.threadID == event.threadID and
+                        if (openingEvent.data.tc.threadID == event.data.tc.threadID and
                             openingEvent.debugRecordIndex == event.debugRecordIndex and
                             openingEvent.translationUnit == event.translationUnit)
                         {
                             if (matchingBlock.startingFrameIndex == frameIndex) {
                                 if (thread.firstOpenBlock.?.parent == null) {
-                                    const region: *debug_frame_region = AddRegion(debugState, currentFrame.?);
-                                    region.laneIndex = thread.laneIndex;
-                                    region.minT = @floatFromInt(openingEvent.clock -% currentFrame.?.beginClock);
-                                    region.maxT = @floatFromInt(event.clock -% currentFrame.?.beginClock);
+                                    const minT: f32 = @floatFromInt(openingEvent.clock -% currentFrame.?.beginClock);
+                                    const maxT: f32 = @floatFromInt(event.clock -% currentFrame.?.beginClock);
+                                    const thresholdT = 0.01;
+
+                                    if ((maxT - minT) > thresholdT) {
+                                        const region: *debug_frame_region = AddRegion(debugState, currentFrame.?);
+                                        region.laneIndex = thread.laneIndex;
+                                        region.minT = minT;
+                                        region.maxT = maxT;
+                                    }
                                 }
                             } else {
                                 // record all frames in between and begin/end spans

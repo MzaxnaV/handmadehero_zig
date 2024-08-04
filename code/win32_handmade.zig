@@ -47,7 +47,6 @@ const WINAPI = std.os.windows.WINAPI;
 
 const platform = @import("handmade_platform");
 const hi = platform.handmade_internal;
-const __rdtsc = platform.__rdtsc;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -873,8 +872,6 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platfor
 //     }
 // }
 
-// inline defs ----------------------------------------------------------------------------------------------------------------------------
-
 inline fn Win32GetWallClock() win32.LARGE_INTEGER {
     var result: win32.LARGE_INTEGER = undefined;
     _ = win32.QueryPerformanceCounter(&result);
@@ -1499,11 +1496,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                 var gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
 
-                var lastCycleCount = __rdtsc();
-
                 while (globalRunning) {
-                    platform.FRAME_MARKER();
-                    platform.FRAME_MARKER__impl(39, @src());
 
                     //
                     //
@@ -1868,26 +1861,31 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     newInput = oldInput;
                     oldInput = temp;
 
-                    const endCounter: win32.LARGE_INTEGER = Win32GetWallClock();
-                    lastCounter = endCounter;
-
                     platform.END_BLOCK("FrameDisplay");
                     platform.END_BLOCK__impl(39 + 6, "FrameDisplay");
 
                     if (HANDMADE_INTERNAL) {
-                        const endCycleCount = __rdtsc();
-                        const cyclesElapsed = endCycleCount - lastCycleCount;
-                        _ = cyclesElapsed;
-                        lastCycleCount = endCycleCount;
+                        platform.BEGIN_BLOCK("DebugCollation");
+                        platform.BEGIN_BLOCK__impl(39 + 7, @src(), "DebugCollation");
 
                         if (gameCode.DEBUGFrameEnd) |DEBUGFrameEnd| {
                             platform.globalDebugTable = DEBUGFrameEnd(&gameMemory);
-                            // platform.globalDebugTable.recordCount[1] = ...; // NOTE (Manav): not needed
                         } else {
                             std.debug.print("DEBUGFrameEnd not present.\n", .{});
                         }
                         globalDebugTable_.indices = .{};
+
+                        platform.END_BLOCK("DebugCollation");
+                        platform.END_BLOCK__impl(39 + 7, "DebugCollation");
                     }
+
+                    const endCounter: win32.LARGE_INTEGER = Win32GetWallClock();
+                    const frameMarkerSecondsElapsed: f32 = Win32GetSecondsElapsed(lastCounter, endCounter);
+                    platform.FRAME_MARKER(frameMarkerSecondsElapsed);
+                    platform.FRAME_MARKER__impl(39, @src(), frameMarkerSecondsElapsed);
+                    lastCounter = endCounter;
+
+                    // platform.globalDebugTable.recordCount[1] = ...; // NOTE (Manav): not needed
                 }
             } else {
                 // TODO: LOGGING
