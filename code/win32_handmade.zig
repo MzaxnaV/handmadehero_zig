@@ -624,13 +624,13 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
 fn Win32ProcessKeyboardMessage(newState: *platform.button_state, isDown: u32) void {
     if (newState.endedDown != isDown) {
         newState.endedDown = isDown;
-        newState.haltTransitionCount += 1;
+        newState.halfTransitionCount += 1;
     }
 }
 
 fn Win32ProcessXinputDigitalButton(xInputButtonState: DWORD, oldState: *platform.button_state, buttonBit: DWORD, newState: *platform.button_state) void {
     newState.endedDown = @as(u32, @intFromBool((xInputButtonState & buttonBit) == buttonBit));
-    newState.haltTransitionCount = if (oldState.endedDown != newState.endedDown) 1 else 0;
+    newState.halfTransitionCount = if (oldState.endedDown != newState.endedDown) 1 else 0;
 }
 
 fn Win32ProcessXInputStickValue(value: i16, deadZoneThreshold: u32) f32 {
@@ -1481,8 +1481,8 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             if (samples != null) {
                 var inputs = [1]platform.input{platform.input{}} ** 2;
 
-                var newInput = &inputs[0];
-                var oldInput = &inputs[1];
+                var newInput: *platform.input = &inputs[0];
+                var oldInput: *platform.input = &inputs[1];
 
                 var lastCounter = Win32GetWallClock();
                 var flipWallClock = Win32GetWallClock();
@@ -1541,8 +1541,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         .isConnected = true,
                     };
 
-                    var buttonIndex: u8 = 0;
-                    while (buttonIndex < newKeyboardController.buttons.states.len) : (buttonIndex += 1) {
+                    for (0..newKeyboardController.buttons.states.len) |buttonIndex| {
                         newKeyboardController.buttons.states[buttonIndex].endedDown = oldKeyboardController.buttons.states[buttonIndex].endedDown;
                     }
 
@@ -1553,30 +1552,27 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         _ = win32.GetCursorPos(&mouseP);
                         _ = win32.ScreenToClient(windowHandle, &mouseP);
 
-                        newInput.mouseX = mouseP.x;
-                        newInput.mouseY = mouseP.y;
+                        newInput.mouseX = (-0.5 * @as(f32, @floatFromInt(globalBackBuffer.width)) + 0.5) + @as(f32, @floatFromInt(mouseP.x));
+                        newInput.mouseY = (0.5 * @as(f32, @floatFromInt(globalBackBuffer.height)) - 0.5) - @as(f32, @floatFromInt(mouseP.y));
                         newInput.mouseZ = 0;
 
-                        Win32ProcessKeyboardMessage(
-                            &newInput.mouseButtons[0],
-                            @as(u32, (@as(u16, @bitCast(win32.GetKeyState(@intFromEnum(win32.VK_LBUTTON)))) & (1 << 15))),
-                        );
-                        Win32ProcessKeyboardMessage(
-                            &newInput.mouseButtons[1],
-                            @as(u32, (@as(u16, @bitCast(win32.GetKeyState(@intFromEnum(win32.VK_MBUTTON)))) & (1 << 15))),
-                        );
-                        Win32ProcessKeyboardMessage(
-                            &newInput.mouseButtons[2],
-                            @as(u32, (@as(u16, @bitCast(win32.GetKeyState(@intFromEnum(win32.VK_RBUTTON)))) & (1 << 15))),
-                        );
-                        Win32ProcessKeyboardMessage(
-                            &newInput.mouseButtons[3],
-                            @as(u32, (@as(u16, @bitCast(win32.GetKeyState(@intFromEnum(win32.VK_XBUTTON1)))) & (1 << 15))),
-                        );
-                        Win32ProcessKeyboardMessage(
-                            &newInput.mouseButtons[4],
-                            @as(u32, (@as(u16, @bitCast(win32.GetKeyState(@intFromEnum(win32.VK_XBUTTON2)))) & (1 << 15))),
-                        );
+                        const winButtonID: [platform.input_mouse_button.len()]i32 = .{
+                            @intFromEnum(win32.VK_LBUTTON),
+                            @intFromEnum(win32.VK_MBUTTON),
+                            @intFromEnum(win32.VK_RBUTTON),
+                            @intFromEnum(win32.VK_XBUTTON1),
+                            @intFromEnum(win32.VK_XBUTTON2),
+                        };
+
+                        for (0..platform.input_mouse_button.len()) |buttonIndex| {
+                            newInput.mouseButtons[buttonIndex] = oldInput.mouseButtons[buttonIndex];
+                            newInput.mouseButtons[buttonIndex].halfTransitionCount = 0;
+
+                            Win32ProcessKeyboardMessage(
+                                &newInput.mouseButtons[buttonIndex],
+                                @as(u32, (@as(u16, @bitCast(win32.GetKeyState(winButtonID[buttonIndex]))) & (1 << 15))),
+                            );
+                        }
 
                         var maxControllerCount = win32.XUSER_MAX_COUNT;
                         if (maxControllerCount > newInput.controllers.len - 1) {

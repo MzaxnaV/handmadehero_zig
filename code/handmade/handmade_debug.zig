@@ -52,6 +52,8 @@ const debug_counter_state = struct {
 };
 
 const debug_frame_region = struct {
+    record: *platform.debug_record,
+    cycleCount: u64,
     minT: f32,
     maxT: f32,
     laneIndex: u32,
@@ -84,6 +86,7 @@ const debug_thread = struct {
 
 const debug_state = struct {
     initialized: bool,
+    paused: bool,
 
     collateArena: h.memory_arena,
     collateTemp: h.temporary_memory,
@@ -148,10 +151,15 @@ var leftEdge: f32 = 0;
 var atY: f32 = 0;
 var fontScale: f32 = 0;
 var fontID: h.font_id = .{ .value = 0 };
+var globalWidth: f32 = 0;
+var globalHeight: f32 = 0;
 
 pub fn DEBUGReset(assets: *h.game_assets, width: u32, height: u32) void {
     var block = TIMED_FUNCTION__impl(__COUNTER__() - 1, @src()).Init(.{});
     defer block.End();
+
+    globalWidth = @floatFromInt(width);
+    globalHeight = @floatFromInt(height);
 
     var matchVectorFont = h.asset_vector{};
     var weightVectorFont = h.asset_vector{};
@@ -293,10 +301,16 @@ const debug_statistic = struct {
     }
 };
 
-pub fn Overlay(memory: *platform.memory) void {
+pub fn Overlay(memory: *platform.memory, input: *platform.input) void {
     if (@as(?*debug_state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
         if (renderGroup) |debugRenderGroup| {
             if (debugRenderGroup.PushFont(fontID)) |_| {
+                const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
+
+                if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)])) {
+                    debugState.paused = !debugState.paused;
+                }
+
                 const info = debugRenderGroup.assets.GetFontInfo(fontID);
 
                 if (platform.ignore) {
@@ -377,8 +391,6 @@ pub fn Overlay(memory: *platform.memory) void {
                     DEBUGTextLine(buffer);
                 }
 
-                atY -= 300;
-
                 const laneWidth = 8.0;
                 const laneCount: f32 = @floatFromInt(debugState.frameBarLaneCount);
                 const barWidth = laneWidth * laneCount;
@@ -386,7 +398,7 @@ pub fn Overlay(memory: *platform.memory) void {
                 const chartLeft = leftEdge + 10.0;
                 const chartHeight = 300.0;
                 const chartWidth = barSpacing * @as(f32, @floatFromInt(debugState.frameCount));
-                const chartMinY = atY - (chartHeight + 80.0);
+                const chartMinY = -0.5 * globalHeight + 10;
                 const scale = chartHeight * debugState.frameBarScale;
 
                 const colours = [_]h.v3{
@@ -421,11 +433,28 @@ pub fn Overlay(memory: *platform.memory) void {
                         const colour = colours[regionIndex % colours.len];
                         const thisMinY = stackY + scale * region.minT;
                         const thisMaxY = stackY + scale * region.maxT;
-                        debugRenderGroup.PushRect(
-                            .{ stackX + 0.5 * laneWidth + laneWidth * @as(f32, @floatFromInt(region.laneIndex)), 0.5 * (thisMinY + thisMaxY), 0 },
-                            .{ laneWidth, thisMaxY - thisMinY },
-                            h.ToV4(colour, 1),
+                        const regionRect = h.rect2.InitMinMax(
+                            .{ stackX + laneWidth * @as(f32, @floatFromInt(region.laneIndex)), thisMinY },
+                            .{ stackX + laneWidth * @as(f32, @floatFromInt(region.laneIndex + 1)), thisMaxY },
                         );
+                        debugRenderGroup.PushRect2(regionRect, 0, h.ToV4(colour, 1));
+
+                        if (regionRect.IsInRect(mouseP)) {
+                            const record: *platform.debug_record = region.record;
+
+                            var textBuffer = [1]u8{0} ** 256;
+                            const buffer = std.fmt.bufPrint(textBuffer[0..], "{s:32}: {:10}cy [{s}({d})]\n", .{
+                                record.blockName.?,
+                                region.cycleCount,
+                                record.fileName.?,
+                                record.lineNumber,
+                            }) catch |err| {
+                                std.debug.print("{}\n", .{err});
+                                return;
+                            };
+
+                            DEBUGTextLine(buffer);
+                        }
                     }
                 }
 
@@ -523,6 +552,7 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
                 if (currentFrame) |_| {
                     currentFrame.?.endClock = event.clock;
                     currentFrame.?.wallSecondsElapsed = event.data.secondsElapsed;
+                    debugState.frameCount += 1;
 
                     // const clockRange: f32 = @floatFromInt(currentFrame.?.endClock - currentFrame.?.beginClock);
 
@@ -535,14 +565,13 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
                 }
 
                 currentFrame = &debugState.frames[debugState.frameCount];
-                debugState.frameCount += 1;
                 currentFrame.?.beginClock = event.clock;
                 currentFrame.?.endClock = 0;
                 currentFrame.?.regionCount = 0;
                 currentFrame.?.regions = debugState.collateArena.PushSlice(debug_frame_region, MAX_REGIONS_PER_FRAME);
                 currentFrame.?.wallSecondsElapsed = 0;
             } else if (currentFrame) |_| {
-                const frameIndex: u32 = debugState.frameCount - 1;
+                const frameIndex: u32 = debugState.frameCount -% 1; // TODO (Manav): ignore this for now.
                 const thread: *debug_thread = GetDebugThread(debugState, event.data.tc.threadID);
                 const relativeClock = event.clock -% currentFrame.?.beginClock;
                 _ = relativeClock;
@@ -580,6 +609,8 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
 
                                     if ((maxT - minT) > thresholdT) {
                                         const region: *debug_frame_region = AddRegion(debugState, currentFrame.?);
+                                        region.record = source;
+                                        region.cycleCount = openingEvent.clock -% currentFrame.?.beginClock;
                                         region.laneIndex = thread.laneIndex;
                                         region.minT = minT;
                                         region.maxT = maxT;
@@ -685,13 +716,15 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
             debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
         }
 
-        h.EndTemporaryMemory(debugState.collateTemp);
-        debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
+        if (!debugState.paused) {
+            h.EndTemporaryMemory(debugState.collateTemp);
+            debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
 
-        debugState.firstThread = null;
-        debugState.firstFreeBlock = null;
+            debugState.firstThread = null;
+            debugState.firstFreeBlock = null;
 
-        CollateDebugRecords(debugState, platform.globalDebugTable.currentEventArrayIndex);
+            CollateDebugRecords(debugState, platform.globalDebugTable.currentEventArrayIndex);
+        }
     }
 
     return platform.globalDebugTable;

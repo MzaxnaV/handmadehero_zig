@@ -76,10 +76,16 @@ pub const sound_output_buffer = struct {
 };
 
 pub const button_state = extern struct {
-    haltTransitionCount: u32 = 0,
-    // endedDown is a boolean
+    halfTransitionCount: u32 = 0,
+    /// endedDown is a boolean
     endedDown: u32 = 0,
 };
+
+pub inline fn WasPressed(state: *const button_state) bool {
+    const result = (state.halfTransitionCount > 1) or ((state.halfTransitionCount == 1) and (state.endedDown != 0));
+
+    return result;
+}
 
 const input_buttons = extern union {
     mapped: extern struct {
@@ -113,11 +119,25 @@ pub const controller_input = struct {
     },
 };
 
+pub const input_mouse_button = enum {
+    PlatformMouseButton_Left,
+    PlatformMouseButton_Middle,
+    PlatformMouseButton_Right,
+    PlatformMouseButton_Extended0,
+    PlatformMouseButton_Extended1,
+
+    pub fn len() comptime_int {
+        comptime {
+            return @typeInfo(@This()).Enum.fields.len;
+        }
+    }
+};
+
 pub const input = struct {
-    mouseButtons: [CONTROLLERS]button_state = [1]button_state{button_state{}} ** CONTROLLERS,
-    mouseX: i32 = 0,
-    mouseY: i32 = 0,
-    mouseZ: i32 = 0,
+    mouseButtons: [input_mouse_button.len()]button_state = [1]button_state{button_state{}} ** input_mouse_button.len(),
+    mouseX: f32 = 0,
+    mouseY: f32 = 0,
+    mouseZ: f32 = 0,
 
     executableReloaded: bool = false,
     dtForFrame: f32 = 0,
@@ -126,7 +146,6 @@ pub const input = struct {
 
 const len = if (HANDMADE_INTERNAL) @typeInfo(handmade_internal.debug_cycle_counter_type).Enum.fields.len else 0;
 
-// TODO (Manav): replace this with an "interface" using a vtable???, https://youtu.be/AHc4x1uXBQE?t=783
 pub const work_queue = opaque {};
 
 pub const work_queue_callback = *const fn (queue: ?*work_queue, data: *anyopaque) void;
@@ -205,9 +224,9 @@ pub const memory = struct {
 pub const MAX_DEBUG_THREAD_COUNT = 256;
 /// NOTE (Manav): should be 2 for win32 and handmadelib, but for now it's 1
 pub const MAX_DEBUG_TRANSLATION_UNITS = 1;
-/// TODO (Manav): it seems stack size can never exceed a certain limit
-/// and gives permission-denied errors so keep it at 32
-pub const MAX_DEBUG_EVENT_ARRAY_COUNT = 32;
+/// NOTE (Manav): investigate the issue that why stack size can never exceed a certain limit
+/// and gives permission-denied errors when greater than 64
+pub const MAX_DEBUG_EVENT_ARRAY_COUNT = 8;
 pub const MAX_DEBUG_EVENT_COUNT = 65536 * 16;
 pub const MAX_DEBUG_EVENT_RECORD_COUNT = 65536;
 

@@ -1197,6 +1197,11 @@ pub const render_group = struct {
     }
 
     /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
+    pub inline fn PushRect2(self: *Self, rectangle: h.rect2, z: f32, colour: h.v4) void {
+        return self.PushRect(h.ToV3(rectangle.GetCenter(), z), rectangle.GetDim(), colour);
+    }
+
+    /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
     pub inline fn PushRectOutline(self: *Self, offset: h.v3, dim: h.v2, colour: h.v4) void {
         const thickness = 0.1;
 

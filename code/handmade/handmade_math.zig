@@ -67,8 +67,8 @@ pub const rect2i = struct {
 
 inline fn ToF32(a: anytype) f32 {
     return switch (@TypeOf(a)) {
-        f32, comptime_float, comptime_int => @as(f32, a),
-        i32, u32 => @as(f32, @floatFromInt(a)),
+        f32, comptime_float, comptime_int => a,
+        i32, u32 => @floatFromInt(a),
         else => @compileError("Invalid type"),
     };
 }
@@ -95,6 +95,14 @@ inline fn Rectangle(comptime n: comptime_int) type {
 
         min: v = [1]f32{0} ** n,
         max: v = [1]f32{0} ** n,
+
+        pub inline fn InitMinMax(min: v, max: v) Self {
+            const result = Self{
+                .min = min,
+                .max = max,
+            };
+            return result;
+        }
 
         pub inline fn InitMinDim(min: v, dim: v) Self {
             const result = Self{

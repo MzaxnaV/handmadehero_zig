@@ -49,6 +49,29 @@ pub fn build(b: *std.Build) void {
     const code_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "code/handmade/" } };
 
     // ----------------------------------------------------------------------------------------------------
+    // Tools - process timed blocks -----------------------------------------------------------------------
+
+    const prepocess_profile = b.addExecutable(.{
+        .name = "prepocess_profile",
+        .root_source_file = b.path("code/tools/preprocess_profile.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+
+    prepocess_profile.root_module.addOptions("config", options);
+
+    const run_prepocess_profile = b.addRunArtifact(prepocess_profile);
+    run_prepocess_profile.setCwd(code_build_path);
+
+    const prepocess_profile_test = b.addTest(.{
+        .root_source_file = b.path("code/tools/preprocess_profile.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+
+    const run_prepocess_profile_test = b.addRunArtifact(prepocess_profile_test);
+
+    // ----------------------------------------------------------------------------------------------------
     // Handmade library -----------------------------------------------------------------------------------
     const lib = b.addSharedLibrary(.{
         .name = lib_name,
@@ -59,7 +82,7 @@ pub fn build(b: *std.Build) void {
     });
     lib.root_module.addImport("handmade_platform", platform);
     lib.root_module.addImport("intrinsics", intrinsics);
-    // lib.root_module.addImport("math", math);
+    lib.step.dependOn(&run_prepocess_profile.step);
 
     const lib_install_step = b.addInstallArtifact(lib, .{
         .dest_dir = .{ .override = .prefix },
@@ -158,31 +181,6 @@ pub fn build(b: *std.Build) void {
     });
 
     const run_llvm_mca_parser_test = b.addRunArtifact(llvm_mca_parser_test);
-
-    // ----------------------------------------------------------------------------------------------------
-    // Tools - process timed blocks -----------------------------------------------------------------------
-
-    const prepocess_profile = b.addExecutable(.{
-        .name = "prepocess_profile",
-        .root_source_file = b.path("code/tools/preprocess_profile.zig"),
-        .target = b.graph.host,
-        .optimize = .ReleaseSafe,
-    });
-
-    prepocess_profile.root_module.addOptions("config", options);
-
-    const run_prepocess_profile = b.addRunArtifact(prepocess_profile);
-    run_prepocess_profile.setCwd(code_build_path);
-
-    lib_install_step.step.dependOn(&run_prepocess_profile.step);
-
-    const prepocess_profile_test = b.addTest(.{
-        .root_source_file = b.path("code/tools/preprocess_profile.zig"),
-        .target = b.graph.host,
-        .optimize = .ReleaseSafe,
-    });
-
-    const run_prepocess_profile_test = b.addRunArtifact(prepocess_profile_test);
 
     // ----------------------------------------------------------------------------------------------------
     // Tests ----------------------------------------------------------------------------------------------
