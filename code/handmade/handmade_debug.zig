@@ -610,7 +610,7 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
                                     if ((maxT - minT) > thresholdT) {
                                         const region: *debug_frame_region = AddRegion(debugState, currentFrame.?);
                                         region.record = source;
-                                        region.cycleCount = openingEvent.clock -% currentFrame.?.beginClock;
+                                        region.cycleCount = event.clock - openingEvent.clock;
                                         region.laneIndex = thread.laneIndex;
                                         region.minT = minT;
                                         region.maxT = maxT;
