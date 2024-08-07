@@ -10,15 +10,17 @@ pub fn build(b: *std.Build) void {
     // Options --------------------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------------------------
 
-    const options = b.addOptions();
+    // NOTE (Manav): keep our tool options separate
+    const preprocess_options = b.addOptions();
+    preprocess_options.addOption(bool, "PROFILE", true);
+
+    const build_options = b.addOptions();
     // NOTE (Manav): for now this are independent of OptimizeMode
-    options.addOption(bool, "ignore", true); // NOTE: true to ignore sections of code.
-    options.addOption(bool, "HANDMADE_INTERNAL", true);
-    options.addOption(bool, "HANDMADE_SLOW", true);
-
-    options.addOption(bool, "PROFILE", true);
-
-    options.addOption(u32, "TRANSLATION_UNIT_INDEX", 0);
+    build_options.addOption(bool, "ignore", true); // NOTE: true to ignore sections of code.
+    build_options.addOption(bool, "HANDMADE_INTERNAL", true);
+    build_options.addOption(bool, "HANDMADE_SLOW", true);
+    build_options.addOption(bool, "PROFILE", true);
+    build_options.addOption(u32, "TRANSLATION_UNIT_INDEX", 0);
 
     // ----------------------------------------------------------------------------------------------------
     // Modules --------------------------------------------------------------------------------------------
@@ -27,7 +29,7 @@ pub fn build(b: *std.Build) void {
     const platform = b.createModule(.{
         .root_source_file = b.path("code/handmade_platform.zig"),
     });
-    platform.addOptions("config", options);
+    platform.addOptions("config", build_options);
 
     const intrinsics = b.createModule(.{
         .root_source_file = b.path("code/handmade/handmade_intrinsics.zig"),
@@ -51,16 +53,16 @@ pub fn build(b: *std.Build) void {
     // ----------------------------------------------------------------------------------------------------
     // Tools - process timed blocks -----------------------------------------------------------------------
 
-    const prepocess_profile = b.addExecutable(.{
+    const preprocess_profile = b.addExecutable(.{
         .name = "prepocess_profile",
         .root_source_file = b.path("code/tools/preprocess_profile.zig"),
         .target = b.graph.host,
         .optimize = .ReleaseSafe,
     });
 
-    prepocess_profile.root_module.addOptions("config", options);
+    preprocess_profile.root_module.addOptions("config", preprocess_options);
 
-    const run_prepocess_profile = b.addRunArtifact(prepocess_profile);
+    const run_prepocess_profile = b.addRunArtifact(preprocess_profile);
     run_prepocess_profile.setCwd(code_build_path);
 
     const prepocess_profile_test = b.addTest(.{
@@ -105,6 +107,7 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addImport("win32", win32);
     exe.root_module.addImport("handmade_platform", platform);
+    exe.step.dependOn(&run_prepocess_profile.step);
 
     const exe_install_step = b.addInstallArtifact(exe, .{
         .dest_dir = .{ .override = .prefix },

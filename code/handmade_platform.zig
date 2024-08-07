@@ -315,36 +315,25 @@ fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debu
 pub inline fn TIMED_BLOCK(comptime _: [:0]const u8, _: struct { hitCount: u32 = 1 }) void {}
 
 pub fn TIMED_BLOCK__impl(comptime __counter__: comptime_int, comptime source: SourceLocation) type {
-    const timed_block = if (config.PROFILE)
-        struct {
-            const Self = @This();
+    const timed_block = struct {
+        const Self = @This();
 
-            counter: u32, // NOTE (Manav): don't need this atm.
+        counter: u32, // NOTE (Manav): don't need this atm.
 
-            pub inline fn Init(comptime name: [:0]const u8, _: struct { hitCount: u32 = 1 }) Self {
-                const self = Self{
-                    .counter = __counter__,
-                };
+        pub inline fn Init(comptime name: [:0]const u8, _: struct { hitCount: u32 = 1 }) Self {
+            const self = Self{
+                .counter = __counter__,
+            };
 
-                BEGIN_BLOCK_(__counter__, source, name);
+            BEGIN_BLOCK_(__counter__, source, name);
 
-                return self;
-            }
-
-            pub inline fn End(_: *Self) void {
-                END_BLOCK_(__counter__);
-            }
+            return self;
         }
-    else
-        struct {
-            const Self = @This();
 
-            pub inline fn Init(comptime _: [:0]const u8, _: struct { hitCount: u32 = 1 }) Self {
-                return Self{};
-            }
-
-            pub inline fn End(_: *Self) void {}
-        };
+        pub inline fn End(_: *Self) void {
+            END_BLOCK_(__counter__);
+        }
+    };
 
     return timed_block;
 }
@@ -362,36 +351,25 @@ pub fn TIMED_BLOCK__impl(comptime __counter__: comptime_int, comptime source: So
 pub inline fn TIMED_FUNCTION(_: struct {}) void {}
 
 pub fn TIMED_FUNCTION__impl(comptime __counter__: comptime_int, comptime source: SourceLocation) type {
-    const timed_fn = if (config.PROFILE)
-        struct {
-            const Self = @This();
+    const timed_fn = struct {
+        const Self = @This();
 
-            counter: u32, // NOTE (Manav): don't need this atm.
+        counter: u32, // NOTE (Manav): don't need this atm.
 
-            pub inline fn Init(_: struct { hitCount: u32 = 1 }) Self {
-                const self = Self{
-                    .counter = __counter__,
-                };
+        pub inline fn Init(_: struct { hitCount: u32 = 1 }) Self {
+            const self = Self{
+                .counter = __counter__,
+            };
 
-                BEGIN_BLOCK_(__counter__, source, source.fn_name);
+            BEGIN_BLOCK_(__counter__, source, source.fn_name);
 
-                return self;
-            }
-
-            pub inline fn End(_: *Self) void {
-                END_BLOCK_(__counter__);
-            }
+            return self;
         }
-    else
-        struct {
-            const Self = @This();
 
-            pub inline fn Init(_: struct { hitCount: u32 = 1 }) Self {
-                return Self{};
-            }
-
-            pub inline fn End(_: *Self) void {}
-        };
+        pub inline fn End(_: *Self) void {
+            END_BLOCK_(__counter__);
+        }
+    };
 
     return timed_fn;
 }
@@ -417,15 +395,11 @@ inline fn BEGIN_BLOCK_(comptime __counter__: comptime_int, comptime source: Sour
 pub inline fn BEGIN_BLOCK(comptime _: []const u8) void {}
 
 pub inline fn BEGIN_BLOCK__impl(comptime __counter__: comptime_int, comptime source: SourceLocation, comptime name: [:0]const u8) void {
-    if (config.PROFILE) {
-        BEGIN_BLOCK_(__counter__, source, name);
-    }
+    BEGIN_BLOCK_(__counter__, source, name);
 }
 
 pub inline fn END_BLOCK__impl(comptime __counter__: comptime_int, comptime _: []const u8) void {
-    if (config.PROFILE) {
-        END_BLOCK_(__counter__);
-    }
+    END_BLOCK_(__counter__);
 }
 
 /// The function at call site  will be replaced, using a preprocesing tool, with
