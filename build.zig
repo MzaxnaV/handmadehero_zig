@@ -19,7 +19,6 @@ pub fn build(b: *std.Build) void {
     build_options.addOption(bool, "ignore", true); // NOTE: true to ignore sections of code.
     build_options.addOption(bool, "HANDMADE_INTERNAL", true);
     build_options.addOption(bool, "HANDMADE_SLOW", true);
-    build_options.addOption(bool, "PROFILE", true);
     build_options.addOption(u32, "TRANSLATION_UNIT_INDEX", 0);
 
     // ----------------------------------------------------------------------------------------------------

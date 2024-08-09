@@ -92,7 +92,7 @@ pub fn main() !void {
     }
 
     if (try processDir(allocator, "./", &counter)) {
-        std.debug.print("Processed TIMED_BLOCK()s: {}\n", .{counter});
+        std.debug.print("Prepocessing Summary:\n  Generated {} <...>__impl() calls.\n", .{if (config.PROFILE) counter else 0});
     }
 
     var debug_file = try std.fs.cwd().openFile("./handmade_debug.zig", .{ .mode = .read_write });

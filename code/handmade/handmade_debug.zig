@@ -54,12 +54,13 @@ const debug_counter_state = struct {
 const debug_frame_region = struct {
     record: *platform.debug_record,
     cycleCount: u64,
-    minT: f32,
+    laneIndex: u16,
+    colourIndex: u16,
     maxT: f32,
-    laneIndex: u32,
+    minT: f32,
 };
 
-const MAX_REGIONS_PER_FRAME = 4096; // NOTE (Manav): we need a bigger number
+const MAX_REGIONS_PER_FRAME = 4096 * 2; // NOTE (Manav): we need a bigger number
 const debug_frame = struct {
     beginClock: u64,
     endClock: u64,
@@ -72,6 +73,7 @@ const debug_frame = struct {
 const open_debug_block = struct {
     startingFrameIndex: u32,
     openingEvent: *platform.debug_event,
+    source: *platform.debug_record,
     parent: ?*open_debug_block,
 
     nextFree: ?*open_debug_block,
@@ -88,8 +90,13 @@ const debug_state = struct {
     initialized: bool,
     paused: bool,
 
+    scopeToRecord: ?*platform.debug_record,
+
     collateArena: h.memory_arena,
     collateTemp: h.temporary_memory,
+
+    collationArrayIndex: u32,
+    collationFrame: ?*debug_frame,
 
     frameBarLaneCount: u32,
     frameCount: u32,
@@ -199,14 +206,15 @@ inline fn GetHex(char: u8) u32 {
     return result;
 }
 
-fn DEBUGTextLine(string: []const u8) void {
+fn DEBUGTextOutAt(p: h.v2, string: []const u8) void {
     if (renderGroup) |debugRenderGroup| {
         if (debugRenderGroup.PushFont(fontID)) |font| {
             const info = debugRenderGroup.assets.GetFontInfo(fontID);
             var prevCodePoint: u32 = 0;
             var charScale = fontScale;
             var colour = h.v4{ 1, 1, 1, 1 };
-            var atX: f32 = leftEdge;
+            const atY_: f32 = h.Y(p);
+            var atX: f32 = h.X(p);
 
             var at = string[0..].ptr;
             while (at[0] != 0) {
@@ -248,7 +256,7 @@ fn DEBUGTextLine(string: []const u8) void {
                         const info_ = debugRenderGroup.assets.GetBitmapInfo(bitmapID);
 
                         // advanceX = charScale * @as(f32, @floatFromInt(info.dim[0] + 2));
-                        debugRenderGroup.PushBitmap2(bitmapID, charScale * @as(f32, @floatFromInt(info_.dim[1])), .{ atX, atY, 0 }, colour);
+                        debugRenderGroup.PushBitmap2(bitmapID, charScale * @as(f32, @floatFromInt(info_.dim[1])), .{ atX, atY_, 0 }, colour);
                     }
 
                     prevCodePoint = @intCast(codePoint);
@@ -256,6 +264,16 @@ fn DEBUGTextLine(string: []const u8) void {
                     at += 1;
                 }
             }
+        }
+    }
+}
+
+fn DEBUGTextLine(string: []const u8) void {
+    if (renderGroup) |debugRenderGroup| {
+        if (debugRenderGroup.PushFont(fontID)) |_| {
+            const info = debugRenderGroup.assets.GetFontInfo(fontID);
+
+            DEBUGTextOutAt(.{ leftEdge, atY }, string);
 
             atY -= h.GetLineAdvanceFor(info) * fontScale;
         }
@@ -303,13 +321,15 @@ const debug_statistic = struct {
 pub fn Overlay(memory: *platform.memory, input: *platform.input) void {
     if (@as(?*debug_state, @alignCast(@ptrCast(memory.debugStorage)))) |debugState| {
         if (renderGroup) |debugRenderGroup| {
+            var hotRecord: ?*platform.debug_record = null;
+
+            const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
+
+            if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)])) {
+                debugState.paused = !debugState.paused;
+            }
+
             if (debugRenderGroup.PushFont(fontID)) |_| {
-                const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
-
-                if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)])) {
-                    debugState.paused = !debugState.paused;
-                }
-
                 const info = debugRenderGroup.assets.GetFontInfo(fontID);
 
                 if (platform.ignore) {
@@ -390,15 +410,15 @@ pub fn Overlay(memory: *platform.memory, input: *platform.input) void {
                     DEBUGTextLine(buffer);
                 }
 
-                const laneWidth = 8.0;
+                const laneHeight = 20.0;
                 const laneCount: f32 = @floatFromInt(debugState.frameBarLaneCount);
-                const barWidth = laneWidth * laneCount;
-                const barSpacing = barWidth + 4.0;
+                const barHeight = laneHeight * laneCount;
+                const barSpacing = barHeight + 4.0;
                 const chartLeft = leftEdge + 10.0;
-                const chartHeight = 300.0;
-                const chartWidth = barSpacing * @as(f32, @floatFromInt(debugState.frameCount));
-                const chartMinY = -0.5 * globalHeight + 10;
-                const scale = chartHeight * debugState.frameBarScale;
+                // const chartHeight = barSpacing * @as(f32, @floatFromInt(debugState.frameCount));
+                const chartWidth = 1000.0;
+                const chartTop = 0.5 * globalHeight - 10;
+                const scale = chartWidth * debugState.frameBarScale;
 
                 const colours = [_]h.v3{
                     .{ 1, 0, 0 },
@@ -423,18 +443,19 @@ pub fn Overlay(memory: *platform.memory, input: *platform.input) void {
                 for (0..maxFrame) |frameIndex| {
                     const frame: *debug_frame = &debugState.frames[debugState.frameCount - (frameIndex + 1)];
 
-                    const stackX: f32 = chartLeft + @as(f32, @floatFromInt(frameIndex)) * barSpacing;
-                    const stackY: f32 = chartMinY;
+                    const stackX: f32 = chartLeft;
+                    const stackY: f32 = chartTop - @as(f32, @floatFromInt(frameIndex)) * barSpacing;
 
                     for (0..frame.regionCount) |regionIndex| {
                         const region: *debug_frame_region = &frame.regions[regionIndex];
 
-                        const colour = colours[regionIndex % colours.len];
-                        const thisMinY = stackY + scale * region.minT;
-                        const thisMaxY = stackY + scale * region.maxT;
+                        // const colour = colours[regionIndex % colours.len];
+                        const colour = colours[region.colourIndex % colours.len];
+                        const thisMinX = stackX + scale * region.minT;
+                        const thisMaxX = stackX + scale * region.maxT;
                         const regionRect = h.rect2.InitMinMax(
-                            .{ stackX + laneWidth * @as(f32, @floatFromInt(region.laneIndex)), thisMinY },
-                            .{ stackX + laneWidth * @as(f32, @floatFromInt(region.laneIndex + 1)), thisMaxY },
+                            .{ thisMinX, stackY - laneHeight * @as(f32, @floatFromInt(region.laneIndex + 1)) },
+                            .{ thisMaxX, stackY - laneHeight * @as(f32, @floatFromInt(region.laneIndex)) },
                         );
                         debugRenderGroup.PushRect2(regionRect, 0, h.ToV4(colour, 1));
 
@@ -442,7 +463,7 @@ pub fn Overlay(memory: *platform.memory, input: *platform.input) void {
                             const record: *platform.debug_record = region.record;
 
                             var textBuffer = [1]u8{0} ** 256;
-                            const buffer = std.fmt.bufPrint(textBuffer[0..], "{s:32}: {:10}cy [{s}({d})]\n", .{
+                            const buffer = std.fmt.bufPrint(textBuffer[0..], "{s}: {:10}cy [{s}({d})]\n", .{
                                 record.blockName.?,
                                 region.cycleCount,
                                 record.fileName.?,
@@ -452,23 +473,28 @@ pub fn Overlay(memory: *platform.memory, input: *platform.input) void {
                                 return;
                             };
 
-                            DEBUGTextLine(buffer);
+                            DEBUGTextOutAt(h.Add(mouseP, .{ 0, 10 }), buffer);
+
+                            hotRecord = record;
                         }
                     }
                 }
 
-                debugRenderGroup.PushRect(
-                    .{ chartLeft + 0.5 * chartWidth, chartMinY + chartHeight, 0 },
-                    .{ chartWidth, 1 },
-                    .{ 1, 1, 1, 1 },
-                );
+                // debugRenderGroup.PushRect(
+                //     .{ chartLeft + 0.5 * chartWidth, chartMinY + chartHeight, 0 },
+                //     .{ chartWidth, 1 },
+                //     .{ 1, 1, 1, 1 },
+                // );
+            }
+            if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)])) {
+                if (hotRecord) |_| {
+                    debugState.scopeToRecord = hotRecord;
+                } else {
+                    debugState.scopeToRecord = null;
+                }
+                RefreshCollation(debugState);
             }
         }
-
-        // DEBUGTextLine("\\5C0F\\8033\\6728\\514E");
-        // DEBUGTextLine("111111");
-        // DEBUGTextLine("999999");
-        // DEBUGTextLine("AVA WA Ta");
     }
 }
 
@@ -526,18 +552,34 @@ fn StringsAreEqual(strA: [*:0]const u8, strB: [*:0]const u8) bool {
     return result;
 }
 
-fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
+fn RestartCollation(debugState: *debug_state, invalidArrayIndex: u32) void {
+    h.EndTemporaryMemory(debugState.collateTemp);
+    debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
+
+    debugState.firstThread = null;
+    debugState.firstFreeBlock = null;
+
     debugState.frames = debugState.collateArena.PushSlice(debug_frame, platform.MAX_DEBUG_EVENT_ARRAY_COUNT * 4);
     debugState.frameBarLaneCount = 0;
     debugState.frameCount = 0;
     debugState.frameBarScale = 1.0 / 60000000.0;
 
-    var currentFrame: ?*debug_frame = null;
-    var eventArrayIndex = invalidArrayIndex + 1;
-    while (true) : (eventArrayIndex += 1) {
-        if (eventArrayIndex == platform.MAX_DEBUG_EVENT_ARRAY_COUNT) {
-            eventArrayIndex = 0;
+    debugState.collationArrayIndex = invalidArrayIndex + 1;
+    debugState.collationFrame = null;
+}
+
+inline fn GetRecordFrom(block: ?*open_debug_block) ?*platform.debug_record {
+    const result = if (block) |_| block.?.source else null;
+
+    return result;
+}
+
+fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
+    while (true) : (debugState.collationArrayIndex += 1) {
+        if (debugState.collationArrayIndex == platform.MAX_DEBUG_EVENT_ARRAY_COUNT) {
+            debugState.collationArrayIndex = 0;
         }
+        const eventArrayIndex = debugState.collationArrayIndex;
 
         if (eventArrayIndex == invalidArrayIndex) {
             break;
@@ -548,12 +590,12 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
             const source: *platform.debug_record = &platform.globalDebugTable.records[event.translationUnit][event.debugRecordIndex];
 
             if (event.eventType == .DebugEvent_FrameMarker) {
-                if (currentFrame) |_| {
-                    currentFrame.?.endClock = event.clock;
-                    currentFrame.?.wallSecondsElapsed = event.data.secondsElapsed;
-                    debugState.frameCount += 1;
+                if (debugState.collationFrame) |_| {
+                    debugState.collationFrame.?.endClock = event.clock;
+                    debugState.collationFrame.?.wallSecondsElapsed = event.data.secondsElapsed;
+                    debugState.frameCount += 1; // NOTE (Manav): this can increase beyond the debugState.frames.len
 
-                    // const clockRange: f32 = @floatFromInt(currentFrame.?.endClock - currentFrame.?.beginClock);
+                    // const clockRange: f32 = @floatFromInt(debugState.collationFrame.?.endClock - debugState.collationFrame.?.beginClock);
 
                     // if (clockRange > 0) {
                     //     const frameBarScale = 1 / clockRange;
@@ -563,16 +605,16 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
                     // }
                 }
 
-                currentFrame = &debugState.frames[debugState.frameCount];
-                currentFrame.?.beginClock = event.clock;
-                currentFrame.?.endClock = 0;
-                currentFrame.?.regionCount = 0;
-                currentFrame.?.regions = debugState.collateArena.PushSlice(debug_frame_region, MAX_REGIONS_PER_FRAME);
-                currentFrame.?.wallSecondsElapsed = 0;
-            } else if (currentFrame) |_| {
+                debugState.collationFrame = &debugState.frames[debugState.frameCount];
+                debugState.collationFrame.?.beginClock = event.clock;
+                debugState.collationFrame.?.endClock = 0;
+                debugState.collationFrame.?.regionCount = 0;
+                debugState.collationFrame.?.regions = debugState.collateArena.PushSlice(debug_frame_region, MAX_REGIONS_PER_FRAME);
+                debugState.collationFrame.?.wallSecondsElapsed = 0;
+            } else if (debugState.collationFrame) |_| {
                 const frameIndex: u32 = debugState.frameCount -% 1; // TODO (Manav): ignore this for now.
                 const thread: *debug_thread = GetDebugThread(debugState, event.data.tc.threadID);
-                const relativeClock = event.clock -% currentFrame.?.beginClock;
+                const relativeClock = event.clock -% debugState.collationFrame.?.beginClock;
                 _ = relativeClock;
 
                 if (StringsAreEqual("DrawRectangle", source.blockName.?)) {
@@ -590,6 +632,7 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
                     debugBlock.?.startingFrameIndex = frameIndex;
                     debugBlock.?.openingEvent = event;
                     debugBlock.?.parent = thread.firstOpenBlock;
+                    debugBlock.?.source = source;
                     thread.firstOpenBlock = debugBlock;
                     debugBlock.?.nextFree = null;
                 } else if (event.eventType == .DebugEvent_EndBlock) {
@@ -601,18 +644,19 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
                             openingEvent.translationUnit == event.translationUnit)
                         {
                             if (matchingBlock.startingFrameIndex == frameIndex) {
-                                if (thread.firstOpenBlock.?.parent == null) {
-                                    const minT: f32 = @floatFromInt(openingEvent.clock -% currentFrame.?.beginClock);
-                                    const maxT: f32 = @floatFromInt(event.clock -% currentFrame.?.beginClock);
+                                if (GetRecordFrom(matchingBlock.parent) == debugState.scopeToRecord) {
+                                    const minT: f32 = @floatFromInt(openingEvent.clock -% debugState.collationFrame.?.beginClock);
+                                    const maxT: f32 = @floatFromInt(event.clock -% debugState.collationFrame.?.beginClock);
                                     const thresholdT = 0.01;
 
                                     if ((maxT - minT) > thresholdT) {
-                                        const region: *debug_frame_region = AddRegion(debugState, currentFrame.?);
+                                        const region: *debug_frame_region = AddRegion(debugState, debugState.collationFrame.?);
                                         region.record = source;
                                         region.cycleCount = event.clock - openingEvent.clock;
-                                        region.laneIndex = thread.laneIndex;
+                                        region.laneIndex = @intCast(thread.laneIndex);
                                         region.minT = minT;
                                         region.maxT = maxT;
+                                        region.colourIndex = openingEvent.debugRecordIndex;
                                     }
                                 }
                             } else {
@@ -632,50 +676,11 @@ fn CollateDebugRecords(debugState: *debug_state, invalidArrayIndex: u32) void {
             }
         }
     }
+}
 
-    // var counterArray = [1][*]debug_counter_state{undefined} ** platform.MAX_DEBUG_TRANSLATION_UNITS;
-    // var currentCounter: [*]debug_counter_state = debugState.counterStates[0..].ptr;
-    // var totalRecordCount: u32 = 0;
-    // for (0..platform.MAX_DEBUG_TRANSLATION_UNITS) |unitIndex| {
-    //     counterArray[unitIndex] = currentCounter;
-    //     totalRecordCount += platform.globalDebugTable.recordCount[unitIndex];
-
-    //     currentCounter += platform.globalDebugTable.recordCount[unitIndex];
-    // }
-
-    // debugState.counterCount = totalRecordCount;
-
-    // for (0..debugState.counterCount) |counterIndex| {
-    //     const dest: *debug_counter_state = &debugState.counterStates[counterIndex];
-
-    //     dest.snapshots[debugState.snapshotIndex].hitCount = 0;
-    //     dest.snapshots[debugState.snapshotIndex].cycleCount = 0;
-    // }
-
-    // var debugRecords = platform.globalDebugTable.records;
-
-    // for (0..events.len) |eventIndex| {
-    //     const event = &events[eventIndex];
-
-    //     var dest: *debug_counter_state = &debugState.counterStates[event.debugRecordIndex];
-    //     const source: *platform.debug_record = &debugRecords[event.translationUnit][event.debugRecordIndex];
-
-    //     dest.fileName = source.fileName;
-    //     dest.blockName = source.blockName;
-    //     dest.lineNumber = source.lineNumber;
-
-    //     switch (event.eventType) {
-    //         .DebugEvent_BeginBlock => {
-    //             dest.snapshots[debugState.snapshotIndex].hitCount += 1;
-    //             // NOTE (Manav): ignore overflow issues for now.
-    //             dest.snapshots[debugState.snapshotIndex].cycleCount -%= event.clock;
-    //         },
-    //         .DebugEvent_EndBlock => {
-    //             dest.snapshots[debugState.snapshotIndex].cycleCount +%= event.clock;
-    //         },
-    //         else => {},
-    //     }
-    // }
+fn RefreshCollation(debugState: *debug_state) void {
+    RestartCollation(debugState, platform.globalDebugTable.currentEventArrayIndex);
+    CollateDebugRecords(debugState, platform.globalDebugTable.currentEventArrayIndex);
 }
 
 pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
@@ -713,15 +718,19 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
             );
 
             debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
+
+            debugState.paused = false;
+            debugState.scopeToRecord = null;
+
+            debugState.initialized = true;
+
+            RestartCollation(debugState, platform.globalDebugTable.currentEventArrayIndex);
         }
 
         if (!debugState.paused) {
-            h.EndTemporaryMemory(debugState.collateTemp);
-            debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
-
-            debugState.firstThread = null;
-            debugState.firstFreeBlock = null;
-
+            if (debugState.frameCount >= platform.MAX_DEBUG_EVENT_ARRAY_COUNT * 4 - 1) { // NOTE (Manav): check note in CollateDebugRecords
+                RestartCollation(debugState, platform.globalDebugTable.currentEventArrayIndex);
+            }
             CollateDebugRecords(debugState, platform.globalDebugTable.currentEventArrayIndex);
         }
     }
