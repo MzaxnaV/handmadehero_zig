@@ -511,6 +511,10 @@ pub fn InvalidCodePath(comptime _: []const u8) noreturn {
     unreachable;
 }
 
+// globals --------------------------------------------------------------------------------------------------------------------------------
+
+pub var debugGlobalMemory: ?*memory = null;
+
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 
 pub const DEBUGFrameEndsFnPtrType = *const fn (*memory) callconv(.C) *debug_table;
