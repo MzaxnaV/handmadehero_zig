@@ -29,6 +29,13 @@ const ignore = platform.ignore;
 // 5) All colour values specified to the renderer as v4's are in NON-premultiplied alpha.
 
 // game data types ------------------------------------------------------------------------------------------------------------------------
+pub const used_bitmap_dim = struct {
+    basis: entity_basis_p_result = .{},
+    size: h.v2 = .{ 0, 0 },
+    alignment: h.v2 = .{ 0, 0 },
+    p: h.v3 = .{ 0, 0, 0 },
+};
+
 pub const loaded_bitmap = extern struct {
     alignPercentage: h.v2 = .{ 0, 0 },
     widthOverHeight: f32 = 0,
@@ -1154,17 +1161,14 @@ pub const render_group = struct {
 
     /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
     pub fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: h.v3, colour: h.v4) void {
-        const size = h.V2(height * bitmap.widthOverHeight, height);
-        const alignment: h.v2 = h.Hammard(bitmap.alignPercentage, size);
-        const p = h.Sub(offset, h.ToV3(alignment, 0));
+        const dim = GetBitmapDim(self, bitmap, height, offset);
 
-        const basis: entity_basis_p_result = GetRenderEntityBasisP(&self.transform, p);
-        if (basis.valid) {
+        if (dim.basis.valid) {
             if (PushRenderElements(self, .Bitmap)) |entry| {
                 entry.bitmap = bitmap;
-                entry.p = basis.p;
+                entry.p = dim.basis.p;
                 entry.colour = h.Scale(colour, self.globalAlpha);
-                entry.size = h.Scale(size, basis.scale);
+                entry.size = h.Scale(dim.size, dim.basis.scale);
             }
         }
     }
@@ -1482,6 +1486,17 @@ pub const render_group = struct {
         return result;
     }
 };
+
+pub inline fn GetBitmapDim(group: *render_group, bitmap: *loaded_bitmap, height: f32, offset: h.v3) used_bitmap_dim {
+    var dim: used_bitmap_dim = .{};
+
+    dim.size = h.V2(height * bitmap.widthOverHeight, height);
+    dim.alignment = h.Hammard(bitmap.alignPercentage, dim.size);
+    dim.p = h.Sub(offset, h.ToV3(dim.alignment, 0));
+    dim.basis = GetRenderEntityBasisP(&group.transform, dim.p);
+
+    return dim;
+}
 
 pub fn BeginRender(group: ?*render_group) void {
     debug.TIMED_FUNCTION(.{});

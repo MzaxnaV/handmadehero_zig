@@ -6,6 +6,8 @@ const h = struct {
 
 // const MaxInt = @import("std").math.maxInt;
 
+// TODO: (Manav) change vectors to be structs ?
+
 // data types -----------------------------------------------------------------------------------------------------------------------------------
 
 pub const v2 = Vector(2);
@@ -30,11 +32,15 @@ pub const rect2i = struct {
         self.yMax = if (self.yMax > other.yMax) other.yMax else self.yMax;
     }
 
-    pub inline fn Union(self: *const Self, other: Self) void {
-        self.xMin = if (self.xMin < other.xMin) self.xMin else other.xMin;
-        self.yMin = if (self.yMin < other.yMin) self.yMin else other.yMin;
-        self.xMax = if (self.xMax > other.xMax) self.xMax else other.xMax;
-        self.yMax = if (self.yMax > other.yMax) self.yMax else other.yMax;
+    pub inline fn Union(self: *Self, other: Self) Self {
+        const result = Self{
+            .xMin = if (self.xMin < other.xMin) self.xMin else other.xMin,
+            .yMin = if (self.yMin < other.yMin) self.yMin else other.yMin,
+            .xMax = if (self.xMax > other.xMax) self.xMax else other.xMax,
+            .yMax = if (self.yMax > other.yMax) self.yMax else other.yMax,
+        };
+
+        return result;
     }
 
     pub fn GetClampedRectArea(self: *const Self) i32 {
@@ -173,10 +179,41 @@ inline fn Rectangle(comptime n: comptime_int) type {
 
             return result;
         }
+
+        pub inline fn InvertedInfinity() Self {
+            const result = Self{
+                .min = .{ platform.F32MAXIMUM, platform.F32MAXIMUM },
+                .max = .{ -platform.F32MAXIMUM, -platform.F32MAXIMUM },
+            };
+
+            return result;
+        }
+
+        pub inline fn Union(a: Self, b: Self) Self {
+            const result = Self{ .min = .{
+                if (X(a.min) < X(b.min)) X(a.min) else X(b.min),
+                if (Y(a.min) < Y(b.min)) Y(a.min) else Y(b.min),
+            }, .max = .{
+                if (X(a.max) > X(b.max)) X(a.max) else X(b.max),
+                if (Y(a.max) > Y(b.max)) Y(a.max) else Y(b.max),
+            } };
+
+            return result;
+        }
+
+        pub inline fn Offset(a: Self, offset: v) Self {
+            const result = Self{
+                .min = Add(a.min, offset),
+                .max = Add(a.max, offset),
+            };
+
+            return result;
+        }
     };
 }
 
 // functions (vector operations)-----------------------------------------------------------------------------------------------------------
+
 /// returns `a + b`
 pub inline fn Add(a: anytype, b: [a.len]f32) [a.len]f32 {
     var result = [1]f32{0} ** a.len;
@@ -425,15 +462,6 @@ pub inline fn LerpV(a: anytype, t: f32, b: [a.len]f32) [a.len]f32 {
 
 // functions (rect operations)------------------------------------------------------------------------------------------------------------
 
-pub inline fn Offset(a: rect3, offset: v3) rect3 {
-    const result = rect3{
-        .min = Add(a.min, offset),
-        .max = Add(a.max, offset),
-    };
-
-    return result;
-}
-
 pub inline fn RectanglesIntersect(a: rect3, b: rect3) bool {
     const result = !(b.max[0] <= a.min[0] or
         b.max[1] <= a.min[1] or
@@ -453,7 +481,7 @@ pub inline fn ToRectXY(a: rect3) rect2 {
     return result;
 }
 
-// functions (scalar operations) ----------------------------------------------------------------------------------------------------------
+// functions (utility operations) ----------------------------------------------------------------------------------------------------------
 
 pub inline fn AddI32ToU32(a: u32, b: i32) u32 {
     const result = if (b > 0) a + @as(u32, @intCast(b)) else a - @as(u32, @intCast(-b));
@@ -515,6 +543,12 @@ pub inline fn ClampV401(value: v4) v4 {
         Clampf01(value[2]),
         Clampf01(value[3]),
     };
+
+    return result;
+}
+
+pub inline fn Arm2(angle: f32) v2 {
+    const result = v2{ h.Cos(angle), h.Sin(angle) };
 
     return result;
 }
