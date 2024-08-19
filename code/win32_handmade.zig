@@ -246,6 +246,32 @@ fn DEBUGWin32WriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory: *
     return result;
 }
 
+fn DEBUGWin32ExecuteSystemCommand(path: [*:0]const u8, command: [*:0]const u8, commandline: [*:0]const u8) i32 {
+    var startUpInfo = std.mem.zeroes(win32.STARTUPINFOA);
+    startUpInfo.cb = @sizeOf(win32.STARTUPINFOA);
+
+    var processInfo = std.mem.zeroes(win32.PROCESS_INFORMATION);
+
+    if (win32.CreateProcessA(
+        command,
+        @constCast(commandline),
+        null,
+        null,
+        win32.FALSE,
+        .{},
+        null,
+        path,
+        &startUpInfo,
+        &processInfo,
+    ) != 0) {
+        //TODO
+    }
+
+    const result: i32 = 0;
+
+    return result;
+}
+
 // local Win32 functions ------------------------------------------------------------------------------------------------------------------
 
 fn Win32GetLastWriteTime(fileName: [*:0]const u16) win32.FILETIME {
@@ -1425,6 +1451,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     .DEBUGFreeFileMemory = DEBUGWin32FreeFileMemory,
                     .DEBUGReadEntireFile = DEBUGWin32ReadEntireFile,
                     .DEBUGWriteEntireFile = DEBUGWin32WriteEntireFile,
+                    .DEBUGExecuteSystemCommand = DEBUGWin32ExecuteSystemCommand,
                 },
             };
 

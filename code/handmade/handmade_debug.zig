@@ -428,6 +428,13 @@ fn WriteHandmadeConfig(debugState: *debug_state, useDebugCamera: bool) void {
     };
 
     _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade_config.zig", @intCast(memory.len), memory.ptr);
+    const commandline = "/C zig build lib -p build -Dself_compilation=true -Doptimize=" ++ switch (@import("builtin").mode) {
+        .Debug => "Debug",
+        .ReleaseFast => "ReleaseFast",
+        .ReleaseSafe => "ReleaseSafe",
+        .ReleaseSmall => "ReleaseSmall",
+    };
+    _ = h.platformAPI.DEBUGExecuteSystemCommand("..\\", "c:\\windows\\system32\\cmd.exe", commandline);
 }
 
 fn DrawDebugMainMenu(debugState: *debug_state, renderGroup: *h.render_group, mouseP: h.v2) void {
@@ -496,7 +503,7 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
                 else => {},
             }
 
-            WriteHandmadeConfig(debugState, true);
+            WriteHandmadeConfig(debugState, !platform.config.DEBUGUI_UseDebugCamera);
         }
 
         const info = debugState.debugFontInfo;

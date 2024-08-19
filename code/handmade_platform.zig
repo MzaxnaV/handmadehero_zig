@@ -39,6 +39,7 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
     pub const debug_free_file_memory = *const fn (*anyopaque) void;
     pub const debug_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
     pub const debug_write_entire_file = *const fn (fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool;
+    pub const debug_execute_system_command = *const fn (path: [*:0]const u8, command: [*:0]const u8, commandline: [*:0]const u8) i32;
 } else {};
 
 pub fn __rdtsc() u64 {
@@ -201,9 +202,10 @@ pub const api = struct {
     AllocateMemory: platform_allocate_memory,
     DeallocateMemory: platform_deallocate_memory,
 
-    DEBUGFreeFileMemory: handmade_internal.debug_free_file_memory = undefined,
-    DEBUGReadEntireFile: handmade_internal.debug_read_entire_file = undefined,
-    DEBUGWriteEntireFile: handmade_internal.debug_write_entire_file = undefined,
+    DEBUGFreeFileMemory: handmade_internal.debug_free_file_memory,
+    DEBUGReadEntireFile: handmade_internal.debug_read_entire_file,
+    DEBUGWriteEntireFile: handmade_internal.debug_write_entire_file,
+    DEBUGExecuteSystemCommand: handmade_internal.debug_execute_system_command,
 };
 
 pub const memory = struct {
