@@ -882,6 +882,10 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
     platform.globalDebugTable.eventCount[eventArrayIndex] = eventCount;
 
     if (DEBUGGetStateMem(memory)) |debugState| {
+        if (memory.executableReloaded) {
+            // NOTE (Manav): we don't really need to do this
+            RestartCollation(debugState, platform.globalDebugTable.currentEventArrayIndex);
+        }
         if (!debugState.paused) {
             if (debugState.frameCount >= platform.MAX_DEBUG_EVENT_ARRAY_COUNT * 4 - 1) { // NOTE (Manav): check note in CollateDebugRecords
                 RestartCollation(debugState, platform.globalDebugTable.currentEventArrayIndex);
