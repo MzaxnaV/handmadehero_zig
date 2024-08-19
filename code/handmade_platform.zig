@@ -1,16 +1,18 @@
 const std = @import("std");
-const config = @import("config");
+const options = @import("options");
 
 const SourceLocation = std.builtin.SourceLocation;
 
-/// Debug: build constant to dynamically ignore code sections
-pub const ignore = !config.ignore;
-/// Debug: `False` - slow code not allowed, `True` - slow code welcome.
-pub const HANDMADE_SLOW = config.HANDMADE_SLOW;
-/// Debug: `False` - Build for public release, `True` - Build for developer only
-pub const HANDMADE_INTERNAL = config.HANDMADE_INTERNAL;
+pub const config = @import("handmade_config.zig");
 
-pub const TRANSLATION_UNIT_INDEX = config.TRANSLATION_UNIT_INDEX;
+/// Debug: build constant to dynamically ignore code sections
+pub const ignore = !options.ignore;
+/// Debug: `False` - slow code not allowed, `True` - slow code welcome.
+pub const HANDMADE_SLOW = options.HANDMADE_SLOW;
+/// Debug: `False` - Build for public release, `True` - Build for developer only
+pub const HANDMADE_INTERNAL = options.HANDMADE_INTERNAL;
+
+pub const TRANSLATION_UNIT_INDEX = options.TRANSLATION_UNIT_INDEX;
 
 pub const native_endian = @import("builtin").target.cpu.arch.endian();
 
@@ -36,7 +38,7 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
 
     pub const debug_free_file_memory = *const fn (*anyopaque) void;
     pub const debug_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
-    pub const debug_write_entire_file = *const fn ([*:0]const u8, u32, *anyopaque) bool;
+    pub const debug_write_entire_file = *const fn (fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool;
 } else {};
 
 pub fn __rdtsc() u64 {
@@ -139,7 +141,6 @@ pub const input = struct {
     mouseY: f32 = 0,
     mouseZ: f32 = 0,
 
-    executableReloaded: bool = false,
     dtForFrame: f32 = 0,
     controllers: [CONTROLLERS]controller_input = [1]controller_input{controller_input{}} ** CONTROLLERS,
 };
@@ -218,6 +219,7 @@ pub const memory = struct {
     highPriorityQueue: *work_queue,
     lowPriorityQueue: *work_queue,
 
+    executableReloaded: bool = false,
     platformAPI: api,
 };
 

@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) void {
     const platform = b.createModule(.{
         .root_source_file = b.path("code/handmade_platform.zig"),
     });
-    platform.addOptions("config", build_options);
+    platform.addOptions("options", build_options);
 
     const intrinsics = b.createModule(.{
         .root_source_file = b.path("code/handmade/handmade_intrinsics.zig"),

@@ -416,6 +416,20 @@ const debug_statistic = struct {
     }
 };
 
+fn WriteHandmadeConfig(debugState: *debug_state, useDebugCamera: bool) void {
+    _ = debugState;
+    var temp = [1]u8{0} ** 4096;
+
+    const memory = std.fmt.bufPrint(temp[0..], "pub const DEBUGUI_UseDebugCamera = {};\n", .{
+        useDebugCamera,
+    }) catch |err| {
+        std.debug.print("{}\n", .{err});
+        return;
+    };
+
+    _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade_config.zig", @intCast(memory.len), memory.ptr);
+}
+
 fn DrawDebugMainMenu(debugState: *debug_state, renderGroup: *h.render_group, mouseP: h.v2) void {
     _ = renderGroup;
     const menuItems = [_][]const u8{
@@ -481,6 +495,8 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
 
                 else => {},
             }
+
+            WriteHandmadeConfig(debugState, true);
         }
 
         const info = debugState.debugFontInfo;
