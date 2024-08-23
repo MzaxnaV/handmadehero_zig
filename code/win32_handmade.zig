@@ -22,6 +22,10 @@ const win32 = struct {
 
     usingnamespace @import("win32").zig;
 
+    const INFINITE = @as(u32, 4294967295);
+    const INVALID_FIND_HANDLE_VALUE = @as(win32.FindFileHandle, -1);
+
+    /// struct to keep definitions that doesn't conflict with win32 import
     const x = struct {
         extern "USER32" fn wsprintfW(
             param0: ?win32.PWSTR,
@@ -36,8 +40,6 @@ const win32 = struct {
         ) callconv(@import("std").os.windows.WINAPI) i32;
 
         const SEMAPHORE_ALL_ACCESS = 0x1f003;
-        const INFINITE = @as(u32, 4294967295);
-        const INVALID_FIND_HANDLE_VALUE = @as(win32.FindFileHandle, -1);
     };
 };
 
@@ -45,8 +47,10 @@ const atomic = std.atomic;
 const DWORD = std.os.windows.DWORD;
 const WINAPI = std.os.windows.WINAPI;
 
-const platform = @import("handmade_platform");
-const hi = platform.handmade_internal;
+const platform = struct {
+    usingnamespace @import("handmade_platform");
+    usingnamespace @This().handmade_internal;
+};
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -192,12 +196,12 @@ fn Win32BuildEXEPathFileName(gameState: *win32_state, filename: []const u16, des
     CatStrings(gameState.exeFileName[0..gameState.onePastLastEXEFileNameSlashIndex], filename, dest);
 }
 
-fn DEBUGWin32FreeFileMemory(memory: *anyopaque) void {
+fn DEBUGPlatformFreeFileMemory(memory: *anyopaque) void {
     _ = win32.VirtualFree(memory, 0, win32.MEM_RELEASE);
 }
 
-fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) hi.debug_read_file_result {
-    var result = hi.debug_read_file_result{};
+fn DEBUGPlatformReadEntireFile(filename: [*:0]const u8) platform.debug_read_file_result {
+    var result = platform.debug_read_file_result{};
     const fileHandle = win32.CreateFileA(filename, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
 
     if (fileHandle != win32.INVALID_HANDLE_VALUE) {
@@ -210,7 +214,7 @@ fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) hi.debug_read_file_result {
                     result.contents = @as([*]u8, @ptrCast(data));
                     result.contentSize = fileSize32;
                 } else {
-                    DEBUGWin32FreeFileMemory(data);
+                    DEBUGPlatformFreeFileMemory(data);
                 }
             } else {
                 // TODO: Logging
@@ -226,7 +230,7 @@ fn DEBUGWin32ReadEntireFile(filename: [*:0]const u8) hi.debug_read_file_result {
     return result;
 }
 
-fn DEBUGWin32WriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool {
+fn DEBUGPlatformWriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool {
     var result = false;
     const fileHandle = win32.CreateFileA(fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null);
 
@@ -241,6 +245,60 @@ fn DEBUGWin32WriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory: *
         _ = win32.CloseHandle(fileHandle);
     } else {
         std.debug.print("Failed to create File Handle: {s}\n", .{"DEBUGWin32WriteEntireFile"});
+    }
+
+    return result;
+}
+
+fn DEBUGExecuteSystemCommand(path: [*:0]const u8, command: [*:0]const u8, commandline: [*:0]const u8) platform.debug_executing_process {
+    var result: platform.debug_executing_process = .{};
+
+    var startUpInfo = std.mem.zeroes(win32.STARTUPINFOA);
+    startUpInfo.cb = @sizeOf(win32.STARTUPINFOA);
+    startUpInfo.dwFlags = win32.STARTF_USESHOWWINDOW;
+    startUpInfo.wShowWindow = 0; // win32.SW_HIDE;
+
+    var processInfo = std.mem.zeroes(win32.PROCESS_INFORMATION);
+
+    if (win32.CreateProcessA(
+        command,
+        @constCast(commandline),
+        null,
+        null,
+        win32.FALSE,
+        .{},
+        null,
+        path,
+        &startUpInfo,
+        &processInfo,
+    ) != 0) {
+        // platform.Assert(@sizeOf(result.osHandle) >= @sizeOf(processInfo.hProcess));
+        const ptr: *win32.HANDLE = @ptrCast(&result.osHandle);
+        ptr.* = processInfo.hProcess.?;
+    } else {
+        const errorCode = win32.GetLastError();
+        _ = errorCode;
+        result.osHandle = @intFromPtr(win32.INVALID_HANDLE_VALUE);
+    }
+
+    return result;
+}
+
+fn DEBUGGetProcessState(process: platform.debug_executing_process) platform.debug_executing_state {
+    var result: platform.debug_executing_state = .{};
+
+    const hProcess: *const win32.HANDLE = @ptrCast(&process.osHandle);
+    if (hProcess.* != win32.INVALID_HANDLE_VALUE) {
+        result.startedSuccessfully = true;
+
+        if (win32.WaitForSingleObject(hProcess.*, 0) == @intFromEnum(win32.WAIT_OBJECT_0)) {
+            var returnCode: i32 = 0;
+            _ = win32.GetExitCodeProcess(hProcess.*, @ptrCast(&returnCode));
+            result.returnCode = returnCode;
+            _ = win32.CloseHandle(hProcess.*);
+        } else {
+            result.isRunning = true;
+        }
     }
 
     return result;
@@ -1080,7 +1138,7 @@ fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
 
     while (true) {
         if (Win32DoNextWorkQueueEntry(queue)) {
-            _ = win32.WaitForSingleObjectEx(queue.semaphoreHandle, win32.x.INFINITE, win32.FALSE);
+            _ = win32.WaitForSingleObjectEx(queue.semaphoreHandle, win32.INFINITE, win32.FALSE);
         }
     }
 
@@ -1123,7 +1181,7 @@ fn Win32GetAllFilesOfTypeBegin(fileType: platform.file_type) platform.file_group
     var findData: win32.WIN32_FIND_DATAW = undefined;
     const fileHandle = win32.FindFirstFileW(extension[0..], &findData);
 
-    while (fileHandle != win32.x.INVALID_FIND_HANDLE_VALUE) {
+    while (fileHandle != win32.INVALID_FIND_HANDLE_VALUE) {
         result.fileCount += 1;
 
         if (win32.FindNextFileW(fileHandle, &findData) != win32.TRUE) {
@@ -1152,7 +1210,7 @@ fn Win32OpenNextFile(fileGroup: *platform.file_group) platform.file_handle {
 
     var result: platform.file_handle = .{ .noErrors = false, .platform = null };
 
-    if (win32FileGroup.fileHandle != win32.x.INVALID_FIND_HANDLE_VALUE) {
+    if (win32FileGroup.fileHandle != win32.INVALID_FIND_HANDLE_VALUE) {
         const win32Handle: ?*win32_platform_file_handle = @alignCast(@ptrCast(win32.VirtualAlloc(
             null,
             @sizeOf(win32_platform_file_handle),
@@ -1171,7 +1229,7 @@ fn Win32OpenNextFile(fileGroup: *platform.file_group) platform.file_handle {
 
         if (win32.FindNextFileW(win32FileGroup.fileHandle, &win32FileGroup.findData) != win32.TRUE) {
             _ = win32.FindClose(win32FileGroup.fileHandle);
-            win32FileGroup.fileHandle = win32.x.INVALID_FIND_HANDLE_VALUE;
+            win32FileGroup.fileHandle = win32.INVALID_FIND_HANDLE_VALUE;
         }
     }
 
@@ -1422,9 +1480,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     .AllocateMemory = Win32AllocateMemory,
                     .DeallocateMemory = Win32DeallocateMemory,
 
-                    .DEBUGFreeFileMemory = DEBUGWin32FreeFileMemory,
-                    .DEBUGReadEntireFile = DEBUGWin32ReadEntireFile,
-                    .DEBUGWriteEntireFile = DEBUGWin32WriteEntireFile,
+                    .DEBUGFreeFileMemory = DEBUGPlatformFreeFileMemory,
+                    .DEBUGReadEntireFile = DEBUGPlatformReadEntireFile,
+                    .DEBUGWriteEntireFile = DEBUGPlatformWriteEntireFile,
+                    .DEBUGExecuteSystemCommand = DEBUGExecuteSystemCommand,
+                    .DEBUGGetProcessState = DEBUGGetProcessState,
                 },
             };
 
@@ -1509,7 +1569,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                     newInput.dtForFrame = targetSecondsPerFrame;
 
-                    newInput.executableReloaded = false;
+                    gameMemory.executableReloaded = false;
                     const newDLLWriteTime = Win32GetLastWriteTime(&sourceGameCodeDLLFullPath);
                     if (win32.CompareFileTime(&newDLLWriteTime, &gameCode.dllLastWriteTime) != 0) {
                         Win32CompleteAllWork(@ptrCast(&highPriorityQueue));
@@ -1518,7 +1578,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         platform.globalDebugTable = &globalDebugTable_;
                         Win32UnloadGameCode(&gameCode);
                         gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
-                        newInput.executableReloaded = true;
+                        gameMemory.executableReloaded = true;
                     }
                     platform.END_BLOCK("ExecutableRefresh");
                     // AUTOGENERATED ----------------------------------------------------------

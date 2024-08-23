@@ -12,8 +12,6 @@ const h = struct {
     usingnamespace @import("handmade_world.zig");
 };
 
-const hi = platform.handmade_internal;
-
 // global variables -----------------------------------------------------------------------------------------------------------------------
 
 pub var platformAPI: platform.api = undefined;

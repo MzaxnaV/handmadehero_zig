@@ -4,7 +4,10 @@
 //! - `const debug = @import("handmade_debug.zig");` must be within the top two lines of the file.
 
 const std = @import("std");
-const platform = @import("handmade_platform");
+const platform = struct {
+    usingnamespace @import("handmade_platform");
+    usingnamespace @This().handmade_internal;
+};
 
 const h = struct {
     usingnamespace @import("intrinsics");
@@ -100,6 +103,9 @@ const debug_state = struct {
     renderGroup: *h.render_group,
     debugFont: ?*h.loaded_font,
     debugFontInfo: *h.hha_font,
+
+    compiling: bool,
+    compiler: platform.debug_executing_process,
 
     menuP: h.v2,
     menuActive: bool,
@@ -416,6 +422,31 @@ const debug_statistic = struct {
     }
 };
 
+fn WriteHandmadeConfig(debugState: *debug_state, useDebugCamera: bool) void {
+    var temp = [1]u8{0} ** 4096;
+
+    const memory = std.fmt.bufPrint(temp[0..], "pub const DEBUGUI_UseDebugCamera = {};\n", .{
+        useDebugCamera,
+    }) catch |err| {
+        std.debug.print("{}\n", .{err});
+        return;
+    };
+    _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade_config.zig", @intCast(memory.len), memory.ptr);
+
+    if (!debugState.compiling) {
+        // NOTE (Manav): inspect why compilation is incredibly slow, perhaps wait for incremental compilation support (use --watch ?)
+        const commandline = "/C zig build lib -p build -Dself_compilation=true -Doptimize=" ++ switch (@import("builtin").mode) {
+            .Debug => "Debug",
+            .ReleaseFast => "ReleaseFast",
+            .ReleaseSafe => "ReleaseSafe",
+            .ReleaseSmall => "ReleaseSmall",
+        };
+
+        debugState.compiling = true;
+        debugState.compiler = h.platformAPI.DEBUGExecuteSystemCommand("..\\", "c:\\windows\\system32\\cmd.exe", commandline);
+    }
+}
+
 fn DrawDebugMainMenu(debugState: *debug_state, renderGroup: *h.render_group, mouseP: h.v2) void {
     _ = renderGroup;
     const menuItems = [_][]const u8{
@@ -480,6 +511,17 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
                 1 => debugState.paused = !debugState.paused,
 
                 else => {},
+            }
+
+            WriteHandmadeConfig(debugState, !platform.config.DEBUGUI_UseDebugCamera);
+        }
+
+        if (debugState.compiling) {
+            const state = h.platformAPI.DEBUGGetProcessState(debugState.compiler);
+            if (state.isRunning) {
+                DEBUGTextLine("Compiling...");
+            } else {
+                debugState.compiling = false;
             }
         }
 
@@ -882,6 +924,10 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
     platform.globalDebugTable.eventCount[eventArrayIndex] = eventCount;
 
     if (DEBUGGetStateMem(memory)) |debugState| {
+        if (memory.executableReloaded) {
+            // NOTE (Manav): we don't really need to do this
+            RestartCollation(debugState, platform.globalDebugTable.currentEventArrayIndex);
+        }
         if (!debugState.paused) {
             if (debugState.frameCount >= platform.MAX_DEBUG_EVENT_ARRAY_COUNT * 4 - 1) { // NOTE (Manav): check note in CollateDebugRecords
                 RestartCollation(debugState, platform.globalDebugTable.currentEventArrayIndex);

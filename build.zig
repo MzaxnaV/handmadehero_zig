@@ -21,6 +21,8 @@ pub fn build(b: *std.Build) void {
     build_options.addOption(bool, "HANDMADE_SLOW", true);
     build_options.addOption(u32, "TRANSLATION_UNIT_INDEX", 0);
 
+    const self_compilation = b.option(bool, "self_compilation", "Flag to check recompiling") orelse false;
+
     // ----------------------------------------------------------------------------------------------------
     // Modules --------------------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------------------------
@@ -28,7 +30,7 @@ pub fn build(b: *std.Build) void {
     const platform = b.createModule(.{
         .root_source_file = b.path("code/handmade_platform.zig"),
     });
-    platform.addOptions("config", build_options);
+    platform.addOptions("options", build_options);
 
     const intrinsics = b.createModule(.{
         .root_source_file = b.path("code/handmade/handmade_intrinsics.zig"),
@@ -83,7 +85,10 @@ pub fn build(b: *std.Build) void {
     });
     lib.root_module.addImport("handmade_platform", platform);
     lib.root_module.addImport("intrinsics", intrinsics);
-    lib.step.dependOn(&run_prepocess_profile.step);
+
+    if (!self_compilation) {
+        lib.step.dependOn(&run_prepocess_profile.step);
+    }
 
     const lib_install_step = b.addInstallArtifact(lib, .{
         .dest_dir = .{ .override = .prefix },

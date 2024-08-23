@@ -12,6 +12,7 @@ const h = struct {
 
 const assert = platform.Assert;
 const ignore = platform.ignore;
+const config = platform.config;
 
 // doc ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1003,7 +1004,7 @@ fn GetRenderEntityBasisP(transform: *const render_transform, originalP: h.v3) en
         const offsetZ = 0;
         var distanceAboveTarget = transform.distanceAboveTarget;
 
-        if (ignore) { // DEBUG CAMERA
+        if (config.DEBUGUI_UseDebugCamera) { // DEBUG CAMERA
             distanceAboveTarget += 50;
         }
 
