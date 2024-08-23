@@ -434,6 +434,7 @@ fn WriteHandmadeConfig(debugState: *debug_state, useDebugCamera: bool) void {
     _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade_config.zig", @intCast(memory.len), memory.ptr);
 
     if (!debugState.compiling) {
+        // NOTE (Manav): inspect why compilation is incredibly slow, perhaps wait for incremental compilation support (use --watch ?)
         const commandline = "/C zig build lib -p build -Dself_compilation=true -Doptimize=" ++ switch (@import("builtin").mode) {
             .Debug => "Debug",
             .ReleaseFast => "ReleaseFast",
