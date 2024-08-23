@@ -4,7 +4,10 @@
 //! - `const debug = @import("handmade_debug.zig");` must be within the top two lines of the file.
 
 const std = @import("std");
-const platform = @import("handmade_platform");
+const platform = struct {
+    usingnamespace @import("handmade_platform");
+    usingnamespace @This().handmade_internal;
+};
 
 const h = struct {
     usingnamespace @import("intrinsics");
@@ -100,6 +103,9 @@ const debug_state = struct {
     renderGroup: *h.render_group,
     debugFont: ?*h.loaded_font,
     debugFontInfo: *h.hha_font,
+
+    compiling: bool,
+    compiler: platform.debug_executing_process,
 
     menuP: h.v2,
     menuActive: bool,
@@ -417,7 +423,6 @@ const debug_statistic = struct {
 };
 
 fn WriteHandmadeConfig(debugState: *debug_state, useDebugCamera: bool) void {
-    _ = debugState;
     var temp = [1]u8{0} ** 4096;
 
     const memory = std.fmt.bufPrint(temp[0..], "pub const DEBUGUI_UseDebugCamera = {};\n", .{
@@ -426,15 +431,19 @@ fn WriteHandmadeConfig(debugState: *debug_state, useDebugCamera: bool) void {
         std.debug.print("{}\n", .{err});
         return;
     };
-
     _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade_config.zig", @intCast(memory.len), memory.ptr);
-    const commandline = "/C zig build lib -p build -Dself_compilation=true -Doptimize=" ++ switch (@import("builtin").mode) {
-        .Debug => "Debug",
-        .ReleaseFast => "ReleaseFast",
-        .ReleaseSafe => "ReleaseSafe",
-        .ReleaseSmall => "ReleaseSmall",
-    };
-    _ = h.platformAPI.DEBUGExecuteSystemCommand("..\\", "c:\\windows\\system32\\cmd.exe", commandline);
+
+    if (!debugState.compiling) {
+        const commandline = "/C zig build lib -p build -Dself_compilation=true -Doptimize=" ++ switch (@import("builtin").mode) {
+            .Debug => "Debug",
+            .ReleaseFast => "ReleaseFast",
+            .ReleaseSafe => "ReleaseSafe",
+            .ReleaseSmall => "ReleaseSmall",
+        };
+
+        debugState.compiling = true;
+        debugState.compiler = h.platformAPI.DEBUGExecuteSystemCommand("..\\", "c:\\windows\\system32\\cmd.exe", commandline);
+    }
 }
 
 fn DrawDebugMainMenu(debugState: *debug_state, renderGroup: *h.render_group, mouseP: h.v2) void {
@@ -504,6 +513,15 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
             }
 
             WriteHandmadeConfig(debugState, !platform.config.DEBUGUI_UseDebugCamera);
+        }
+
+        if (debugState.compiling) {
+            const state = h.platformAPI.DEBUGGetProcessState(debugState.compiler);
+            if (state.isRunning) {
+                DEBUGTextLine("Compiling...");
+            } else {
+                debugState.compiling = false;
+            }
         }
 
         const info = debugState.debugFontInfo;

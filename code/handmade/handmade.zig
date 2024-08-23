@@ -1,5 +1,6 @@
-const platform = @import("handmade_platform");
 const debug = @import("handmade_debug.zig");
+
+const platform = @import("handmade_platform");
 
 const h = struct {
     usingnamespace @import("intrinsics");
@@ -15,8 +16,6 @@ const h = struct {
     usingnamespace @import("handmade_sim_region.zig");
     usingnamespace @import("handmade_world.zig");
 };
-
-const hi = platform.handmade_internal;
 
 const assert = platform.Assert;
 const ignore = platform.ignore;

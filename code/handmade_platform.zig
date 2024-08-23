@@ -36,10 +36,21 @@ pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
         contents: [*]u8 = undefined,
     };
 
+    pub const debug_executing_process = struct {
+        osHandle: u64 = 0,
+    };
+
+    pub const debug_executing_state = struct {
+        startedSuccessfully: bool = false,
+        isRunning: bool = false,
+        returnCode: i32 = 0,
+    };
+
     pub const debug_free_file_memory = *const fn (*anyopaque) void;
     pub const debug_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
     pub const debug_write_entire_file = *const fn (fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool;
-    pub const debug_execute_system_command = *const fn (path: [*:0]const u8, command: [*:0]const u8, commandline: [*:0]const u8) i32;
+    pub const debug_execute_system_command = *const fn (path: [*:0]const u8, command: [*:0]const u8, commandline: [*:0]const u8) debug_executing_process;
+    pub const debug_get_process_state = *const fn (process: debug_executing_process) debug_executing_state;
 } else {};
 
 pub fn __rdtsc() u64 {
@@ -206,6 +217,7 @@ pub const api = struct {
     DEBUGReadEntireFile: handmade_internal.debug_read_entire_file,
     DEBUGWriteEntireFile: handmade_internal.debug_write_entire_file,
     DEBUGExecuteSystemCommand: handmade_internal.debug_execute_system_command,
+    DEBUGGetProcessState: handmade_internal.debug_get_process_state,
 };
 
 pub const memory = struct {
