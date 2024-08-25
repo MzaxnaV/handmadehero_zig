@@ -1606,7 +1606,7 @@ fn SampleEnvironmentMap(screenSpaceUV: h.v2, sampleDirection: h.v3, roughness: f
     assert((x >= 0) and (x < lod.width));
     assert((y >= 0) and (y < lod.height));
 
-    if (ignore) {
+    if (config.DEBUGUI_ShowLightingSamples) {
         const ptrOffset = y * lod.pitch + x * @sizeOf(u32);
         const texelPtr = if (ptrOffset > 0) lod.memory + @as(usize, @intCast(ptrOffset)) else lod.memory - @as(usize, @intCast(-ptrOffset));
         const ptr = @as(*align(1) u32, @ptrCast(texelPtr));

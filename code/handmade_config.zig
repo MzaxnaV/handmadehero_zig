@@ -1,1 +1,11 @@
 pub const DEBUGUI_UseDebugCamera = false;
+pub const DEBUGUI_GroundChunkOutlines = false;
+pub const DEBUGUI_ParticleTest = true;
+pub const DEBUGUI_ParticleGrid = false;
+pub const DEBUGUI_UseSpaceOutlines = false;
+pub const DEBUGUI_GroundChunkCheckerboards = true;
+pub const DEBUGUI_RecomputeGroundChunksOnExeChange = true;
+pub const DEBUGUI_TestWeirdDrawBufferSize = true;
+pub const DEBUGUI_FamiliarFollowsHero = true;
+pub const DEBUGUI_ShowLightingSamples = false;
+pub const DEBUGUI_UseRoomBasedCamera = false;

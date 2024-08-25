@@ -19,6 +19,7 @@ const h = struct {
 
 const assert = platform.Assert;
 const ignore = platform.ignore;
+const config = platform.config;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
@@ -275,7 +276,7 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
                 var colour = h.v4{ 1, 1, 1, 1 };
 
-                if (ignore) {
+                if (config.DEBUGUI_GroundChunkCheckerboards) {
                     colour = h.v4{ 1, 0, 0, 1 };
                     if (@mod(chunkX, 2) == @mod(chunkY, 2)) {
                         colour = h.v4{ 0, 0, 1, 1 };
@@ -791,11 +792,13 @@ pub export fn UpdateAndRender(
 
     debug.Start(tranState.assets, buffer.width, buffer.height);
 
-    if (ignore and gameInput.executableReloaded) {
-        var groundBufferIndex = @as(u32, 0);
-        while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
-            var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
-            groundBuffer.p = h.NullPosition();
+    if (config.DEBUGUI_RecomputeGroundChunksOnExeChange) {
+        if (gameMemory.executableReloaded) {
+            var groundBufferIndex = @as(u32, 0);
+            while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
+                var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
+                groundBuffer.p = h.NullPosition();
+            }
         }
     }
 
@@ -873,7 +876,7 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
-    if (ignore) {
+    if (config.DEBUGUI_TestWeirdDrawBufferSize) {
         drawBuffer.width = 1279;
         drawBuffer.height = 719;
     }
@@ -913,7 +916,7 @@ pub export fn UpdateAndRender(
                 if ((h.Z(delta) >= -1.0) and (h.Z(delta) < 1.0)) {
                     const groundSideInMeters = h.X(world.chunkDimInMeters);
                     renderGroup.PushBitmap(bitmap, 1.0 * groundSideInMeters, delta, .{ 1, 1, 1, 1 });
-                    if (ignore) {
+                    if (platform.config.DEBUGUI_GroundChunkOutlines) {
                         renderGroup.PushRectOutline(delta, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
                     }
                 }
@@ -1084,12 +1087,12 @@ pub export fn UpdateAndRender(
                 .Familiar => {
                     var closestHero: ?*h.sim_entity = null;
                     var closestHeroDSq = h.Square(10);
-                    if (ignore) {
+                    if (config.DEBUGUI_FamiliarFollowsHero) {
                         var testEntityIndex = @as(u32, 0);
                         while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
                             const testEntity: *h.sim_entity = &simRegion.entities[testEntityIndex];
                             if (testEntity.entityType == .Hero) {
-                                const testDSq = h.LengthSq(3, testEntity.p - entity.p);
+                                const testDSq = h.LengthSq(h.Sub(testEntity.p, entity.p));
 
                                 if (closestHeroDSq > testDSq) {
                                     closestHero = testEntity;
@@ -1136,7 +1139,7 @@ pub export fn UpdateAndRender(
                     renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
-                    if (false) {
+                    if (config.DEBUGUI_ParticleTest) {
                         for (0..3) |_| {
                             const particle: *h.particle = &gameState.particles[gameState.nextParticle];
                             gameState.nextParticle += 1;
@@ -1168,12 +1171,7 @@ pub export fn UpdateAndRender(
                             matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
                             weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
 
-                            particle.bitmapID = h.GetBestMatchBitmapFrom(
-                                tranState.assets,
-                                .Asset_Font,
-                                &matchVectorFont,
-                                &weightVectorFont,
-                            );
+                            particle.bitmapID = heroBitmaps.head; // h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
                             // particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
                         }
                     }
@@ -1213,7 +1211,7 @@ pub export fn UpdateAndRender(
                         h.AddTo(&cel.velocityTimesDensity, h.Scale(particle.dP, density));
                     }
 
-                    if (ignore) {
+                    if (config.DEBUGUI_ParticleGrid) {
                         for (0..h.PARTICLE_CEL_DIM) |y| {
                             for (0..h.PARTICLE_CEL_DIM) |x| {
                                 const cel: *h.particle_cel = &gameState.particleCels[y][x];
@@ -1331,9 +1329,9 @@ pub export fn UpdateAndRender(
                 },
 
                 .Space => {
-                    if (ignore) {
+                    if (config.DEBUGUI_UseSpaceOutlines) {
                         var volumeIndex = @as(u32, 0);
-                        while (volumeIndex < entity.collision.volumeCount) : (volumeIndex += 1) {
+                        while (volumeIndex < entity.collision.volumes.len) : (volumeIndex += 1) {
                             const volume = entity.collision.volumes[volumeIndex];
                             renderGroup.PushRectOutline(h.Sub(volume.offsetP, .{ 0, 0, 0.5 * h.Z(volume.dim) }), h.XY(volume.dim), .{ 0, 0.5, 1, 1 });
                         }
@@ -1367,6 +1365,8 @@ pub export fn UpdateAndRender(
                 const checkerWidth = @as(i32, 16);
                 const checkerHeight = @as(i32, 16);
 
+                const clipRect = h.rect2i{ .xMin = 0, .xMax = lod.width, .yMin = 0, .yMax = lod.height };
+
                 var y = @as(i32, 0);
                 while (y < lod.height) : (y += checkerHeight) {
                     var checkerOn = rowCheckerOn;
@@ -1375,7 +1375,8 @@ pub export fn UpdateAndRender(
                         const colour: h.v4 = if (checkerOn) h.ToV4(mapColour[mapIndex], 1) else h.v4{ 0, 0, 0, 1 };
                         const minP = h.V2(x, y);
                         const maxP: h.v2 = h.Add(minP, h.V2(checkerWidth, checkerHeight));
-                        h.DrawRectangle(lod, minP, maxP, colour);
+                        lod.DrawRectangle(minP, maxP, colour, clipRect, true);
+                        lod.DrawRectangle(minP, maxP, colour, clipRect, false);
                         checkerOn = !checkerOn;
                     }
                     rowCheckerOn = !rowCheckerOn;
@@ -1386,7 +1387,7 @@ pub export fn UpdateAndRender(
         tranState.envMaps[1].pZ = 0;
         tranState.envMaps[2].pZ = 1.5;
 
-        h.DrawBitmap(&tranState.envMaps[0].lod[0], &tranState.groundBuffers[tranState.groundBuffers.len - 1].bitmap, 125, 25, 1);
+        tranState.envMaps[0].lod[0].DrawBitmap(&tranState.groundBuffers[tranState.groundBuffers.len - 1].bitmap, 125, 25, 1);
 
         // angle = 0;
 
@@ -1420,8 +1421,7 @@ pub export fn UpdateAndRender(
             colour = .{ 1, 1, 1, 1 };
         }
 
-        h.CoordinateSystem(
-            renderGroup,
+        renderGroup.CoordinateSystem(
             h.Sub(h.Add(disp, origin), h.Scale(h.Add(xAxis, yAxis), 0.5)),
             xAxis,
             yAxis,
@@ -1442,7 +1442,7 @@ pub export fn UpdateAndRender(
                 xAxis = h.v2{ 0.5 * @as(f32, @floatFromInt(lod.width)), 0 };
                 yAxis = h.v2{ 0, 0.5 * @as(f32, @floatFromInt(lod.height)) };
 
-                h.CoordinateSystem(renderGroup, mapP, xAxis, yAxis, .{ 1, 1, 1, 1 }, lod, null, null, null, null);
+                renderGroup.CoordinateSystem(mapP, xAxis, yAxis, .{ 1, 1, 1, 1 }, lod, null, null, null, null);
                 h.AddTo(&mapP, h.Add(yAxis, h.v2{ 0, 6 }));
             }
         }

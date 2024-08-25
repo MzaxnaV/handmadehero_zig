@@ -1750,7 +1750,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
 
                         if (win32State.inputPlayingIndex != 0) {
+                            const temp = newInput.*;
                             Win32PlayBackInput(&win32State, newInput);
+                            for (0..newInput.mouseButtons.len) |mouseButtonIndex| {
+                                newInput.mouseButtons[mouseButtonIndex] = temp.mouseButtons[mouseButtonIndex];
+                            }
+                            newInput.mouseX = temp.mouseX;
+                            newInput.mouseY = temp.mouseY;
+                            newInput.mouseZ = temp.mouseZ;
                         }
 
                         if (gameCode.UpdateAndRender) |UpdateAndRender| {

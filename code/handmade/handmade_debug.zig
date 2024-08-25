@@ -14,6 +14,7 @@ const h = struct {
 
     usingnamespace @import("handmade_asset.zig");
     usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_debug_variables.zig");
     usingnamespace @import("handmade_math.zig");
     usingnamespace @import("handmade_render_group.zig");
 
@@ -40,6 +41,16 @@ pub const perf_analyzer = struct {
         }
         @fence(.seq_cst);
     }
+};
+
+pub const debug_variable_type = enum {
+    DebugVariableType_Boolean,
+};
+
+pub const debug_variable = struct {
+    type: debug_variable_type,
+    name: [:0]const u8,
+    value: bool,
 };
 
 const debug_text_op = enum {
@@ -422,19 +433,40 @@ const debug_statistic = struct {
     }
 };
 
-fn WriteHandmadeConfig(debugState: *debug_state, useDebugCamera: bool) void {
-    var temp = [1]u8{0} ** 4096;
+// pub const DEBUGUI_UseDebugCamera = true;
+// pub const DEBUGUI_GroundChunkOutlines = true;
+// pub const DEBUGUI_ParticleTest = true;
+// pub const DEBUGUI_ParticleGrid = true;
+// pub const DEBUGUI_UseSpaceOutlines = true;
+// pub const DEBUGUI_GroundChunkCheckerboards = true;
+// pub const DEBUGUI_RecomputeGroundChunksOnExeChange = true;
+// pub const DEBUGUI_TestWeirdDrawBufferSize = true;
+// pub const DEBUGUI_FamiliarFollowsHero = true;
+// pub const DEBUGUI_ShowLightingSamples = true;
+// pub const DEBUGUI_UseRoomBasedCamera = true;
 
-    const memory = std.fmt.bufPrint(temp[0..], "pub const DEBUGUI_UseDebugCamera = {};\n", .{
-        useDebugCamera,
-    }) catch |err| {
-        std.debug.print("{}\n", .{err});
-        return;
-    };
-    _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade_config.zig", @intCast(memory.len), memory.ptr);
+fn WriteHandmadeConfig(debugState: *debug_state) void {
+    var temp = [1]u8{0} ** 4096;
+    var written: u32 = 0;
+
+    for (0..h.debugVariableList.len) |debugVariableIndex| {
+        const debugVar = h.debugVariableList[debugVariableIndex];
+
+        const memory = std.fmt.bufPrint(temp[written..], "pub const {s} = {};\n", .{
+            debugVar.name,
+            debugVar.value,
+        }) catch |err| {
+            std.debug.print("{}\n", .{err});
+            return;
+        };
+
+        written += @intCast(memory.len);
+    }
+
+    _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade_config.zig", written, temp[0..written].ptr);
 
     if (!debugState.compiling) {
-        // NOTE (Manav): inspect why compilation is incredibly slow, perhaps wait for incremental compilation support (use --watch ?)
+        // NOTE (Manav): compilation is incredibly slow, wait for incremental compilation support (use -fincremental) in 0.14
         const commandline = "/C zig build lib -p build -Dself_compilation=true -Doptimize=" ++ switch (@import("builtin").mode) {
             .Debug => "Debug",
             .ReleaseFast => "ReleaseFast",
@@ -447,26 +479,17 @@ fn WriteHandmadeConfig(debugState: *debug_state, useDebugCamera: bool) void {
     }
 }
 
-fn DrawDebugMainMenu(debugState: *debug_state, renderGroup: *h.render_group, mouseP: h.v2) void {
-    _ = renderGroup;
-    const menuItems = [_][]const u8{
-        "Toggle Profile Graph",
-        "Toggle Debug Collation",
-        "Toggle Framerate Counter",
-        "Mark Loop Point",
-        "Toggle Entity Bounds",
-        "Toggle World Chunk Bounds",
-    };
-
-    var newHotMenuIndex: u32 = menuItems.len;
+fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
+    var newHotMenuIndex: u32 = h.debugVariableList.len;
     var bestDistanceSq: f32 = platform.F32MAXIMUM;
 
-    const menuRadius = 200.0;
-    const angleStep: f32 = platform.Tau32 / @as(f32, @floatFromInt(menuItems.len));
-    for (0..menuItems.len) |menuItemIndex| {
-        const text: []const u8 = menuItems[menuItemIndex];
+    const menuRadius = 400.0;
+    const angleStep: f32 = platform.Tau32 / @as(f32, @floatFromInt(h.debugVariableList.len));
+    for (0..h.debugVariableList.len) |menuItemIndex| {
+        const debugVar = h.debugVariableList[menuItemIndex];
+        const text = debugVar.name;
 
-        var itemColour: h.v4 = .{ 1, 1, 1, 1 };
+        var itemColour: h.v4 = if (debugVar.value) .{ 1, 1, 1, 1 } else .{ 0.5, 0.5, 0.5, 1 };
         if (menuItemIndex == debugState.hotMenuIndex) {
             itemColour = .{ 1, 1, 0, 1 };
         }
@@ -485,7 +508,11 @@ fn DrawDebugMainMenu(debugState: *debug_state, renderGroup: *h.render_group, mou
         DEBUGTextOutAt(h.Sub(textP, h.Scale(textBounds.GetDim(), 0.5)), text, itemColour);
     }
 
-    debugState.hotMenuIndex = newHotMenuIndex;
+    if (h.LengthSq(h.Sub(mouseP, debugState.menuP)) > h.Square(menuRadius)) {
+        debugState.hotMenuIndex = newHotMenuIndex;
+    } else {
+        debugState.hotMenuIndex = h.debugVariableList.len;
+    }
 }
 
 pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
@@ -506,14 +533,11 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
             DrawDebugMainMenu(debugState, renderGroup, mouseP);
         } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
             DrawDebugMainMenu(debugState, renderGroup, mouseP);
-            switch (debugState.hotMenuIndex) {
-                0 => debugState.profileOn = !debugState.profileOn,
-                1 => debugState.paused = !debugState.paused,
-
-                else => {},
+            if (debugState.hotMenuIndex < h.debugVariableList.len) {
+                h.debugVariableList[debugState.hotMenuIndex].value = !h.debugVariableList[debugState.hotMenuIndex].value;
             }
 
-            WriteHandmadeConfig(debugState, !platform.config.DEBUGUI_UseDebugCamera);
+            WriteHandmadeConfig(debugState);
         }
 
         if (debugState.compiling) {
