@@ -44,8 +44,8 @@ pub const perf_analyzer = struct {
 };
 
 pub const debug_variable_type = enum {
-    DebugVariableType_Boolean,
-    DebugVariableType_Group,
+    bool,
+    group,
 };
 
 pub const debug_variable_group = struct {
@@ -55,13 +55,12 @@ pub const debug_variable_group = struct {
 };
 
 pub const debug_variable = struct {
-    type: debug_variable_type,
     name: [:0]const u8,
     next: ?*debug_variable,
     parent: ?*debug_variable,
 
-    data: union { // TODO (Manav): tagged union using type?
-        bool32: bool,
+    data: union(debug_variable_type) { // TODO (Manav): tagged union using type?
+        bool: bool,
         group: debug_variable_group,
     },
 };
@@ -279,8 +278,7 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
         debugState.renderGroup.Orthographic(width, height, 1);
         debugState.leftEdge = -0.5 * @as(f32, @floatFromInt(width));
 
-        const info = assets.GetFontInfo(debugState.fontID);
-        debugState.atY = 0.5 * @as(f32, @floatFromInt(height)) - h.GetStartingBaselineY(info) * debugState.fontScale;
+        debugState.atY = 0.5 * @as(f32, @floatFromInt(height)) - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo);
     }
 }
 
@@ -477,11 +475,11 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
             written += 1;
         }
 
-        switch (variable.?.type) {
-            .DebugVariableType_Boolean => {
+        switch (variable.?.data) {
+            .bool => |value| {
                 const memory = std.fmt.bufPrint(temp[written..], "pub const {s} = {};\n", .{
                     variable.?.name,
-                    variable.?.data.bool32,
+                    value,
                 }) catch |err| {
                     std.debug.print("{}\n", .{err});
                     return;
@@ -489,7 +487,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
 
                 written += @intCast(memory.len);
             },
-            .DebugVariableType_Group => {
+            .group => {
                 const memory = std.fmt.bufPrint(temp[written..], "// {s};\n", .{
                     variable.?.name,
                 }) catch |err| {
@@ -501,19 +499,22 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
             },
         }
 
-        if (variable.?.type == debug_variable_type.DebugVariableType_Group) {
-            variable = variable.?.data.group.firstChild;
-            depth += 1;
-        } else {
-            while (variable) |_| {
-                if (variable.?.next) |_| {
-                    variable = variable.?.next;
-                    break;
-                } else {
-                    variable = variable.?.parent;
-                    depth -= 1;
+        switch (variable.?.data) {
+            .group => {
+                variable = variable.?.data.group.firstChild;
+                depth += 1;
+            },
+            else => {
+                while (variable) |_| {
+                    if (variable.?.next) |_| {
+                        variable = variable.?.next;
+                        break;
+                    } else {
+                        variable = variable.?.parent;
+                        depth -= 1;
+                    }
                 }
-            }
+            },
         }
     }
 
@@ -534,6 +535,61 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
 }
 
 fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
+    const atX: f32 = debugState.leftEdge;
+    var atY: f32 = debugState.atY;
+    const lineAdvance: f32 = h.GetLineAdvanceFor(debugState.debugFontInfo);
+
+    var depth: i32 = 0;
+    var variable: ?*debug_variable = debugState.rootGroup.data.group.firstChild;
+    while (variable) |_| {
+        const itemColour = h.v4{ 1, 1, 1, 1 };
+        var text = [1]u8{0} ** 256;
+
+        switch (variable.?.data) {
+            .bool => |value| {
+                _ = std.fmt.bufPrint(text[0..], "{s}: {}\n", .{
+                    variable.?.name,
+                    value,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+            },
+            .group => {
+                _ = std.fmt.bufPrint(text[0..], "{s}\n", .{
+                    variable.?.name,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+            },
+        }
+
+        const textP: h.v2 = .{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY };
+        DEBUGTextOutAt(textP, text[0..], itemColour);
+        atY -= lineAdvance * debugState.fontScale;
+
+        switch (variable.?.data) {
+            .group => {
+                variable = variable.?.data.group.firstChild;
+                depth += 1;
+            },
+            else => {
+                while (variable) |_| {
+                    if (variable.?.next) |_| {
+                        variable = variable.?.next;
+                        break;
+                    } else {
+                        variable = variable.?.parent;
+                        depth -= 1;
+                    }
+                }
+            },
+        }
+    }
+
+    debugState.atY = atY;
+
     if (ignore) {
         var newHotMenuIndex: u32 = h.debugVariableList.len;
         var bestDistanceSq: f32 = platform.F32MAXIMUM;
@@ -581,6 +637,8 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
         var hotRecord: ?*platform.debug_record = null;
 
         const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
+
+        DrawDebugMainMenu(debugState, renderGroup, mouseP);
 
         if (ignore) {
             if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {

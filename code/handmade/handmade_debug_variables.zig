@@ -14,10 +14,9 @@ const debug_variable_definition_context = struct {
 
 pub var debugVariableList: []h.debug_variable = undefined;
 
-fn AddVariable__(context: *debug_variable_definition_context, comptime name: [:0]const u8, t: h.debug_variable_type) *h.debug_variable {
+fn AddVariable__(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
     var debugVar: *h.debug_variable = context.arena.PushStruct(h.debug_variable);
 
-    debugVar.type = t;
     debugVar.name = name;
     debugVar.next = null;
 
@@ -39,7 +38,7 @@ fn AddVariable__(context: *debug_variable_definition_context, comptime name: [:0
 }
 
 fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
-    var group: *h.debug_variable = AddVariable__(context, name, .DebugVariableType_Group);
+    var group: *h.debug_variable = AddVariable__(context, name);
 
     group.data = .{
         .group = .{
@@ -55,8 +54,8 @@ fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name
 }
 
 fn AddVariable(context: *debug_variable_definition_context, comptime name: [:0]const u8, value: bool) *h.debug_variable {
-    var debugVar: *h.debug_variable = AddVariable__(context, name, .DebugVariableType_Boolean);
-    debugVar.data = .{ .bool32 = value };
+    var debugVar: *h.debug_variable = AddVariable__(context, name);
+    debugVar.data = .{ .bool = value };
 
     return debugVar;
 }
