@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const options = @import("options");
 
 const SourceLocation = std.builtin.SourceLocation;
@@ -14,7 +15,7 @@ pub const HANDMADE_INTERNAL = options.HANDMADE_INTERNAL;
 
 pub const TRANSLATION_UNIT_INDEX = options.TRANSLATION_UNIT_INDEX;
 
-pub const native_endian = @import("builtin").target.cpu.arch.endian();
+pub const native_endian = builtin.target.cpu.arch.endian();
 
 // globals --------------------------------------------------------------------------------------------------------------------------------
 
@@ -483,16 +484,22 @@ pub inline fn AtomicExchange(comptime T: type, ptr: *T, new_value: T) T {
 }
 
 inline fn __readgsqword() *anyopaque {
-    return asm ("movq %%gs:0x30, %[res]"
+    return asm ("movq %%gs:0x30, %[res]" // TODO (Manav): investigate this further
         : [res] "=r" (-> *anyopaque),
     );
 }
 
 pub inline fn GetThreadID() u32 {
-    const threadlocalStorage: [*]u8 = @ptrCast(__readgsqword());
-    const threadID: *u32 = @alignCast(@ptrCast(threadlocalStorage + 0x48));
+    if (builtin.target.os.tag == .windows and builtin.target.cpu.arch == .x86_64) {
+        var threadID: u32 = 0;
+        asm volatile ("movl %%gs:0x48, %[res]"
+            : [res] "=r" (threadID),
+        );
 
-    return threadID.*;
+        return threadID;
+    } else {
+        InvalidCodePath("Unsupported platform");
+    }
 }
 
 pub inline fn KiloBytes(comptime value: comptime_int) comptime_int {
