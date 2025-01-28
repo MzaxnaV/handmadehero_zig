@@ -471,22 +471,34 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     var variable: ?*debug_variable = debugState.rootGroup.data.group.firstChild;
 
     while (variable) |_| {
-        if (variable.?.type == debug_variable_type.DebugVariableType_Boolean) {
-            var index: i32 = 0;
-            while (index < depth) : (index += 1) {
-                temp[written] = ' ';
-                written += 1;
-            }
+        var index: i32 = 0;
+        while (index < depth) : (index += 1) {
+            temp[written] = '\t';
+            written += 1;
+        }
 
-            const memory = std.fmt.bufPrint(temp[written..], "pub const {s} = {};\n", .{
-                variable.?.name,
-                variable.?.data.bool32,
-            }) catch |err| {
-                std.debug.print("{}\n", .{err});
-                return;
-            };
+        switch (variable.?.type) {
+            .DebugVariableType_Boolean => {
+                const memory = std.fmt.bufPrint(temp[written..], "pub const {s} = {};\n", .{
+                    variable.?.name,
+                    variable.?.data.bool32,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
 
-            written += @intCast(memory.len);
+                written += @intCast(memory.len);
+            },
+            .DebugVariableType_Group => {
+                const memory = std.fmt.bufPrint(temp[written..], "// {s};\n", .{
+                    variable.?.name,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+
+                written += @intCast(memory.len);
+            },
         }
 
         if (variable.?.type == debug_variable_type.DebugVariableType_Group) {
@@ -569,8 +581,6 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
         var hotRecord: ?*platform.debug_record = null;
 
         const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
-
-        WriteHandmadeConfig(debugState);
 
         if (ignore) {
             if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
