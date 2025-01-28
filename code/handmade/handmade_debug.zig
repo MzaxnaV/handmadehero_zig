@@ -467,10 +467,17 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     var temp = [1]u8{0} ** 4096;
     var written: u32 = 0;
 
+    var depth: i32 = 0;
     var variable: ?*debug_variable = debugState.rootGroup.data.group.firstChild;
 
     while (variable) |_| {
         if (variable.?.type == debug_variable_type.DebugVariableType_Boolean) {
+            var index: i32 = 0;
+            while (index < depth) : (index += 1) {
+                temp[written] = ' ';
+                written += 1;
+            }
+
             const memory = std.fmt.bufPrint(temp[written..], "pub const {s} = {};\n", .{
                 variable.?.name,
                 variable.?.data.bool32,
@@ -484,6 +491,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
 
         if (variable.?.type == debug_variable_type.DebugVariableType_Group) {
             variable = variable.?.data.group.firstChild;
+            depth += 1;
         } else {
             while (variable) |_| {
                 if (variable.?.next) |_| {
@@ -491,6 +499,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
                     break;
                 } else {
                     variable = variable.?.parent;
+                    depth -= 1;
                 }
             }
         }
