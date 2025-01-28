@@ -1,25 +1,111 @@
 const platform = @import("handmade_platform");
 
-const debug = @import("handmade_debug.zig");
-
-pub var debugVariableList = [_]debug.debug_variable{
-    DebugVariableListing("DEBUGUI_UseDebugCamera"),
-    DebugVariableListing("DEBUGUI_GroundChunkOutlines"),
-    DebugVariableListing("DEBUGUI_ParticleTest"),
-    DebugVariableListing("DEBUGUI_ParticleGrid"),
-    DebugVariableListing("DEBUGUI_UseSpaceOutlines"),
-    DebugVariableListing("DEBUGUI_GroundChunkCheckerboards"),
-    DebugVariableListing("DEBUGUI_RecomputeGroundChunksOnExeChange"),
-    DebugVariableListing("DEBUGUI_TestWeirdDrawBufferSize"),
-    DebugVariableListing("DEBUGUI_FamiliarFollowsHero"),
-    DebugVariableListing("DEBUGUI_ShowLightingSamples"),
-    DebugVariableListing("DEBUGUI_UseRoomBasedCamera"),
+const h = struct {
+    usingnamespace @import("handmade_data.zig");
+    usingnamespace @import("handmade_debug.zig");
 };
 
-fn DebugVariableListing(comptime name: [:0]const u8) debug.debug_variable {
-    return debug.debug_variable{
-        .type = .DebugVariableType_Boolean,
-        .name = name,
-        .value = @field(platform.config, name),
+const debug_variable_definition_context = struct {
+    state: *h.debug_state,
+    arena: *h.memory_arena,
+
+    group: ?*h.debug_variable,
+};
+
+pub var debugVariableList: []h.debug_variable = undefined;
+
+fn AddVariable__(context: *debug_variable_definition_context, comptime name: [:0]const u8, t: h.debug_variable_type) *h.debug_variable {
+    var debugVar: *h.debug_variable = context.arena.PushStruct(h.debug_variable);
+
+    debugVar.type = t;
+    debugVar.name = name;
+    debugVar.next = null;
+
+    var group = context.group;
+
+    debugVar.parent = group;
+
+    if (group) |_| {
+        if (group.?.data.group.firstChild) |_| {
+            group.?.data.group.lastChild.?.next = debugVar;
+            group.?.data.group.lastChild = debugVar;
+        } else {
+            group.?.data.group.firstChild = debugVar;
+            group.?.data.group.lastChild = group.?.data.group.firstChild;
+        }
+    }
+
+    return debugVar;
+}
+
+fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
+    var group: *h.debug_variable = AddVariable__(context, name, .DebugVariableType_Group);
+
+    group.data = .{
+        .group = .{
+            .expanded = true,
+            .firstChild = null,
+            .lastChild = null,
+        },
     };
+
+    context.group = group;
+
+    return group;
+}
+
+fn AddVariable(context: *debug_variable_definition_context, comptime name: [:0]const u8, value: bool) *h.debug_variable {
+    var debugVar: *h.debug_variable = AddVariable__(context, name, .DebugVariableType_Boolean);
+    debugVar.data = .{ .bool32 = value };
+
+    return debugVar;
+}
+
+fn EndVariableGroup(context: *debug_variable_definition_context) void {
+    platform.Assert(context.group != null);
+
+    context.group = context.group.?.parent;
+}
+
+inline fn VariableListing(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
+    return AddVariable(context, name, @field(platform.config, name));
+}
+
+pub fn DEBUGCreateVariables(state: *h.debug_state) void {
+    var context = debug_variable_definition_context{
+        .state = state,
+        .arena = &state.debugArena,
+        .group = null,
+    };
+
+    context.group = BeginVariableGroup(&context, "Root");
+
+    _ = BeginVariableGroup(&context, "Ground Chunks");
+    _ = VariableListing(&context, "DEBUGUI_GroundChunkOutlines");
+    _ = VariableListing(&context, "DEBUGUI_GroundChunkCheckerboards");
+    _ = VariableListing(&context, "DEBUGUI_RecomputeGroundChunksOnExeChange");
+    EndVariableGroup(&context);
+
+    _ = BeginVariableGroup(&context, "Particles");
+    _ = VariableListing(&context, "DEBUGUI_ParticleTest");
+    _ = VariableListing(&context, "DEBUGUI_ParticleGrid");
+    EndVariableGroup(&context);
+
+    _ = BeginVariableGroup(&context, "Renderer");
+    {
+        _ = VariableListing(&context, "DEBUGUI_TestWeirdDrawBufferSize");
+        _ = VariableListing(&context, "DEBUGUI_ShowLightingSamples");
+        _ = BeginVariableGroup(&context, "Camera");
+        {
+            _ = VariableListing(&context, "DEBUGUI_UseDebugCamera");
+            _ = VariableListing(&context, "DEBUGUI_UseRoomBasedCamera");
+            EndVariableGroup(&context);
+        }
+        EndVariableGroup(&context);
+    }
+
+    _ = VariableListing(&context, "DEBUGUI_UseSpaceOutlines");
+    _ = VariableListing(&context, "DEBUGUI_FamiliarFollowsHero");
+
+    state.rootGroup = context.group.?;
 }

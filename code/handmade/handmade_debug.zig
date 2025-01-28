@@ -45,12 +45,25 @@ pub const perf_analyzer = struct {
 
 pub const debug_variable_type = enum {
     DebugVariableType_Boolean,
+    DebugVariableType_Group,
+};
+
+pub const debug_variable_group = struct {
+    expanded: bool,
+    firstChild: ?*debug_variable,
+    lastChild: ?*debug_variable,
 };
 
 pub const debug_variable = struct {
     type: debug_variable_type,
     name: [:0]const u8,
-    value: bool,
+    next: ?*debug_variable,
+    parent: ?*debug_variable,
+
+    data: union { // TODO (Manav): tagged union using type?
+        bool32: bool,
+        group: debug_variable_group,
+    },
 };
 
 const debug_text_op = enum {
@@ -105,12 +118,15 @@ const debug_thread = struct {
     next: ?*debug_thread,
 };
 
-const debug_state = struct {
+pub const debug_state = struct {
     initialized: bool,
 
     highPriorityQueue: *platform.work_queue,
 
     debugArena: h.memory_arena,
+
+    rootGroup: *debug_variable,
+
     renderGroup: *h.render_group,
     debugFont: ?*h.loaded_font,
     debugFontInfo: *h.hha_font,
@@ -223,6 +239,8 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
                 platform.debugGlobalMemory.?.debugStorageSize - @sizeOf(debug_state),
                 @ptrCast(@as([*]debug_state, @ptrCast(debugState)) + 1),
             );
+
+            h.DEBUGCreateVariables(debugState);
 
             debugState.renderGroup = h.render_group.Allocate(assets, &debugState.debugArena, platform.MegaBytes(16), false);
 
@@ -449,18 +467,33 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     var temp = [1]u8{0} ** 4096;
     var written: u32 = 0;
 
-    for (0..h.debugVariableList.len) |debugVariableIndex| {
-        const debugVar = h.debugVariableList[debugVariableIndex];
+    var variable: ?*debug_variable = debugState.rootGroup.data.group.firstChild;
 
-        const memory = std.fmt.bufPrint(temp[written..], "pub const {s} = {};\n", .{
-            debugVar.name,
-            debugVar.value,
-        }) catch |err| {
-            std.debug.print("{}\n", .{err});
-            return;
-        };
+    while (variable) |_| {
+        if (variable.?.type == debug_variable_type.DebugVariableType_Boolean) {
+            const memory = std.fmt.bufPrint(temp[written..], "pub const {s} = {};\n", .{
+                variable.?.name,
+                variable.?.data.bool32,
+            }) catch |err| {
+                std.debug.print("{}\n", .{err});
+                return;
+            };
 
-        written += @intCast(memory.len);
+            written += @intCast(memory.len);
+        }
+
+        if (variable.?.type == debug_variable_type.DebugVariableType_Group) {
+            variable = variable.?.data.group.firstChild;
+        } else {
+            while (variable) |_| {
+                if (variable.?.next) |_| {
+                    variable = variable.?.next;
+                    break;
+                } else {
+                    variable = variable.?.parent;
+                }
+            }
+        }
     }
 
     _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade_config.zig", written, temp[0..written].ptr);
@@ -480,38 +513,40 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
 }
 
 fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
-    var newHotMenuIndex: u32 = h.debugVariableList.len;
-    var bestDistanceSq: f32 = platform.F32MAXIMUM;
+    if (ignore) {
+        var newHotMenuIndex: u32 = h.debugVariableList.len;
+        var bestDistanceSq: f32 = platform.F32MAXIMUM;
 
-    const menuRadius = 400.0;
-    const angleStep: f32 = platform.Tau32 / @as(f32, @floatFromInt(h.debugVariableList.len));
-    for (0..h.debugVariableList.len) |menuItemIndex| {
-        const debugVar = h.debugVariableList[menuItemIndex];
-        const text = debugVar.name;
+        const menuRadius = 400.0;
+        const angleStep: f32 = platform.Tau32 / @as(f32, @floatFromInt(h.debugVariableList.len));
+        for (0..h.debugVariableList.len) |menuItemIndex| {
+            const debugVar = h.debugVariableList[menuItemIndex];
+            const text = debugVar.name;
 
-        var itemColour: h.v4 = if (debugVar.value) .{ 1, 1, 1, 1 } else .{ 0.5, 0.5, 0.5, 1 };
-        if (menuItemIndex == debugState.hotMenuIndex) {
-            itemColour = .{ 1, 1, 0, 1 };
+            var itemColour: h.v4 = if (debugVar.value) .{ 1, 1, 1, 1 } else .{ 0.5, 0.5, 0.5, 1 };
+            if (menuItemIndex == debugState.hotMenuIndex) {
+                itemColour = .{ 1, 1, 0, 1 };
+            }
+            const angle = @as(f32, @floatFromInt(menuItemIndex)) * angleStep;
+
+            // const textP: h.v2 = debugState.menuP + menuRadius * h.Arm2(angle);
+            const textP: h.v2 = h.Add(debugState.menuP, h.Scale(h.Arm2(angle), menuRadius));
+
+            const thisDistanceSq = h.LengthSq(h.Sub(textP, mouseP));
+            if (bestDistanceSq > thisDistanceSq) {
+                newHotMenuIndex = @intCast(menuItemIndex);
+                bestDistanceSq = thisDistanceSq;
+            }
+
+            const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text);
+            DEBUGTextOutAt(h.Sub(textP, h.Scale(textBounds.GetDim(), 0.5)), text, itemColour);
         }
-        const angle = @as(f32, @floatFromInt(menuItemIndex)) * angleStep;
 
-        // const textP: h.v2 = debugState.menuP + menuRadius * h.Arm2(angle);
-        const textP: h.v2 = h.Add(debugState.menuP, h.Scale(h.Arm2(angle), menuRadius));
-
-        const thisDistanceSq = h.LengthSq(h.Sub(textP, mouseP));
-        if (bestDistanceSq > thisDistanceSq) {
-            newHotMenuIndex = @intCast(menuItemIndex);
-            bestDistanceSq = thisDistanceSq;
+        if (h.LengthSq(h.Sub(mouseP, debugState.menuP)) > h.Square(menuRadius)) {
+            debugState.hotMenuIndex = newHotMenuIndex;
+        } else {
+            debugState.hotMenuIndex = h.debugVariableList.len;
         }
-
-        const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text);
-        DEBUGTextOutAt(h.Sub(textP, h.Scale(textBounds.GetDim(), 0.5)), text, itemColour);
-    }
-
-    if (h.LengthSq(h.Sub(mouseP, debugState.menuP)) > h.Square(menuRadius)) {
-        debugState.hotMenuIndex = newHotMenuIndex;
-    } else {
-        debugState.hotMenuIndex = h.debugVariableList.len;
     }
 }
 
@@ -526,18 +561,22 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
 
         const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
 
-        if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
-            if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
-                debugState.menuP = mouseP;
-            }
-            DrawDebugMainMenu(debugState, renderGroup, mouseP);
-        } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
-            DrawDebugMainMenu(debugState, renderGroup, mouseP);
-            if (debugState.hotMenuIndex < h.debugVariableList.len) {
-                h.debugVariableList[debugState.hotMenuIndex].value = !h.debugVariableList[debugState.hotMenuIndex].value;
-            }
+        WriteHandmadeConfig(debugState);
 
-            WriteHandmadeConfig(debugState);
+        if (ignore) {
+            if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
+                if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
+                    debugState.menuP = mouseP;
+                }
+                DrawDebugMainMenu(debugState, renderGroup, mouseP);
+            } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
+                DrawDebugMainMenu(debugState, renderGroup, mouseP);
+                if (debugState.hotMenuIndex < h.debugVariableList.len) {
+                    h.debugVariableList[debugState.hotMenuIndex].value = !h.debugVariableList[debugState.hotMenuIndex].value;
+                }
+
+                WriteHandmadeConfig(debugState);
+            }
         }
 
         if (debugState.compiling) {
