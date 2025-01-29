@@ -45,6 +45,12 @@ pub const perf_analyzer = struct {
 
 pub const debug_variable_type = enum {
     bool,
+    i32,
+    u32,
+    f32,
+    v3,
+    v4,
+
     group,
 };
 
@@ -61,6 +67,11 @@ pub const debug_variable = struct {
 
     value: union(debug_variable_type) { // TODO (Manav): tagged union using type?
         bool: bool,
+        i32: i32,
+        u32: u32,
+        f32: f32,
+        v3: h.v3,
+        v4: h.v4,
         group: debug_variable_group,
     },
 };
@@ -477,9 +488,42 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
             written += 1;
         }
 
-        switch (variable.?.value) {
+        switch (variable.?.value) { // TODO (Manav): too ugly
             .bool => |value| {
-                const memory = std.fmt.bufPrint(temp[written..], "pub const {s} = {};\n", .{
+                const memory = std.fmt.bufPrint(temp[written..], "pub const {s}: bool = {};\n", .{
+                    variable.?.name,
+                    value,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+
+                written += @intCast(memory.len);
+            },
+            .i32 => |value| {
+                const memory = std.fmt.bufPrint(temp[written..], "pub const {s}: i32 = {};\n", .{
+                    variable.?.name,
+                    value,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+
+                written += @intCast(memory.len);
+            },
+            .u32 => |value| {
+                const memory = std.fmt.bufPrint(temp[written..], "pub const {s}: u32 = {};\n", .{
+                    variable.?.name,
+                    value,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+
+                written += @intCast(memory.len);
+            },
+            .f32 => |value| {
+                const memory = std.fmt.bufPrint(temp[written..], "pub const {s}: f32 = {d};\n", .{
                     variable.?.name,
                     value,
                 }) catch |err| {
@@ -499,6 +543,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
 
                 written += @intCast(memory.len);
             },
+            else => {},
         }
 
         switch (variable.?.value) {
@@ -549,9 +594,36 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
         var itemColour = h.v4{ 1, 1, 1, 1 };
         var text = [1]u8{0} ** 256;
 
-        switch (variable.?.value) {
+        switch (variable.?.value) { // TODO (Manav): too ugly
             .bool => |value| {
                 _ = std.fmt.bufPrint(text[0..], "{s}: {}", .{
+                    variable.?.name,
+                    value,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+            },
+            .i32 => |value| {
+                _ = std.fmt.bufPrint(text[0..], "{s}: {}", .{
+                    variable.?.name,
+                    value,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+            },
+            .u32 => |value| {
+                _ = std.fmt.bufPrint(text[0..], "{s}: {}", .{
+                    variable.?.name,
+                    value,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+            },
+            .f32 => |value| {
+                _ = std.fmt.bufPrint(text[0..], "{s}: {d}", .{
                     variable.?.name,
                     value,
                 }) catch |err| {
@@ -567,6 +639,7 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
                     return;
                 };
             },
+            else => {},
         }
 
         const textP: h.v2 = .{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY };
@@ -679,6 +752,7 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
                     .group => {
                         debugState.hotVariable.?.value.group.expanded = !debugState.hotVariable.?.value.group.expanded;
                     },
+                    else => {},
                 }
             }
 

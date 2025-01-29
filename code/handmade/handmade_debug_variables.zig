@@ -51,9 +51,16 @@ fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name
     return group;
 }
 
-fn AddVariable(context: *debug_variable_definition_context, comptime name: [:0]const u8, value: bool) *h.debug_variable {
+fn AddVariable(context: *debug_variable_definition_context, comptime name: [:0]const u8, comptime T: type, value: T) *h.debug_variable {
     var debugVar: *h.debug_variable = AddVariable__(context, name);
-    debugVar.value = .{ .bool = value };
+
+    switch (T) {
+        u32 => debugVar.value = .{ .u32 = value },
+        i32 => debugVar.value = .{ .i32 = value },
+        f32 => debugVar.value = .{ .f32 = value },
+        bool => debugVar.value = .{ .bool = value },
+        else => {},
+    }
 
     return debugVar;
 }
@@ -65,7 +72,8 @@ fn EndVariableGroup(context: *debug_variable_definition_context) void {
 }
 
 inline fn VariableListing(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
-    return AddVariable(context, name, @field(platform.config, name));
+    const config = @field(platform.config, name);
+    return AddVariable(context, name, @TypeOf(config), config);
 }
 
 pub fn DEBUGCreateVariables(state: *h.debug_state) void {
@@ -95,6 +103,7 @@ pub fn DEBUGCreateVariables(state: *h.debug_state) void {
         _ = BeginVariableGroup(&context, "Camera");
         {
             _ = VariableListing(&context, "DEBUGUI_UseDebugCamera");
+            _ = VariableListing(&context, "DEBUGUI_DebugCameraDistance");
             _ = VariableListing(&context, "DEBUGUI_UseRoomBasedCamera");
             EndVariableGroup(&context);
         }

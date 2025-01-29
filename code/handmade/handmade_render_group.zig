@@ -1005,7 +1005,7 @@ fn GetRenderEntityBasisP(transform: *const render_transform, originalP: h.v3) en
         var distanceAboveTarget = transform.distanceAboveTarget;
 
         if (config.DEBUGUI_UseDebugCamera) { // DEBUG CAMERA
-            distanceAboveTarget += 50;
+            distanceAboveTarget += config.DEBUGUI_DebugCameraDistance;
         }
 
         const distanceToPZ = distanceAboveTarget - h.Z(p);
