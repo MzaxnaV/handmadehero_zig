@@ -9,7 +9,7 @@
 	pub const DEBUGUI_TestWeirdDrawBufferSize = false;
 	pub const DEBUGUI_ShowLightingSamples = false;
 	// Camera;
-		pub const DEBUGUI_UseDebugCamera = true;
+		pub const DEBUGUI_UseDebugCamera = false;
 		pub const DEBUGUI_UseRoomBasedCamera = false;
 pub const DEBUGUI_UseSpaceOutlines = false;
 pub const DEBUGUI_FamiliarFollowsHero = false;

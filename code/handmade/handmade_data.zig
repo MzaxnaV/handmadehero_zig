@@ -35,6 +35,14 @@ pub const memory_arena = struct {
         return self.PushSizeAlign(@alignOf(u32), size);
     }
 
+    pub inline fn PushCopy(self: *memory_arena, size: platform.memory_index, source: []const u8) [*]u8 {
+        platform.Assert(size <= source.len);
+        const dest = self.PushSize(size);
+        Copy(size, @ptrCast(source.ptr), @ptrCast(dest));
+
+        return dest;
+    }
+
     pub fn PushSizeAlign(self: *memory_arena, comptime alignment: u5, sizeInit: platform.memory_index) [*]align(alignment) u8 {
         const alignmentOffset = self.GetAlignmentOffset(alignment);
 

@@ -582,8 +582,20 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
 
         switch (variable.?.value) {
             .group => {
-                variable = variable.?.value.group.firstChild;
-                depth += 1;
+                if (variable.?.value.group.expanded) {
+                    variable = variable.?.value.group.firstChild;
+                    depth += 1;
+                } else {
+                    while (variable) |_| {
+                        if (variable.?.next) |_| {
+                            variable = variable.?.next;
+                            break;
+                        } else {
+                            variable = variable.?.parent;
+                            depth -= 1;
+                        }
+                    }
+                }
             },
             else => {
                 while (variable) |_| {
@@ -662,10 +674,10 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
             if (debugState.hotVariable) |hotVariable| {
                 switch (hotVariable.value) {
                     .bool => {
-                        hotVariable.value.bool = !hotVariable.value.bool;
+                        debugState.hotVariable.?.value.bool = !debugState.hotVariable.?.value.bool;
                     },
                     .group => {
-                        hotVariable.value.group.expanded = !hotVariable.value.group.expanded;
+                        debugState.hotVariable.?.value.group.expanded = !debugState.hotVariable.?.value.group.expanded;
                     },
                 }
             }

@@ -15,7 +15,7 @@ const debug_variable_definition_context = struct {
 fn AddVariable__(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
     var debugVar: *h.debug_variable = context.arena.PushStruct(h.debug_variable);
 
-    debugVar.name = name;
+    debugVar.name = context.arena.PushCopy(name.len, name)[0..name.len :0];
     debugVar.next = null;
 
     var group = context.group;
@@ -39,8 +39,8 @@ fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name
     var group: *h.debug_variable = AddVariable__(context, name);
 
     group.value = .{
-        .group = .{
-            .expanded = true,
+        .group = h.debug_variable_group{
+            .expanded = false,
             .firstChild = null,
             .lastChild = null,
         },
