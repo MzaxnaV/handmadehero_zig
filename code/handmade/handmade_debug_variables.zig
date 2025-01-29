@@ -12,8 +12,6 @@ const debug_variable_definition_context = struct {
     group: ?*h.debug_variable,
 };
 
-pub var debugVariableList: []h.debug_variable = undefined;
-
 fn AddVariable__(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
     var debugVar: *h.debug_variable = context.arena.PushStruct(h.debug_variable);
 
@@ -25,12 +23,12 @@ fn AddVariable__(context: *debug_variable_definition_context, comptime name: [:0
     debugVar.parent = group;
 
     if (group) |_| {
-        if (group.?.data.group.firstChild) |_| {
-            group.?.data.group.lastChild.?.next = debugVar;
-            group.?.data.group.lastChild = debugVar;
+        if (group.?.value.group.firstChild) |_| {
+            group.?.value.group.lastChild.?.next = debugVar;
+            group.?.value.group.lastChild = debugVar;
         } else {
-            group.?.data.group.firstChild = debugVar;
-            group.?.data.group.lastChild = group.?.data.group.firstChild;
+            group.?.value.group.firstChild = debugVar;
+            group.?.value.group.lastChild = group.?.value.group.firstChild;
         }
     }
 
@@ -40,7 +38,7 @@ fn AddVariable__(context: *debug_variable_definition_context, comptime name: [:0
 fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
     var group: *h.debug_variable = AddVariable__(context, name);
 
-    group.data = .{
+    group.value = .{
         .group = .{
             .expanded = true,
             .firstChild = null,
@@ -55,7 +53,7 @@ fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name
 
 fn AddVariable(context: *debug_variable_definition_context, comptime name: [:0]const u8, value: bool) *h.debug_variable {
     var debugVar: *h.debug_variable = AddVariable__(context, name);
-    debugVar.data = .{ .bool = value };
+    debugVar.value = .{ .bool = value };
 
     return debugVar;
 }

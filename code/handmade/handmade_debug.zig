@@ -59,7 +59,7 @@ pub const debug_variable = struct {
     next: ?*debug_variable,
     parent: ?*debug_variable,
 
-    data: union(debug_variable_type) { // TODO (Manav): tagged union using type?
+    value: union(debug_variable_type) { // TODO (Manav): tagged union using type?
         bool: bool,
         group: debug_variable_group,
     },
@@ -135,7 +135,8 @@ pub const debug_state = struct {
 
     menuP: h.v2,
     menuActive: bool,
-    hotMenuIndex: u32,
+
+    hotVariable: ?*debug_variable,
 
     leftEdge: f32,
     atY: f32,
@@ -316,7 +317,7 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
             const atY: f32 = h.Y(p);
             var atX: f32 = h.X(p);
 
-            var at = string[0..].ptr;
+            var at: [*]const u8 = string.ptr;
             while (at[0] != 0) {
                 if (at[0] == '\\' and at[1] == '#' and at[2] != 0 and at[3] != 0 and at[4] != 0) {
                     const cScale = 1.0 / 9.0;
@@ -351,6 +352,7 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
                     const advanceX: f32 = charScale * h.GetHorizontalAdvanceForPair(info, font, prevCodePoint, codePoint);
                     atX += advanceX;
 
+                    // NOTE (Manav): this can have issues with handling newlines or other special characters.
                     if (codePoint != ' ') {
                         const bitmapID = h.GetBitmapForGlyph(renderGroup.assets, info, font, codePoint);
                         const info_ = renderGroup.assets.GetBitmapInfo(bitmapID);
@@ -466,7 +468,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     var written: u32 = 0;
 
     var depth: i32 = 0;
-    var variable: ?*debug_variable = debugState.rootGroup.data.group.firstChild;
+    var variable: ?*debug_variable = debugState.rootGroup.value.group.firstChild;
 
     while (variable) |_| {
         var index: i32 = 0;
@@ -475,7 +477,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
             written += 1;
         }
 
-        switch (variable.?.data) {
+        switch (variable.?.value) {
             .bool => |value| {
                 const memory = std.fmt.bufPrint(temp[written..], "pub const {s} = {};\n", .{
                     variable.?.name,
@@ -499,9 +501,9 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
             },
         }
 
-        switch (variable.?.data) {
+        switch (variable.?.value) {
             .group => {
-                variable = variable.?.data.group.firstChild;
+                variable = variable.?.value.group.firstChild;
                 depth += 1;
             },
             else => {
@@ -539,15 +541,17 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
     var atY: f32 = debugState.atY;
     const lineAdvance: f32 = h.GetLineAdvanceFor(debugState.debugFontInfo);
 
+    debugState.hotVariable = null;
+
     var depth: i32 = 0;
-    var variable: ?*debug_variable = debugState.rootGroup.data.group.firstChild;
+    var variable: ?*debug_variable = debugState.rootGroup.value.group.firstChild;
     while (variable) |_| {
-        const itemColour = h.v4{ 1, 1, 1, 1 };
+        var itemColour = h.v4{ 1, 1, 1, 1 };
         var text = [1]u8{0} ** 256;
 
-        switch (variable.?.data) {
+        switch (variable.?.value) {
             .bool => |value| {
-                _ = std.fmt.bufPrint(text[0..], "{s}: {}\n", .{
+                _ = std.fmt.bufPrint(text[0..], "{s}: {}", .{
                     variable.?.name,
                     value,
                 }) catch |err| {
@@ -555,9 +559,9 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
                     return;
                 };
             },
-            .group => {
-                _ = std.fmt.bufPrint(text[0..], "{s}\n", .{
-                    variable.?.name,
+            .group => |value| {
+                _ = std.fmt.bufPrint(text[0..], "{s} {s}", .{
+                    if (value.expanded) "-" else "+", variable.?.name,
                 }) catch |err| {
                     std.debug.print("{}\n", .{err});
                     return;
@@ -566,12 +570,19 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
         }
 
         const textP: h.v2 = .{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY };
+
+        const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text[0..]);
+        if (textBounds.IsInRect(h.Sub(mouseP, textP))) {
+            itemColour = .{ 1, 1, 0, 1 };
+            debugState.hotVariable = variable;
+        }
+
         DEBUGTextOutAt(textP, text[0..], itemColour);
         atY -= lineAdvance * debugState.fontScale;
 
-        switch (variable.?.data) {
+        switch (variable.?.value) {
             .group => {
-                variable = variable.?.data.group.firstChild;
+                variable = variable.?.value.group.firstChild;
                 depth += 1;
             },
             else => {
@@ -640,20 +651,26 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
 
         DrawDebugMainMenu(debugState, renderGroup, mouseP);
 
-        if (ignore) {
-            if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
-                if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
-                    debugState.menuP = mouseP;
-                }
-                DrawDebugMainMenu(debugState, renderGroup, mouseP);
-            } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
-                DrawDebugMainMenu(debugState, renderGroup, mouseP);
-                if (debugState.hotMenuIndex < h.debugVariableList.len) {
-                    h.debugVariableList[debugState.hotMenuIndex].value = !h.debugVariableList[debugState.hotMenuIndex].value;
-                }
+        // if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
+        //     if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
+        //         debugState.menuP = mouseP;
+        //     }
+        //     DrawDebugMainMenu(debugState, renderGroup, mouseP);
+        // } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
 
-                WriteHandmadeConfig(debugState);
+        if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)])) {
+            if (debugState.hotVariable) |hotVariable| {
+                switch (hotVariable.value) {
+                    .bool => {
+                        hotVariable.value.bool = !hotVariable.value.bool;
+                    },
+                    .group => {
+                        hotVariable.value.group.expanded = !hotVariable.value.group.expanded;
+                    },
+                }
             }
+
+            WriteHandmadeConfig(debugState);
         }
 
         if (debugState.compiling) {
