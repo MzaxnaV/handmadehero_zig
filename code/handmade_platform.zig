@@ -4,8 +4,6 @@ const options = @import("options");
 
 const SourceLocation = std.builtin.SourceLocation;
 
-pub const config = @import("handmade_config.zig");
-
 /// Debug: build constant to dynamically ignore code sections
 pub const ignore = !options.ignore;
 /// Debug: `False` - slow code not allowed, `True` - slow code welcome.
@@ -518,6 +516,15 @@ pub inline fn TeraBytes(comptime value: comptime_int) comptime_int {
 pub inline fn Align(addr: usize, alignment: usize) usize {
     // return @import("std").mem.alignForward(usize, addr, alignment);
     return addr + (alignment - 1) & ~(alignment - 1);
+}
+
+pub fn StringLength(string: [*]const u8) u32 {
+    var result: u32 = 0;
+    while (string[result] != 0) {
+        result += 1;
+    }
+
+    return result;
 }
 
 pub inline fn GetAlignForwardOffset(resultPointer: memory_index, comptime alignment: u5) memory_index {

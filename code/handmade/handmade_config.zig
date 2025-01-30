@@ -1,0 +1,22 @@
+const math = @import("handmade_math.zig");
+const v2 = math.v2;
+const v3 = math.v3;
+const v4 = math.v4;
+
+// pub const DEBUGUI_Ground Chunks: group = ;
+	pub const DEBUGUI_GroundChunkOutlines: bool = true;
+	pub const DEBUGUI_GroundChunkCheckerboards: bool = false;
+	pub const DEBUGUI_RecomputeGroundChunksOnExeChange: bool = true;
+// pub const DEBUGUI_Particles: group = ;
+	pub const DEBUGUI_ParticleTest: bool = false;
+	pub const DEBUGUI_ParticleGrid: bool = false;
+// pub const DEBUGUI_Renderer: group = ;
+	pub const DEBUGUI_TestWeirdDrawBufferSize: bool = false;
+	pub const DEBUGUI_ShowLightingSamples: bool = false;
+	// pub const DEBUGUI_Camera: group = ;
+		pub const DEBUGUI_UseDebugCamera: bool = true;
+		pub const DEBUGUI_DebugCameraDistance: f32 = 50;
+		pub const DEBUGUI_UseRoomBasedCamera: bool = false;
+pub const DEBUGUI_UseSpaceOutlines: bool = false;
+pub const DEBUGUI_FamiliarFollowsHero: bool = true;
+pub const DEBUGUI_FauxV4: v4 = v4{ 1, 2, 3, 4 };

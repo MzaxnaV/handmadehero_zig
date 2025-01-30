@@ -43,9 +43,25 @@ pub const perf_analyzer = struct {
     }
 };
 
+pub const debug_variable_to_text_flag = packed struct {
+    Prefix: bool = false,
+    Name: bool = false,
+    Colon: bool = false,
+    TypeSuffix: bool = false,
+    LineFeedEnd: bool = false,
+    NullTerminate: bool = false,
+};
+
 pub const debug_variable_type = enum {
-    DebugVariableType_Boolean,
-    DebugVariableType_Group,
+    bool,
+    i32,
+    u32,
+    f32,
+    v2,
+    v3,
+    v4,
+
+    group,
 };
 
 pub const debug_variable_group = struct {
@@ -55,13 +71,19 @@ pub const debug_variable_group = struct {
 };
 
 pub const debug_variable = struct {
-    type: debug_variable_type,
     name: [:0]const u8,
     next: ?*debug_variable,
     parent: ?*debug_variable,
+    // type: debug_variable_type,
 
-    data: union { // TODO (Manav): tagged union using type?
-        bool32: bool,
+    value: union(debug_variable_type) {
+        bool: bool,
+        i32: i32,
+        u32: u32,
+        f32: f32,
+        v2: h.v2,
+        v3: h.v3,
+        v4: h.v4,
         group: debug_variable_group,
     },
 };
@@ -136,7 +158,8 @@ pub const debug_state = struct {
 
     menuP: h.v2,
     menuActive: bool,
-    hotMenuIndex: u32,
+
+    hotVariable: ?*debug_variable,
 
     leftEdge: f32,
     atY: f32,
@@ -279,8 +302,7 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
         debugState.renderGroup.Orthographic(width, height, 1);
         debugState.leftEdge = -0.5 * @as(f32, @floatFromInt(width));
 
-        const info = assets.GetFontInfo(debugState.fontID);
-        debugState.atY = 0.5 * @as(f32, @floatFromInt(height)) - h.GetStartingBaselineY(info) * debugState.fontScale;
+        debugState.atY = 0.5 * @as(f32, @floatFromInt(height)) - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo);
     }
 }
 
@@ -318,7 +340,7 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
             const atY: f32 = h.Y(p);
             var atX: f32 = h.X(p);
 
-            var at = string[0..].ptr;
+            var at: [*]const u8 = string.ptr;
             while (at[0] != 0) {
                 if (at[0] == '\\' and at[1] == '#' and at[2] != 0 and at[3] != 0 and at[4] != 0) {
                     const cScale = 1.0 / 9.0;
@@ -353,6 +375,7 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
                     const advanceX: f32 = charScale * h.GetHorizontalAdvanceForPair(info, font, prevCodePoint, codePoint);
                     atX += advanceX;
 
+                    // NOTE (Manav): this can have issues with handling newlines or other special characters.
                     if (codePoint != ' ') {
                         const bitmapID = h.GetBitmapForGlyph(renderGroup.assets, info, font, codePoint);
                         const info_ = renderGroup.assets.GetBitmapInfo(bitmapID);
@@ -463,12 +486,149 @@ const debug_statistic = struct {
 // pub const DEBUGUI_ShowLightingSamples = true;
 // pub const DEBUGUI_UseRoomBasedCamera = true;
 
+fn VariableToText(buffer: []u8, variable: *debug_variable, flags: debug_variable_to_text_flag) u32 {
+    var written: u32 = 0;
+
+    if (flags.Prefix) {
+        written += @intCast((std.fmt.bufPrint(buffer[written..], "pub const DEBUGUI_", .{}) catch |err| {
+            std.debug.print("{}\n", .{err});
+            return 0;
+        }).len);
+    }
+
+    if (flags.Name) {
+        written += @intCast((std.fmt.bufPrint(buffer[written..], "{s}", .{
+            variable.name,
+        }) catch |err| {
+            std.debug.print("{}\n", .{err});
+            return 0;
+        }).len);
+    }
+
+    if (flags.Colon) {
+        written += @intCast((std.fmt.bufPrint(buffer[written..], ": ", .{}) catch |err| {
+            std.debug.print("{}\n", .{err});
+            return 0;
+        }).len);
+    }
+
+    if (flags.TypeSuffix) {
+        written += @intCast((std.fmt.bufPrint(buffer[written..], "{s} = ", .{
+            @tagName(variable.value),
+        }) catch |err| {
+            std.debug.print("{}\n", .{err});
+            return 0;
+        }).len);
+    }
+
+    switch (variable.value) {
+        .bool => {
+            const memory = std.fmt.bufPrint(buffer[written..], "{}", .{
+                variable.value.bool,
+            }) catch |err| {
+                std.debug.print("{}\n", .{err});
+                return 0;
+            };
+
+            written += @intCast(memory.len);
+        },
+        .i32 => {
+            const memory = std.fmt.bufPrint(buffer[written..], "{}", .{
+                variable.value.i32,
+            }) catch |err| {
+                std.debug.print("{}\n", .{err});
+                return 0;
+            };
+
+            written += @intCast(memory.len);
+        },
+        .u32 => {
+            const memory = std.fmt.bufPrint(buffer[written..], "{}", .{
+                variable.value.u32,
+            }) catch |err| {
+                std.debug.print("{}\n", .{err});
+                return 0;
+            };
+
+            written += @intCast(memory.len);
+        },
+        .f32 => {
+            const memory = std.fmt.bufPrint(buffer[written..], "{d}", .{
+                variable.value.f32,
+            }) catch |err| {
+                std.debug.print("{}\n", .{err});
+                return 0;
+            };
+
+            written += @intCast(memory.len);
+        },
+        .v2 => {
+            const memory = std.fmt.bufPrint(buffer[written..], "v2{{ {d}, {d} }}", .{
+                h.X(variable.value.v2),
+                h.Y(variable.value.v2),
+            }) catch |err| {
+                std.debug.print("{}\n", .{err});
+                return 0;
+            };
+
+            written += @intCast(memory.len);
+        },
+        .v3 => {
+            const memory = std.fmt.bufPrint(buffer[written..], "v3{{ {d}, {d}, {d} }}", .{
+                h.X(variable.value.v3),
+                h.Y(variable.value.v3),
+                h.Z(variable.value.v3),
+            }) catch |err| {
+                std.debug.print("{}\n", .{err});
+                return 0;
+            };
+
+            written += @intCast(memory.len);
+        },
+        .v4 => {
+            const memory = std.fmt.bufPrint(buffer[written..], "v4{{ {d}, {d}, {d}, {d} }}", .{
+                h.X(variable.value.v4),
+                h.Y(variable.value.v4),
+                h.Z(variable.value.v4),
+                h.W(variable.value.v4),
+            }) catch |err| {
+                std.debug.print("{}\n", .{err});
+                return 0;
+            };
+
+            written += @intCast(memory.len);
+        },
+        .group => {},
+    }
+
+    if (flags.LineFeedEnd) {
+        written += @intCast((std.fmt.bufPrint(buffer[written..], ";\n", .{}) catch |err| {
+            std.debug.print("{}\n", .{err});
+            return 0;
+        }).len);
+    }
+
+    if (flags.NullTerminate) {
+        buffer[written] = 0;
+        written += 1;
+    }
+
+    return written;
+}
+
 fn WriteHandmadeConfig(debugState: *debug_state) void {
     var temp = [1]u8{0} ** 4096;
     var written: u32 = 0;
 
     var depth: i32 = 0;
-    var variable: ?*debug_variable = debugState.rootGroup.data.group.firstChild;
+    var variable: ?*debug_variable = debugState.rootGroup.value.group.firstChild;
+
+    const include = "const math = @import(\"handmade_math.zig\");\nconst v2 = math.v2;\nconst v3 = math.v3;\nconst v4 = math.v4;\n\n";
+
+    written += @intCast((std.fmt.bufPrint(temp[written..], "{s}", .{include}) catch |err| {
+        std.debug.print("{}\n", .{err});
+        return;
+    }).len);
 
     while (variable) |_| {
         var index: i32 = 0;
@@ -477,47 +637,41 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
             written += 1;
         }
 
-        switch (variable.?.type) {
-            .DebugVariableType_Boolean => {
-                const memory = std.fmt.bufPrint(temp[written..], "pub const {s} = {};\n", .{
-                    variable.?.name,
-                    variable.?.data.bool32,
-                }) catch |err| {
-                    std.debug.print("{}\n", .{err});
-                    return;
-                };
-
-                written += @intCast(memory.len);
-            },
-            .DebugVariableType_Group => {
-                const memory = std.fmt.bufPrint(temp[written..], "// {s};\n", .{
-                    variable.?.name,
-                }) catch |err| {
-                    std.debug.print("{}\n", .{err});
-                    return;
-                };
-
-                written += @intCast(memory.len);
-            },
+        if (std.meta.activeTag(variable.?.value) == .group) {
+            written += @intCast((std.fmt.bufPrint(temp[written..], "// ", .{}) catch |err| {
+                std.debug.print("{}\n", .{err});
+                return;
+            }).len);
         }
 
-        if (variable.?.type == debug_variable_type.DebugVariableType_Group) {
-            variable = variable.?.data.group.firstChild;
-            depth += 1;
-        } else {
-            while (variable) |_| {
-                if (variable.?.next) |_| {
-                    variable = variable.?.next;
-                    break;
-                } else {
-                    variable = variable.?.parent;
-                    depth -= 1;
+        written += VariableToText(temp[written..], variable.?, .{
+            .Prefix = true,
+            .Name = true,
+            .Colon = true,
+            .TypeSuffix = true,
+            .LineFeedEnd = true,
+        });
+
+        switch (variable.?.value) {
+            .group => {
+                variable = variable.?.value.group.firstChild;
+                depth += 1;
+            },
+            else => {
+                while (variable) |_| {
+                    if (variable.?.next) |_| {
+                        variable = variable.?.next;
+                        break;
+                    } else {
+                        variable = variable.?.parent;
+                        depth -= 1;
+                    }
                 }
-            }
+            },
         }
     }
 
-    _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade_config.zig", written, temp[0..written].ptr);
+    _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade/handmade_config.zig", written, temp[0..written].ptr);
 
     if (!debugState.compiling) {
         // NOTE (Manav): compilation is incredibly slow, wait for incremental compilation support (use -fincremental) in 0.14
@@ -534,6 +688,67 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
 }
 
 fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
+    const atX: f32 = debugState.leftEdge;
+    var atY: f32 = debugState.atY;
+    const lineAdvance: f32 = h.GetLineAdvanceFor(debugState.debugFontInfo);
+
+    debugState.hotVariable = null;
+
+    var depth: i32 = 0;
+    var variable: ?*debug_variable = debugState.rootGroup.value.group.firstChild;
+    while (variable) |_| {
+        var itemColour = h.v4{ 1, 1, 1, 1 };
+        var text = [1]u8{0} ** 256;
+
+        _ = VariableToText(text[0..], variable.?, .{
+            .Name = true,
+            .Colon = true,
+        });
+
+        const textP: h.v2 = .{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY };
+
+        const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text[0..]);
+        if (textBounds.IsInRect(h.Sub(mouseP, textP))) {
+            itemColour = .{ 1, 1, 0, 1 };
+            debugState.hotVariable = variable;
+        }
+
+        DEBUGTextOutAt(textP, text[0..], itemColour);
+        atY -= lineAdvance * debugState.fontScale;
+
+        switch (variable.?.value) {
+            .group => {
+                if (variable.?.value.group.expanded) {
+                    variable = variable.?.value.group.firstChild;
+                    depth += 1;
+                } else {
+                    while (variable) |_| {
+                        if (variable.?.next) |_| {
+                            variable = variable.?.next;
+                            break;
+                        } else {
+                            variable = variable.?.parent;
+                            depth -= 1;
+                        }
+                    }
+                }
+            },
+            else => {
+                while (variable) |_| {
+                    if (variable.?.next) |_| {
+                        variable = variable.?.next;
+                        break;
+                    } else {
+                        variable = variable.?.parent;
+                        depth -= 1;
+                    }
+                }
+            },
+        }
+    }
+
+    debugState.atY = atY;
+
     if (ignore) {
         var newHotMenuIndex: u32 = h.debugVariableList.len;
         var bestDistanceSq: f32 = platform.F32MAXIMUM;
@@ -582,20 +797,29 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
 
         const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
 
-        if (ignore) {
-            if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
-                if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
-                    debugState.menuP = mouseP;
-                }
-                DrawDebugMainMenu(debugState, renderGroup, mouseP);
-            } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
-                DrawDebugMainMenu(debugState, renderGroup, mouseP);
-                if (debugState.hotMenuIndex < h.debugVariableList.len) {
-                    h.debugVariableList[debugState.hotMenuIndex].value = !h.debugVariableList[debugState.hotMenuIndex].value;
-                }
+        DrawDebugMainMenu(debugState, renderGroup, mouseP);
 
-                WriteHandmadeConfig(debugState);
+        // if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
+        //     if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
+        //         debugState.menuP = mouseP;
+        //     }
+        //     DrawDebugMainMenu(debugState, renderGroup, mouseP);
+        // } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
+
+        if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)])) {
+            if (debugState.hotVariable) |hotVariable| {
+                switch (hotVariable.value) {
+                    .bool => {
+                        debugState.hotVariable.?.value.bool = !debugState.hotVariable.?.value.bool;
+                    },
+                    .group => {
+                        debugState.hotVariable.?.value.group.expanded = !debugState.hotVariable.?.value.group.expanded;
+                    },
+                    else => {},
+                }
             }
+
+            WriteHandmadeConfig(debugState);
         }
 
         if (debugState.compiling) {

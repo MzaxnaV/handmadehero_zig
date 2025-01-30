@@ -1,5 +1,6 @@
 const platform = @import("handmade_platform");
 const debug = @import("handmade_debug.zig");
+const config = @import("handmade_config.zig");
 
 const h = struct {
     usingnamespace @import("intrinsics");
@@ -12,7 +13,6 @@ const h = struct {
 
 const assert = platform.Assert;
 const ignore = platform.ignore;
-const config = platform.config;
 
 // doc ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1005,7 +1005,7 @@ fn GetRenderEntityBasisP(transform: *const render_transform, originalP: h.v3) en
         var distanceAboveTarget = transform.distanceAboveTarget;
 
         if (config.DEBUGUI_UseDebugCamera) { // DEBUG CAMERA
-            distanceAboveTarget += 50;
+            distanceAboveTarget += config.DEBUGUI_DebugCameraDistance;
         }
 
         const distanceToPZ = distanceAboveTarget - h.Z(p);

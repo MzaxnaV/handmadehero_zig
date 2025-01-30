@@ -2,6 +2,8 @@ const debug = @import("handmade_debug.zig");
 
 const platform = @import("handmade_platform");
 
+const config = @import("handmade_config.zig");
+
 const h = struct {
     usingnamespace @import("intrinsics");
 
@@ -19,7 +21,6 @@ const h = struct {
 
 const assert = platform.Assert;
 const ignore = platform.ignore;
-const config = platform.config;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
@@ -916,7 +917,7 @@ pub export fn UpdateAndRender(
                 if ((h.Z(delta) >= -1.0) and (h.Z(delta) < 1.0)) {
                     const groundSideInMeters = h.X(world.chunkDimInMeters);
                     renderGroup.PushBitmap(bitmap, 1.0 * groundSideInMeters, delta, .{ 1, 1, 1, 1 });
-                    if (platform.config.DEBUGUI_GroundChunkOutlines) {
+                    if (config.DEBUGUI_GroundChunkOutlines) {
                         renderGroup.PushRectOutline(delta, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
                     }
                 }
