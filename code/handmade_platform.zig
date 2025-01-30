@@ -4,8 +4,6 @@ const options = @import("options");
 
 const SourceLocation = std.builtin.SourceLocation;
 
-pub const config = @import("handmade_config.zig");
-
 /// Debug: build constant to dynamically ignore code sections
 pub const ignore = !options.ignore;
 /// Debug: `False` - slow code not allowed, `True` - slow code welcome.
