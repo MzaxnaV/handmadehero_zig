@@ -159,7 +159,10 @@ pub const debug_state = struct {
     menuP: h.v2,
     menuActive: bool,
 
-    hotVariable: ?*debug_variable,
+    lastMouseP: h.v2,
+    hot: ?*debug_variable,
+    interactingWith: ?*debug_variable,
+    nextHot: ?*debug_variable,
 
     leftEdge: f32,
     atY: f32,
@@ -692,8 +695,6 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
     var atY: f32 = debugState.atY;
     const lineAdvance: f32 = h.GetLineAdvanceFor(debugState.debugFontInfo);
 
-    debugState.hotVariable = null;
-
     var depth: i32 = 0;
     var variable: ?*debug_variable = debugState.rootGroup.value.group.firstChild;
     while (variable) |_| {
@@ -709,8 +710,11 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
 
         const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text[0..]);
         if (textBounds.IsInRect(h.Sub(mouseP, textP))) {
-            itemColour = .{ 1, 1, 0, 1 };
-            debugState.hotVariable = variable;
+            debugState.nextHot = variable;
+        }
+
+        if (debugState.hot == variable) {
+            itemColour = h.v4{ 1, 1, 0, 1 };
         }
 
         DEBUGTextOutAt(textP, text[0..], itemColour);
@@ -786,26 +790,76 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
     }
 }
 
-pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
-    TIMED_FUNCTION(.{});
-    var block = TIMED_FUNCTION__impl(__COUNTER__() + 1, @src()).Init(.{});
-    defer block.End();
+fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
+    debugState.interactingWith = debugState.hot;
+}
 
-    if (DEBUGGetState()) |debugState| {
-        const renderGroup: *h.render_group = debugState.renderGroup;
-        var hotRecord: ?*platform.debug_record = null;
+fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
+    if (debugState.interactingWith) |variable| {
+        switch (variable.value) {
+            .bool => {
+                variable.value.bool = !variable.value.bool;
+            },
+            .group => {
+                variable.value.group.expanded = !variable.value.group.expanded;
+            },
+            else => {},
+        }
+    }
 
-        const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
+    WriteHandmadeConfig(debugState);
 
-        DrawDebugMainMenu(debugState, renderGroup, mouseP);
+    debugState.interactingWith = null;
+}
 
-        // if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
-        //     if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
-        //         debugState.menuP = mouseP;
-        //     }
-        //     DrawDebugMainMenu(debugState, renderGroup, mouseP);
-        // } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
+fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void {
+    const dMouseP: h.v2 = h.Sub(mouseP, debugState.lastMouseP);
 
+    // if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
+    //     if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
+    //         debugState.menuP = mouseP;
+    //     }
+    //     DrawDebugMainMenu(debugState, renderGroup, mouseP);
+    // } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
+
+    if (debugState.interactingWith) |variable| {
+        // Mouse move interaction
+
+        switch (variable.value) {
+            .f32 => {
+                variable.value.f32 += 0.1 * h.Y(dMouseP);
+            },
+
+            else => {},
+        }
+
+        // Mouse click interaction
+        var transitionIndex = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
+        while (transitionIndex > 1) : (transitionIndex -= 1) {
+            EndInteract(debugState, input, mouseP);
+            BeginInteract(debugState, input, mouseP);
+        }
+
+        if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].endedDown == 0) {
+            EndInteract(debugState, input, mouseP);
+        }
+        DEBUGTextLine("INTERACTING");
+    } else {
+        debugState.hot = debugState.nextHot;
+
+        var transitionIndex = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
+        while (transitionIndex > 1) : (transitionIndex -= 1) {
+            BeginInteract(debugState, input, mouseP);
+            EndInteract(debugState, input, mouseP);
+        }
+
+        if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].endedDown != 0) {
+            BeginInteract(debugState, input, mouseP);
+        }
+        DEBUGTextLine("Not.");
+    }
+
+    if (platform.ignore) {
         if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)])) {
             if (debugState.hotVariable) |hotVariable| {
                 switch (hotVariable.value) {
@@ -821,6 +875,26 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
 
             WriteHandmadeConfig(debugState);
         }
+    }
+
+    debugState.lastMouseP = mouseP;
+}
+
+pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
+    TIMED_FUNCTION(.{});
+    var block = TIMED_FUNCTION__impl(__COUNTER__() + 1, @src()).Init(.{});
+    defer block.End();
+
+    if (DEBUGGetState()) |debugState| {
+        const renderGroup: *h.render_group = debugState.renderGroup;
+
+        debugState.nextHot = null;
+        var hotRecord: ?*platform.debug_record = null;
+
+        const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
+
+        DrawDebugMainMenu(debugState, renderGroup, mouseP);
+        Interact(debugState, input, mouseP);
 
         if (debugState.compiling) {
             const state = h.platformAPI.DEBUGGetProcessState(debugState.compiler);
