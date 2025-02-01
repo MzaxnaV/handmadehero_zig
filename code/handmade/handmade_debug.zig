@@ -140,6 +140,14 @@ const debug_thread = struct {
     next: ?*debug_thread,
 };
 
+const debug_interaction = enum {
+    None,
+
+    ToggleValue,
+    DragValue,
+    TearValue,
+};
+
 pub const debug_state = struct {
     initialized: bool,
 
@@ -159,6 +167,7 @@ pub const debug_state = struct {
     menuP: h.v2,
     menuActive: bool,
 
+    interaction: debug_interaction,
     lastMouseP: h.v2,
     hot: ?*debug_variable,
     interactingWith: ?*debug_variable,
@@ -791,24 +800,49 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
 }
 
 fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
-    debugState.interactingWith = debugState.hot;
-}
-
-fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
-    if (debugState.interactingWith) |variable| {
-        switch (variable.value) {
+    if (debugState.hot) |hotVariable| {
+        switch (hotVariable.value) {
             .bool => {
-                variable.value.bool = !variable.value.bool;
+                debugState.interaction = .ToggleValue;
+            },
+            .f32 => {
+                debugState.interaction = .DragValue;
             },
             .group => {
-                variable.value.group.expanded = !variable.value.group.expanded;
+                debugState.interaction = .ToggleValue;
             },
             else => {},
         }
+
+        if (debugState.interaction != .None) {
+            debugState.interactingWith = debugState.hot;
+        }
+    }
+}
+
+fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
+    var variable = debugState.interactingWith.?;
+
+    switch (debugState.interaction) {
+        .ToggleValue => {
+            switch (variable.value) {
+                .bool => {
+                    variable.value.bool = !variable.value.bool;
+                },
+                .group => {
+                    variable.value.group.expanded = !variable.value.group.expanded;
+                },
+                else => {},
+            }
+        },
+
+        .TearValue => {},
+        else => {},
     }
 
     WriteHandmadeConfig(debugState);
 
+    debugState.interaction = .None;
     debugState.interactingWith = null;
 }
 
@@ -822,14 +856,20 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
     //     DrawDebugMainMenu(debugState, renderGroup, mouseP);
     // } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
 
-    if (debugState.interactingWith) |variable| {
+    if (debugState.interaction != .None) {
+        var variable = debugState.interactingWith.?;
+
         // Mouse move interaction
+        switch (debugState.interaction) {
+            .DragValue => {
+                switch (variable.value) {
+                    .f32 => {
+                        variable.value.f32 += 0.1 * h.Y(dMouseP);
+                    },
 
-        switch (variable.value) {
-            .f32 => {
-                variable.value.f32 += 0.1 * h.Y(dMouseP);
+                    else => {},
+                }
             },
-
             else => {},
         }
 
@@ -843,7 +883,6 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
         if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].endedDown == 0) {
             EndInteract(debugState, input, mouseP);
         }
-        DEBUGTextLine("INTERACTING");
     } else {
         debugState.hot = debugState.nextHot;
 
@@ -856,7 +895,6 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
         if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].endedDown != 0) {
             BeginInteract(debugState, input, mouseP);
         }
-        DEBUGTextLine("Not.");
     }
 
     if (platform.ignore) {
