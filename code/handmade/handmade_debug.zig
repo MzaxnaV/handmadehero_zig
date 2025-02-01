@@ -70,6 +70,11 @@ pub const debug_variable_group = struct {
     lastChild: ?*debug_variable,
 };
 
+const debug_variable_hierarchy = struct {
+    uiP: h.v2,
+    group: *debug_variable,
+};
+
 pub const debug_variable = struct {
     name: [:0]const u8,
     next: ?*debug_variable,
@@ -140,14 +145,22 @@ const debug_thread = struct {
     next: ?*debug_thread,
 };
 
+const debug_interaction = enum {
+    None,
+
+    NOP,
+
+    ToggleValue,
+    DragValue,
+    TearValue,
+};
+
 pub const debug_state = struct {
     initialized: bool,
 
     highPriorityQueue: *platform.work_queue,
 
     debugArena: h.memory_arena,
-
-    rootGroup: *debug_variable,
 
     renderGroup: *h.render_group,
     debugFont: ?*h.loaded_font,
@@ -159,7 +172,14 @@ pub const debug_state = struct {
     menuP: h.v2,
     menuActive: bool,
 
-    hotVariable: ?*debug_variable,
+    rootGroup: *debug_variable,
+    hierarchy: debug_variable_hierarchy,
+
+    interaction: debug_interaction,
+    lastMouseP: h.v2,
+    hot: ?*debug_variable,
+    interactingWith: ?*debug_variable,
+    nextHot: ?*debug_variable,
 
     leftEdge: f32,
     atY: f32,
@@ -303,6 +323,11 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
         debugState.leftEdge = -0.5 * @as(f32, @floatFromInt(width));
 
         debugState.atY = 0.5 * @as(f32, @floatFromInt(height)) - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo);
+
+        debugState.hierarchy = .{
+            .uiP = h.v2{ debugState.leftEdge, debugState.atY },
+            .group = debugState.rootGroup,
+        };
     }
 }
 
@@ -688,14 +713,12 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
 }
 
 fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
-    const atX: f32 = debugState.leftEdge;
-    var atY: f32 = debugState.atY;
+    const atX: f32 = h.X(debugState.hierarchy.uiP);
+    var atY: f32 = h.Y(debugState.hierarchy.uiP);
     const lineAdvance: f32 = h.GetLineAdvanceFor(debugState.debugFontInfo);
 
-    debugState.hotVariable = null;
-
     var depth: i32 = 0;
-    var variable: ?*debug_variable = debugState.rootGroup.value.group.firstChild;
+    var variable: ?*debug_variable = debugState.hierarchy.group.value.group.firstChild;
     while (variable) |_| {
         var itemColour = h.v4{ 1, 1, 1, 1 };
         var text = [1]u8{0} ** 256;
@@ -709,8 +732,11 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
 
         const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text[0..]);
         if (textBounds.IsInRect(h.Sub(mouseP, textP))) {
-            itemColour = .{ 1, 1, 0, 1 };
-            debugState.hotVariable = variable;
+            debugState.nextHot = variable;
+        }
+
+        if (debugState.hot == variable) {
+            itemColour = h.v4{ 1, 1, 0, 1 };
         }
 
         DEBUGTextOutAt(textP, text[0..], itemColour);
@@ -786,26 +812,108 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
     }
 }
 
-pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
-    TIMED_FUNCTION(.{});
-    var block = TIMED_FUNCTION__impl(__COUNTER__() + 1, @src()).Init(.{});
-    defer block.End();
+fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
+    if (debugState.hot) |hotVariable| {
+        switch (hotVariable.value) {
+            .bool => {
+                debugState.interaction = .ToggleValue;
+            },
+            .f32 => {
+                debugState.interaction = .DragValue;
+            },
+            .group => {
+                debugState.interaction = .ToggleValue;
+            },
+            else => {},
+        }
 
-    if (DEBUGGetState()) |debugState| {
-        const renderGroup: *h.render_group = debugState.renderGroup;
-        var hotRecord: ?*platform.debug_record = null;
+        if (debugState.interaction != .None) {
+            debugState.interactingWith = debugState.hot;
+        }
+    } else {
+        debugState.interaction = .NOP;
+    }
+}
 
-        const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
+fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
+    if (debugState.interaction != .NOP) {
+        if (debugState.interactingWith) |variable| { // NOTE (Manav): null variable can be with .NOP
+            switch (debugState.interaction) {
+                .ToggleValue => {
+                    switch (variable.value) {
+                        .bool => {
+                            variable.value.bool = !variable.value.bool;
+                        },
+                        .group => {
+                            variable.value.group.expanded = !variable.value.group.expanded;
+                        },
+                        else => {},
+                    }
+                },
 
-        DrawDebugMainMenu(debugState, renderGroup, mouseP);
+                .TearValue => {},
+                else => {},
+            }
+        }
 
-        // if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
-        //     if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
-        //         debugState.menuP = mouseP;
-        //     }
-        //     DrawDebugMainMenu(debugState, renderGroup, mouseP);
-        // } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
+        WriteHandmadeConfig(debugState);
+    }
 
+    debugState.interactingWith = null;
+    debugState.interaction = .None;
+}
+
+fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void {
+    const dMouseP: h.v2 = h.Sub(mouseP, debugState.lastMouseP);
+
+    // if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
+    //     if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
+    //         debugState.menuP = mouseP;
+    //     }
+    //     DrawDebugMainMenu(debugState, renderGroup, mouseP);
+    // } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
+
+    if (debugState.interaction != .None) {
+        // Mouse move interaction
+        switch (debugState.interaction) {
+            .DragValue => {
+                var variable = debugState.interactingWith.?; // NOTE (Manav): null variable can be with .NOP
+                switch (variable.value) {
+                    .f32 => {
+                        variable.value.f32 += 0.1 * h.Y(dMouseP);
+                    },
+
+                    else => {},
+                }
+            },
+            else => {},
+        }
+
+        // Mouse click interaction
+        var transitionIndex = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
+        while (transitionIndex > 1) : (transitionIndex -= 1) {
+            EndInteract(debugState, input, mouseP);
+            BeginInteract(debugState, input, mouseP);
+        }
+
+        if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].endedDown == 0) {
+            EndInteract(debugState, input, mouseP);
+        }
+    } else {
+        debugState.hot = debugState.nextHot;
+
+        var transitionIndex = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
+        while (transitionIndex > 1) : (transitionIndex -= 1) {
+            BeginInteract(debugState, input, mouseP);
+            EndInteract(debugState, input, mouseP);
+        }
+
+        if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].endedDown != 0) {
+            BeginInteract(debugState, input, mouseP);
+        }
+    }
+
+    if (platform.ignore) {
         if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)])) {
             if (debugState.hotVariable) |hotVariable| {
                 switch (hotVariable.value) {
@@ -821,6 +929,26 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
 
             WriteHandmadeConfig(debugState);
         }
+    }
+
+    debugState.lastMouseP = mouseP;
+}
+
+pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
+    TIMED_FUNCTION(.{});
+    var block = TIMED_FUNCTION__impl(__COUNTER__() + 1, @src()).Init(.{});
+    defer block.End();
+
+    if (DEBUGGetState()) |debugState| {
+        const renderGroup: *h.render_group = debugState.renderGroup;
+
+        debugState.nextHot = null;
+        var hotRecord: ?*platform.debug_record = null;
+
+        const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
+
+        DrawDebugMainMenu(debugState, renderGroup, mouseP);
+        Interact(debugState, input, mouseP);
 
         if (debugState.compiling) {
             const state = h.platformAPI.DEBUGGetProcessState(debugState.compiler);
