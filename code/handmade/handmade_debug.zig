@@ -143,6 +143,8 @@ const debug_thread = struct {
 const debug_interaction = enum {
     None,
 
+    NOP,
+
     ToggleValue,
     DragValue,
     TearValue,
@@ -817,33 +819,37 @@ fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
         if (debugState.interaction != .None) {
             debugState.interactingWith = debugState.hot;
         }
+    } else {
+        debugState.interaction = .NOP;
     }
 }
 
 fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
-    var variable = debugState.interactingWith.?;
+    if (debugState.interaction != .NOP) {
+        if (debugState.interactingWith) |variable| { // NOTE (Manav): null variable can be with .NOP
+            switch (debugState.interaction) {
+                .ToggleValue => {
+                    switch (variable.value) {
+                        .bool => {
+                            variable.value.bool = !variable.value.bool;
+                        },
+                        .group => {
+                            variable.value.group.expanded = !variable.value.group.expanded;
+                        },
+                        else => {},
+                    }
+                },
 
-    switch (debugState.interaction) {
-        .ToggleValue => {
-            switch (variable.value) {
-                .bool => {
-                    variable.value.bool = !variable.value.bool;
-                },
-                .group => {
-                    variable.value.group.expanded = !variable.value.group.expanded;
-                },
+                .TearValue => {},
                 else => {},
             }
-        },
+        }
 
-        .TearValue => {},
-        else => {},
+        WriteHandmadeConfig(debugState);
     }
 
-    WriteHandmadeConfig(debugState);
-
-    debugState.interaction = .None;
     debugState.interactingWith = null;
+    debugState.interaction = .None;
 }
 
 fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void {
