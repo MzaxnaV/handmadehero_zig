@@ -70,6 +70,11 @@ pub const debug_variable_group = struct {
     lastChild: ?*debug_variable,
 };
 
+const debug_variable_hierarchy = struct {
+    uiP: h.v2,
+    group: *debug_variable,
+};
+
 pub const debug_variable = struct {
     name: [:0]const u8,
     next: ?*debug_variable,
@@ -157,8 +162,6 @@ pub const debug_state = struct {
 
     debugArena: h.memory_arena,
 
-    rootGroup: *debug_variable,
-
     renderGroup: *h.render_group,
     debugFont: ?*h.loaded_font,
     debugFontInfo: *h.hha_font,
@@ -168,6 +171,9 @@ pub const debug_state = struct {
 
     menuP: h.v2,
     menuActive: bool,
+
+    rootGroup: *debug_variable,
+    hierarchy: debug_variable_hierarchy,
 
     interaction: debug_interaction,
     lastMouseP: h.v2,
@@ -317,6 +323,11 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
         debugState.leftEdge = -0.5 * @as(f32, @floatFromInt(width));
 
         debugState.atY = 0.5 * @as(f32, @floatFromInt(height)) - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo);
+
+        debugState.hierarchy = .{
+            .uiP = h.v2{ debugState.leftEdge, debugState.atY },
+            .group = debugState.rootGroup,
+        };
     }
 }
 
@@ -702,12 +713,12 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
 }
 
 fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
-    const atX: f32 = debugState.leftEdge;
-    var atY: f32 = debugState.atY;
+    const atX: f32 = h.X(debugState.hierarchy.uiP);
+    var atY: f32 = h.Y(debugState.hierarchy.uiP);
     const lineAdvance: f32 = h.GetLineAdvanceFor(debugState.debugFontInfo);
 
     var depth: i32 = 0;
-    var variable: ?*debug_variable = debugState.rootGroup.value.group.firstChild;
+    var variable: ?*debug_variable = debugState.hierarchy.group.value.group.firstChild;
     while (variable) |_| {
         var itemColour = h.v4{ 1, 1, 1, 1 };
         var text = [1]u8{0} ** 256;
@@ -863,11 +874,10 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
     // } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
 
     if (debugState.interaction != .None) {
-        var variable = debugState.interactingWith.?;
-
         // Mouse move interaction
         switch (debugState.interaction) {
             .DragValue => {
+                var variable = debugState.interactingWith.?; // NOTE (Manav): null variable can be with .NOP
                 switch (variable.value) {
                     .f32 => {
                         variable.value.f32 += 0.1 * h.Y(dMouseP);
