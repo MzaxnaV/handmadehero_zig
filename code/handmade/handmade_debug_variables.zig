@@ -40,7 +40,7 @@ fn AddVariable__(context: *debug_variable_definition_context, comptime name: [:0
 fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
     var group: *h.debug_variable = AddVariable__(context, name);
 
-    // group.type = .group;
+    group.type = .group;
 
     group.value = .{
         .group = h.debug_variable_group{
@@ -55,36 +55,31 @@ fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name
     return group;
 }
 
-fn AddVariable(context: *debug_variable_definition_context, comptime name: [:0]const u8, comptime T: type, value: T) *h.debug_variable {
+fn DEBUGAddVariable(context: *debug_variable_definition_context, comptime name: [:0]const u8, comptime t: h.debug_variable_type, value: h.debug_variable_type.toT(t)) *h.debug_variable {
     var debugVar: *h.debug_variable = AddVariable__(context, name);
 
-    switch (T) {
-        u32 => {
-            // debugVar.type = .u32;
+    debugVar.type = t;
+
+    switch (t) {
+        .u32 => {
             debugVar.value = .{ .u32 = value };
         },
-        i32 => {
-            // debugVar.type = .i32;
+        .i32 => {
             debugVar.value = .{ .i32 = value };
         },
-        f32 => {
-            // debugVar.type = .f32;
+        .f32 => {
             debugVar.value = .{ .f32 = value };
         },
-        bool => {
-            // debugVar.type = .bool;
+        .bool => {
             debugVar.value = .{ .bool = value };
         },
-        h.v2 => {
-            // debugVar.type = .v2;
+        .v2 => {
             debugVar.value = .{ .v2 = value };
         },
-        h.v3 => {
-            // debugVar.type = .v3;
+        .v3 => {
             debugVar.value = .{ .v3 = value };
         },
-        h.v4 => {
-            // debugVar.type = .v4;
+        .v4 => {
             debugVar.value = .{ .v4 = value };
         },
         else => platform.InvalidCodePath("Unsupported debug variable type"),
@@ -102,7 +97,19 @@ fn EndVariableGroup(context: *debug_variable_definition_context) void {
 inline fn VariableListing(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
     const debug_name = "DEBUGUI_" ++ name;
     const config_variable = @field(config, debug_name);
-    return AddVariable(context, name, @TypeOf(config_variable), config_variable);
+
+    const t: h.debug_variable_type = comptime switch (@TypeOf(config_variable)) {
+        bool => .bool,
+        u32 => .u32,
+        i32 => .i32,
+        f32 => .f32,
+        h.v2 => .v2,
+        h.v3 => .v3,
+        h.v4 => .v4,
+        else => platform.InvalidCodePath("Unsupported debug variable type"),
+    };
+
+    return DEBUGAddVariable(context, name, t, config_variable);
 }
 
 pub fn DEBUGCreateVariables(state: *h.debug_state) void {

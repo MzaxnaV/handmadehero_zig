@@ -62,6 +62,19 @@ pub const debug_variable_type = enum {
     v4,
 
     group,
+
+    pub inline fn toT(comptime t: debug_variable_type) type {
+        comptime return switch (t) {
+            .bool => bool,
+            .i32 => i32,
+            .u32 => u32,
+            .f32 => f32,
+            .v2 => h.v2,
+            .v3 => h.v3,
+            .v4 => h.v4,
+            .group => debug_variable_group,
+        };
+    }
 };
 
 pub const debug_variable_group = struct {
@@ -79,9 +92,9 @@ pub const debug_variable = struct {
     name: [:0]const u8,
     next: ?*debug_variable,
     parent: ?*debug_variable,
-    // type: debug_variable_type,
+    type: debug_variable_type,
 
-    value: union(debug_variable_type) {
+    value: union {
         bool: bool,
         i32: i32,
         u32: u32,
@@ -539,14 +552,14 @@ fn VariableToText(buffer: []u8, variable: *debug_variable, flags: debug_variable
 
     if (flags.TypeSuffix) {
         written += @intCast((std.fmt.bufPrint(buffer[written..], "{s} = ", .{
-            @tagName(variable.value),
+            @tagName(variable.type),
         }) catch |err| {
             std.debug.print("{}\n", .{err});
             return 0;
         }).len);
     }
 
-    switch (variable.value) {
+    switch (variable.type) {
         .bool => {
             const memory = std.fmt.bufPrint(buffer[written..], "{}", .{
                 variable.value.bool,
@@ -662,7 +675,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
             written += 1;
         }
 
-        if (std.meta.activeTag(variable.?.value) == .group) {
+        if (variable.?.type == .group) {
             written += @intCast((std.fmt.bufPrint(temp[written..], "// ", .{}) catch |err| {
                 std.debug.print("{}\n", .{err});
                 return;
@@ -677,22 +690,19 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
             .LineFeedEnd = true,
         });
 
-        switch (variable.?.value) {
-            .group => {
-                variable = variable.?.value.group.firstChild;
-                depth += 1;
-            },
-            else => {
-                while (variable) |_| {
-                    if (variable.?.next) |_| {
-                        variable = variable.?.next;
-                        break;
-                    } else {
-                        variable = variable.?.parent;
-                        depth -= 1;
-                    }
+        if (variable.?.type == .group) {
+            variable = variable.?.value.group.firstChild;
+            depth += 1;
+        } else {
+            while (variable) |_| {
+                if (variable.?.next) |_| {
+                    variable = variable.?.next;
+                    break;
+                } else {
+                    variable = variable.?.parent;
+                    depth -= 1;
                 }
-            },
+            }
         }
     }
 
@@ -742,34 +752,19 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
         DEBUGTextOutAt(textP, text[0..], itemColour);
         atY -= lineAdvance * debugState.fontScale;
 
-        switch (variable.?.value) {
-            .group => {
-                if (variable.?.value.group.expanded) {
-                    variable = variable.?.value.group.firstChild;
-                    depth += 1;
+        if (variable.?.type == .group and variable.?.value.group.expanded) {
+            variable = variable.?.value.group.firstChild;
+            depth += 1;
+        } else {
+            while (variable) |_| {
+                if (variable.?.next) |_| {
+                    variable = variable.?.next;
+                    break;
                 } else {
-                    while (variable) |_| {
-                        if (variable.?.next) |_| {
-                            variable = variable.?.next;
-                            break;
-                        } else {
-                            variable = variable.?.parent;
-                            depth -= 1;
-                        }
-                    }
+                    variable = variable.?.parent;
+                    depth -= 1;
                 }
-            },
-            else => {
-                while (variable) |_| {
-                    if (variable.?.next) |_| {
-                        variable = variable.?.next;
-                        break;
-                    } else {
-                        variable = variable.?.parent;
-                        depth -= 1;
-                    }
-                }
-            },
+            }
         }
     }
 
@@ -814,7 +809,7 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
 
 fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
     if (debugState.hot) |hotVariable| {
-        switch (hotVariable.value) {
+        switch (hotVariable.type) {
             .bool => {
                 debugState.interaction = .ToggleValue;
             },
@@ -840,7 +835,7 @@ fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
         if (debugState.interactingWith) |variable| { // NOTE (Manav): null variable can be with .NOP
             switch (debugState.interaction) {
                 .ToggleValue => {
-                    switch (variable.value) {
+                    switch (variable.type) {
                         .bool => {
                             variable.value.bool = !variable.value.bool;
                         },
@@ -878,7 +873,7 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
         switch (debugState.interaction) {
             .DragValue => {
                 var variable = debugState.interactingWith.?; // NOTE (Manav): null variable can be with .NOP
-                switch (variable.value) {
+                switch (variable.type) {
                     .f32 => {
                         variable.value.f32 += 0.1 * h.Y(dMouseP);
                     },
@@ -916,7 +911,7 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
     if (platform.ignore) {
         if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)])) {
             if (debugState.hotVariable) |hotVariable| {
-                switch (hotVariable.value) {
+                switch (hotVariable.type) {
                     .bool => {
                         debugState.hotVariable.?.value.bool = !debugState.hotVariable.?.value.bool;
                     },
