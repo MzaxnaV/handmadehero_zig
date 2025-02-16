@@ -318,6 +318,7 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
             };
 
             context.group = h.DEBUGBeginVariableGroup(&context, "Root");
+            _ = h.DEBUGBeginVariableGroup(&context, "Debugging");
 
             h.DEBUGCreateVariables(&context);
             _ = h.DEBUGBeginVariableGroup(&context, "Profile");
@@ -329,6 +330,8 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
             const functionList = h.DEBUGAddVariable(&context, "", .counterThreadList, .{ .dimension = h.v2{ 1024, 200 } });
             _ = functionList;
             h.DEBUGEndVariableGroup(&context);
+            h.DEBUGEndVariableGroup(&context);
+
             h.DEBUGEndVariableGroup(&context);
 
             debugState.rootGroup = context.group.?;
@@ -1033,16 +1036,22 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
 
     if (debugState.interaction != .None) {
         // Mouse move interaction
+        var variable: ?*debug_variable = debugState.interactingWith; // NOTE (Manav): null variable can be with .NOP
+
         switch (debugState.interaction) {
             .DragValue => {
-                var variable = debugState.interactingWith.?; // NOTE (Manav): null variable can be with .NOP
-                switch (variable.type) {
+                switch (variable.?.type) {
                     .f32 => {
-                        variable.value.f32 += 0.1 * h.Y(dMouseP);
+                        variable.?.value.f32 += 0.1 * h.Y(dMouseP);
                     },
 
                     else => {},
                 }
+            },
+            .ResizeProfile => {
+                h.AddTo(&variable.?.value.profile.dimension, .{ h.X(dMouseP), -h.Y(dMouseP) });
+                h.SetX(&variable.?.value.profile.dimension, @max(h.X(variable.?.value.profile.dimension), 10.0));
+                h.SetY(&variable.?.value.profile.dimension, @max(h.Y(variable.?.value.profile.dimension), 10.0));
             },
             else => {},
         }
