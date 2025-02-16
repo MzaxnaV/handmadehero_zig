@@ -314,8 +314,10 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
             context.group = h.DEBUGBeginVariableGroup(&context, "Root");
 
             h.DEBUGCreateVariables(&context);
+            _ = h.DEBUGBeginVariableGroup(&context, "Profile");
             const threadList = h.DEBUGAddVariable(&context, "Profile By Thread", .counterThreadList, .{});
             _ = threadList;
+            h.DEBUGEndVariableGroup(&context);
 
             debugState.rootGroup = context.group.?;
 
@@ -489,7 +491,10 @@ fn DEBUGTextLine(string: []const u8) void {
         if (renderGroup.PushFont(debugState.fontID)) |_| {
             const info = renderGroup.assets.GetFontInfo(debugState.fontID);
 
-            DEBUGTextOutAt(.{ debugState.leftEdge, debugState.atY }, string, .{ 1, 1, 1, 1 });
+            DEBUGTextOutAt(.{
+                debugState.leftEdge,
+                debugState.atY - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo),
+            }, string, .{ 1, 1, 1, 1 });
 
             debugState.atY -= h.GetLineAdvanceFor(info) * debugState.fontScale;
         }

@@ -91,7 +91,7 @@ pub fn DEBUGAddVariable(context: *debug_variable_definition_context, comptime na
     return debugVar;
 }
 
-fn EndVariableGroup(context: *debug_variable_definition_context) void {
+pub fn DEBUGEndVariableGroup(context: *debug_variable_definition_context) void {
     platform.Assert(context.group != null);
 
     context.group = context.group.?.parent;
@@ -120,12 +120,12 @@ pub fn DEBUGCreateVariables(context: *debug_variable_definition_context) void {
     _ = VariableListing(context, "GroundChunkOutlines");
     _ = VariableListing(context, "GroundChunkCheckerboards");
     _ = VariableListing(context, "RecomputeGroundChunksOnExeChange");
-    EndVariableGroup(context);
+    DEBUGEndVariableGroup(context);
 
     _ = DEBUGBeginVariableGroup(context, "Particles");
     _ = VariableListing(context, "ParticleTest");
     _ = VariableListing(context, "ParticleGrid");
-    EndVariableGroup(context);
+    DEBUGEndVariableGroup(context);
 
     _ = DEBUGBeginVariableGroup(context, "Renderer");
     {
@@ -136,9 +136,9 @@ pub fn DEBUGCreateVariables(context: *debug_variable_definition_context) void {
             _ = VariableListing(context, "UseDebugCamera");
             _ = VariableListing(context, "DebugCameraDistance");
             _ = VariableListing(context, "UseRoomBasedCamera");
-            EndVariableGroup(context);
+            DEBUGEndVariableGroup(context);
         }
-        EndVariableGroup(context);
+        DEBUGEndVariableGroup(context);
     }
 
     _ = VariableListing(context, "UseSpaceOutlines");

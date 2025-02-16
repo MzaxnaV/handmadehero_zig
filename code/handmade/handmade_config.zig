@@ -20,3 +20,4 @@ const v4 = math.v4;
 pub const DEBUGUI_UseSpaceOutlines: bool = false;
 pub const DEBUGUI_FamiliarFollowsHero: bool = false;
 pub const DEBUGUI_FauxV4: v4 = v4{ 1, 2, 3, 4 };
+// pub const DEBUGUI_Profile: group = ;
