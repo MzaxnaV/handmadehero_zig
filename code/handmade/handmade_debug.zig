@@ -61,8 +61,29 @@ pub const debug_variable_type = enum {
     v3,
     v4,
 
+    counterThreadList,
+
     group,
+
+    pub inline fn toT(comptime t: debug_variable_type) type {
+        comptime return switch (t) {
+            .bool => bool,
+            .i32 => i32,
+            .u32 => u32,
+            .f32 => f32,
+            .v2 => h.v2,
+            .v3 => h.v3,
+            .v4 => h.v4,
+            .group => debug_variable_group,
+            .counterThreadList => debug_profile_settings,
+        };
+    }
 };
+
+pub fn ShouldBeWritten(t: debug_variable_type) bool {
+    const result = (t != .counterThreadList);
+    return result;
+}
 
 pub const debug_variable_group = struct {
     expanded: bool,
@@ -75,13 +96,17 @@ const debug_variable_hierarchy = struct {
     group: *debug_variable,
 };
 
+const debug_profile_settings = struct {
+    dimension: h.v2,
+};
+
 pub const debug_variable = struct {
     name: [:0]const u8,
     next: ?*debug_variable,
     parent: ?*debug_variable,
-    // type: debug_variable_type,
+    type: debug_variable_type,
 
-    value: union(debug_variable_type) {
+    value: union { // NOTE (Manav): consider tagged union once everything is finalised
         bool: bool,
         i32: i32,
         u32: u32,
@@ -90,6 +115,7 @@ pub const debug_variable = struct {
         v3: h.v3,
         v4: h.v4,
         group: debug_variable_group,
+        profile: debug_profile_settings,
     },
 };
 
@@ -153,6 +179,8 @@ const debug_interaction = enum {
     ToggleValue,
     DragValue,
     TearValue,
+
+    ResizeProfile,
 };
 
 pub const debug_state = struct {
@@ -177,11 +205,14 @@ pub const debug_state = struct {
 
     interaction: debug_interaction,
     lastMouseP: h.v2,
+    hotInteraction: debug_interaction,
     hot: ?*debug_variable,
     interactingWith: ?*debug_variable,
+    nextHotInteraction: debug_interaction,
     nextHot: ?*debug_variable,
 
     leftEdge: f32,
+    rightEdge: f32,
     atY: f32,
     fontScale: f32,
     fontID: h.font_id,
@@ -199,9 +230,6 @@ pub const debug_state = struct {
     frameCount: u32,
     frameBarScale: f32,
     paused: bool,
-
-    profileOn: bool,
-    profileRect: h.rect2,
 
     frames: []debug_frame,
     firstThread: ?*debug_thread,
@@ -283,7 +311,30 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
                 @ptrCast(@as([*]debug_state, @ptrCast(debugState)) + 1),
             );
 
-            h.DEBUGCreateVariables(debugState);
+            var context = h.debug_variable_definition_context{
+                .state = debugState,
+                .arena = &debugState.debugArena,
+                .group = null,
+            };
+
+            context.group = h.DEBUGBeginVariableGroup(&context, "Root");
+            _ = h.DEBUGBeginVariableGroup(&context, "Debugging");
+
+            h.DEBUGCreateVariables(&context);
+            _ = h.DEBUGBeginVariableGroup(&context, "Profile");
+            _ = h.DEBUGBeginVariableGroup(&context, "By Thread");
+            const threadList = h.DEBUGAddVariable(&context, "", .counterThreadList, .{ .dimension = h.v2{ 1024, 100 } });
+            _ = threadList;
+            h.DEBUGEndVariableGroup(&context);
+            _ = h.DEBUGBeginVariableGroup(&context, "By Function");
+            const functionList = h.DEBUGAddVariable(&context, "", .counterThreadList, .{ .dimension = h.v2{ 1024, 200 } });
+            _ = functionList;
+            h.DEBUGEndVariableGroup(&context);
+            h.DEBUGEndVariableGroup(&context);
+
+            h.DEBUGEndVariableGroup(&context);
+
+            debugState.rootGroup = context.group.?;
 
             debugState.renderGroup = h.render_group.Allocate(assets, &debugState.debugArena, platform.MegaBytes(16), false);
 
@@ -321,8 +372,9 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
         debugState.fontScale = 1;
         debugState.renderGroup.Orthographic(width, height, 1);
         debugState.leftEdge = -0.5 * @as(f32, @floatFromInt(width));
+        debugState.rightEdge = 0.5 * @as(f32, @floatFromInt(width));
 
-        debugState.atY = 0.5 * @as(f32, @floatFromInt(height)) - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo);
+        debugState.atY = 0.5 * @as(f32, @floatFromInt(height));
 
         debugState.hierarchy = .{
             .uiP = h.v2{ debugState.leftEdge, debugState.atY },
@@ -454,7 +506,10 @@ fn DEBUGTextLine(string: []const u8) void {
         if (renderGroup.PushFont(debugState.fontID)) |_| {
             const info = renderGroup.assets.GetFontInfo(debugState.fontID);
 
-            DEBUGTextOutAt(.{ debugState.leftEdge, debugState.atY }, string, .{ 1, 1, 1, 1 });
+            DEBUGTextOutAt(.{
+                debugState.leftEdge,
+                debugState.atY - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo),
+            }, string, .{ 1, 1, 1, 1 });
 
             debugState.atY -= h.GetLineAdvanceFor(info) * debugState.fontScale;
         }
@@ -539,14 +594,14 @@ fn VariableToText(buffer: []u8, variable: *debug_variable, flags: debug_variable
 
     if (flags.TypeSuffix) {
         written += @intCast((std.fmt.bufPrint(buffer[written..], "{s} = ", .{
-            @tagName(variable.value),
+            @tagName(variable.type),
         }) catch |err| {
             std.debug.print("{}\n", .{err});
             return 0;
         }).len);
     }
 
-    switch (variable.value) {
+    switch (variable.type) {
         .bool => {
             const memory = std.fmt.bufPrint(buffer[written..], "{}", .{
                 variable.value.bool,
@@ -624,6 +679,7 @@ fn VariableToText(buffer: []u8, variable: *debug_variable, flags: debug_variable
             written += @intCast(memory.len);
         },
         .group => {},
+        else => platform.InvalidCodePath("Unaccounted type."),
     }
 
     if (flags.LineFeedEnd) {
@@ -656,43 +712,42 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     }).len);
 
     while (variable) |_| {
-        var index: i32 = 0;
-        while (index < depth) : (index += 1) {
-            temp[written] = '\t';
-            written += 1;
+        if (ShouldBeWritten(variable.?.type)) {
+            var index: i32 = 0;
+            while (index < depth) : (index += 1) {
+                temp[written] = '\t';
+                written += 1;
+            }
+
+            if (variable.?.type == .group) {
+                written += @intCast((std.fmt.bufPrint(temp[written..], "// ", .{}) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                }).len);
+            }
+
+            written += VariableToText(temp[written..], variable.?, .{
+                .Prefix = true,
+                .Name = true,
+                .Colon = true,
+                .TypeSuffix = true,
+                .LineFeedEnd = true,
+            });
         }
 
-        if (std.meta.activeTag(variable.?.value) == .group) {
-            written += @intCast((std.fmt.bufPrint(temp[written..], "// ", .{}) catch |err| {
-                std.debug.print("{}\n", .{err});
-                return;
-            }).len);
-        }
-
-        written += VariableToText(temp[written..], variable.?, .{
-            .Prefix = true,
-            .Name = true,
-            .Colon = true,
-            .TypeSuffix = true,
-            .LineFeedEnd = true,
-        });
-
-        switch (variable.?.value) {
-            .group => {
-                variable = variable.?.value.group.firstChild;
-                depth += 1;
-            },
-            else => {
-                while (variable) |_| {
-                    if (variable.?.next) |_| {
-                        variable = variable.?.next;
-                        break;
-                    } else {
-                        variable = variable.?.parent;
-                        depth -= 1;
-                    }
+        if (variable.?.type == .group) {
+            variable = variable.?.value.group.firstChild;
+            depth += 1;
+        } else {
+            while (variable) |_| {
+                if (variable.?.next) |_| {
+                    variable = variable.?.next;
+                    break;
+                } else {
+                    variable = variable.?.parent;
+                    depth -= 1;
                 }
-            },
+            }
         }
     }
 
@@ -712,64 +767,166 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     }
 }
 
+fn DrawProfileIn(debugState: *debug_state, profileRect: h.rect2, mouseP: h.v2) void {
+    debugState.renderGroup.PushRect2(profileRect, 0, .{ 0, 0, 0, 0.25 });
+
+    var laneHeight: f32 = 20.0;
+    const laneCount: f32 = @floatFromInt(debugState.frameBarLaneCount);
+
+    const barSpacing = 4.0;
+    var maxFrame = debugState.frameCount;
+    if (maxFrame > 10) {
+        maxFrame = 10;
+    }
+
+    if (laneCount > 0 and maxFrame > 0) {
+        const pixelsPerFramePlusSpacing = h.Y(profileRect.GetDim()) / @as(f32, @floatFromInt(maxFrame));
+        const pixelsPerFrame = pixelsPerFramePlusSpacing - barSpacing;
+        laneHeight = pixelsPerFrame / laneCount;
+    }
+
+    const barHeight = laneHeight * laneCount;
+    const barPlusSpacing = barHeight + barSpacing;
+    const chartLeft = h.X(profileRect.min);
+    const chartHeight = barPlusSpacing * @as(f32, @floatFromInt(maxFrame));
+    _ = chartHeight;
+    const chartWidth = h.X(profileRect.GetDim());
+    const chartTop = h.Y(profileRect.max);
+    const scale = chartWidth * debugState.frameBarScale;
+
+    const colours = [_]h.v3{
+        .{ 1, 0, 0 },
+        .{ 0, 1, 0 },
+        .{ 0, 0, 1 },
+        .{ 1, 1, 0 },
+        .{ 0, 1, 1 },
+        .{ 1, 0, 1 },
+        .{ 1, 0.5, 0 },
+        .{ 1, 0, 0.5 },
+        .{ 0.5, 1, 0 },
+        .{ 0, 1, 0.5 },
+        .{ 0.5, 0, 1 },
+        .{ 0, 0.5, 1 },
+    };
+
+    for (0..maxFrame) |frameIndex| {
+        const frame: *debug_frame = &debugState.frames[debugState.frameCount - (frameIndex + 1)];
+
+        const stackX: f32 = chartLeft;
+        const stackY: f32 = chartTop - @as(f32, @floatFromInt(frameIndex)) * barPlusSpacing;
+
+        for (0..frame.regionCount) |regionIndex| {
+            const region: *debug_frame_region = &frame.regions[regionIndex];
+
+            // const colour = colours[regionIndex % colours.len];
+            const colour = colours[region.colourIndex % colours.len];
+            const thisMinX = stackX + scale * region.minT;
+            const thisMaxX = stackX + scale * region.maxT;
+            const regionRect = h.rect2.InitMinMax(
+                .{ thisMinX, stackY - laneHeight * @as(f32, @floatFromInt(region.laneIndex + 1)) },
+                .{ thisMaxX, stackY - laneHeight * @as(f32, @floatFromInt(region.laneIndex)) },
+            );
+            debugState.renderGroup.PushRect2(regionRect, 0, h.ToV4(colour, 1));
+
+            if (regionRect.IsInRect(mouseP)) {
+                const record: *platform.debug_record = region.record;
+
+                var textBuffer = [1]u8{0} ** 256;
+                const buffer = std.fmt.bufPrint(textBuffer[0..], "{s}: {:10}cy [{s}({d})]\n", .{
+                    record.blockName.?,
+                    region.cycleCount,
+                    record.fileName.?,
+                    record.lineNumber,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+
+                DEBUGTextOutAt(h.Add(mouseP, .{ 0, 10 }), buffer, .{ 1, 1, 1, 1 });
+
+                // hotRecord = record;
+            }
+        }
+    }
+
+    // renderGroup.PushRect(
+    //     .{ chartLeft + 0.5 * chartWidth, chartMinY + chartHeight, 0 },
+    //     .{ chartWidth, 1 },
+    //     .{ 1, 1, 1, 1 },
+    // );
+
+}
+
 fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
     const atX: f32 = h.X(debugState.hierarchy.uiP);
     var atY: f32 = h.Y(debugState.hierarchy.uiP);
     const lineAdvance: f32 = h.GetLineAdvanceFor(debugState.debugFontInfo);
 
+    const spacingY = 4.0;
     var depth: i32 = 0;
     var variable: ?*debug_variable = debugState.hierarchy.group.value.group.firstChild;
     while (variable) |_| {
-        var itemColour = h.v4{ 1, 1, 1, 1 };
-        var text = [1]u8{0} ** 256;
+        const isHot = debugState.hot == variable;
+        const itemColour: h.v4 = if (isHot and debugState.hotInteraction == .None) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 };
 
-        _ = VariableToText(text[0..], variable.?, .{
-            .Name = true,
-            .Colon = true,
-        });
+        var bounds = h.rect2{};
+        switch (variable.?.type) {
+            .counterThreadList => {
+                const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - h.Y(variable.?.value.profile.dimension) };
+                const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.?.value.profile.dimension), atY };
+                const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
+                bounds = h.rect2.InitMinMax(minCorner, maxCorner);
+                DrawProfileIn(debugState, bounds, mouseP);
 
-        const textP: h.v2 = .{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY };
+                const sizeBox = h.rect2.InitCenterHalfDim(sizeP, .{ 4, 4 });
+                debugState.renderGroup.PushRect2(sizeBox, 0, if (isHot and debugState.hotInteraction == .ResizeProfile) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 });
 
-        const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text[0..]);
-        if (textBounds.IsInRect(h.Sub(mouseP, textP))) {
-            debugState.nextHot = variable;
-        }
-
-        if (debugState.hot == variable) {
-            itemColour = h.v4{ 1, 1, 0, 1 };
-        }
-
-        DEBUGTextOutAt(textP, text[0..], itemColour);
-        atY -= lineAdvance * debugState.fontScale;
-
-        switch (variable.?.value) {
-            .group => {
-                if (variable.?.value.group.expanded) {
-                    variable = variable.?.value.group.firstChild;
-                    depth += 1;
-                } else {
-                    while (variable) |_| {
-                        if (variable.?.next) |_| {
-                            variable = variable.?.next;
-                            break;
-                        } else {
-                            variable = variable.?.parent;
-                            depth -= 1;
-                        }
-                    }
+                if (sizeBox.IsInRect(mouseP)) {
+                    debugState.nextHotInteraction = .ResizeProfile;
+                    debugState.nextHot = variable;
+                } else if (bounds.IsInRect(mouseP)) {
+                    debugState.nextHotInteraction = .None;
+                    debugState.nextHot = variable;
                 }
             },
             else => {
-                while (variable) |_| {
-                    if (variable.?.next) |_| {
-                        variable = variable.?.next;
-                        break;
-                    } else {
-                        variable = variable.?.parent;
-                        depth -= 1;
-                    }
+                var text = [1]u8{0} ** 256;
+
+                _ = VariableToText(text[0..], variable.?, .{
+                    .Name = true,
+                    .Colon = true,
+                });
+
+                const leftPx = atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance;
+                const topPy = atY;
+
+                bounds = DEBUGGetTextSize(debugState, text[0..]);
+                bounds = bounds.Offset(.{ leftPx, topPy - h.Y(bounds.GetDim()) });
+
+                DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
+
+                if (bounds.IsInRect(mouseP)) {
+                    debugState.nextHotInteraction = .None;
+                    debugState.nextHot = variable;
                 }
             },
+        }
+
+        atY = h.Y(bounds.GetMinCorner()) - spacingY;
+
+        if (variable.?.type == .group and variable.?.value.group.expanded) {
+            variable = variable.?.value.group.firstChild;
+            depth += 1;
+        } else {
+            while (variable) |_| {
+                if (variable.?.next) |_| {
+                    variable = variable.?.next;
+                    break;
+                } else {
+                    variable = variable.?.parent;
+                    depth -= 1;
+                }
+            }
         }
     }
 
@@ -814,17 +971,21 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
 
 fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
     if (debugState.hot) |hotVariable| {
-        switch (hotVariable.value) {
-            .bool => {
-                debugState.interaction = .ToggleValue;
-            },
-            .f32 => {
-                debugState.interaction = .DragValue;
-            },
-            .group => {
-                debugState.interaction = .ToggleValue;
-            },
-            else => {},
+        if (debugState.hotInteraction != .None) {
+            debugState.interaction = debugState.hotInteraction;
+        } else {
+            switch (hotVariable.type) {
+                .bool => {
+                    debugState.interaction = .ToggleValue;
+                },
+                .f32 => {
+                    debugState.interaction = .DragValue;
+                },
+                .group => {
+                    debugState.interaction = .ToggleValue;
+                },
+                else => {},
+            }
         }
 
         if (debugState.interaction != .None) {
@@ -840,7 +1001,7 @@ fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
         if (debugState.interactingWith) |variable| { // NOTE (Manav): null variable can be with .NOP
             switch (debugState.interaction) {
                 .ToggleValue => {
-                    switch (variable.value) {
+                    switch (variable.type) {
                         .bool => {
                             variable.value.bool = !variable.value.bool;
                         },
@@ -875,16 +1036,22 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
 
     if (debugState.interaction != .None) {
         // Mouse move interaction
+        var variable: ?*debug_variable = debugState.interactingWith; // NOTE (Manav): null variable can be with .NOP
+
         switch (debugState.interaction) {
             .DragValue => {
-                var variable = debugState.interactingWith.?; // NOTE (Manav): null variable can be with .NOP
-                switch (variable.value) {
+                switch (variable.?.type) {
                     .f32 => {
-                        variable.value.f32 += 0.1 * h.Y(dMouseP);
+                        variable.?.value.f32 += 0.1 * h.Y(dMouseP);
                     },
 
                     else => {},
                 }
+            },
+            .ResizeProfile => {
+                h.AddTo(&variable.?.value.profile.dimension, .{ h.X(dMouseP), -h.Y(dMouseP) });
+                h.SetX(&variable.?.value.profile.dimension, @max(h.X(variable.?.value.profile.dimension), 10.0));
+                h.SetY(&variable.?.value.profile.dimension, @max(h.Y(variable.?.value.profile.dimension), 10.0));
             },
             else => {},
         }
@@ -901,6 +1068,7 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
         }
     } else {
         debugState.hot = debugState.nextHot;
+        debugState.hotInteraction = debugState.nextHotInteraction;
 
         var transitionIndex = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
         while (transitionIndex > 1) : (transitionIndex -= 1) {
@@ -916,7 +1084,7 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
     if (platform.ignore) {
         if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)])) {
             if (debugState.hotVariable) |hotVariable| {
-                switch (hotVariable.value) {
+                switch (hotVariable.type) {
                     .bool => {
                         debugState.hotVariable.?.value.bool = !debugState.hotVariable.?.value.bool;
                     },
@@ -943,7 +1111,8 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
         const renderGroup: *h.render_group = debugState.renderGroup;
 
         debugState.nextHot = null;
-        var hotRecord: ?*platform.debug_record = null;
+        debugState.nextHotInteraction = .None;
+        const hotRecord: ?*platform.debug_record = null;
 
         const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
 
@@ -1037,98 +1206,6 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
                 };
 
                 DEBUGTextLine(buffer);
-            }
-
-            if (debugState.profileOn) {
-                debugState.renderGroup.Orthographic(@intFromFloat(debugState.globalWidth), @intFromFloat(debugState.globalHeight), 1);
-
-                debugState.profileRect = h.rect2.InitMinMax(.{ 50, 50 }, .{ 200, 200 });
-                renderGroup.PushRect2(debugState.profileRect, 0, .{ 0, 0, 0, 0.25 });
-
-                var laneHeight: f32 = 20.0;
-                const laneCount: f32 = @floatFromInt(debugState.frameBarLaneCount);
-
-                const barSpacing = 4.0;
-                var maxFrame = debugState.frameCount;
-                if (maxFrame > 10) {
-                    maxFrame = 10;
-                }
-
-                if (laneCount > 0 and maxFrame > 0) {
-                    const pixelsPerFramePlusSpacing = h.Y(debugState.profileRect.GetDim()) / @as(f32, @floatFromInt(maxFrame));
-                    const pixelsPerFrame = pixelsPerFramePlusSpacing - barSpacing;
-                    laneHeight = pixelsPerFrame / laneCount;
-                }
-
-                const barHeight = laneHeight * laneCount;
-                const barPlusSpacing = barHeight + barSpacing;
-                const chartLeft = h.X(debugState.profileRect.min);
-                const chartHeight = barPlusSpacing * @as(f32, @floatFromInt(maxFrame));
-                _ = chartHeight;
-                const chartWidth = h.X(debugState.profileRect.GetDim());
-                const chartTop = h.Y(debugState.profileRect.max);
-                const scale = chartWidth * debugState.frameBarScale;
-
-                const colours = [_]h.v3{
-                    .{ 1, 0, 0 },
-                    .{ 0, 1, 0 },
-                    .{ 0, 0, 1 },
-                    .{ 1, 1, 0 },
-                    .{ 0, 1, 1 },
-                    .{ 1, 0, 1 },
-                    .{ 1, 0.5, 0 },
-                    .{ 1, 0, 0.5 },
-                    .{ 0.5, 1, 0 },
-                    .{ 0, 1, 0.5 },
-                    .{ 0.5, 0, 1 },
-                    .{ 0, 0.5, 1 },
-                };
-
-                for (0..maxFrame) |frameIndex| {
-                    const frame: *debug_frame = &debugState.frames[debugState.frameCount - (frameIndex + 1)];
-
-                    const stackX: f32 = chartLeft;
-                    const stackY: f32 = chartTop - @as(f32, @floatFromInt(frameIndex)) * barPlusSpacing;
-
-                    for (0..frame.regionCount) |regionIndex| {
-                        const region: *debug_frame_region = &frame.regions[regionIndex];
-
-                        // const colour = colours[regionIndex % colours.len];
-                        const colour = colours[region.colourIndex % colours.len];
-                        const thisMinX = stackX + scale * region.minT;
-                        const thisMaxX = stackX + scale * region.maxT;
-                        const regionRect = h.rect2.InitMinMax(
-                            .{ thisMinX, stackY - laneHeight * @as(f32, @floatFromInt(region.laneIndex + 1)) },
-                            .{ thisMaxX, stackY - laneHeight * @as(f32, @floatFromInt(region.laneIndex)) },
-                        );
-                        renderGroup.PushRect2(regionRect, 0, h.ToV4(colour, 1));
-
-                        if (regionRect.IsInRect(mouseP)) {
-                            const record: *platform.debug_record = region.record;
-
-                            var textBuffer = [1]u8{0} ** 256;
-                            const buffer = std.fmt.bufPrint(textBuffer[0..], "{s}: {:10}cy [{s}({d})]\n", .{
-                                record.blockName.?,
-                                region.cycleCount,
-                                record.fileName.?,
-                                record.lineNumber,
-                            }) catch |err| {
-                                std.debug.print("{}\n", .{err});
-                                return;
-                            };
-
-                            DEBUGTextOutAt(h.Add(mouseP, .{ 0, 10 }), buffer, .{ 1, 1, 1, 1 });
-
-                            hotRecord = record;
-                        }
-                    }
-                }
-
-                // renderGroup.PushRect(
-                //     .{ chartLeft + 0.5 * chartWidth, chartMinY + chartHeight, 0 },
-                //     .{ chartWidth, 1 },
-                //     .{ 1, 1, 1, 1 },
-                // );
             }
         }
         if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)])) {
