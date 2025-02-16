@@ -7,7 +7,7 @@ const h = struct {
     usingnamespace @import("handmade_math.zig");
 };
 
-const debug_variable_definition_context = struct {
+pub const debug_variable_definition_context = struct {
     state: *h.debug_state,
     arena: *h.memory_arena,
 
@@ -37,7 +37,7 @@ fn AddVariable__(context: *debug_variable_definition_context, comptime name: [:0
     return debugVar;
 }
 
-fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
+pub fn DEBUGBeginVariableGroup(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable {
     var group: *h.debug_variable = AddVariable__(context, name);
 
     group.type = .group;
@@ -55,7 +55,7 @@ fn BeginVariableGroup(context: *debug_variable_definition_context, comptime name
     return group;
 }
 
-fn DEBUGAddVariable(context: *debug_variable_definition_context, comptime name: [:0]const u8, comptime t: h.debug_variable_type, value: h.debug_variable_type.toT(t)) *h.debug_variable {
+pub fn DEBUGAddVariable(context: *debug_variable_definition_context, comptime name: [:0]const u8, comptime t: h.debug_variable_type, value: h.debug_variable_type.toT(t)) *h.debug_variable {
     var debugVar: *h.debug_variable = AddVariable__(context, name);
 
     debugVar.type = t;
@@ -81,6 +81,9 @@ fn DEBUGAddVariable(context: *debug_variable_definition_context, comptime name: 
         },
         .v4 => {
             debugVar.value = .{ .v4 = value };
+        },
+        .counterThreadList => {
+            debugVar.value = .{ .counterThreadList = value };
         },
         else => platform.InvalidCodePath("Unsupported debug variable type"),
     }
@@ -112,43 +115,33 @@ inline fn VariableListing(context: *debug_variable_definition_context, comptime 
     return DEBUGAddVariable(context, name, t, config_variable);
 }
 
-pub fn DEBUGCreateVariables(state: *h.debug_state) void {
-    var context = debug_variable_definition_context{
-        .state = state,
-        .arena = &state.debugArena,
-        .group = null,
-    };
+pub fn DEBUGCreateVariables(context: *debug_variable_definition_context) void {
+    _ = DEBUGBeginVariableGroup(context, "Ground Chunks");
+    _ = VariableListing(context, "GroundChunkOutlines");
+    _ = VariableListing(context, "GroundChunkCheckerboards");
+    _ = VariableListing(context, "RecomputeGroundChunksOnExeChange");
+    EndVariableGroup(context);
 
-    context.group = BeginVariableGroup(&context, "Root");
+    _ = DEBUGBeginVariableGroup(context, "Particles");
+    _ = VariableListing(context, "ParticleTest");
+    _ = VariableListing(context, "ParticleGrid");
+    EndVariableGroup(context);
 
-    _ = BeginVariableGroup(&context, "Ground Chunks");
-    _ = VariableListing(&context, "GroundChunkOutlines");
-    _ = VariableListing(&context, "GroundChunkCheckerboards");
-    _ = VariableListing(&context, "RecomputeGroundChunksOnExeChange");
-    EndVariableGroup(&context);
-
-    _ = BeginVariableGroup(&context, "Particles");
-    _ = VariableListing(&context, "ParticleTest");
-    _ = VariableListing(&context, "ParticleGrid");
-    EndVariableGroup(&context);
-
-    _ = BeginVariableGroup(&context, "Renderer");
+    _ = DEBUGBeginVariableGroup(context, "Renderer");
     {
-        _ = VariableListing(&context, "TestWeirdDrawBufferSize");
-        _ = VariableListing(&context, "ShowLightingSamples");
-        _ = BeginVariableGroup(&context, "Camera");
+        _ = VariableListing(context, "TestWeirdDrawBufferSize");
+        _ = VariableListing(context, "ShowLightingSamples");
+        _ = DEBUGBeginVariableGroup(context, "Camera");
         {
-            _ = VariableListing(&context, "UseDebugCamera");
-            _ = VariableListing(&context, "DebugCameraDistance");
-            _ = VariableListing(&context, "UseRoomBasedCamera");
-            EndVariableGroup(&context);
+            _ = VariableListing(context, "UseDebugCamera");
+            _ = VariableListing(context, "DebugCameraDistance");
+            _ = VariableListing(context, "UseRoomBasedCamera");
+            EndVariableGroup(context);
         }
-        EndVariableGroup(&context);
+        EndVariableGroup(context);
     }
 
-    _ = VariableListing(&context, "UseSpaceOutlines");
-    _ = VariableListing(&context, "FamiliarFollowsHero");
-    _ = VariableListing(&context, "FauxV4");
-
-    state.rootGroup = context.group.?;
+    _ = VariableListing(context, "UseSpaceOutlines");
+    _ = VariableListing(context, "FamiliarFollowsHero");
+    _ = VariableListing(context, "FauxV4");
 }

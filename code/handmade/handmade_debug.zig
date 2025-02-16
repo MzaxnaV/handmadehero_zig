@@ -61,6 +61,8 @@ pub const debug_variable_type = enum {
     v3,
     v4,
 
+    counterThreadList,
+
     group,
 
     pub inline fn toT(comptime t: debug_variable_type) type {
@@ -72,10 +74,16 @@ pub const debug_variable_type = enum {
             .v2 => h.v2,
             .v3 => h.v3,
             .v4 => h.v4,
+            .counterThreadList => __t,
             .group => debug_variable_group,
         };
     }
 };
+
+pub fn ShouldBeWritten(t: debug_variable_type) bool {
+    const result = (t != .counterThreadList);
+    return result;
+}
 
 pub const debug_variable_group = struct {
     expanded: bool,
@@ -87,6 +95,8 @@ const debug_variable_hierarchy = struct {
     uiP: h.v2,
     group: *debug_variable,
 };
+
+const __t = struct {};
 
 pub const debug_variable = struct {
     name: [:0]const u8,
@@ -102,6 +112,7 @@ pub const debug_variable = struct {
         v2: h.v2,
         v3: h.v3,
         v4: h.v4,
+        counterThreadList: __t, // NOTE (Manav): this is needed or else the tag will be .bool
         group: debug_variable_group,
     },
 };
@@ -195,6 +206,7 @@ pub const debug_state = struct {
     nextHot: ?*debug_variable,
 
     leftEdge: f32,
+    rightEdge: f32,
     atY: f32,
     fontScale: f32,
     fontID: h.font_id,
@@ -212,9 +224,6 @@ pub const debug_state = struct {
     frameCount: u32,
     frameBarScale: f32,
     paused: bool,
-
-    profileOn: bool,
-    profileRect: h.rect2,
 
     frames: []debug_frame,
     firstThread: ?*debug_thread,
@@ -296,7 +305,19 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
                 @ptrCast(@as([*]debug_state, @ptrCast(debugState)) + 1),
             );
 
-            h.DEBUGCreateVariables(debugState);
+            var context = h.debug_variable_definition_context{
+                .state = debugState,
+                .arena = &debugState.debugArena,
+                .group = null,
+            };
+
+            context.group = h.DEBUGBeginVariableGroup(&context, "Root");
+
+            h.DEBUGCreateVariables(&context);
+            const threadList = h.DEBUGAddVariable(&context, "Profile By Thread", .counterThreadList, .{});
+            _ = threadList;
+
+            debugState.rootGroup = context.group.?;
 
             debugState.renderGroup = h.render_group.Allocate(assets, &debugState.debugArena, platform.MegaBytes(16), false);
 
@@ -334,8 +355,9 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
         debugState.fontScale = 1;
         debugState.renderGroup.Orthographic(width, height, 1);
         debugState.leftEdge = -0.5 * @as(f32, @floatFromInt(width));
+        debugState.rightEdge = 0.5 * @as(f32, @floatFromInt(width));
 
-        debugState.atY = 0.5 * @as(f32, @floatFromInt(height)) - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo);
+        debugState.atY = 0.5 * @as(f32, @floatFromInt(height));
 
         debugState.hierarchy = .{
             .uiP = h.v2{ debugState.leftEdge, debugState.atY },
@@ -637,6 +659,7 @@ fn VariableToText(buffer: []u8, variable: *debug_variable, flags: debug_variable
             written += @intCast(memory.len);
         },
         .group => {},
+        else => platform.InvalidCodePath("Unaccounted type."),
     }
 
     if (flags.LineFeedEnd) {
@@ -669,26 +692,28 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     }).len);
 
     while (variable) |_| {
-        var index: i32 = 0;
-        while (index < depth) : (index += 1) {
-            temp[written] = '\t';
-            written += 1;
-        }
+        if (ShouldBeWritten(variable.?.type)) {
+            var index: i32 = 0;
+            while (index < depth) : (index += 1) {
+                temp[written] = '\t';
+                written += 1;
+            }
 
-        if (variable.?.type == .group) {
-            written += @intCast((std.fmt.bufPrint(temp[written..], "// ", .{}) catch |err| {
-                std.debug.print("{}\n", .{err});
-                return;
-            }).len);
-        }
+            if (variable.?.type == .group) {
+                written += @intCast((std.fmt.bufPrint(temp[written..], "// ", .{}) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                }).len);
+            }
 
-        written += VariableToText(temp[written..], variable.?, .{
-            .Prefix = true,
-            .Name = true,
-            .Colon = true,
-            .TypeSuffix = true,
-            .LineFeedEnd = true,
-        });
+            written += VariableToText(temp[written..], variable.?, .{
+                .Prefix = true,
+                .Name = true,
+                .Colon = true,
+                .TypeSuffix = true,
+                .LineFeedEnd = true,
+            });
+        }
 
         if (variable.?.type == .group) {
             variable = variable.?.value.group.firstChild;
@@ -722,35 +747,143 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     }
 }
 
+fn DrawProfileIn(debugState: *debug_state, profileRect: h.rect2, mouseP: h.v2) void {
+    debugState.renderGroup.PushRect2(profileRect, 0, .{ 0, 0, 0, 0.25 });
+
+    var laneHeight: f32 = 20.0;
+    const laneCount: f32 = @floatFromInt(debugState.frameBarLaneCount);
+
+    const barSpacing = 4.0;
+    var maxFrame = debugState.frameCount;
+    if (maxFrame > 10) {
+        maxFrame = 10;
+    }
+
+    if (laneCount > 0 and maxFrame > 0) {
+        const pixelsPerFramePlusSpacing = h.Y(profileRect.GetDim()) / @as(f32, @floatFromInt(maxFrame));
+        const pixelsPerFrame = pixelsPerFramePlusSpacing - barSpacing;
+        laneHeight = pixelsPerFrame / laneCount;
+    }
+
+    const barHeight = laneHeight * laneCount;
+    const barPlusSpacing = barHeight + barSpacing;
+    const chartLeft = h.X(profileRect.min);
+    const chartHeight = barPlusSpacing * @as(f32, @floatFromInt(maxFrame));
+    _ = chartHeight;
+    const chartWidth = h.X(profileRect.GetDim());
+    const chartTop = h.Y(profileRect.max);
+    const scale = chartWidth * debugState.frameBarScale;
+
+    const colours = [_]h.v3{
+        .{ 1, 0, 0 },
+        .{ 0, 1, 0 },
+        .{ 0, 0, 1 },
+        .{ 1, 1, 0 },
+        .{ 0, 1, 1 },
+        .{ 1, 0, 1 },
+        .{ 1, 0.5, 0 },
+        .{ 1, 0, 0.5 },
+        .{ 0.5, 1, 0 },
+        .{ 0, 1, 0.5 },
+        .{ 0.5, 0, 1 },
+        .{ 0, 0.5, 1 },
+    };
+
+    for (0..maxFrame) |frameIndex| {
+        const frame: *debug_frame = &debugState.frames[debugState.frameCount - (frameIndex + 1)];
+
+        const stackX: f32 = chartLeft;
+        const stackY: f32 = chartTop - @as(f32, @floatFromInt(frameIndex)) * barPlusSpacing;
+
+        for (0..frame.regionCount) |regionIndex| {
+            const region: *debug_frame_region = &frame.regions[regionIndex];
+
+            // const colour = colours[regionIndex % colours.len];
+            const colour = colours[region.colourIndex % colours.len];
+            const thisMinX = stackX + scale * region.minT;
+            const thisMaxX = stackX + scale * region.maxT;
+            const regionRect = h.rect2.InitMinMax(
+                .{ thisMinX, stackY - laneHeight * @as(f32, @floatFromInt(region.laneIndex + 1)) },
+                .{ thisMaxX, stackY - laneHeight * @as(f32, @floatFromInt(region.laneIndex)) },
+            );
+            debugState.renderGroup.PushRect2(regionRect, 0, h.ToV4(colour, 1));
+
+            if (regionRect.IsInRect(mouseP)) {
+                const record: *platform.debug_record = region.record;
+
+                var textBuffer = [1]u8{0} ** 256;
+                const buffer = std.fmt.bufPrint(textBuffer[0..], "{s}: {:10}cy [{s}({d})]\n", .{
+                    record.blockName.?,
+                    region.cycleCount,
+                    record.fileName.?,
+                    record.lineNumber,
+                }) catch |err| {
+                    std.debug.print("{}\n", .{err});
+                    return;
+                };
+
+                DEBUGTextOutAt(h.Add(mouseP, .{ 0, 10 }), buffer, .{ 1, 1, 1, 1 });
+
+                // hotRecord = record;
+            }
+        }
+    }
+
+    // renderGroup.PushRect(
+    //     .{ chartLeft + 0.5 * chartWidth, chartMinY + chartHeight, 0 },
+    //     .{ chartWidth, 1 },
+    //     .{ 1, 1, 1, 1 },
+    // );
+
+}
+
 fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
     const atX: f32 = h.X(debugState.hierarchy.uiP);
     var atY: f32 = h.Y(debugState.hierarchy.uiP);
     const lineAdvance: f32 = h.GetLineAdvanceFor(debugState.debugFontInfo);
 
+    const spacingY = 4.0;
     var depth: i32 = 0;
     var variable: ?*debug_variable = debugState.hierarchy.group.value.group.firstChild;
     while (variable) |_| {
         var itemColour = h.v4{ 1, 1, 1, 1 };
-        var text = [1]u8{0} ** 256;
 
-        _ = VariableToText(text[0..], variable.?, .{
-            .Name = true,
-            .Colon = true,
-        });
-
-        const textP: h.v2 = .{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY };
-
-        const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text[0..]);
-        if (textBounds.IsInRect(h.Sub(mouseP, textP))) {
-            debugState.nextHot = variable;
-        }
+        var bounds = h.rect2{};
 
         if (debugState.hot == variable) {
             itemColour = h.v4{ 1, 1, 0, 1 };
         }
 
-        DEBUGTextOutAt(textP, text[0..], itemColour);
-        atY -= lineAdvance * debugState.fontScale;
+        switch (variable.?.type) {
+            .counterThreadList => {
+                const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - 100.0 };
+                const maxCorner = h.v2{ debugState.rightEdge, atY };
+                bounds = h.rect2.InitMinMax(minCorner, maxCorner);
+                DrawProfileIn(debugState, bounds, mouseP);
+            },
+            else => {
+                var text = [1]u8{0} ** 256;
+
+                _ = VariableToText(text[0..], variable.?, .{
+                    .Name = true,
+                    .Colon = true,
+                });
+
+                const leftPx = atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance;
+                const topPy = atY;
+
+                bounds = DEBUGGetTextSize(debugState, text[0..]);
+                bounds = bounds.Offset(.{ leftPx, topPy - h.Y(bounds.GetDim()) });
+
+                DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
+            },
+        }
+
+        if (bounds.IsInRect(mouseP)) {
+            debugState.nextHot = variable;
+        }
+
+        atY = h.Y(bounds.GetMinCorner()) - spacingY;
 
         if (variable.?.type == .group and variable.?.value.group.expanded) {
             variable = variable.?.value.group.firstChild;
@@ -938,7 +1071,7 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
         const renderGroup: *h.render_group = debugState.renderGroup;
 
         debugState.nextHot = null;
-        var hotRecord: ?*platform.debug_record = null;
+        const hotRecord: ?*platform.debug_record = null;
 
         const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
 
@@ -1032,98 +1165,6 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
                 };
 
                 DEBUGTextLine(buffer);
-            }
-
-            if (debugState.profileOn) {
-                debugState.renderGroup.Orthographic(@intFromFloat(debugState.globalWidth), @intFromFloat(debugState.globalHeight), 1);
-
-                debugState.profileRect = h.rect2.InitMinMax(.{ 50, 50 }, .{ 200, 200 });
-                renderGroup.PushRect2(debugState.profileRect, 0, .{ 0, 0, 0, 0.25 });
-
-                var laneHeight: f32 = 20.0;
-                const laneCount: f32 = @floatFromInt(debugState.frameBarLaneCount);
-
-                const barSpacing = 4.0;
-                var maxFrame = debugState.frameCount;
-                if (maxFrame > 10) {
-                    maxFrame = 10;
-                }
-
-                if (laneCount > 0 and maxFrame > 0) {
-                    const pixelsPerFramePlusSpacing = h.Y(debugState.profileRect.GetDim()) / @as(f32, @floatFromInt(maxFrame));
-                    const pixelsPerFrame = pixelsPerFramePlusSpacing - barSpacing;
-                    laneHeight = pixelsPerFrame / laneCount;
-                }
-
-                const barHeight = laneHeight * laneCount;
-                const barPlusSpacing = barHeight + barSpacing;
-                const chartLeft = h.X(debugState.profileRect.min);
-                const chartHeight = barPlusSpacing * @as(f32, @floatFromInt(maxFrame));
-                _ = chartHeight;
-                const chartWidth = h.X(debugState.profileRect.GetDim());
-                const chartTop = h.Y(debugState.profileRect.max);
-                const scale = chartWidth * debugState.frameBarScale;
-
-                const colours = [_]h.v3{
-                    .{ 1, 0, 0 },
-                    .{ 0, 1, 0 },
-                    .{ 0, 0, 1 },
-                    .{ 1, 1, 0 },
-                    .{ 0, 1, 1 },
-                    .{ 1, 0, 1 },
-                    .{ 1, 0.5, 0 },
-                    .{ 1, 0, 0.5 },
-                    .{ 0.5, 1, 0 },
-                    .{ 0, 1, 0.5 },
-                    .{ 0.5, 0, 1 },
-                    .{ 0, 0.5, 1 },
-                };
-
-                for (0..maxFrame) |frameIndex| {
-                    const frame: *debug_frame = &debugState.frames[debugState.frameCount - (frameIndex + 1)];
-
-                    const stackX: f32 = chartLeft;
-                    const stackY: f32 = chartTop - @as(f32, @floatFromInt(frameIndex)) * barPlusSpacing;
-
-                    for (0..frame.regionCount) |regionIndex| {
-                        const region: *debug_frame_region = &frame.regions[regionIndex];
-
-                        // const colour = colours[regionIndex % colours.len];
-                        const colour = colours[region.colourIndex % colours.len];
-                        const thisMinX = stackX + scale * region.minT;
-                        const thisMaxX = stackX + scale * region.maxT;
-                        const regionRect = h.rect2.InitMinMax(
-                            .{ thisMinX, stackY - laneHeight * @as(f32, @floatFromInt(region.laneIndex + 1)) },
-                            .{ thisMaxX, stackY - laneHeight * @as(f32, @floatFromInt(region.laneIndex)) },
-                        );
-                        renderGroup.PushRect2(regionRect, 0, h.ToV4(colour, 1));
-
-                        if (regionRect.IsInRect(mouseP)) {
-                            const record: *platform.debug_record = region.record;
-
-                            var textBuffer = [1]u8{0} ** 256;
-                            const buffer = std.fmt.bufPrint(textBuffer[0..], "{s}: {:10}cy [{s}({d})]\n", .{
-                                record.blockName.?,
-                                region.cycleCount,
-                                record.fileName.?,
-                                record.lineNumber,
-                            }) catch |err| {
-                                std.debug.print("{}\n", .{err});
-                                return;
-                            };
-
-                            DEBUGTextOutAt(h.Add(mouseP, .{ 0, 10 }), buffer, .{ 1, 1, 1, 1 });
-
-                            hotRecord = record;
-                        }
-                    }
-                }
-
-                // renderGroup.PushRect(
-                //     .{ chartLeft + 0.5 * chartWidth, chartMinY + chartHeight, 0 },
-                //     .{ chartWidth, 1 },
-                //     .{ 1, 1, 1, 1 },
-                // );
             }
         }
         if (platform.WasPressed(&input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)])) {
