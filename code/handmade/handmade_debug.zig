@@ -74,8 +74,8 @@ pub const debug_variable_type = enum {
             .v2 => h.v2,
             .v3 => h.v3,
             .v4 => h.v4,
-            .counterThreadList => __t,
             .group => debug_variable_group,
+            .counterThreadList => debug_profile_settings,
         };
     }
 };
@@ -96,7 +96,9 @@ const debug_variable_hierarchy = struct {
     group: *debug_variable,
 };
 
-const __t = struct {};
+const debug_profile_settings = struct {
+    dimension: h.v2,
+};
 
 pub const debug_variable = struct {
     name: [:0]const u8,
@@ -104,7 +106,7 @@ pub const debug_variable = struct {
     parent: ?*debug_variable,
     type: debug_variable_type,
 
-    value: union {
+    value: union { // NOTE (Manav): consider tagged union once everything is finalised
         bool: bool,
         i32: i32,
         u32: u32,
@@ -112,8 +114,8 @@ pub const debug_variable = struct {
         v2: h.v2,
         v3: h.v3,
         v4: h.v4,
-        counterThreadList: __t, // NOTE (Manav): this is needed or else the tag will be .bool
         group: debug_variable_group,
+        profile: debug_profile_settings,
     },
 };
 
@@ -177,6 +179,8 @@ const debug_interaction = enum {
     ToggleValue,
     DragValue,
     TearValue,
+
+    ResizeProfile,
 };
 
 pub const debug_state = struct {
@@ -201,8 +205,10 @@ pub const debug_state = struct {
 
     interaction: debug_interaction,
     lastMouseP: h.v2,
+    hotInteraction: debug_interaction,
     hot: ?*debug_variable,
     interactingWith: ?*debug_variable,
+    nextHotInteraction: debug_interaction,
     nextHot: ?*debug_variable,
 
     leftEdge: f32,
@@ -315,8 +321,14 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
 
             h.DEBUGCreateVariables(&context);
             _ = h.DEBUGBeginVariableGroup(&context, "Profile");
-            const threadList = h.DEBUGAddVariable(&context, "Profile By Thread", .counterThreadList, .{});
+            _ = h.DEBUGBeginVariableGroup(&context, "By Thread");
+            const threadList = h.DEBUGAddVariable(&context, "", .counterThreadList, .{ .dimension = h.v2{ 1024, 100 } });
             _ = threadList;
+            h.DEBUGEndVariableGroup(&context);
+            _ = h.DEBUGBeginVariableGroup(&context, "By Function");
+            const functionList = h.DEBUGAddVariable(&context, "", .counterThreadList, .{ .dimension = h.v2{ 1024, 200 } });
+            _ = functionList;
+            h.DEBUGEndVariableGroup(&context);
             h.DEBUGEndVariableGroup(&context);
 
             debugState.rootGroup = context.group.?;
@@ -851,20 +863,28 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
     var depth: i32 = 0;
     var variable: ?*debug_variable = debugState.hierarchy.group.value.group.firstChild;
     while (variable) |_| {
-        var itemColour = h.v4{ 1, 1, 1, 1 };
+        const isHot = debugState.hot == variable;
+        const itemColour: h.v4 = if (isHot and debugState.hotInteraction == .None) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 };
 
         var bounds = h.rect2{};
-
-        if (debugState.hot == variable) {
-            itemColour = h.v4{ 1, 1, 0, 1 };
-        }
-
         switch (variable.?.type) {
             .counterThreadList => {
-                const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - 100.0 };
-                const maxCorner = h.v2{ debugState.rightEdge, atY };
+                const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - h.Y(variable.?.value.profile.dimension) };
+                const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.?.value.profile.dimension), atY };
+                const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
                 bounds = h.rect2.InitMinMax(minCorner, maxCorner);
                 DrawProfileIn(debugState, bounds, mouseP);
+
+                const sizeBox = h.rect2.InitCenterHalfDim(sizeP, .{ 4, 4 });
+                debugState.renderGroup.PushRect2(sizeBox, 0, if (isHot and debugState.hotInteraction == .ResizeProfile) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 });
+
+                if (sizeBox.IsInRect(mouseP)) {
+                    debugState.nextHotInteraction = .ResizeProfile;
+                    debugState.nextHot = variable;
+                } else if (bounds.IsInRect(mouseP)) {
+                    debugState.nextHotInteraction = .None;
+                    debugState.nextHot = variable;
+                }
             },
             else => {
                 var text = [1]u8{0} ** 256;
@@ -881,11 +901,12 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
                 bounds = bounds.Offset(.{ leftPx, topPy - h.Y(bounds.GetDim()) });
 
                 DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
-            },
-        }
 
-        if (bounds.IsInRect(mouseP)) {
-            debugState.nextHot = variable;
+                if (bounds.IsInRect(mouseP)) {
+                    debugState.nextHotInteraction = .None;
+                    debugState.nextHot = variable;
+                }
+            },
         }
 
         atY = h.Y(bounds.GetMinCorner()) - spacingY;
@@ -947,17 +968,21 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
 
 fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
     if (debugState.hot) |hotVariable| {
-        switch (hotVariable.type) {
-            .bool => {
-                debugState.interaction = .ToggleValue;
-            },
-            .f32 => {
-                debugState.interaction = .DragValue;
-            },
-            .group => {
-                debugState.interaction = .ToggleValue;
-            },
-            else => {},
+        if (debugState.hotInteraction != .None) {
+            debugState.interaction = debugState.hotInteraction;
+        } else {
+            switch (hotVariable.type) {
+                .bool => {
+                    debugState.interaction = .ToggleValue;
+                },
+                .f32 => {
+                    debugState.interaction = .DragValue;
+                },
+                .group => {
+                    debugState.interaction = .ToggleValue;
+                },
+                else => {},
+            }
         }
 
         if (debugState.interaction != .None) {
@@ -1034,6 +1059,7 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
         }
     } else {
         debugState.hot = debugState.nextHot;
+        debugState.hotInteraction = debugState.nextHotInteraction;
 
         var transitionIndex = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
         while (transitionIndex > 1) : (transitionIndex -= 1) {
@@ -1076,6 +1102,7 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
         const renderGroup: *h.render_group = debugState.renderGroup;
 
         debugState.nextHot = null;
+        debugState.nextHotInteraction = .None;
         const hotRecord: ?*platform.debug_record = null;
 
         const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);

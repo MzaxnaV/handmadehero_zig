@@ -83,7 +83,7 @@ pub fn DEBUGAddVariable(context: *debug_variable_definition_context, comptime na
             debugVar.value = .{ .v4 = value };
         },
         .counterThreadList => {
-            debugVar.value = .{ .counterThreadList = value };
+            debugVar.value = .{ .profile = value };
         },
         else => platform.InvalidCodePath("Unsupported debug variable type"),
     }
