@@ -85,15 +85,21 @@ pub fn ShouldBeWritten(t: debug_variable_type) bool {
     return result;
 }
 
+pub const debug_variable_reference = struct {
+    variable: *debug_variable,
+    next: ?*debug_variable_reference,
+    parent: ?*debug_variable_reference,
+};
+
 pub const debug_variable_group = struct {
     expanded: bool,
-    firstChild: ?*debug_variable,
-    lastChild: ?*debug_variable,
+    firstChild: ?*debug_variable_reference,
+    lastChild: ?*debug_variable_reference,
 };
 
 const debug_variable_hierarchy = struct {
     uiP: h.v2,
-    group: *debug_variable,
+    group: *debug_variable_reference,
 };
 
 const debug_profile_settings = struct {
@@ -101,10 +107,8 @@ const debug_profile_settings = struct {
 };
 
 pub const debug_variable = struct {
-    name: [:0]const u8,
-    next: ?*debug_variable,
-    parent: ?*debug_variable,
     type: debug_variable_type,
+    name: [:0]const u8,
 
     value: union { // NOTE (Manav): consider tagged union once everything is finalised
         bool: bool,
@@ -200,7 +204,7 @@ pub const debug_state = struct {
     menuP: h.v2,
     menuActive: bool,
 
-    rootGroup: *debug_variable,
+    rootGroup: *debug_variable_reference,
     hierarchy: debug_variable_hierarchy,
 
     interaction: debug_interaction,
@@ -702,7 +706,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     var written: u32 = 0;
 
     var depth: i32 = 0;
-    var variable: ?*debug_variable = debugState.rootGroup.value.group.firstChild;
+    var ref: ?*debug_variable_reference = debugState.rootGroup.variable.value.group.firstChild;
 
     const include = "const math = @import(\"handmade_math.zig\");\nconst v2 = math.v2;\nconst v3 = math.v3;\nconst v4 = math.v4;\n\n";
 
@@ -711,22 +715,23 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
         return;
     }).len);
 
-    while (variable) |_| {
-        if (ShouldBeWritten(variable.?.type)) {
+    while (ref) |_| {
+        const variable = ref.?.variable;
+        if (ShouldBeWritten(variable.type)) {
             var index: i32 = 0;
             while (index < depth) : (index += 1) {
                 temp[written] = '\t';
                 written += 1;
             }
 
-            if (variable.?.type == .group) {
+            if (variable.type == .group) {
                 written += @intCast((std.fmt.bufPrint(temp[written..], "// ", .{}) catch |err| {
                     std.debug.print("{}\n", .{err});
                     return;
                 }).len);
             }
 
-            written += VariableToText(temp[written..], variable.?, .{
+            written += VariableToText(temp[written..], variable, .{
                 .Prefix = true,
                 .Name = true,
                 .Colon = true,
@@ -735,16 +740,16 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
             });
         }
 
-        if (variable.?.type == .group) {
-            variable = variable.?.value.group.firstChild;
+        if (variable.type == .group) {
+            ref = variable.value.group.firstChild;
             depth += 1;
         } else {
-            while (variable) |_| {
-                if (variable.?.next) |_| {
-                    variable = variable.?.next;
+            while (ref) |_| {
+                if (ref.?.next) |_| {
+                    ref = ref.?.next;
                     break;
                 } else {
-                    variable = variable.?.parent;
+                    ref = ref.?.parent;
                     depth -= 1;
                 }
             }
@@ -864,16 +869,17 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
 
     const spacingY = 4.0;
     var depth: i32 = 0;
-    var variable: ?*debug_variable = debugState.hierarchy.group.value.group.firstChild;
-    while (variable) |_| {
+    var ref: ?*debug_variable_reference = debugState.hierarchy.group.variable.value.group.firstChild;
+    while (ref) |_| {
+        const variable = ref.?.variable;
         const isHot = debugState.hot == variable;
         const itemColour: h.v4 = if (isHot and debugState.hotInteraction == .None) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 };
 
         var bounds = h.rect2{};
-        switch (variable.?.type) {
+        switch (variable.type) {
             .counterThreadList => {
-                const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - h.Y(variable.?.value.profile.dimension) };
-                const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.?.value.profile.dimension), atY };
+                const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - h.Y(variable.value.profile.dimension) };
+                const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.value.profile.dimension), atY };
                 const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
                 bounds = h.rect2.InitMinMax(minCorner, maxCorner);
                 DrawProfileIn(debugState, bounds, mouseP);
@@ -892,7 +898,7 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
             else => {
                 var text = [1]u8{0} ** 256;
 
-                _ = VariableToText(text[0..], variable.?, .{
+                _ = VariableToText(text[0..], variable, .{
                     .Name = true,
                     .Colon = true,
                 });
@@ -914,16 +920,16 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
 
         atY = h.Y(bounds.GetMinCorner()) - spacingY;
 
-        if (variable.?.type == .group and variable.?.value.group.expanded) {
-            variable = variable.?.value.group.firstChild;
+        if (variable.type == .group and variable.value.group.expanded) {
+            ref = variable.value.group.firstChild;
             depth += 1;
         } else {
-            while (variable) |_| {
-                if (variable.?.next) |_| {
-                    variable = variable.?.next;
+            while (ref) |_| {
+                if (ref.?.next) |_| {
+                    ref = ref.?.next;
                     break;
                 } else {
-                    variable = variable.?.parent;
+                    ref = ref.?.parent;
                     depth -= 1;
                 }
             }
