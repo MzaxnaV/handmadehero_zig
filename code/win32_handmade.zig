@@ -49,7 +49,7 @@ const WINAPI = std.os.windows.WINAPI;
 
 const platform = struct {
     usingnamespace @import("handmade_platform");
-    usingnamespace @This().handmade_internal;
+    usingnamespace @import("handmade_platform").handmade_internal;
 };
 
 // constants ------------------------------------------------------------------------------------------------------------------------------

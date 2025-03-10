@@ -47,7 +47,7 @@ fn AddLowEntity(gameState: *h.game_state, entityType: h.entity_type, pos: h.worl
 
     h.ChangeEntityLocation(&gameState.worldArena, gameState.world, entityIndex, entityLow, pos);
 
-    const result = .{
+    const result = add_low_entity_result{
         .low = entityLow,
         .lowIndex = entityIndex,
     };
@@ -217,9 +217,7 @@ pub fn BeginTaskWithMemory(tranState: *h.transient_state) ?*h.task_with_memory {
 pub fn EndTaskWithMemory(task: *h.task_with_memory) void {
     h.EndTemporaryMemory(task.memoryFlush);
 
-    @fence(.seq_cst);
-
-    task.beingUsed = false;
+    @atomicStore(bool, &task.beingUsed, false, .seq_cst);
 }
 
 const fill_ground_chunk_work = struct {
@@ -233,7 +231,7 @@ const fill_ground_chunk_work = struct {
 
 pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     comptime {
-        if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(FillGroundChunkWork)) {
+        if (@typeInfo(platform.work_queue_callback).pointer.child != @TypeOf(FillGroundChunkWork)) {
             @compileError("Function signature mismatch!");
         }
     }
@@ -526,7 +524,7 @@ pub export fn UpdateAndRender(
 ) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
-        if (@typeInfo(platform.UpdateAndRenderFnPtrType).Pointer.child != @TypeOf(UpdateAndRender)) {
+        if (@typeInfo(platform.UpdateAndRenderFnPtrType).pointer.child != @TypeOf(UpdateAndRender)) {
             @compileError("Function signature mismatch!");
         }
     }
@@ -1467,7 +1465,7 @@ pub export fn UpdateAndRender(
 pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platform.sound_output_buffer) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
-        if (@typeInfo(platform.GetSoundSamplesFnPtrType).Pointer.child != @TypeOf(GetSoundSamples)) {
+        if (@typeInfo(platform.GetSoundSamplesFnPtrType).pointer.child != @TypeOf(GetSoundSamples)) {
             @compileError("Function signature mismatch!");
         }
     }

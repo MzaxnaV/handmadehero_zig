@@ -141,7 +141,7 @@ pub const input_mouse_button = enum {
 
     pub fn len() comptime_int {
         comptime {
-            return @typeInfo(@This()).Enum.fields.len;
+            return @typeInfo(@This()).@"enum".fields.len;
         }
     }
 };
@@ -156,7 +156,7 @@ pub const input = struct {
     controllers: [CONTROLLERS]controller_input = [1]controller_input{controller_input{}} ** CONTROLLERS,
 };
 
-const len = if (HANDMADE_INTERNAL) @typeInfo(handmade_internal.debug_cycle_counter_type).Enum.fields.len else 0;
+const len = if (HANDMADE_INTERNAL) @typeInfo(handmade_internal.debug_cycle_counter_type).@"enum".fields.len else 0;
 
 pub const work_queue = opaque {};
 
@@ -180,7 +180,7 @@ pub const file_type = enum(u32) {
 
     pub fn count() comptime_int {
         comptime {
-            return @typeInfo(@This()).Enum.fields.len;
+            return @typeInfo(@This()).@"enum".fields.len;
         }
     }
 };

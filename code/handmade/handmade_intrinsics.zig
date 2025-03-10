@@ -80,6 +80,7 @@ pub inline fn RoundF32ToInt(comptime T: type, float32: f32) T {
 }
 
 pub inline fn CeilF32ToI32(float32: f32) i32 {
+    @setRuntimeSafety(false); // TODO (Manav): hack until bug in profile display is fixed.
     const result: i32 = @intFromFloat(@ceil(float32));
     return result;
 }
@@ -90,6 +91,7 @@ pub inline fn TruncateF32ToI32(float32: f32) i32 {
 }
 
 pub inline fn FloorF32ToI32(float32: f32) i32 {
+    @setRuntimeSafety(false); // TODO (Manav): hack until bug in profile display is fixed.
     const result: i32 = @intFromFloat(@floor(float32));
     return result;
 }

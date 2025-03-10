@@ -136,11 +136,10 @@ pub const game_assets = struct {
             RemoveAssetHeaderFromList(result.?);
             InsertAssetHeaderAtFront(self, result.?);
 
-            if (asset_.header.generationID < generationID) {
-                asset_.header.generationID = generationID;
-            }
-
-            @fence(.seq_cst);
+            // if (asset_.header.generationID < generationID) {
+            //     asset_.header.generationID = generationID;
+            // }
+            _ = @atomicRmw(u32, &asset_.header.generationID, .Max, generationID, .seq_cst);
         }
 
         self.EndAssetLock();
@@ -202,8 +201,7 @@ pub const game_assets = struct {
     }
 
     pub inline fn EndAssetLock(self: *game_assets) void {
-        @fence(.seq_cst);
-        self.operationLock = 0;
+        @atomicStore(u32, &self.operationLock, 0, .seq_cst);
     }
 
     pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
@@ -411,17 +409,16 @@ fn LoadAssetWorkDirectly(work: *load_asset_work) void {
         }
     }
 
-    @fence(.seq_cst);
-
     if (!platform.NoFileErrors(work.handle)) {
         h.ZeroSize(work.size, @ptrCast(work.destination));
     }
-    work.asset_.state = work.finalState;
+
+    @atomicStore(u32, &work.asset_.state, work.finalState, .seq_cst);
 }
 
 fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
     comptime {
-        if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(LoadAssetWork)) {
+        if (@typeInfo(platform.work_queue_callback).pointer.child != @TypeOf(LoadAssetWork)) {
             @compileError("Function signature mismatch!");
         }
     }

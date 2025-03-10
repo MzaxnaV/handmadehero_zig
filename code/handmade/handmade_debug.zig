@@ -6,7 +6,7 @@
 const std = @import("std");
 const platform = struct {
     usingnamespace @import("handmade_platform");
-    usingnamespace @This().handmade_internal;
+    usingnamespace @import("handmade_platform").handmade_internal;
 };
 
 const h = struct {
@@ -29,7 +29,6 @@ pub const perf_analyzer = struct {
     };
 
     pub fn Start(comptime m: method, comptime region: []const u8) void {
-        @fence(.seq_cst);
         switch (m) {
             .llvm_mca => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: "memory"),
         }
@@ -39,7 +38,6 @@ pub const perf_analyzer = struct {
         switch (m) {
             .llvm_mca => asm volatile ("# LLVM-MCA-END " ++ region ::: "memory"),
         }
-        @fence(.seq_cst);
     }
 };
 
@@ -1416,7 +1414,7 @@ fn RefreshCollation(debugState: *debug_state) void {
 pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
-        if (@typeInfo(platform.DEBUGFrameEndsFnPtrType).Pointer.child != @TypeOf(DEBUGFrameEnd)) {
+        if (@typeInfo(platform.DEBUGFrameEndsFnPtrType).pointer.child != @TypeOf(DEBUGFrameEnd)) {
             @compileError("Function signature mismatch!");
         }
     }
