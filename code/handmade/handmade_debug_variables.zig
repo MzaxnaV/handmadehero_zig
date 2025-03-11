@@ -118,6 +118,8 @@ inline fn VariableListing(context: *debug_variable_definition_context, comptime 
 }
 
 pub fn DEBUGCreateVariables(context: *debug_variable_definition_context) void {
+    var useDebugCamRef: *h.debug_variable_reference = undefined;
+
     _ = DEBUGBeginVariableGroup(context, "Ground Chunks");
     _ = VariableListing(context, "GroundChunkOutlines");
     _ = VariableListing(context, "GroundChunkCheckerboards");
@@ -135,7 +137,7 @@ pub fn DEBUGCreateVariables(context: *debug_variable_definition_context) void {
         _ = VariableListing(context, "ShowLightingSamples");
         _ = DEBUGBeginVariableGroup(context, "Camera");
         {
-            _ = VariableListing(context, "UseDebugCamera");
+            useDebugCamRef = VariableListing(context, "UseDebugCamera");
             _ = VariableListing(context, "DebugCameraDistance");
             _ = VariableListing(context, "UseRoomBasedCamera");
             DEBUGEndVariableGroup(context);
@@ -146,4 +148,7 @@ pub fn DEBUGCreateVariables(context: *debug_variable_definition_context) void {
     _ = VariableListing(context, "UseSpaceOutlines");
     _ = VariableListing(context, "FamiliarFollowsHero");
     _ = VariableListing(context, "FauxV4");
+
+    // NOTE (Manav): Comment out this until we can make sure there's only one declaration of the variable
+    // _ = AddVariableReference(context, useDebugCamRef.variable);
 }
