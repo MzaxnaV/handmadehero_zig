@@ -229,7 +229,7 @@ pub inline fn Add(a: anytype, b: [a.len]f32) [a.len]f32 {
 pub inline fn AddTo(vec: anytype, other: [vec.len]f32) void {
     comptime {
         if (@TypeOf(vec) != *[vec.len]f32) {
-            @compileError("vec should be of the type *[N]f32");
+            @compileError("vec should be of the type *[N]f32, but it is of type: " ++ @typeName(@TypeOf(vec)));
         }
     }
 
