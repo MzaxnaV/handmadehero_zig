@@ -6,7 +6,7 @@
 const std = @import("std");
 const platform = struct {
     usingnamespace @import("handmade_platform");
-    usingnamespace @This().handmade_internal;
+    usingnamespace @import("handmade_platform").handmade_internal;
 };
 
 const h = struct {
@@ -29,7 +29,6 @@ pub const perf_analyzer = struct {
     };
 
     pub fn Start(comptime m: method, comptime region: []const u8) void {
-        @fence(.seq_cst);
         switch (m) {
             .llvm_mca => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: "memory"),
         }
@@ -39,7 +38,6 @@ pub const perf_analyzer = struct {
         switch (m) {
             .llvm_mca => asm volatile ("# LLVM-MCA-END " ++ region ::: "memory"),
         }
-        @fence(.seq_cst);
     }
 };
 
@@ -85,15 +83,24 @@ pub fn ShouldBeWritten(t: debug_variable_type) bool {
     return result;
 }
 
+pub const debug_variable_reference = struct {
+    variable: *debug_variable,
+    next: ?*debug_variable_reference,
+    parent: ?*debug_variable_reference,
+};
+
 pub const debug_variable_group = struct {
     expanded: bool,
-    firstChild: ?*debug_variable,
-    lastChild: ?*debug_variable,
+    firstChild: ?*debug_variable_reference,
+    lastChild: ?*debug_variable_reference,
 };
 
 const debug_variable_hierarchy = struct {
     uiP: h.v2,
-    group: *debug_variable,
+    group: *debug_variable_reference,
+
+    next: *debug_variable_hierarchy,
+    prev: *debug_variable_hierarchy,
 };
 
 const debug_profile_settings = struct {
@@ -101,10 +108,8 @@ const debug_profile_settings = struct {
 };
 
 pub const debug_variable = struct {
-    name: [:0]const u8,
-    next: ?*debug_variable,
-    parent: ?*debug_variable,
     type: debug_variable_type,
+    name: [:0]const u8,
 
     value: union { // NOTE (Manav): consider tagged union once everything is finalised
         bool: bool,
@@ -181,6 +186,7 @@ const debug_interaction = enum {
     TearValue,
 
     ResizeProfile,
+    MoveHierarchy,
 };
 
 pub const debug_state = struct {
@@ -200,8 +206,8 @@ pub const debug_state = struct {
     menuP: h.v2,
     menuActive: bool,
 
-    rootGroup: *debug_variable,
-    hierarchy: debug_variable_hierarchy,
+    rootGroup: *debug_variable_reference,
+    hierarchySentinel: debug_variable_hierarchy,
 
     interaction: debug_interaction,
     lastMouseP: h.v2,
@@ -210,6 +216,9 @@ pub const debug_state = struct {
     interactingWith: ?*debug_variable,
     nextHotInteraction: debug_interaction,
     nextHot: ?*debug_variable,
+    nextHotHierarchy: ?*debug_variable_hierarchy,
+
+    draggingHierarchy: ?*debug_variable_hierarchy,
 
     leftEdge: f32,
     rightEdge: f32,
@@ -304,6 +313,10 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
 
     if (@as(?*debug_state, @alignCast(@ptrCast(platform.debugGlobalMemory.?.debugStorage)))) |debugState| {
         if (!debugState.initialized) {
+            debugState.hierarchySentinel.next = &debugState.hierarchySentinel;
+            debugState.hierarchySentinel.prev = &debugState.hierarchySentinel;
+            debugState.hierarchySentinel.group = undefined;
+
             debugState.highPriorityQueue = platform.debugGlobalMemory.?.highPriorityQueue;
 
             debugState.debugArena.Initialize(
@@ -347,6 +360,8 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
             debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
 
             RestartCollation(debugState, 0);
+
+            _ = AddHierarchy(debugState, debugState.rootGroup, .{ -0.5 * @as(f32, @floatFromInt(width)), 0.5 * @as(f32, @floatFromInt(height)) });
         }
 
         h.BeginRender(debugState.renderGroup);
@@ -375,12 +390,20 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
         debugState.rightEdge = 0.5 * @as(f32, @floatFromInt(width));
 
         debugState.atY = 0.5 * @as(f32, @floatFromInt(height));
-
-        debugState.hierarchy = .{
-            .uiP = h.v2{ debugState.leftEdge, debugState.atY },
-            .group = debugState.rootGroup,
-        };
     }
+}
+
+fn AddHierarchy(debugState: *debug_state, group: *debug_variable_reference, atP: h.v2) *debug_variable_hierarchy {
+    var hierarchy: *debug_variable_hierarchy = debugState.debugArena.PushStruct(debug_variable_hierarchy);
+    hierarchy.uiP = atP;
+    hierarchy.group = group;
+    hierarchy.next = debugState.hierarchySentinel.next;
+    hierarchy.prev = &debugState.hierarchySentinel;
+
+    hierarchy.next.prev = hierarchy;
+    hierarchy.prev.next = hierarchy;
+
+    return hierarchy;
 }
 
 inline fn IsHex(char: u8) bool {
@@ -702,7 +725,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     var written: u32 = 0;
 
     var depth: i32 = 0;
-    var variable: ?*debug_variable = debugState.rootGroup.value.group.firstChild;
+    var ref: ?*debug_variable_reference = debugState.rootGroup.variable.value.group.firstChild;
 
     const include = "const math = @import(\"handmade_math.zig\");\nconst v2 = math.v2;\nconst v3 = math.v3;\nconst v4 = math.v4;\n\n";
 
@@ -711,22 +734,23 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
         return;
     }).len);
 
-    while (variable) |_| {
-        if (ShouldBeWritten(variable.?.type)) {
+    while (ref) |_| {
+        const variable = ref.?.variable;
+        if (ShouldBeWritten(variable.type)) {
             var index: i32 = 0;
             while (index < depth) : (index += 1) {
                 temp[written] = '\t';
                 written += 1;
             }
 
-            if (variable.?.type == .group) {
+            if (variable.type == .group) {
                 written += @intCast((std.fmt.bufPrint(temp[written..], "// ", .{}) catch |err| {
                     std.debug.print("{}\n", .{err});
                     return;
                 }).len);
             }
 
-            written += VariableToText(temp[written..], variable.?, .{
+            written += VariableToText(temp[written..], variable, .{
                 .Prefix = true,
                 .Name = true,
                 .Colon = true,
@@ -735,20 +759,24 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
             });
         }
 
-        if (variable.?.type == .group) {
-            variable = variable.?.value.group.firstChild;
+        if (variable.type == .group) {
+            ref = variable.value.group.firstChild;
             depth += 1;
         } else {
-            while (variable) |_| {
-                if (variable.?.next) |_| {
-                    variable = variable.?.next;
+            while (ref) |_| {
+                if (ref.?.next) |_| {
+                    ref = ref.?.next;
                     break;
                 } else {
-                    variable = variable.?.parent;
+                    ref = ref.?.parent;
                     depth -= 1;
                 }
             }
         }
+    }
+
+    {
+        // TODO (Manav): remove duplicate declarations.
     }
 
     _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade/handmade_config.zig", written, temp[0..written].ptr);
@@ -857,80 +885,102 @@ fn DrawProfileIn(debugState: *debug_state, profileRect: h.rect2, mouseP: h.v2) v
 
 }
 
-fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
-    const atX: f32 = h.X(debugState.hierarchy.uiP);
-    var atY: f32 = h.Y(debugState.hierarchy.uiP);
-    const lineAdvance: f32 = h.GetLineAdvanceFor(debugState.debugFontInfo);
+fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
+    var hierarchy = debugState.hierarchySentinel.next;
+    while (hierarchy != &debugState.hierarchySentinel) : (hierarchy = hierarchy.next) {
+        const atX: f32 = h.X(hierarchy.uiP);
+        var atY: f32 = h.Y(hierarchy.uiP);
+        const lineAdvance: f32 = debugState.fontScale * h.GetLineAdvanceFor(debugState.debugFontInfo);
 
-    const spacingY = 4.0;
-    var depth: i32 = 0;
-    var variable: ?*debug_variable = debugState.hierarchy.group.value.group.firstChild;
-    while (variable) |_| {
-        const isHot = debugState.hot == variable;
-        const itemColour: h.v4 = if (isHot and debugState.hotInteraction == .None) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 };
+        const spacingY = 4.0;
+        var depth: i32 = 0;
+        var ref: ?*debug_variable_reference = hierarchy.group.variable.value.group.firstChild;
+        while (ref) |_| {
+            const variable = ref.?.variable;
+            const isHot = debugState.hot == variable;
+            const itemColour: h.v4 = if (isHot and debugState.hotInteraction == .None) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 };
 
-        var bounds = h.rect2{};
-        switch (variable.?.type) {
-            .counterThreadList => {
-                const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - h.Y(variable.?.value.profile.dimension) };
-                const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.?.value.profile.dimension), atY };
-                const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
-                bounds = h.rect2.InitMinMax(minCorner, maxCorner);
-                DrawProfileIn(debugState, bounds, mouseP);
+            var bounds = h.rect2{};
+            switch (variable.type) {
+                .counterThreadList => {
+                    const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - h.Y(variable.value.profile.dimension) };
+                    const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.value.profile.dimension), atY };
+                    const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
+                    bounds = h.rect2.InitMinMax(minCorner, maxCorner);
+                    DrawProfileIn(debugState, bounds, mouseP);
 
-                const sizeBox = h.rect2.InitCenterHalfDim(sizeP, .{ 4, 4 });
-                debugState.renderGroup.PushRect2(sizeBox, 0, if (isHot and debugState.hotInteraction == .ResizeProfile) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 });
+                    const sizeBox = h.rect2.InitCenterHalfDim(sizeP, .{ 4, 4 });
+                    debugState.renderGroup.PushRect2(
+                        sizeBox,
+                        0,
+                        if (isHot and debugState.hotInteraction == .ResizeProfile) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
+                    );
 
-                if (sizeBox.IsInRect(mouseP)) {
-                    debugState.nextHotInteraction = .ResizeProfile;
-                    debugState.nextHot = variable;
-                } else if (bounds.IsInRect(mouseP)) {
-                    debugState.nextHotInteraction = .None;
-                    debugState.nextHot = variable;
-                }
-            },
-            else => {
-                var text = [1]u8{0} ** 256;
+                    if (sizeBox.IsInRect(mouseP)) {
+                        debugState.nextHotInteraction = .ResizeProfile;
+                        debugState.nextHot = variable;
+                    } else if (bounds.IsInRect(mouseP)) {
+                        debugState.nextHotInteraction = .None;
+                        debugState.nextHot = variable;
+                    }
 
-                _ = VariableToText(text[0..], variable.?, .{
-                    .Name = true,
-                    .Colon = true,
-                });
+                    // bounds.min.y -= spaceingY;
+                    h.SetY(&bounds.min, h.Y(bounds.min) - spacingY);
+                },
+                else => {
+                    var text = [1]u8{0} ** 256;
 
-                const leftPx = atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance;
-                const topPy = atY;
+                    _ = VariableToText(text[0..], variable, .{
+                        .Name = true,
+                        .Colon = true,
+                    });
 
-                bounds = DEBUGGetTextSize(debugState, text[0..]);
-                bounds = bounds.Offset(.{ leftPx, topPy - h.Y(bounds.GetDim()) });
+                    const leftPx = atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance;
+                    const topPy = atY;
 
-                DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
+                    const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text[0..]);
 
-                if (bounds.IsInRect(mouseP)) {
-                    debugState.nextHotInteraction = .None;
-                    debugState.nextHot = variable;
-                }
-            },
-        }
+                    bounds = h.rect2.InitMinMax(.{ leftPx + h.X(textBounds.min), topPy - lineAdvance }, .{ leftPx + h.X(textBounds.max), topPy });
 
-        atY = h.Y(bounds.GetMinCorner()) - spacingY;
+                    DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
 
-        if (variable.?.type == .group and variable.?.value.group.expanded) {
-            variable = variable.?.value.group.firstChild;
-            depth += 1;
-        } else {
-            while (variable) |_| {
-                if (variable.?.next) |_| {
-                    variable = variable.?.next;
-                    break;
-                } else {
-                    variable = variable.?.parent;
-                    depth -= 1;
+                    if (bounds.IsInRect(mouseP)) {
+                        debugState.nextHotInteraction = .None;
+                        debugState.nextHot = variable;
+                    }
+                },
+            }
+
+            atY = h.Y(bounds.GetMinCorner());
+
+            if (variable.type == .group and variable.value.group.expanded) {
+                ref = variable.value.group.firstChild;
+                depth += 1;
+            } else {
+                while (ref) |_| {
+                    if (ref.?.next) |_| {
+                        ref = ref.?.next;
+                        break;
+                    } else {
+                        ref = ref.?.parent;
+                        depth -= 1;
+                    }
                 }
             }
         }
-    }
 
-    debugState.atY = atY;
+        debugState.atY = atY;
+
+        if (true) {
+            const moveBox = h.rect2.InitCenterHalfDim(h.Sub(hierarchy.uiP, .{ 4, -4 }), .{ 4, 4 });
+            debugState.renderGroup.PushRect2(moveBox, 0, .{ 1, 1, 1, 1 });
+
+            if (moveBox.IsInRect(mouseP)) {
+                debugState.nextHotInteraction = .MoveHierarchy;
+                debugState.nextHotHierarchy = hierarchy;
+            }
+        }
+    }
 
     if (ignore) {
         var newHotMenuIndex: u32 = h.debugVariableList.len;
@@ -969,59 +1019,63 @@ fn DrawDebugMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
     }
 }
 
-fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
-    if (debugState.hot) |hotVariable| {
-        if (debugState.hotInteraction != .None) {
-            debugState.interaction = debugState.hotInteraction;
-        } else {
-            switch (hotVariable.type) {
-                .bool => {
-                    debugState.interaction = .ToggleValue;
-                },
-                .f32 => {
-                    debugState.interaction = .DragValue;
-                },
-                .group => {
-                    debugState.interaction = .ToggleValue;
-                },
-                else => {},
-            }
-        }
-
-        if (debugState.interaction != .None) {
-            debugState.interactingWith = debugState.hot;
-        }
+fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2, altUI: bool) void {
+    if (debugState.hotInteraction != .None) {
+        debugState.interaction = debugState.hotInteraction;
     } else {
-        debugState.interaction = .NOP;
+        if (debugState.hot) |hotVariable| {
+            if (altUI) {
+                debugState.interaction = .TearValue;
+            } else {
+                switch (hotVariable.type) {
+                    .bool => {
+                        debugState.interaction = .ToggleValue;
+                    },
+                    .f32 => {
+                        debugState.interaction = .DragValue;
+                    },
+                    .group => {
+                        debugState.interaction = .ToggleValue;
+                    },
+                    else => {},
+                }
+            }
+
+            if (debugState.interaction != .None) {
+                debugState.interactingWith = debugState.hot;
+            }
+        } else {
+            debugState.interaction = .NOP;
+        }
     }
 }
 
 fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
     if (debugState.interaction != .NOP) {
-        if (debugState.interactingWith) |variable| { // NOTE (Manav): null variable can be with .NOP
-            switch (debugState.interaction) {
-                .ToggleValue => {
-                    switch (variable.type) {
-                        .bool => {
-                            variable.value.bool = !variable.value.bool;
-                        },
-                        .group => {
-                            variable.value.group.expanded = !variable.value.group.expanded;
-                        },
-                        else => {},
-                    }
-                },
+        // NOTE (Manav): debugState.interactingWith can be null .NOP
+        switch (debugState.interaction) {
+            .ToggleValue => {
+                var variable = debugState.interactingWith.?;
+                switch (variable.type) {
+                    .bool => {
+                        variable.value.bool = !variable.value.bool;
+                    },
+                    .group => {
+                        variable.value.group.expanded = !variable.value.group.expanded;
+                    },
+                    else => {},
+                }
+            },
 
-                .TearValue => {},
-                else => {},
-            }
+            else => {},
         }
 
         WriteHandmadeConfig(debugState);
     }
 
-    debugState.interactingWith = null;
     debugState.interaction = .None;
+    debugState.interactingWith = null;
+    debugState.draggingHierarchy = null;
 }
 
 fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void {
@@ -1036,7 +1090,7 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
 
     if (debugState.interaction != .None) {
         // Mouse move interaction
-        var variable: ?*debug_variable = debugState.interactingWith; // NOTE (Manav): null variable can be with .NOP
+        var variable: ?*debug_variable = debugState.interactingWith; // NOTE (Manav): variable can be null with .NOP
 
         switch (debugState.interaction) {
             .DragValue => {
@@ -1049,18 +1103,38 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
                 }
             },
             .ResizeProfile => {
-                h.AddTo(&variable.?.value.profile.dimension, .{ h.X(dMouseP), -h.Y(dMouseP) });
-                h.SetX(&variable.?.value.profile.dimension, @max(h.X(variable.?.value.profile.dimension), 10.0));
-                h.SetY(&variable.?.value.profile.dimension, @max(h.Y(variable.?.value.profile.dimension), 10.0));
+                if (variable != null) { // NOTE (Manav): variable can be null with .ResizeProfile when it's in a hierarchy
+                    // variable.value.profile.dimension += .{ dMouseP.x, -dMouseP.y };
+                    h.AddTo(&variable.?.value.profile.dimension, .{ h.X(dMouseP), -h.Y(dMouseP) });
+                    // variable.value.profile.dimension.x = @max(variable.value.profile.dimension.x, 10.0);
+                    h.SetX(&variable.?.value.profile.dimension, @max(h.X(variable.?.value.profile.dimension), 10.0));
+                    // variable.value.profile.dimension.y = @max(variable.value.profile.dimension.y, 10.0);
+                    h.SetY(&variable.?.value.profile.dimension, @max(h.Y(variable.?.value.profile.dimension), 10.0));
+                }
+            },
+            .MoveHierarchy => {
+                // debugState.draggingHierarchy.uiP += .{ dMouseP.x, dMouseP.y };
+                h.AddTo(&debugState.draggingHierarchy.?.uiP, .{ h.X(dMouseP), h.Y(dMouseP) });
+            },
+            .TearValue => {
+                if (debugState.draggingHierarchy == null) {
+                    const rootGroup: *debug_variable_reference = h.DEBUGAddRootGroup(debugState, "NewUserGroup");
+                    _ = h.DEBUGAddVariableReference__(debugState, rootGroup, debugState.interactingWith.?);
+                    debugState.draggingHierarchy = AddHierarchy(debugState, rootGroup, .{ 0, 0 });
+                }
+
+                debugState.draggingHierarchy.?.uiP = mouseP;
             },
             else => {},
         }
+
+        const altUI = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown != 0;
 
         // Mouse click interaction
         var transitionIndex = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
         while (transitionIndex > 1) : (transitionIndex -= 1) {
             EndInteract(debugState, input, mouseP);
-            BeginInteract(debugState, input, mouseP);
+            BeginInteract(debugState, input, mouseP, altUI);
         }
 
         if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].endedDown == 0) {
@@ -1069,15 +1143,18 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
     } else {
         debugState.hot = debugState.nextHot;
         debugState.hotInteraction = debugState.nextHotInteraction;
+        debugState.draggingHierarchy = debugState.nextHotHierarchy;
+
+        const altUI = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown != 0;
 
         var transitionIndex = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
         while (transitionIndex > 1) : (transitionIndex -= 1) {
-            BeginInteract(debugState, input, mouseP);
+            BeginInteract(debugState, input, mouseP, altUI);
             EndInteract(debugState, input, mouseP);
         }
 
         if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].endedDown != 0) {
-            BeginInteract(debugState, input, mouseP);
+            BeginInteract(debugState, input, mouseP, altUI);
         }
     }
 
@@ -1111,12 +1188,13 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
         const renderGroup: *h.render_group = debugState.renderGroup;
 
         debugState.nextHot = null;
+        debugState.nextHotHierarchy = null;
         debugState.nextHotInteraction = .None;
         const hotRecord: ?*platform.debug_record = null;
 
         const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
 
-        DrawDebugMainMenu(debugState, renderGroup, mouseP);
+        DEBUGDrawMainMenu(debugState, renderGroup, mouseP);
         Interact(debugState, input, mouseP);
 
         if (debugState.compiling) {
@@ -1410,7 +1488,7 @@ fn RefreshCollation(debugState: *debug_state) void {
 pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
-        if (@typeInfo(platform.DEBUGFrameEndsFnPtrType).Pointer.child != @TypeOf(DEBUGFrameEnd)) {
+        if (@typeInfo(platform.DEBUGFrameEndsFnPtrType).pointer.child != @TypeOf(DEBUGFrameEnd)) {
             @compileError("Function signature mismatch!");
         }
     }

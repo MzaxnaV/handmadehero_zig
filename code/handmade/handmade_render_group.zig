@@ -1382,7 +1382,7 @@ pub const render_group = struct {
 
     fn DoTiledRenderWork(_: ?*platform.work_queue, data: *anyopaque) void {
         comptime {
-            if (@typeInfo(platform.work_queue_callback).Pointer.child != @TypeOf(DoTiledRenderWork)) {
+            if (@typeInfo(platform.work_queue_callback).pointer.child != @TypeOf(DoTiledRenderWork)) {
                 @compileError("Function signature mismatch!");
             }
         }

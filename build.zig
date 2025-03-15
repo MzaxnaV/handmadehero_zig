@@ -40,7 +40,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
 
-    const win32 = b.dependency("zigwin32", .{}).module("zigwin32");
+    const win32 = b.dependency("zigwin32", .{}).module("win32");
 
     // ----------------------------------------------------------------------------------------------------
     // Build targets --------------------------------------------------------------------------------------
