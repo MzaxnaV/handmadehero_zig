@@ -216,6 +216,8 @@ pub const debug_state = struct {
     nextHotInteraction: debug_interaction,
     nextHot: ?*debug_variable,
 
+    draggingHierarchy: ?*debug_variable_hierarchy,
+
     leftEdge: f32,
     rightEdge: f32,
     atY: f32,
@@ -997,22 +999,26 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
     }
 }
 
-fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
+fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2, altUI: bool) void {
     if (debugState.hot) |hotVariable| {
         if (debugState.hotInteraction != .None) {
             debugState.interaction = debugState.hotInteraction;
         } else {
-            switch (hotVariable.type) {
-                .bool => {
-                    debugState.interaction = .ToggleValue;
-                },
-                .f32 => {
-                    debugState.interaction = .DragValue;
-                },
-                .group => {
-                    debugState.interaction = .ToggleValue;
-                },
-                else => {},
+            if (altUI) {
+                debugState.interaction = .TearValue;
+            } else {
+                switch (hotVariable.type) {
+                    .bool => {
+                        debugState.interaction = .ToggleValue;
+                    },
+                    .f32 => {
+                        debugState.interaction = .DragValue;
+                    },
+                    .group => {
+                        debugState.interaction = .ToggleValue;
+                    },
+                    else => {},
+                }
             }
         }
 
@@ -1040,7 +1046,6 @@ fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
                     }
                 },
 
-                .TearValue => {},
                 else => {},
             }
         }
@@ -1048,8 +1053,9 @@ fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
         WriteHandmadeConfig(debugState);
     }
 
-    debugState.interactingWith = null;
     debugState.interaction = .None;
+    debugState.interactingWith = null;
+    debugState.draggingHierarchy = null;
 }
 
 fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void {
@@ -1077,18 +1083,32 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
                 }
             },
             .ResizeProfile => {
+                // variable.value.profile.dimension += .{ dMouseP.x, -dMouseP.y };
                 h.AddTo(&variable.?.value.profile.dimension, .{ h.X(dMouseP), -h.Y(dMouseP) });
+                // variable.value.profile.dimension.x = @max(variable.value.profile.dimension.x, 10.0);
                 h.SetX(&variable.?.value.profile.dimension, @max(h.X(variable.?.value.profile.dimension), 10.0));
+                // variable.value.profile.dimension.y = @max(variable.value.profile.dimension.y, 10.0);
                 h.SetY(&variable.?.value.profile.dimension, @max(h.Y(variable.?.value.profile.dimension), 10.0));
+            },
+            .TearValue => {
+                if (debugState.draggingHierarchy == null) {
+                    const rootGroup: *debug_variable_reference = h.DEBUGAddRootGroup(debugState, "NewUserGroup");
+                    _ = h.DEBUGAddVariableReference__(debugState, rootGroup, debugState.interactingWith.?);
+                    debugState.draggingHierarchy = AddHierarchy(debugState, rootGroup, .{ 0, 0 });
+                }
+
+                debugState.draggingHierarchy.?.uiP = mouseP;
             },
             else => {},
         }
+
+        const altUI = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown != 0;
 
         // Mouse click interaction
         var transitionIndex = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
         while (transitionIndex > 1) : (transitionIndex -= 1) {
             EndInteract(debugState, input, mouseP);
-            BeginInteract(debugState, input, mouseP);
+            BeginInteract(debugState, input, mouseP, altUI);
         }
 
         if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].endedDown == 0) {
@@ -1098,14 +1118,16 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
         debugState.hot = debugState.nextHot;
         debugState.hotInteraction = debugState.nextHotInteraction;
 
+        const altUI = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown != 0;
+
         var transitionIndex = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
         while (transitionIndex > 1) : (transitionIndex -= 1) {
-            BeginInteract(debugState, input, mouseP);
+            BeginInteract(debugState, input, mouseP, altUI);
             EndInteract(debugState, input, mouseP);
         }
 
         if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Left)].endedDown != 0) {
-            BeginInteract(debugState, input, mouseP);
+            BeginInteract(debugState, input, mouseP, altUI);
         }
     }
 

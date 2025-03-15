@@ -15,23 +15,23 @@ pub const debug_variable_definition_context = struct {
 };
 
 fn AddUnreferencedVariable(
-    context: *debug_variable_definition_context,
+    state: *h.debug_state,
     comptime t: h.debug_variable_type,
     comptime name: [:0]const u8,
 ) *h.debug_variable {
-    var debugVar: *h.debug_variable = context.arena.PushStruct(h.debug_variable);
+    var debugVar: *h.debug_variable = state.debugArena.PushStruct(h.debug_variable);
     debugVar.type = t;
-    debugVar.name = context.arena.PushCopy(name.len, name)[0..name.len :0];
+    debugVar.name = state.debugArena.PushCopy(name.len, name)[0..name.len :0];
 
     return debugVar;
 }
 
-fn AddVariableReference(context: *debug_variable_definition_context, debugVar: *h.debug_variable) *h.debug_variable_reference {
-    var ref: *h.debug_variable_reference = context.arena.PushStruct(h.debug_variable_reference);
+pub fn DEBUGAddVariableReference__(state: *h.debug_state, groupRef: ?*h.debug_variable_reference, debugVar: *h.debug_variable) *h.debug_variable_reference {
+    var ref: *h.debug_variable_reference = state.debugArena.PushStruct(h.debug_variable_reference);
     ref.variable = debugVar;
     ref.next = null;
 
-    ref.parent = context.group;
+    ref.parent = groupRef;
     var group: ?*h.debug_variable = if (ref.parent) |parent| parent.variable else null;
 
     if (group) |_| {
@@ -47,23 +47,50 @@ fn AddVariableReference(context: *debug_variable_definition_context, debugVar: *
     return ref;
 }
 
-fn AddVariable__(context: *debug_variable_definition_context, comptime t: h.debug_variable_type, comptime name: [:0]const u8) *h.debug_variable_reference {
-    const debugVar: *h.debug_variable = AddUnreferencedVariable(context, t, name);
-    const ref: *h.debug_variable_reference = AddVariableReference(context, debugVar);
+pub fn DEBUGAddVariableReference(context: *debug_variable_definition_context, debugVar: *h.debug_variable) *h.debug_variable_reference {
+    const ref: *h.debug_variable_reference = DEBUGAddVariableReference__(context.state, context.group, debugVar);
 
     return ref;
 }
 
-pub fn DEBUGBeginVariableGroup(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable_reference {
-    var group: *h.debug_variable_reference = AddVariable__(context, .group, name);
+fn AddVariable__(context: *debug_variable_definition_context, comptime t: h.debug_variable_type, comptime name: [:0]const u8) *h.debug_variable_reference {
+    const debugVar: *h.debug_variable = AddUnreferencedVariable(context.state, t, name);
+    const ref: *h.debug_variable_reference = DEBUGAddVariableReference(context, debugVar);
 
-    group.variable.value = .{
+    return ref;
+}
+
+fn DEBUGAddRootGroupInternal(debugState: *h.debug_state, comptime name: [:0]const u8) *h.debug_variable {
+    var group: *h.debug_variable = AddUnreferencedVariable(debugState, .group, name);
+
+    group.value = .{
         .group = h.debug_variable_group{
-            .expanded = false,
+            .expanded = true,
             .firstChild = null,
             .lastChild = null,
         },
     };
+
+    return group;
+}
+
+pub fn DEBUGAddRootGroup(debugState: *h.debug_state, comptime name: [:0]const u8) *h.debug_variable_reference {
+    const groupRef: *h.debug_variable_reference = DEBUGAddVariableReference__(
+        debugState,
+        null,
+        DEBUGAddRootGroupInternal(debugState, name),
+    );
+
+    return groupRef;
+}
+
+pub fn DEBUGBeginVariableGroup(context: *debug_variable_definition_context, comptime name: [:0]const u8) *h.debug_variable_reference {
+    var group: *h.debug_variable_reference = DEBUGAddVariableReference(
+        context,
+        DEBUGAddRootGroupInternal(context.state, name),
+    );
+
+    group.variable.value.group.expanded = false;
 
     context.group = group;
 
