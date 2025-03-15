@@ -1055,14 +1055,13 @@ fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
         // NOTE (Manav): debugState.interactingWith can be null .NOP
         switch (debugState.interaction) {
             .ToggleValue => {
-                const variable = debugState.interactingWith.?;
-
-                switch (variable.?.type) {
+                var variable = debugState.interactingWith.?;
+                switch (variable.type) {
                     .bool => {
-                        variable.?.value.bool = !variable.?.value.bool;
+                        variable.value.bool = !variable.value.bool;
                     },
                     .group => {
-                        variable.?.value.group.expanded = !variable.?.value.group.expanded;
+                        variable.value.group.expanded = !variable.value.group.expanded;
                     },
                     else => {},
                 }
@@ -1091,7 +1090,7 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
 
     if (debugState.interaction != .None) {
         // Mouse move interaction
-        var variable: ?*debug_variable = debugState.interactingWith; // NOTE (Manav): null variable can be with .NOP
+        var variable: ?*debug_variable = debugState.interactingWith; // NOTE (Manav): variable can be null with .NOP
 
         switch (debugState.interaction) {
             .DragValue => {
@@ -1104,12 +1103,14 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
                 }
             },
             .ResizeProfile => {
-                // variable.value.profile.dimension += .{ dMouseP.x, -dMouseP.y };
-                h.AddTo(&variable.?.value.profile.dimension, .{ h.X(dMouseP), -h.Y(dMouseP) });
-                // variable.value.profile.dimension.x = @max(variable.value.profile.dimension.x, 10.0);
-                h.SetX(&variable.?.value.profile.dimension, @max(h.X(variable.?.value.profile.dimension), 10.0));
-                // variable.value.profile.dimension.y = @max(variable.value.profile.dimension.y, 10.0);
-                h.SetY(&variable.?.value.profile.dimension, @max(h.Y(variable.?.value.profile.dimension), 10.0));
+                if (variable != null) { // NOTE (Manav): variable can be null with .ResizeProfile when it's in a hierarchy
+                    // variable.value.profile.dimension += .{ dMouseP.x, -dMouseP.y };
+                    h.AddTo(&variable.?.value.profile.dimension, .{ h.X(dMouseP), -h.Y(dMouseP) });
+                    // variable.value.profile.dimension.x = @max(variable.value.profile.dimension.x, 10.0);
+                    h.SetX(&variable.?.value.profile.dimension, @max(h.X(variable.?.value.profile.dimension), 10.0));
+                    // variable.value.profile.dimension.y = @max(variable.value.profile.dimension.y, 10.0);
+                    h.SetY(&variable.?.value.profile.dimension, @max(h.Y(variable.?.value.profile.dimension), 10.0));
+                }
             },
             .MoveHierarchy => {
                 // debugState.draggingHierarchy.uiP += .{ dMouseP.x, dMouseP.y };
