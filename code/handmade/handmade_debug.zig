@@ -890,7 +890,7 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
     while (hierarchy != &debugState.hierarchySentinel) : (hierarchy = hierarchy.next) {
         const atX: f32 = h.X(hierarchy.uiP);
         var atY: f32 = h.Y(hierarchy.uiP);
-        const lineAdvance: f32 = h.GetLineAdvanceFor(debugState.debugFontInfo);
+        const lineAdvance: f32 = debugState.fontScale * h.GetLineAdvanceFor(debugState.debugFontInfo);
 
         const spacingY = 4.0;
         var depth: i32 = 0;
@@ -923,6 +923,9 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
                         debugState.nextHotInteraction = .None;
                         debugState.nextHot = variable;
                     }
+
+                    // bounds.min.y -= spaceingY;
+                    h.SetY(&bounds.min, h.Y(bounds.min) - spacingY);
                 },
                 else => {
                     var text = [1]u8{0} ** 256;
@@ -935,8 +938,9 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
                     const leftPx = atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance;
                     const topPy = atY;
 
-                    bounds = DEBUGGetTextSize(debugState, text[0..]);
-                    bounds = bounds.Offset(.{ leftPx, topPy - h.Y(bounds.GetDim()) });
+                    const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text[0..]);
+
+                    bounds = h.rect2.InitMinMax(.{ leftPx + h.X(textBounds.min), topPy - lineAdvance }, .{ leftPx + h.X(textBounds.max), topPy });
 
                     DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
 
@@ -947,7 +951,7 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
                 },
             }
 
-            atY = h.Y(bounds.GetMinCorner()) - spacingY;
+            atY = h.Y(bounds.GetMinCorner());
 
             if (variable.type == .group and variable.value.group.expanded) {
                 ref = variable.value.group.firstChild;
@@ -976,10 +980,6 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
                 debugState.nextHotHierarchy = hierarchy;
             }
         }
-    }
-
-    if (debugState.nextHotHierarchy) |_| {
-        DEBUGTextLine("HIERARCHY");
     }
 
     if (ignore) {
