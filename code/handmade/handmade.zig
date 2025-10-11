@@ -1,36 +1,36 @@
 const debug = @import("handmade_debug.zig");
-
-const platform = @import("handmade_platform");
-
 const config = @import("handmade_config.zig");
+const h = @import("handmade_all.zig");
 
-const h = struct {
-    usingnamespace @import("intrinsics");
-
-    usingnamespace @import("handmade_audio.zig");
-    usingnamespace @import("handmade_asset.zig");
-    usingnamespace @import("handmade_data.zig");
-    usingnamespace @import("handmade_entity.zig");
-    usingnamespace @import("handmade_file_formats.zig");
-    usingnamespace @import("handmade_math.zig");
-    usingnamespace @import("handmade_random.zig");
-    usingnamespace @import("handmade_render_group.zig");
-    usingnamespace @import("handmade_sim_region.zig");
-    usingnamespace @import("handmade_world.zig");
-};
+const platform = @import("platform");
 
 const assert = platform.Assert;
 const ignore = platform.ignore;
 const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
 
-// local functions ------------------------------------------------------------------------------------------------------------------------
+// imported types -------------------------------------------------------------------------------------------------------------------------------
+const PARTICLE_CEL_DIM = h.data_ns.PARTICLE_CEL_DIM;
 
+const game_state = h.data_ns.game_state;
+const sim_entity_flags = h.sim_region_ns.sim_entity_flags;
+const sim_entity_collision_volume_group = h.sim_region_ns.sim_entity_collision_volume_group;
+const world_position = h.world_ns.world_position;
+const transient_state = h.data_ns.transient_state;
+const ground_buffer = h.data_ns.ground_buffer;
+const loaded_bitmap = h.render_group_ns.loaded_bitmap;
+const asset_tag_id = h.file_formats_ns.asset_tag_id;
+
+const NullPosition = h.world_ns.NullPosition;
+const AddFlags = h.entity_ns.AddFlags;
+const GetFirstBitmapFrom = h.asset_ns.GetFirstBitmapFrom;
+
+// local functions ------------------------------------------------------------------------------------------------------------------------
 const add_low_entity_result = struct {
-    low: *h.low_entity,
+    low: *h.data_ns.low_entity,
     lowIndex: u32,
 };
 
-fn AddLowEntity(gameState: *h.game_state, entityType: h.entity_type, pos: h.world_position) add_low_entity_result {
+fn AddLowEntity(gameState: *game_state, entityType: h.sim_region_ns.entity_type, pos: world_position) add_low_entity_result {
     assert(gameState.lowEntityCount < gameState.lowEntities.len);
     const entityIndex = gameState.lowEntityCount;
     gameState.lowEntityCount += 1;
@@ -42,10 +42,10 @@ fn AddLowEntity(gameState: *h.game_state, entityType: h.entity_type, pos: h.worl
             .entityType = entityType,
             .collision = gameState.nullCollision,
         },
-        .p = h.NullPosition(),
+        .p = NullPosition(),
     };
 
-    h.ChangeEntityLocation(&gameState.worldArena, gameState.world, entityIndex, entityLow, pos);
+    h.world_ns.ChangeEntityLocation(&gameState.worldArena, gameState.world, entityIndex, entityLow, pos);
 
     const result = add_low_entity_result{
         .low = entityLow,
@@ -55,42 +55,42 @@ fn AddLowEntity(gameState: *h.game_state, entityType: h.entity_type, pos: h.worl
     return result;
 }
 
-fn AddGroundedEntity(gameState: *h.game_state, entityType: h.entity_type, p: h.world_position, collision: *h.sim_entity_collision_volume_group) add_low_entity_result {
+fn AddGroundedEntity(gameState: *game_state, entityType: h.sim_region_ns.entity_type, p: world_position, collision: *sim_entity_collision_volume_group) add_low_entity_result {
     const entity = AddLowEntity(gameState, entityType, p);
     entity.low.sim.collision = collision;
     return entity;
 }
 
-fn AddStandardRoom(gameState: *h.game_state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
+fn AddStandardRoom(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
+    const p = h.data_ns.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Space, p, gameState.standardRoomCollision);
 
-    h.AddFlags(&entity.low.sim, @intFromEnum(h.sim_entity_flags.Traversable));
+    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Traversable));
 
     return entity;
 }
 
-fn AddWall(gameState: *h.game_state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
+fn AddWall(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
+    const p = h.data_ns.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Wall, p, gameState.wallCollision);
 
-    h.AddFlags(&entity.low.sim, @intFromEnum(h.sim_entity_flags.Collides));
+    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides));
 
     return entity;
 }
 
-fn AddStairs(gameState: *h.game_state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
+fn AddStairs(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
+    const p = h.data_ns.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Stairwell, p, gameState.stairCollision);
 
-    h.AddFlags(&entity.low.sim, @intFromEnum(h.sim_entity_flags.Collides));
+    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides));
     entity.low.sim.walkableDim = .{ h.X(entity.low.sim.collision.totalVolume.dim), h.Y(entity.low.sim.collision.totalVolume.dim) };
     entity.low.sim.walkableHeight = gameState.typicalFloorHeight;
 
     return entity;
 }
 
-fn InitHitPoints(entityLow: *h.low_entity, hitPointCount: u32) void {
+fn InitHitPoints(entityLow: *h.data_ns.low_entity, hitPointCount: u32) void {
     assert(hitPointCount <= entityLow.sim.hitPoint.len);
     entityLow.sim.hitPointMax = hitPointCount;
 
@@ -98,25 +98,25 @@ fn InitHitPoints(entityLow: *h.low_entity, hitPointCount: u32) void {
     while (hitPointIndex < entityLow.sim.hitPointMax) : (hitPointIndex += 1) {
         const hitPoint = &entityLow.sim.hitPoint[hitPointIndex];
         hitPoint.flags = 0;
-        hitPoint.filledAmount = h.HIT_POINT_SUB_COUNT;
+        hitPoint.filledAmount = h.sim_region_ns.HIT_POINT_SUB_COUNT;
     }
 }
 
-fn AddSword(gameState: *h.game_state) add_low_entity_result {
-    var entity = AddLowEntity(gameState, .Sword, h.NullPosition());
+fn AddSword(gameState: *game_state) add_low_entity_result {
+    var entity = AddLowEntity(gameState, .Sword, NullPosition());
 
     entity.low.sim.collision = gameState.swordCollision;
 
-    h.AddFlags(&entity.low.sim, @intFromEnum(h.sim_entity_flags.Movable));
+    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Movable));
 
     return entity;
 }
 
-fn AddPlayer(gameState: *h.game_state) add_low_entity_result {
+fn AddPlayer(gameState: *game_state) add_low_entity_result {
     const p = gameState.cameraP;
     var entity = AddGroundedEntity(gameState, .Hero, p, gameState.playerCollision);
 
-    h.AddFlags(&entity.low.sim, @intFromEnum(h.sim_entity_flags.Collides) | @intFromEnum(h.sim_entity_flags.Movable));
+    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides) | @intFromEnum(sim_entity_flags.Movable));
 
     InitHitPoints(entity.low, 3);
 
@@ -130,27 +130,27 @@ fn AddPlayer(gameState: *h.game_state) add_low_entity_result {
     return entity;
 }
 
-fn AddMonstar(gameState: *h.game_state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
+fn AddMonstar(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
+    const p = h.data_ns.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Monstar, p, gameState.monstarCollision);
 
-    h.AddFlags(&entity.low.sim, @intFromEnum(h.sim_entity_flags.Collides) | @intFromEnum(h.sim_entity_flags.Movable));
+    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides) | @intFromEnum(sim_entity_flags.Movable));
 
     InitHitPoints(entity.low, 3);
 
     return entity;
 }
 
-fn AddFamiliar(gameState: *h.game_state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
+fn AddFamiliar(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
+    const p = h.data_ns.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Familiar, p, gameState.familiarCollision);
 
-    h.AddFlags(&entity.low.sim, @intFromEnum(h.sim_entity_flags.Collides) | @intFromEnum(h.sim_entity_flags.Movable));
+    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides) | @intFromEnum(sim_entity_flags.Movable));
 
     return entity;
 }
 
-fn DrawHitpoints(entity: *h.sim_entity, pieceGroup: *h.render_group) void {
+fn DrawHitpoints(entity: *h.sim_region_ns.sim_entity, pieceGroup: *h.render_group_ns.render_group) void {
     if (entity.hitPointMax >= 1) {
         const healthDim = h.v2{ 0.2, 0.2 };
         const spacingX = 1.5 * h.X(healthDim);
@@ -173,11 +173,11 @@ fn DrawHitpoints(entity: *h.sim_entity, pieceGroup: *h.render_group) void {
     }
 }
 
-fn MakeSimpleGroundedCollision(gameState: *h.game_state, dimX: f32, dimY: f32, dimZ: f32) *h.sim_entity_collision_volume_group {
-    const group: *h.sim_entity_collision_volume_group = gameState.worldArena.PushStruct(h.sim_entity_collision_volume_group);
+fn MakeSimpleGroundedCollision(gameState: *game_state, dimX: f32, dimY: f32, dimZ: f32) *sim_entity_collision_volume_group {
+    const group: *sim_entity_collision_volume_group = gameState.worldArena.PushStruct(sim_entity_collision_volume_group);
 
     const volumeCount = 1;
-    group.volumes = gameState.worldArena.PushSlice(h.sim_entity_collision_volume, volumeCount);
+    group.volumes = gameState.worldArena.PushSlice(h.sim_region_ns.sim_entity_collision_volume, volumeCount);
     group.totalVolume.offsetP = h.v3{ 0, 0, 0.5 * dimZ };
     group.totalVolume.dim = h.v3{ dimX, dimY, dimZ };
     group.volumes[0] = group.totalVolume;
@@ -185,8 +185,8 @@ fn MakeSimpleGroundedCollision(gameState: *h.game_state, dimX: f32, dimY: f32, d
     return group;
 }
 
-fn MakeNullCollision(gameState: *h.game_state) *h.sim_entity_collision_volume_group {
-    const group: *h.sim_entity_collision_volume_group = gameState.worldArena.PushStruct(h.sim_entity_collision_volume_group);
+fn MakeNullCollision(gameState: *game_state) *sim_entity_collision_volume_group {
+    const group: *sim_entity_collision_volume_group = gameState.worldArena.PushStruct(sim_entity_collision_volume_group);
 
     const volumeCount = 0;
     group.volumes = undefined; // TODO (Manav): change type from,  []sim_entity_collision_volume to ?[]sim_entity_collision_volume
@@ -197,39 +197,16 @@ fn MakeNullCollision(gameState: *h.game_state) *h.sim_entity_collision_volume_gr
     return group;
 }
 
-pub fn BeginTaskWithMemory(tranState: *h.transient_state) ?*h.task_with_memory {
-    var foundTask: ?*h.task_with_memory = null;
-
-    var taskIndex: u32 = 0;
-    while (taskIndex < tranState.tasks.len) : (taskIndex += 1) {
-        var task: *h.task_with_memory = &tranState.tasks[taskIndex];
-        if (!task.beingUsed) {
-            foundTask = task;
-            task.beingUsed = true;
-            task.memoryFlush = h.BeginTemporaryMemory(&task.arena);
-            break;
-        }
-    }
-
-    return foundTask;
-}
-
-pub fn EndTaskWithMemory(task: *h.task_with_memory) void {
-    h.EndTemporaryMemory(task.memoryFlush);
-
-    @atomicStore(bool, &task.beingUsed, false, .seq_cst);
-}
-
 const fill_ground_chunk_work = struct {
-    tranState: *h.transient_state,
-    gameState: *h.game_state,
-    groundBuffer: *h.ground_buffer,
-    chunkP: h.world_position,
+    tranState: *transient_state,
+    gameState: *game_state,
+    groundBuffer: *ground_buffer,
+    chunkP: world_position,
 
-    task: *h.task_with_memory,
+    task: *h.data_ns.task_with_memory,
 };
 
-pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
+fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     comptime {
         if (@typeInfo(platform.work_queue_callback).pointer.child != @TypeOf(FillGroundChunkWork)) {
             @compileError("Function signature mismatch!");
@@ -242,7 +219,7 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     defer __t_blk__8.End();
     // AUTOGENERATED ----------------------------------------------------------
 
-    const work: *fill_ground_chunk_work = @alignCast(@ptrCast(data));
+    const work: *fill_ground_chunk_work = @ptrCast(@alignCast(data));
 
     var buffer = &work.groundBuffer.bitmap;
     buffer.alignPercentage = h.v2{ 0.5, 0.5 };
@@ -253,8 +230,8 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     assert(width == height);
     const haldDim = h.Scale(.{ width, height }, 0.5);
 
-    const renderGroup = h.render_group.Allocate(work.tranState.assets, &work.task.arena, 0, true);
-    h.BeginRender(renderGroup);
+    const renderGroup = h.render_group_ns.render_group.Allocate(work.tranState.assets, &work.task.arena, 0, true);
+    h.render_group_ns.BeginRender(renderGroup);
     renderGroup.Orthographic(
         @intCast(buffer.width),
         @intCast(buffer.height),
@@ -271,7 +248,7 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
                 const chunkY = work.chunkP.chunkY + chunkOffsetY;
                 const chunkZ = work.chunkP.chunkZ;
 
-                var series = h.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
+                var series = h.random_ns.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
 
                 var colour = h.v4{ 1, 1, 1, 1 };
 
@@ -286,9 +263,9 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
                 var grassIndex: u32 = 0;
                 while (grassIndex < 50) : (grassIndex += 1) {
-                    const stamp = h.GetRandomBitmapFrom(work.tranState.assets, if (series.RandomChoice(2) == 1) .Asset_Grass else .Asset_Stone, &series);
+                    const stamp = h.asset_ns.GetRandomBitmapFrom(work.tranState.assets, if (series.RandomChoice(2) == 1) .Asset_Grass else .Asset_Stone, &series);
 
-                    const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
+                    const p = h.Add(center, h.math_ns.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
                     renderGroup.PushBitmap2(stamp, 2.5, h.ToV3(p, 0), colour);
                 }
             }
@@ -304,15 +281,15 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
                 const chunkY = work.chunkP.chunkY + chunkOffsetY;
                 const chunkZ = work.chunkP.chunkZ;
 
-                var series = h.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
+                var series = h.random_ns.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
 
                 const center = h.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
 
                 var grassIndex = @as(u32, 0);
                 while (grassIndex < 50) : (grassIndex += 1) {
-                    const stamp: h.bitmap_id = h.GetRandomBitmapFrom(work.tranState.assets, .Asset_Tuft, &series);
+                    const stamp: h.file_formats_ns.bitmap_id = h.asset_ns.GetRandomBitmapFrom(work.tranState.assets, .Asset_Tuft, &series);
 
-                    const p = h.Add(center, h.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
+                    const p = h.Add(center, h.math_ns.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
                     renderGroup.PushBitmap2(stamp, 0.1, h.ToV3(p, 0), .{ 1, 1, 1, 1 });
                 }
             }
@@ -322,18 +299,18 @@ pub fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
     assert(renderGroup.AllResourcesPresent());
 
     renderGroup.NonTiledRenderGroupToOutput(buffer);
-    h.EndRender(renderGroup);
+    h.render_group_ns.EndRender(renderGroup);
 
-    EndTaskWithMemory(work.task);
+    h.data_ns.EndTaskWithMemory(work.task);
 }
 
 fn FillGroundChunk(
-    tranState: *h.transient_state,
-    gameState: *h.game_state,
-    groundBuffer: *h.ground_buffer,
-    chunkP: *const h.world_position,
+    tranState: *transient_state,
+    gameState: *game_state,
+    groundBuffer: *ground_buffer,
+    chunkP: *const world_position,
 ) void {
-    if (BeginTaskWithMemory(tranState)) |task| {
+    if (h.data_ns.BeginTaskWithMemory(tranState)) |task| {
         var work: *fill_ground_chunk_work = task.arena.PushStruct(fill_ground_chunk_work);
         work.task = task;
         work.tranState = tranState;
@@ -342,19 +319,19 @@ fn FillGroundChunk(
         work.chunkP = chunkP.*;
         groundBuffer.p = chunkP.*;
 
-        h.platformAPI.AddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
+        h.data_ns.platformAPI.AddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
     }
 }
 
-fn ClearBitmap(bitmap: *h.loaded_bitmap) void {
+fn ClearBitmap(bitmap: *loaded_bitmap) void {
     const totalBitmapSize = @as(usize, @intCast(bitmap.width * bitmap.height * platform.BITMAP_BYTES_PER_PIXEL));
-    h.ZeroSize(totalBitmapSize, bitmap.memory);
+    h.data_ns.ZeroSize(totalBitmapSize, bitmap.memory);
 }
 
-fn MakeEmptyBitmap(arena: *h.memory_arena, width: i32, height: i32, clearToZero: bool) h.loaded_bitmap {
-    var result = h.loaded_bitmap{
+fn MakeEmptyBitmap(arena: *h.data_ns.memory_arena, width: i32, height: i32, clearToZero: bool) loaded_bitmap {
+    var result = loaded_bitmap{
         .alignPercentage = .{ 0.5, 0.5 },
-        .widthOverHeight = h.SafeRatiof1(@floatFromInt(width), @floatFromInt(height)),
+        .widthOverHeight = h.math_ns.SafeRatiof1(@floatFromInt(width), @floatFromInt(height)),
         .width = width,
         .height = height,
     };
@@ -370,7 +347,7 @@ fn MakeEmptyBitmap(arena: *h.memory_arena, width: i32, height: i32, clearToZero:
 }
 
 /// Defaults: ```cX = 1.0, cY = 1.0```
-fn MakeSphereDiffuseMap(bitmap: *const h.loaded_bitmap, cX: f32, cY: f32) void {
+fn MakeSphereDiffuseMap(bitmap: *const loaded_bitmap, cX: f32, cY: f32) void {
     const invWidth = 1.0 / (@as(f32, @floatFromInt(bitmap.width)) - 1);
     const invHeight = 1.0 / (@as(f32, @floatFromInt(bitmap.height)) - 1);
 
@@ -379,7 +356,7 @@ fn MakeSphereDiffuseMap(bitmap: *const h.loaded_bitmap, cX: f32, cY: f32) void {
     var y = @as(u32, 0);
     while (y < bitmap.height) : (y += 1) {
         var x = @as(u32, 0);
-        var pixel = @as([*]u32, @alignCast(@ptrCast(row)));
+        var pixel = @as([*]u32, @ptrCast(@alignCast(row)));
         while (x < bitmap.width) : (x += 1) {
             const bitmapUV = h.v2{ invWidth * @as(f32, @floatFromInt(x)), invHeight * @as(f32, @floatFromInt(y)) };
 
@@ -414,7 +391,7 @@ fn MakeSphereDiffuseMap(bitmap: *const h.loaded_bitmap, cX: f32, cY: f32) void {
 }
 
 /// Defaults: ```cX = 1.0, cY = 1.0```
-fn MakeSphereNormalMap(bitmap: *const h.loaded_bitmap, roughness: f32, cX: f32, cY: f32) void {
+fn MakeSphereNormalMap(bitmap: *const loaded_bitmap, roughness: f32, cX: f32, cY: f32) void {
     const invWidth = 1.0 / (@as(f32, @floatFromInt(bitmap.width)) - 1);
     const invHeight = 1.0 / (@as(f32, @floatFromInt(bitmap.height)) - 1);
 
@@ -423,7 +400,7 @@ fn MakeSphereNormalMap(bitmap: *const h.loaded_bitmap, roughness: f32, cX: f32, 
     var y = @as(u32, 0);
     while (y < bitmap.height) : (y += 1) {
         var x = @as(u32, 0);
-        var pixel = @as([*]u32, @alignCast(@ptrCast(row)));
+        var pixel = @as([*]u32, @ptrCast(@alignCast(row)));
         while (x < bitmap.width) : (x += 1) {
             const bitmapUV = h.v2{ invWidth * @as(f32, @floatFromInt(x)), invHeight * @as(f32, @floatFromInt(y)) };
 
@@ -431,7 +408,7 @@ fn MakeSphereNormalMap(bitmap: *const h.loaded_bitmap, roughness: f32, cX: f32, 
             const nY = cY * (2 * h.Y(bitmapUV) - 1);
             const nZ_sq = 1 - nX * nX - nY * nY;
 
-            const normal: h.v3 = if (nZ_sq >= 0) .{ nX, nY, h.SquareRoot(nZ_sq) } else .{ 0, 0.70710678118, 0.70710678118 };
+            const normal: h.v3 = if (nZ_sq >= 0) .{ nX, nY, h.intrinsics_ns.SquareRoot(nZ_sq) } else .{ 0, 0.70710678118, 0.70710678118 };
 
             const colour = h.v4{
                 255 * (0.5 * (h.X(normal) + 1)),
@@ -451,7 +428,7 @@ fn MakeSphereNormalMap(bitmap: *const h.loaded_bitmap, roughness: f32, cX: f32, 
     }
 }
 
-fn MakePyramidNormalMap(bitmap: *const h.loaded_bitmap, roughness: f32) void {
+fn MakePyramidNormalMap(bitmap: *const loaded_bitmap, roughness: f32) void {
     // const invWidth = 1.0 / (@intToFloat(f32, bitmap.width) - 1);
     // const invHeight = 1.0 / (@intToFloat(f32, bitmap.height) - 1);
 
@@ -460,7 +437,7 @@ fn MakePyramidNormalMap(bitmap: *const h.loaded_bitmap, roughness: f32) void {
     var y = @as(i32, 0);
     while (y < bitmap.height) : (y += 1) {
         var x = @as(i32, 0);
-        var pixel = @as([*]u32, @alignCast(@ptrCast(row)));
+        var pixel = @as([*]u32, @ptrCast(@alignCast(row)));
         while (x < bitmap.width) : (x += 1) {
             // const bitmapUV = game.v2{ invWidth * @intToFloat(f32, x), invHeight * @intToFloat(f32, y) };
 
@@ -499,22 +476,6 @@ fn MakePyramidNormalMap(bitmap: *const h.loaded_bitmap, roughness: f32) void {
     }
 }
 
-pub inline fn ChunkPosFromTilePos(w: *h.world, absTileX: i32, absTileY: i32, absTileZ: i32, additionalOffset: h.v3) h.world_position {
-    const basePos: h.world_position = .{};
-
-    const tileSideInMeters = 1.4;
-    const tileDepthInMeters = 3.0;
-
-    const tileDim = h.v3{ tileSideInMeters, tileSideInMeters, tileDepthInMeters };
-    const offset = h.Hammard(tileDim, h.V3(absTileX, absTileY, absTileZ));
-
-    const result: h.world_position = h.MapIntoChunkSpace(w, basePos, h.Add(offset, additionalOffset));
-
-    assert(h.IsCanonical(w, result.offset_));
-
-    return result;
-}
-
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(
@@ -529,7 +490,9 @@ pub export fn UpdateAndRender(
         }
     }
 
-    h.platformAPI = gameMemory.platformAPI;
+    const particle_cel = h.data_ns.particle_cel;
+
+    h.data_ns.platformAPI = gameMemory.platformAPI;
 
     if (HANDMADE_INTERNAL) {
         platform.debugGlobalMemory = gameMemory;
@@ -541,8 +504,8 @@ pub export fn UpdateAndRender(
     defer __t_blk__9.End();
     // AUTOGENERATED ----------------------------------------------------------
 
-    assert(@sizeOf(h.game_state) <= gameMemory.permanentStorageSize);
-    const gameState: *h.game_state = @alignCast(@ptrCast(gameMemory.permanentStorage));
+    assert(@sizeOf(game_state) <= gameMemory.permanentStorageSize);
+    const gameState: *game_state = @ptrCast(@alignCast(gameMemory.permanentStorage));
 
     const groundBufferWidth = 256.0;
     const groundBufferHeight = 256.0;
@@ -553,7 +516,7 @@ pub export fn UpdateAndRender(
         const tilesPerHeight = 9;
 
         gameState.typicalFloorHeight = 3.0;
-        gameState.effectsEntropy = h.RandomSeed(1234);
+        gameState.effectsEntropy = h.random_ns.RandomSeed(1234);
 
         const worldChunkDimInMeters = h.v3{
             pixelsToMeters * groundBufferWidth,
@@ -562,17 +525,17 @@ pub export fn UpdateAndRender(
         };
 
         gameState.worldArena.Initialize(
-            gameMemory.permanentStorageSize - @sizeOf(h.game_state),
-            gameMemory.permanentStorage + @sizeOf(h.game_state),
+            gameMemory.permanentStorageSize - @sizeOf(game_state),
+            gameMemory.permanentStorage + @sizeOf(game_state),
         );
 
-        h.InitializeAudioState(&gameState.audioState, &gameState.worldArena);
+        h.audio_ns.InitializeAudioState(&gameState.audioState, &gameState.worldArena);
 
-        _ = AddLowEntity(gameState, .Null, h.NullPosition());
+        _ = AddLowEntity(gameState, .Null, NullPosition());
 
-        gameState.world = gameState.worldArena.PushStruct(h.world);
+        gameState.world = gameState.worldArena.PushStruct(h.world_ns.world);
         const world = gameState.world;
-        h.InitializeWorld(world, worldChunkDimInMeters);
+        h.world_ns.InitializeWorld(world, worldChunkDimInMeters);
 
         const tileSideInMeters = 1.4;
         const tileDepthInMeters = gameState.typicalFloorHeight;
@@ -592,7 +555,7 @@ pub export fn UpdateAndRender(
             0.9 * tileDepthInMeters,
         );
 
-        var series = h.RandomSeed(1234);
+        var series = h.random_ns.RandomSeed(1234);
 
         const screenBaseX = @as(u32, 0);
         const screenBaseY = @as(u32, 0);
@@ -712,7 +675,7 @@ pub export fn UpdateAndRender(
         const cameraTileY = screenBaseY * tilesPerHeight + 9 / 2;
         const cameraTileZ = screenBaseZ;
 
-        const newCameraP = ChunkPosFromTilePos(gameState.world, cameraTileX, cameraTileY, cameraTileZ, .{ 0, 0, 0 });
+        const newCameraP = h.data_ns.ChunkPosFromTilePos(gameState.world, cameraTileX, cameraTileY, cameraTileZ, .{ 0, 0, 0 });
 
         gameState.cameraP = newCameraP;
 
@@ -735,12 +698,12 @@ pub export fn UpdateAndRender(
         gameState.isInitialized = true;
     }
 
-    assert(@sizeOf(h.transient_state) <= gameMemory.transientStorageSize);
-    const tranState = @as(*h.transient_state, @alignCast(@ptrCast(gameMemory.transientStorage)));
+    assert(@sizeOf(transient_state) <= gameMemory.transientStorageSize);
+    const tranState = @as(*transient_state, @ptrCast(@alignCast(gameMemory.transientStorage)));
     if (!tranState.initialized) {
         tranState.tranArena.Initialize(
-            gameMemory.transientStorageSize - @sizeOf(h.transient_state),
-            gameMemory.transientStorage + @sizeOf(h.transient_state),
+            gameMemory.transientStorageSize - @sizeOf(transient_state),
+            gameMemory.transientStorage + @sizeOf(transient_state),
         );
 
         tranState.highPriorityQueue = gameMemory.highPriorityQueue;
@@ -753,17 +716,17 @@ pub export fn UpdateAndRender(
             task.arena.SubArena(&tranState.tranArena, 16, platform.MegaBytes(1));
         }
 
-        tranState.assets = h.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(16), tranState);
+        tranState.assets = h.asset_ns.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(16), tranState);
 
         // gameState.music = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
         const groundBufferCount = 256; // 64
-        tranState.groundBuffers = tranState.tranArena.PushSlice(h.ground_buffer, groundBufferCount);
+        tranState.groundBuffers = tranState.tranArena.PushSlice(h.data_ns.ground_buffer, groundBufferCount);
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
-            var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
+            var groundBuffer: *h.data_ns.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
             groundBuffer.bitmap = MakeEmptyBitmap(&tranState.tranArena, groundBufferWidth, groundBufferHeight, false);
-            groundBuffer.p = h.NullPosition();
+            groundBuffer.p = NullPosition();
         }
 
         gameState.testDiffuse = MakeEmptyBitmap(&tranState.tranArena, 256, 256, false);
@@ -795,18 +758,18 @@ pub export fn UpdateAndRender(
         if (gameMemory.executableReloaded) {
             var groundBufferIndex = @as(u32, 0);
             while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
-                var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
-                groundBuffer.p = h.NullPosition();
+                var groundBuffer: *ground_buffer = &tranState.groundBuffers[groundBufferIndex];
+                groundBuffer.p = NullPosition();
             }
         }
     }
 
     {
         var musicVolume: h.v2 = .{ 0, 0 };
-        musicVolume[1] = h.SafeRatiof0(gameInput.mouseX, @floatFromInt(buffer.width));
+        musicVolume[1] = h.math_ns.SafeRatiof0(gameInput.mouseX, @floatFromInt(buffer.width));
         musicVolume[0] = 1 - musicVolume[1];
 
-        h.ChangeVolume(&gameState.audioState, gameState.music, 0.01, musicVolume);
+        h.audio_ns.ChangeVolume(&gameState.audioState, gameState.music, 0.01, musicVolume);
     }
 
     const world = gameState.world;
@@ -847,27 +810,27 @@ pub export fn UpdateAndRender(
             conHero.dSword = .{ 0, 0 };
 
             if (controller.buttons.mapped.actionUp.endedDown != 0) {
-                h.ChangeVolume(&gameState.audioState, gameState.music, 10, .{ 1, 1 });
+                h.audio_ns.ChangeVolume(&gameState.audioState, gameState.music, 10, .{ 1, 1 });
                 conHero.dSword[1] = 1.0;
             }
             if (controller.buttons.mapped.actionDown.endedDown != 0) {
-                h.ChangeVolume(&gameState.audioState, gameState.music, 10, .{ 0, 0 });
+                h.audio_ns.ChangeVolume(&gameState.audioState, gameState.music, 10, .{ 0, 0 });
                 conHero.dSword[1] = -1.0;
             }
             if (controller.buttons.mapped.actionLeft.endedDown != 0) {
-                h.ChangeVolume(&gameState.audioState, gameState.music, 5, .{ 1, 0 });
+                h.audio_ns.ChangeVolume(&gameState.audioState, gameState.music, 5, .{ 1, 0 });
 
                 conHero.dSword[0] = -1.0;
             }
             if (controller.buttons.mapped.actionRight.endedDown != 0) {
-                h.ChangeVolume(&gameState.audioState, gameState.music, 5, .{ 0, 1 });
+                h.audio_ns.ChangeVolume(&gameState.audioState, gameState.music, 5, .{ 0, 1 });
 
                 conHero.dSword[0] = 1.0;
             }
         }
     }
 
-    var drawBuffer_ = h.loaded_bitmap{
+    var drawBuffer_ = loaded_bitmap{
         .width = @intCast(buffer.width),
         .height = @intCast(buffer.height),
         .pitch = @intCast(buffer.pitch),
@@ -880,9 +843,9 @@ pub export fn UpdateAndRender(
         drawBuffer.height = 719;
     }
 
-    const renderMemory = h.BeginTemporaryMemory(&tranState.tranArena);
-    const renderGroup = h.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(4), false);
-    h.BeginRender(renderGroup);
+    const renderMemory = h.data_ns.BeginTemporaryMemory(&tranState.tranArena);
+    const renderGroup = h.render_group_ns.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(4), false);
+    h.render_group_ns.BeginRender(renderGroup);
 
     const widthOfMonitorInMeters = 0.635;
     const metersToPixels = @as(f32, @floatFromInt(drawBuffer.width)) * widthOfMonitorInMeters;
@@ -899,7 +862,7 @@ pub export fn UpdateAndRender(
         0.5 * @as(f32, @floatFromInt(drawBuffer.height)),
     };
 
-    const screenBounds = h.GetCameraRectangleAtTarget(renderGroup);
+    const screenBounds = h.render_group_ns.GetCameraRectangleAtTarget(renderGroup);
     var cameraBoundsInMeters = h.rect3{ .min = h.ToV3(screenBounds.min, 0), .max = h.ToV3(screenBounds.max, 0) };
     cameraBoundsInMeters.min[2] = -3 * gameState.typicalFloorHeight;
     cameraBoundsInMeters.max[2] = 1 * gameState.typicalFloorHeight;
@@ -907,10 +870,10 @@ pub export fn UpdateAndRender(
     if (!ignore) {
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
-            var groundBuffer: *h.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
-            if (h.IsValid(groundBuffer.p)) {
+            var groundBuffer: *ground_buffer = &tranState.groundBuffers[groundBufferIndex];
+            if (h.world_ns.IsValid(groundBuffer.p)) {
                 const bitmap = &groundBuffer.bitmap;
-                const delta = h.Substract(world, &groundBuffer.p, &gameState.cameraP);
+                const delta = h.world_ns.Substract(world, &groundBuffer.p, &gameState.cameraP);
 
                 if ((h.Z(delta) >= -1.0) and (h.Z(delta) < 1.0)) {
                     const groundSideInMeters = h.X(world.chunkDimInMeters);
@@ -923,8 +886,8 @@ pub export fn UpdateAndRender(
         }
 
         {
-            const minChunkP = h.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMinCorner());
-            const maxChunkP = h.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMaxCorner());
+            const minChunkP = h.world_ns.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMinCorner());
+            const maxChunkP = h.world_ns.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMaxCorner());
 
             var chunkZ = minChunkP.chunkZ;
             while (chunkZ <= maxChunkP.chunkZ) : (chunkZ += 1) {
@@ -934,21 +897,21 @@ pub export fn UpdateAndRender(
                     while (chunkX <= maxChunkP.chunkX) : (chunkX += 1) {
                         // if (game.GetWorldChunk(null, world, )) |chunk|
                         {
-                            const chunkCenterP = h.CenteredChunkPoint(chunkX, chunkY, chunkZ);
-                            const relP = h.Substract(world, &chunkCenterP, &gameState.cameraP);
+                            const chunkCenterP = h.world_ns.CenteredChunkPoint(chunkX, chunkY, chunkZ);
+                            const relP = h.world_ns.Substract(world, &chunkCenterP, &gameState.cameraP);
                             _ = relP;
 
                             var furthestBufferLengthSq = @as(f32, 0);
-                            var furthestBuffer: ?*h.ground_buffer = null;
+                            var furthestBuffer: ?*ground_buffer = null;
                             var index = @as(u32, 0);
                             while (index < tranState.groundBuffers.len) : (index += 1) {
                                 const groundBuffer = &tranState.groundBuffers[index];
-                                if (h.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
+                                if (h.world_ns.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
                                     furthestBuffer = null;
                                     break;
-                                } else if (h.IsValid(groundBuffer.p)) {
-                                    const distance = h.Substract(world, &groundBuffer.p, &gameState.cameraP);
-                                    const bufferLengthSq = h.LengthSq(h.XY(distance));
+                                } else if (h.world_ns.IsValid(groundBuffer.p)) {
+                                    const distance = h.world_ns.Substract(world, &groundBuffer.p, &gameState.cameraP);
+                                    const bufferLengthSq = h.math_ns.LengthSq(h.XY(distance));
                                     if (furthestBufferLengthSq < bufferLengthSq) {
                                         furthestBufferLengthSq = bufferLengthSq;
                                         furthestBuffer = groundBuffer;
@@ -971,11 +934,11 @@ pub export fn UpdateAndRender(
 
     const simBoundsExpansion = h.v3{ 15, 15, 0 };
     const simBounds = cameraBoundsInMeters.AddRadius(simBoundsExpansion);
-    const simMemory = h.BeginTemporaryMemory(&tranState.tranArena);
+    const simMemory = h.data_ns.BeginTemporaryMemory(&tranState.tranArena);
     const simCenterP = gameState.cameraP;
-    const simRegion = h.BeginSim(&tranState.tranArena, gameState, gameState.world, simCenterP, simBounds, gameInput.dtForFrame);
+    const simRegion = h.sim_region_ns.BeginSim(&tranState.tranArena, gameState, gameState.world, simCenterP, simBounds, gameInput.dtForFrame);
 
-    const cameraP: h.v3 = h.Substract(world, &gameState.cameraP, &simCenterP);
+    const cameraP: h.v3 = h.world_ns.Substract(world, &gameState.cameraP, &simCenterP);
 
     renderGroup.PushRectOutline(.{ 0, 0, 0 }, screenBounds.GetDim(), .{ 1, 1, 0, 1 });
     // renderGroup.PushRectOutline( .{0, 0, 0}, game.XY(cameraBoundsInMeters.GetDim()), .{1, 1, 1, 1});
@@ -985,7 +948,7 @@ pub export fn UpdateAndRender(
 
     var entityIndex = @as(u32, 0);
     while (entityIndex < simRegion.entityCount) : (entityIndex += 1) {
-        const entity: *h.sim_entity = &simRegion.entities[entityIndex];
+        const entity: *h.sim_region_ns.sim_entity = &simRegion.entities[entityIndex];
 
         if (entity.updatable) {
             const dt = gameInput.dtForFrame;
@@ -993,45 +956,45 @@ pub export fn UpdateAndRender(
             const alpha = 1 - 0.5 * h.Z(entity.p);
             const shadowAlpha = h.Clampf01(alpha);
 
-            var moveSpec = h.DefaultMoveSpec();
+            var moveSpec = h.entity_ns.DefaultMoveSpec();
             var ddP = h.v3{ 0, 0, 0 };
 
-            const cameraRelativeGroundP: h.v3 = h.Sub(h.GetEntityGroundPoint(entity), cameraP);
+            const cameraRelativeGroundP: h.v3 = h.Sub(h.entity_ns.GetEntityGroundPoint(entity), cameraP);
             const fadeTopEndZ = 0.75 * gameState.typicalFloorHeight;
             const fadeTopStartZ = 0.5 * gameState.typicalFloorHeight;
             const fadeBottomStartZ = -2 * gameState.typicalFloorHeight;
             const fadeBottomEndZ = -2.5 * gameState.typicalFloorHeight;
             renderGroup.globalAlpha = 1.0;
             if (h.Z(cameraRelativeGroundP) > fadeTopStartZ) {
-                renderGroup.globalAlpha = h.ClampMapToRange(fadeTopEndZ, h.Z(cameraRelativeGroundP), fadeTopStartZ);
+                renderGroup.globalAlpha = h.math_ns.ClampMapToRange(fadeTopEndZ, h.Z(cameraRelativeGroundP), fadeTopStartZ);
             } else if (h.Z(cameraRelativeGroundP) < fadeBottomStartZ) {
-                renderGroup.globalAlpha = h.ClampMapToRange(fadeBottomEndZ, h.Z(cameraRelativeGroundP), fadeBottomStartZ);
+                renderGroup.globalAlpha = h.math_ns.ClampMapToRange(fadeBottomEndZ, h.Z(cameraRelativeGroundP), fadeBottomStartZ);
             }
 
-            var matchVector = h.asset_vector{};
-            matchVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] = entity.facingDirection;
+            var matchVector = h.asset_ns.asset_vector{};
+            matchVector.e[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = entity.facingDirection;
 
-            var weightVector = h.asset_vector{};
-            weightVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] = 1.0;
+            var weightVector = h.asset_ns.asset_vector{};
+            weightVector.e[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = 1.0;
 
             // if (entity.facingDirection != 0) {
             //     @import("std").debug.print("{}, {}, {}\n", .{
             //         entity.facingDirection,
-            //         h.asset_tag_id.Tag_FacingDirection,
-            //         matchVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)],
+            //         asset_tag_id.Tag_FacingDirection,
+            //         matchVector.e[@intFromEnum(asset_tag_id.Tag_FacingDirection)],
             //     });
             //     @import("std").debug.print("{}, {}, {}\n", .{
             //         entity.facingDirection,
-            //         h.asset_tag_id.Tag_FacingDirection,
-            //         weightVector.e[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)],
+            //         asset_tag_id.Tag_FacingDirection,
+            //         weightVector.e[@intFromEnum(asset_tag_id.Tag_FacingDirection)],
             //     });
             // }
 
             // Update (pre-physics entity)
-            const heroBitmaps = h.hero_bitmap_ids{
-                .head = h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Head, &matchVector, &weightVector),
-                .cape = h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Cape, &matchVector, &weightVector),
-                .torso = h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Torso, &matchVector, &weightVector),
+            const heroBitmaps = h.data_ns.hero_bitmap_ids{
+                .head = h.asset_ns.GetBestMatchBitmapFrom(tranState.assets, .Asset_Head, &matchVector, &weightVector),
+                .cape = h.asset_ns.GetBestMatchBitmapFrom(tranState.assets, .Asset_Cape, &matchVector, &weightVector),
+                .torso = h.asset_ns.GetBestMatchBitmapFrom(tranState.assets, .Asset_Torso, &matchVector, &weightVector),
             };
 
             switch (entity.entityType) {
@@ -1050,13 +1013,13 @@ pub export fn UpdateAndRender(
                                 switch (entity.sword) {
                                     .ptr => {
                                         const sword = entity.sword.ptr;
-                                        if (h.IsSet(sword, @intFromEnum(h.sim_entity_flags.NonSpatial))) {
+                                        if (h.entity_ns.IsSet(sword, @intFromEnum(sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
                                             const dSwordV3 = h.v3{ h.X(conHero.dSword), h.Y(conHero.dSword), 0 };
-                                            h.MakeEntitySpatial(sword, entity.p, h.Add(entity.dP, (h.Scale(dSwordV3, 5))));
-                                            h.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
+                                            h.entity_ns.MakeEntitySpatial(sword, entity.p, h.Add(entity.dP, (h.Scale(dSwordV3, 5))));
+                                            h.data_ns.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
 
-                                            _ = h.PlaySound(&gameState.audioState, h.GetRandomSoundFrom(tranState.assets, .Asset_Bloop, &gameState.effectsEntropy));
+                                            _ = h.audio_ns.PlaySound(&gameState.audioState, h.asset_ns.GetRandomSoundFrom(tranState.assets, .Asset_Bloop, &gameState.effectsEntropy));
                                         }
                                     },
 
@@ -1075,8 +1038,8 @@ pub export fn UpdateAndRender(
                     moveSpec.drag = 0;
 
                     if (entity.distanceLimit == 0) {
-                        h.ClearCollisionRulesFor(gameState, entity.storageIndex);
-                        h.MakeEntityNonSpatial(entity);
+                        h.data_ns.ClearCollisionRulesFor(gameState, entity.storageIndex);
+                        h.entity_ns.MakeEntityNonSpatial(entity);
                     } else {
                         // NOTE (Manav): invalid z position causes float overflow down the line when drawing bitmap because of zFudge,
                         // so not pushing bitmap when entity becomes non spatial
@@ -1084,14 +1047,14 @@ pub export fn UpdateAndRender(
                 },
 
                 .Familiar => {
-                    var closestHero: ?*h.sim_entity = null;
-                    var closestHeroDSq = h.Square(10);
+                    var closestHero: ?*h.sim_region_ns.sim_entity = null;
+                    var closestHeroDSq = h.math_ns.Square(10);
                     if (config.DEBUGUI_FamiliarFollowsHero) {
                         var testEntityIndex = @as(u32, 0);
                         while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
-                            const testEntity: *h.sim_entity = &simRegion.entities[testEntityIndex];
+                            const testEntity: *h.sim_region_ns.sim_entity = &simRegion.entities[testEntityIndex];
                             if (testEntity.entityType == .Hero) {
-                                const testDSq = h.LengthSq(h.Sub(testEntity.p, entity.p));
+                                const testDSq = h.math_ns.LengthSq(h.Sub(testEntity.p, entity.p));
 
                                 if (closestHeroDSq > testDSq) {
                                     closestHero = testEntity;
@@ -1102,9 +1065,9 @@ pub export fn UpdateAndRender(
                     }
 
                     if (closestHero) |hero| {
-                        if (closestHeroDSq > h.Square(3)) {
+                        if (closestHeroDSq > h.math_ns.Square(3)) {
                             const accelaration = 0.5;
-                            const oneOverLength = accelaration / h.SquareRoot(closestHeroDSq);
+                            const oneOverLength = accelaration / h.intrinsics_ns.SquareRoot(closestHeroDSq);
                             ddP = h.Scale(h.Sub(hero.p, entity.p), oneOverLength);
                         }
                     }
@@ -1121,26 +1084,26 @@ pub export fn UpdateAndRender(
                 else => {},
             }
 
-            if (!h.IsSet(entity, @intFromEnum(h.sim_entity_flags.NonSpatial)) and
-                h.IsSet(entity, @intFromEnum(h.sim_entity_flags.Movable)))
+            if (!h.entity_ns.IsSet(entity, @intFromEnum(sim_entity_flags.NonSpatial)) and
+                h.entity_ns.IsSet(entity, @intFromEnum(sim_entity_flags.Movable)))
             {
-                h.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
+                h.sim_region_ns.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
 
-            renderGroup.transform.offsetP = h.GetEntityGroundPoint(entity);
+            renderGroup.transform.offsetP = h.entity_ns.GetEntityGroundPoint(entity);
 
             // Render (post-physics entity)
             switch (entity.entityType) {
                 .Hero => {
                     const heroSizeC = 2.5;
-                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
                     renderGroup.PushBitmap2(heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                     renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     if (config.DEBUGUI_ParticleTest) {
                         for (0..3) |_| {
-                            const particle: *h.particle = &gameState.particles[gameState.nextParticle];
+                            const particle: *h.data_ns.particle = &gameState.particles[gameState.nextParticle];
                             gameState.nextParticle += 1;
 
                             if (gameState.nextParticle >= gameState.particles.len) {
@@ -1162,48 +1125,48 @@ pub export fn UpdateAndRender(
                             };
                             particle.dColour = .{ 0, 0, 0, -0.25 };
 
-                            var matchVectorFont = h.asset_vector{};
-                            var weightVectorFont = h.asset_vector{};
+                            var matchVectorFont = h.asset_ns.asset_vector{};
+                            var weightVectorFont = h.asset_ns.asset_vector{};
 
                             const nothings = "NOTHINGS";
 
-                            matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
-                            weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
+                            matchVectorFont.e[@intFromEnum(asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
+                            weightVectorFont.e[@intFromEnum(asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
 
-                            particle.bitmapID = heroBitmaps.head; // h.GetBestMatchBitmapFrom(tranState.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
-                            // particle.bitmapID = h.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
+                            particle.bitmapID = heroBitmaps.head; // h.asset_ns.GetBestMatchBitmapFrom(tranState.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
+                            // particle.bitmapID = h.asset_ns.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
                         }
                     }
 
-                    h.ZeroStruct(@TypeOf(gameState.particleCels), &gameState.particleCels);
+                    h.data_ns.ZeroStruct(@TypeOf(gameState.particleCels), &gameState.particleCels);
 
                     const gridScale = 0.25;
                     const invGridScale = 1.0 / gridScale;
-                    const gridOrigin = h.v3{ -0.5 * gridScale * h.PARTICLE_CEL_DIM, 0, 0 };
+                    const gridOrigin = h.v3{ -0.5 * gridScale * PARTICLE_CEL_DIM, 0, 0 };
 
                     for (0..gameState.particles.len) |i| {
-                        const particle: *h.particle = &gameState.particles[i];
+                        const particle: *h.data_ns.particle = &gameState.particles[i];
 
                         const p = h.Scale(h.Sub(particle.p, gridOrigin), invGridScale);
 
-                        var x = h.TruncateF32ToI32(h.X(p));
-                        var y = h.TruncateF32ToI32(h.Y(p));
+                        var x = h.intrinsics_ns.TruncateF32ToI32(h.X(p));
+                        var y = h.intrinsics_ns.TruncateF32ToI32(h.Y(p));
 
                         if (x < 0) {
                             x = 0;
                         }
-                        if (x > h.PARTICLE_CEL_DIM - 1) {
-                            x = h.PARTICLE_CEL_DIM - 1;
+                        if (x > PARTICLE_CEL_DIM - 1) {
+                            x = PARTICLE_CEL_DIM - 1;
                         }
 
                         if (y < 0) {
                             y = 0;
                         }
-                        if (y > h.PARTICLE_CEL_DIM - 1) {
-                            y = h.PARTICLE_CEL_DIM - 1;
+                        if (y > PARTICLE_CEL_DIM - 1) {
+                            y = PARTICLE_CEL_DIM - 1;
                         }
 
-                        const cel: *h.particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x)];
+                        const cel: *particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x)];
                         const density = h.A(particle.colour);
                         cel.density += density;
                         // cel.velocityTimesDensity += density * particle.dP
@@ -1211,9 +1174,9 @@ pub export fn UpdateAndRender(
                     }
 
                     if (config.DEBUGUI_ParticleGrid) {
-                        for (0..h.PARTICLE_CEL_DIM) |y| {
-                            for (0..h.PARTICLE_CEL_DIM) |x| {
-                                const cel: *h.particle_cel = &gameState.particleCels[y][x];
+                        for (0..PARTICLE_CEL_DIM) |y| {
+                            for (0..PARTICLE_CEL_DIM) |x| {
+                                const cel: *particle_cel = &gameState.particleCels[y][x];
 
                                 const a = h.Clampf01(0.1 * cel.density);
 
@@ -1227,32 +1190,32 @@ pub export fn UpdateAndRender(
                     }
 
                     for (0..gameState.particles.len) |i| {
-                        const particle: *h.particle = &gameState.particles[i];
+                        const particle: *h.data_ns.particle = &gameState.particles[i];
 
                         const p = h.Scale(h.Sub(particle.p, gridOrigin), invGridScale);
 
-                        var x = h.TruncateF32ToI32(h.X(p));
-                        var y = h.TruncateF32ToI32(h.Y(p));
+                        var x = h.intrinsics_ns.TruncateF32ToI32(h.X(p));
+                        var y = h.intrinsics_ns.TruncateF32ToI32(h.Y(p));
 
                         if (x < 1) {
                             x = 1;
                         }
-                        if (x > h.PARTICLE_CEL_DIM - 2) {
-                            x = h.PARTICLE_CEL_DIM - 2;
+                        if (x > PARTICLE_CEL_DIM - 2) {
+                            x = PARTICLE_CEL_DIM - 2;
                         }
 
                         if (y < 1) {
                             y = 1;
                         }
-                        if (y > h.PARTICLE_CEL_DIM - 2) {
-                            y = h.PARTICLE_CEL_DIM - 2;
+                        if (y > PARTICLE_CEL_DIM - 2) {
+                            y = PARTICLE_CEL_DIM - 2;
                         }
 
-                        const celCenter: *h.particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x)];
-                        const celLeft: *h.particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x - 1)];
-                        const celRight: *h.particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x + 1)];
-                        const celDown: *h.particle_cel = &gameState.particleCels[@intCast(y - 1)][@intCast(x)];
-                        const celUp: *h.particle_cel = &gameState.particleCels[@intCast(y + 1)][@intCast(x)];
+                        const celCenter: *particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x)];
+                        const celLeft: *particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x - 1)];
+                        const celRight: *particle_cel = &gameState.particleCels[@intCast(y)][@intCast(x + 1)];
+                        const celDown: *particle_cel = &gameState.particleCels[@intCast(y - 1)][@intCast(x)];
+                        const celUp: *particle_cel = &gameState.particleCels[@intCast(y + 1)][@intCast(x)];
 
                         const dc = 1.0;
                         var dispersion = h.v3{ 0, 0, 0 };
@@ -1267,8 +1230,8 @@ pub export fn UpdateAndRender(
 
                         const particleDDP = h.Add(particle.ddP, dispersion);
 
-                        // particle.p += 0.5* Square(gameInput.dtForFrame) * particleDDP + particle.dp * gameInput.dtForFrame;
-                        h.AddTo(&particle.p, h.Add(h.Scale(particleDDP, 0.5 * h.Square(gameInput.dtForFrame)), h.Scale(particle.dP, gameInput.dtForFrame)));
+                        // particle.p += 0.5* h.math_ns.Square(gameInput.dtForFrame) * particleDDP + particle.dp * gameInput.dtForFrame;
+                        h.AddTo(&particle.p, h.Add(h.Scale(particleDDP, 0.5 * h.math_ns.Square(gameInput.dtForFrame)), h.Scale(particle.dP, gameInput.dtForFrame)));
 
                         // particle.dp += particleDDP * gameInput.dtForFrame;
                         h.AddTo(&particle.dP, h.Scale(particleDDP, gameInput.dtForFrame));
@@ -1284,10 +1247,10 @@ pub export fn UpdateAndRender(
                             h.SetX(&particle.dP, coefficientOfFriction * h.X(particle.dP));
                         }
 
-                        var colour: h.v4 = h.ClampV401(particle.colour);
+                        var colour: h.v4 = h.math_ns.ClampV401(particle.colour);
 
                         if (h.A(colour) > 0.9) {
-                            h.SetA(&colour, 0.9 * h.ClampMapToRange(1, h.A(colour), 0.9));
+                            h.math_ns.SetA(&colour, 0.9 * h.math_ns.ClampMapToRange(1, h.A(colour), 0.9));
                         }
                         renderGroup.PushBitmap2(particle.bitmapID, 1, particle.p, colour);
                     }
@@ -1296,7 +1259,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Wall => {
-                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Tree), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Tree), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Stairwell => {
@@ -1305,8 +1268,8 @@ pub export fn UpdateAndRender(
                 },
 
                 .Sword => {
-                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Sword), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Sword), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
                 },
 
                 .Familiar => {
@@ -1316,12 +1279,12 @@ pub export fn UpdateAndRender(
                     }
                     const bobSin = h.Sin(2 * entity.tBob);
 
-                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
                     renderGroup.PushBitmap2(heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
                 },
 
                 .Monstar => {
-                    renderGroup.PushBitmap2(h.GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
                     renderGroup.PushBitmap2(heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
 
                     DrawHitpoints(entity, renderGroup);
@@ -1450,11 +1413,11 @@ pub export fn UpdateAndRender(
     }
 
     renderGroup.TiledRenderGroupToOutput(tranState.highPriorityQueue, drawBuffer);
-    h.EndRender(renderGroup);
+    h.render_group_ns.EndRender(renderGroup);
 
-    h.EndSim(simRegion, gameState); // TODO (Manav): use defer
-    h.EndTemporaryMemory(simMemory);
-    h.EndTemporaryMemory(renderMemory);
+    h.sim_region_ns.EndSim(simRegion, gameState); // TODO (Manav): use defer
+    h.data_ns.EndTemporaryMemory(simMemory);
+    h.data_ns.EndTemporaryMemory(renderMemory);
 
     gameState.worldArena.CheckArena();
     tranState.tranArena.CheckArena();
@@ -1470,9 +1433,9 @@ pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platfo
         }
     }
 
-    const gameState: *h.game_state = @alignCast(@ptrCast(gameMemory.permanentStorage));
-    const tranState: *h.transient_state = @alignCast(@ptrCast(gameMemory.transientStorage));
+    const gameState: *game_state = @ptrCast(@alignCast(gameMemory.permanentStorage));
+    const tranState: *h.data_ns.transient_state = @ptrCast(@alignCast(gameMemory.transientStorage));
 
-    h.OutputPlayingSounds(&gameState.audioState, soundBuffer, tranState.assets, &tranState.tranArena);
-    // h.OutputTestSineWave(gameState, soundBuffer, 400);
+    h.audio_ns.OutputPlayingSounds(&gameState.audioState, soundBuffer, tranState.assets, &tranState.tranArena);
+    // h.audio_ns.OutputTestSineWave(gameState, soundBuffer, 400);
 }

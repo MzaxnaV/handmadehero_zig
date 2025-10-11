@@ -1,19 +1,18 @@
-const platform = @import("handmade_platform");
 const debug = @import("handmade_debug.zig");
+const h = @import("handmade_all.zig");
 
-const h = struct {
-    usingnamespace @import("intrinsics");
-
-    usingnamespace @import("handmade_data.zig");
-    usingnamespace @import("handmade_math.zig");
-    usingnamespace @import("handmade_random.zig");
-    usingnamespace @import("handmade_render_group.zig");
-    usingnamespace @import("handmade.zig");
-
-    usingnamespace @import("handmade_file_formats.zig");
-};
-
+const platform = @import("platform");
 const assert = platform.Assert;
+
+const hha_tag = h.file_formats_ns.hha_tag;
+const hha_font = h.file_formats_ns.hha_font;
+const hha_asset = h.file_formats_ns.hha_asset;
+const font_id = h.file_formats_ns.font_id;
+const sound_id = h.file_formats_ns.sound_id;
+const bitmap_id = h.file_formats_ns.bitmap_id;
+const asset_tag_id = h.file_formats_ns.asset_tag_id;
+const asset_type_id = h.file_formats_ns.asset_type_id;
+
 const ignore = platform.ignore;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
@@ -26,7 +25,7 @@ pub const loaded_sound = extern struct {
 };
 
 pub const loaded_font = extern struct {
-    glyphs: [*]h.hha_font_glyph,
+    glyphs: [*]h.file_formats_ns.hha_font_glyph,
     horizontalAdvance: [*]f32,
     bitmapIDOffset: u32,
     unicodeMap: [*]u16,
@@ -47,7 +46,7 @@ pub const asset_memory_header = struct {
     generationID: u32,
 
     data: extern union {
-        bitmap: h.loaded_bitmap,
+        bitmap: h.render_group_ns.loaded_bitmap,
         sound: loaded_sound,
         font: loaded_font,
     },
@@ -56,12 +55,12 @@ pub const asset_memory_header = struct {
 pub const asset = extern struct {
     state: u32,
     header: *asset_memory_header,
-    hha: h.hha_asset,
+    hha: hha_asset,
     fileIndex: u32,
 };
 
 pub const asset_vector = struct {
-    e: [h.asset_tag_id.len()]f32 = [1]f32{0} ** h.asset_tag_id.len(),
+    e: [asset_tag_id.len()]f32 = [1]f32{0} ** asset_tag_id.len(),
 };
 
 pub const asset_type = struct {
@@ -77,8 +76,8 @@ pub const asset_group = struct {
 pub const asset_file = struct {
     handle: platform.file_handle,
 
-    header: h.hha_header,
-    assetTypeArray: []h.hha_asset_type,
+    header: h.file_formats_ns.hha_header,
+    assetTypeArray: []h.file_formats_ns.hha_asset_type,
 
     tagBase: u32,
     fontBitmapIDOffset: i32,
@@ -99,24 +98,24 @@ pub const asset_memory_block = extern struct {
 pub const game_assets = struct {
     nextGenerationID: u32,
 
-    tranState: *h.transient_state,
+    tranState: *h.data_ns.transient_state,
 
     memorySentinel: asset_memory_block,
 
     loadedAssetSentinel: asset_memory_header,
 
-    tagRange: [h.asset_tag_id.len()]f32,
+    tagRange: [asset_tag_id.len()]f32,
 
     // fileCount: u32,
     files: []asset_file,
 
     tagCount: u32,
-    tags: [*]h.hha_tag,
+    tags: [*]hha_tag,
 
     assetCount: u32,
     assets: [*]asset,
 
-    assetTypes: [h.asset_type_id.count()]asset_type,
+    assetTypes: [asset_type_id.count()]asset_type,
 
     operationLock: u32,
 
@@ -147,8 +146,8 @@ pub const game_assets = struct {
         return result;
     }
 
-    pub inline fn GetBitmap(self: *game_assets, ID: h.bitmap_id, generationID: u32) ?*h.loaded_bitmap {
-        var result: ?*h.loaded_bitmap = null;
+    pub inline fn GetBitmap(self: *game_assets, ID: bitmap_id, generationID: u32) ?*h.render_group_ns.loaded_bitmap {
+        var result: ?*h.render_group_ns.loaded_bitmap = null;
 
         if (self.GetAsset(ID.value, generationID)) |header| {
             result = &header.data.bitmap;
@@ -157,7 +156,7 @@ pub const game_assets = struct {
         return result;
     }
 
-    pub inline fn GetSound(self: *game_assets, ID: h.sound_id, generationID: u32) ?*loaded_sound {
+    pub inline fn GetSound(self: *game_assets, ID: sound_id, generationID: u32) ?*loaded_sound {
         var result: ?*loaded_sound = null;
 
         if (self.GetAsset(ID.value, generationID)) |header| {
@@ -167,7 +166,7 @@ pub const game_assets = struct {
         return result;
     }
 
-    pub inline fn GetFont(self: *game_assets, ID: h.font_id, generationID: u32) ?*loaded_font {
+    pub inline fn GetFont(self: *game_assets, ID: font_id, generationID: u32) ?*loaded_font {
         var result: ?*loaded_font = null;
 
         if (self.GetAsset(ID.value, generationID)) |header| {
@@ -177,24 +176,24 @@ pub const game_assets = struct {
         return result;
     }
 
-    pub inline fn GetBitmapInfo(self: *game_assets, ID: h.bitmap_id) *h.hha_bitmap {
+    pub inline fn GetBitmapInfo(self: *game_assets, ID: bitmap_id) *h.file_formats_ns.hha_bitmap {
         const result = &self.assets[ID.value].hha.data.bitmap;
         return result;
     }
 
-    pub inline fn GetSoundInfo(self: *game_assets, ID: h.sound_id) *h.hha_sound {
+    pub inline fn GetSoundInfo(self: *game_assets, ID: sound_id) *h.file_formats_ns.hha_sound {
         const result = &self.assets[ID.value].hha.data.sound;
         return result;
     }
 
-    pub inline fn GetFontInfo(self: *game_assets, ID: h.font_id) *h.hha_font {
+    pub inline fn GetFontInfo(self: *game_assets, ID: font_id) *h.file_formats_ns.hha_font {
         const result = &self.assets[ID.value].hha.data.font;
         return result;
     }
 
     pub inline fn BeginAssetLock(self: *game_assets) void {
         while (true) {
-            if (h.AtomicCompareExchange(u32, &self.operationLock, 1, 0) == null) {
+            if (h.intrinsics_ns.AtomicCompareExchange(u32, &self.operationLock, 1, 0) == null) {
                 break;
             }
         }
@@ -204,7 +203,7 @@ pub const game_assets = struct {
         @atomicStore(u32, &self.operationLock, 0, .seq_cst);
     }
 
-    pub fn AllocateGameAssets(arena: *h.memory_arena, size: platform.memory_index, tranState: *h.transient_state) *game_assets {
+    pub fn AllocateGameAssets(arena: *h.data_ns.memory_arena, size: platform.memory_index, tranState: *h.data_ns.transient_state) *game_assets {
         var assets: *game_assets = arena.PushStruct(game_assets);
 
         assets.nextGenerationID = 0;
@@ -222,18 +221,18 @@ pub const game_assets = struct {
         assets.loadedAssetSentinel.next = &assets.loadedAssetSentinel;
         assets.loadedAssetSentinel.prev = &assets.loadedAssetSentinel;
 
-        for (0..h.asset_tag_id.len()) |tagType| {
+        for (0..asset_tag_id.len()) |tagType| {
             assets.tagRange[tagType] = 1000000.0;
         }
 
-        assets.tagRange[@intFromEnum(h.asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
+        assets.tagRange[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = platform.Tau32;
 
         assets.tagCount = 1;
         assets.assetCount = 1;
 
         {
-            var fileGroup = h.platformAPI.GetAllFilesOfTypeBegin(.PlatformFileType_AssetFile);
-            defer h.platformAPI.GetAllFilesOfTypeEnd(&fileGroup);
+            var fileGroup = h.data_ns.platformAPI.GetAllFilesOfTypeBegin(.PlatformFileType_AssetFile);
+            defer h.data_ns.platformAPI.GetAllFilesOfTypeEnd(&fileGroup);
 
             assets.files = arena.PushSlice(asset_file, fileGroup.fileCount);
 
@@ -243,21 +242,21 @@ pub const game_assets = struct {
                 file.fontBitmapIDOffset = 0;
                 file.tagBase = assets.tagCount;
 
-                h.ZeroStruct(h.hha_header, &file.header);
-                file.handle = h.platformAPI.OpenNextFile(&fileGroup);
-                h.platformAPI.ReadDataFromFile(&file.handle, 0, @sizeOf(@TypeOf(file.header)), &file.header);
+                h.data_ns.ZeroStruct(h.file_formats_ns.hha_header, &file.header);
+                file.handle = h.data_ns.platformAPI.OpenNextFile(&fileGroup);
+                h.data_ns.platformAPI.ReadDataFromFile(&file.handle, 0, @sizeOf(@TypeOf(file.header)), &file.header);
 
-                file.assetTypeArray = arena.PushSlice(h.hha_asset_type, file.header.assetTypeCount);
-                const assetTypeArraySize = file.header.assetTypeCount * @sizeOf(h.hha_asset_type);
+                file.assetTypeArray = arena.PushSlice(h.file_formats_ns.hha_asset_type, file.header.assetTypeCount);
+                const assetTypeArraySize = file.header.assetTypeCount * @sizeOf(h.file_formats_ns.hha_asset_type);
 
-                h.platformAPI.ReadDataFromFile(&file.handle, file.header.assetTypes, assetTypeArraySize, file.assetTypeArray.ptr);
+                h.data_ns.platformAPI.ReadDataFromFile(&file.handle, file.header.assetTypes, assetTypeArraySize, file.assetTypeArray.ptr);
 
-                if (file.header.magicValue != h.HHA_MAGIC_VALUE) {
-                    h.platformAPI.FileError(&file.handle, "HHA file has invalid magic value.");
+                if (file.header.magicValue != h.file_formats_ns.HHA_MAGIC_VALUE) {
+                    h.data_ns.platformAPI.FileError(&file.handle, "HHA file has invalid magic value.");
                 }
 
-                if (file.header.version > h.HHA_VERSION) {
-                    h.platformAPI.FileError(&file.handle, "HHA file is of a later version.");
+                if (file.header.version > h.file_formats_ns.HHA_VERSION) {
+                    h.data_ns.platformAPI.FileError(&file.handle, "HHA file is of a later version.");
                 }
 
                 if (platform.NoFileErrors(&file.handle)) {
@@ -271,23 +270,23 @@ pub const game_assets = struct {
 
         assets.assets = arena.PushSlice(asset, assets.assetCount).ptr;
         // assets.assets = arena.PushSlice(asset, assets.assetCount);
-        assets.tags = arena.PushSlice(h.hha_tag, assets.tagCount).ptr;
+        assets.tags = arena.PushSlice(hha_tag, assets.tagCount).ptr;
 
-        h.ZeroStruct(h.hha_tag, &assets.tags[0]);
+        h.data_ns.ZeroStruct(hha_tag, &assets.tags[0]);
 
         for (0..assets.files.len) |fileIndex| {
             const file: *asset_file = &assets.files[fileIndex];
             if (platform.NoFileErrors(&file.handle)) {
-                const tagArraySize = @sizeOf(h.hha_tag) * (file.header.tagCount - 1);
-                h.platformAPI.ReadDataFromFile(&file.handle, file.header.tags + @sizeOf(h.hha_tag), tagArraySize, assets.tags + file.tagBase);
+                const tagArraySize = @sizeOf(hha_tag) * (file.header.tagCount - 1);
+                h.data_ns.platformAPI.ReadDataFromFile(&file.handle, file.header.tags + @sizeOf(hha_tag), tagArraySize, assets.tags + file.tagBase);
             }
         }
 
         var assetCount: u32 = 0;
-        h.ZeroStruct(asset, &assets.assets[assetCount]);
+        h.data_ns.ZeroStruct(asset, &assets.assets[assetCount]);
         assetCount += 1;
 
-        for (0..h.asset_type_id.count()) |destTypeID| {
+        for (0..asset_type_id.count()) |destTypeID| {
             var destType: *asset_type = &assets.assetTypes[destTypeID];
             destType.firstAssetIndex = assetCount;
 
@@ -295,29 +294,29 @@ pub const game_assets = struct {
                 var file: *asset_file = &assets.files[fileIndex];
                 if (platform.NoFileErrors(&file.handle)) {
                     for (0..file.header.assetTypeCount) |sourceIndex| {
-                        const sourceType: *h.hha_asset_type = &file.assetTypeArray[sourceIndex];
+                        const sourceType: *h.file_formats_ns.hha_asset_type = &file.assetTypeArray[sourceIndex];
 
                         if (sourceType.typeID == destTypeID) {
-                            if (sourceType.typeID == @intFromEnum(h.asset_type_id.Asset_FontGlyph)) {
+                            if (sourceType.typeID == @intFromEnum(asset_type_id.Asset_FontGlyph)) {
                                 file.fontBitmapIDOffset = @as(i32, @intCast(assetCount)) - @as(i32, @intCast(sourceType.firstAssetIndex));
                             }
 
                             const assetCountForType: u32 = (sourceType.onePastLastAssetIndex - sourceType.firstAssetIndex);
 
-                            const tempMem = h.BeginTemporaryMemory(&tranState.tranArena);
-                            defer h.EndTemporaryMemory(tempMem);
+                            const tempMem = h.data_ns.BeginTemporaryMemory(&tranState.tranArena);
+                            defer h.data_ns.EndTemporaryMemory(tempMem);
 
-                            const hhaAssetArray = tempMem.arena.PushSlice(h.hha_asset, assetCountForType);
+                            const hhaAssetArray = tempMem.arena.PushSlice(hha_asset, assetCountForType);
 
-                            h.platformAPI.ReadDataFromFile(
+                            h.data_ns.platformAPI.ReadDataFromFile(
                                 &file.handle,
-                                file.header.assets + sourceType.firstAssetIndex * @sizeOf(h.hha_asset),
-                                assetCountForType * @sizeOf(h.hha_asset),
+                                file.header.assets + sourceType.firstAssetIndex * @sizeOf(hha_asset),
+                                assetCountForType * @sizeOf(hha_asset),
                                 hhaAssetArray.ptr,
                             );
 
                             for (0..assetCountForType) |assetIndex| {
-                                const hhaAsset: h.hha_asset = hhaAssetArray[assetIndex];
+                                const hhaAsset: hha_asset = hhaAssetArray[assetIndex];
 
                                 assert(assetCount < assets.assetCount);
                                 var a: *asset = &assets.assets[assetCount];
@@ -371,7 +370,7 @@ const finalize_asset_operation = enum {
 };
 
 const load_asset_work = struct {
-    task: ?*h.task_with_memory,
+    task: ?*h.data_ns.task_with_memory,
     asset_: *asset, // TODO: (change code style to match with casey? or switch to zig?)
 
     handle: *platform.file_handle,
@@ -391,7 +390,7 @@ fn LoadAssetWorkDirectly(work: *load_asset_work) void {
     defer __t_blk__10.End();
     // AUTOGENERATED ----------------------------------------------------------
 
-    h.platformAPI.ReadDataFromFile(work.handle, work.offset, work.size, work.destination);
+    h.data_ns.platformAPI.ReadDataFromFile(work.handle, work.offset, work.size, work.destination);
 
     if (platform.NoFileErrors(work.handle)) {
         switch (work.finalizeOperation) {
@@ -410,7 +409,7 @@ fn LoadAssetWorkDirectly(work: *load_asset_work) void {
     }
 
     if (!platform.NoFileErrors(work.handle)) {
-        h.ZeroSize(work.size, @ptrCast(work.destination));
+        h.data_ns.ZeroSize(work.size, @ptrCast(work.destination));
     }
 
     @atomicStore(u32, &work.asset_.state, work.finalState, .seq_cst);
@@ -422,11 +421,11 @@ fn LoadAssetWork(_: ?*platform.work_queue, data: *anyopaque) void {
             @compileError("Function signature mismatch!");
         }
     }
-    const work: *load_asset_work = @alignCast(@ptrCast(data));
+    const work: *load_asset_work = @ptrCast(@alignCast(data));
 
     LoadAssetWorkDirectly(work);
 
-    h.EndTaskWithMemory(work.task.?);
+    h.data_ns.EndTaskWithMemory(work.task.?);
 }
 
 inline fn GetFile(assets: *game_assets, fileIndex: u32) *asset_file {
@@ -442,7 +441,7 @@ inline fn GetFileHandleFor(assets: *game_assets, fileIndex: u32) *platform.file_
 fn InsertBlock(prev: *asset_memory_block, size: u64, memory: *anyopaque) *asset_memory_block {
     platform.Assert(size > @sizeOf(asset_memory_block));
 
-    var block: *asset_memory_block = @alignCast(@ptrCast(memory));
+    var block: *asset_memory_block = @ptrCast(@alignCast(memory));
     block.flags = .{ .used = false };
     block.size = size - @sizeOf(asset_memory_block);
     block.prev = prev;
@@ -528,7 +527,7 @@ fn AcquireAssetMemory(assets: *game_assets, size_: u32, assetIndex: u32) ?*asset
 
             const resPtr: [*]u8 = @ptrCast(@as([*]asset_memory_block, @ptrCast(block)) + 1);
 
-            result = @alignCast(@ptrCast(resPtr));
+            result = @ptrCast(@alignCast(resPtr));
 
             const remainingSize = block.?.size - size;
             const blockSplitThreshold = 4096;
@@ -551,7 +550,7 @@ fn AcquireAssetMemory(assets: *game_assets, size_: u32, assetIndex: u32) ?*asset
 
                     RemoveAssetHeaderFromList(header);
 
-                    block = &(@as([*]asset_memory_block, @alignCast(@ptrCast(asset_.header))) - 1)[0];
+                    block = &(@as([*]asset_memory_block, @ptrCast(@alignCast(asset_.header))) - 1)[0];
                     block.?.flags = .{ .used = false };
 
                     if (MergeIfPossible(assets, block.?.prev, block.?)) {
@@ -586,7 +585,7 @@ const asset_memory_size = struct {
     section: u32 = 0,
 };
 
-pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
+pub fn LoadBitmap(assets: *game_assets, ID: bitmap_id, immediate: bool) void {
     debug.TIMED_FUNCTION(.{});
     // AUTOGENERATED ----------------------------------------------------------
     var __t_blk__12 = debug.TIMED_FUNCTION__impl(12, @src()).Init(.{});
@@ -597,14 +596,14 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
 
     const asset_: *asset = &assets.assets[ID.value];
 
-    if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
-        var task: ?*h.task_with_memory = null;
+    if (h.intrinsics_ns.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
+        var task: ?*h.data_ns.task_with_memory = null;
 
         if (!immediate) {
-            task = h.BeginTaskWithMemory(assets.tranState);
+            task = h.data_ns.BeginTaskWithMemory(assets.tranState);
         }
         if (immediate or task != null) {
-            const info: h.hha_bitmap = asset_.hha.data.bitmap;
+            const info: h.file_formats_ns.hha_bitmap = asset_.hha.data.bitmap;
 
             var size: asset_memory_size = .{};
 
@@ -618,7 +617,7 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
 
             asset_.header = AcquireAssetMemory(assets, size.total, ID.value).?;
 
-            const bitmap: *h.loaded_bitmap = &asset_.header.data.bitmap;
+            const bitmap: *h.render_group_ns.loaded_bitmap = &asset_.header.data.bitmap;
             bitmap.alignPercentage = info.alignPercentage;
             bitmap.widthOverHeight = @as(f32, @floatFromInt(info.dim[0])) / @as(f32, @floatFromInt(info.dim[1]));
             bitmap.width = @intCast(info.dim[0]);
@@ -641,7 +640,7 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
             if (task) |_| {
                 const taskWork: *load_asset_work = task.?.arena.PushStruct(load_asset_work);
                 taskWork.* = work;
-                h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, taskWork);
+                h.data_ns.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, taskWork);
             } else {
                 LoadAssetWorkDirectly(&work);
             }
@@ -653,11 +652,11 @@ pub fn LoadBitmap(assets: *game_assets, ID: h.bitmap_id, immediate: bool) void {
     }
 }
 
-pub inline fn PrefetchBitmap(assets: *game_assets, ID: h.bitmap_id) void {
+pub inline fn PrefetchBitmap(assets: *game_assets, ID: bitmap_id) void {
     return LoadBitmap(assets, ID, false);
 }
 
-pub fn LoadFont(assets: *game_assets, ID: h.font_id, immediate: bool) void {
+pub fn LoadFont(assets: *game_assets, ID: font_id, immediate: bool) void {
     debug.TIMED_FUNCTION(.{});
     // AUTOGENERATED ----------------------------------------------------------
     var __t_blk__13 = debug.TIMED_FUNCTION__impl(13, @src()).Init(.{});
@@ -668,17 +667,17 @@ pub fn LoadFont(assets: *game_assets, ID: h.font_id, immediate: bool) void {
 
     const asset_: *asset = &assets.assets[ID.value];
 
-    if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
-        var task: ?*h.task_with_memory = null;
+    if (h.intrinsics_ns.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
+        var task: ?*h.data_ns.task_with_memory = null;
 
         if (!immediate) {
-            task = h.BeginTaskWithMemory(assets.tranState);
+            task = h.data_ns.BeginTaskWithMemory(assets.tranState);
         }
         if (immediate or task != null) {
-            const info: h.hha_font = asset_.hha.data.font;
+            const info: hha_font = asset_.hha.data.font;
 
             const horizontalAdvanceSize = info.glyphCount * info.glyphCount * @sizeOf(f32);
-            const glyphsSize = info.glyphCount * @sizeOf(h.hha_font_glyph);
+            const glyphsSize = info.glyphCount * @sizeOf(h.file_formats_ns.hha_font_glyph);
             const unicodeMapSize = @sizeOf(u16) * info.onePastHighestCodepoint;
             const sizeData = glyphsSize + horizontalAdvanceSize;
             const sizeTotal = sizeData + @sizeOf(asset_memory_header) + unicodeMapSize;
@@ -688,10 +687,10 @@ pub fn LoadFont(assets: *game_assets, ID: h.font_id, immediate: bool) void {
             const font: *loaded_font = &asset_.header.data.font;
             font.bitmapIDOffset = @intCast(GetFile(assets, asset_.fileIndex).fontBitmapIDOffset);
             font.glyphs = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
-            font.horizontalAdvance = @alignCast(@ptrCast(@as([*]u8, @ptrCast(font.glyphs)) + glyphsSize));
-            font.unicodeMap = @alignCast(@ptrCast(@as([*]u8, @ptrCast(font.horizontalAdvance)) + horizontalAdvanceSize));
+            font.horizontalAdvance = @ptrCast(@alignCast(@as([*]u8, @ptrCast(font.glyphs)) + glyphsSize));
+            font.unicodeMap = @ptrCast(@alignCast(@as([*]u8, @ptrCast(font.horizontalAdvance)) + horizontalAdvanceSize));
 
-            h.ZeroSize(unicodeMapSize, @ptrCast(font.unicodeMap));
+            h.data_ns.ZeroSize(unicodeMapSize, @ptrCast(font.unicodeMap));
 
             var work = load_asset_work{
                 .task = task,
@@ -707,7 +706,7 @@ pub fn LoadFont(assets: *game_assets, ID: h.font_id, immediate: bool) void {
             if (task) |_| {
                 const taskWork: *load_asset_work = task.?.arena.PushStruct(load_asset_work);
                 taskWork.* = work;
-                h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, taskWork);
+                h.data_ns.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, taskWork);
             } else {
                 LoadAssetWorkDirectly(&work);
             }
@@ -719,11 +718,11 @@ pub fn LoadFont(assets: *game_assets, ID: h.font_id, immediate: bool) void {
     }
 }
 
-pub inline fn PrefetchFont(assets: *game_assets, ID: h.font_id) void {
+pub inline fn PrefetchFont(assets: *game_assets, ID: font_id) void {
     return LoadFont(assets, ID, false);
 }
 
-pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
+pub fn LoadSound(assets: *game_assets, ID: sound_id) void {
     debug.TIMED_FUNCTION(.{});
     // AUTOGENERATED ----------------------------------------------------------
     var __t_blk__14 = debug.TIMED_FUNCTION__impl(14, @src()).Init(.{});
@@ -734,9 +733,9 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
 
     const asset_: *asset = &assets.assets[ID.value];
 
-    if (h.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
-        if (h.BeginTaskWithMemory(assets.tranState)) |task| {
-            const info: *h.hha_sound = &asset_.hha.data.sound;
+    if (h.intrinsics_ns.AtomicCompareExchange(u32, &asset_.state, @intFromEnum(asset_state.AssetState_Queued), @intFromEnum(asset_state.AssetState_Unloaded)) == null) {
+        if (h.data_ns.BeginTaskWithMemory(assets.tranState)) |task| {
+            const info: *h.file_formats_ns.hha_sound = &asset_.hha.data.sound;
 
             var size: asset_memory_size = .{};
 
@@ -744,7 +743,7 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
             size.data = size.section * info.channelCount;
             size.total = size.data + @sizeOf(asset_memory_header);
 
-            asset_.header = @alignCast(@ptrCast(AcquireAssetMemory(assets, size.total, ID.value).?));
+            asset_.header = @ptrCast(@alignCast(AcquireAssetMemory(assets, size.total, ID.value).?));
             const sound: *loaded_sound = &asset_.header.data.sound;
 
             sound.sampleCount = info.sampleCount;
@@ -754,7 +753,7 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
 
             const memory: *anyopaque = @ptrCast(@as([*]asset_memory_header, @ptrCast(asset_.header)) + 1);
 
-            var soundAt: [*]i16 = @alignCast(@ptrCast(memory));
+            var soundAt: [*]i16 = @ptrCast(@alignCast(memory));
             for (0..sound.channelCount) |channelIndex| {
                 sound.samples[channelIndex] = soundAt;
                 soundAt += channelSize;
@@ -772,19 +771,19 @@ pub fn LoadSound(assets: *game_assets, ID: h.sound_id) void {
                 .finalizeOperation = .FinalizeAsset_NONE,
             };
 
-            h.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
+            h.data_ns.platformAPI.AddEntry(assets.tranState.lowPriorityQueue, LoadAssetWork, work);
         } else {
             asset_.state = @intFromEnum(asset_state.AssetState_Unloaded);
         }
     }
 }
 
-pub inline fn PrefetchSound(assets: *game_assets, ID: h.sound_id) void {
+pub inline fn PrefetchSound(assets: *game_assets, ID: sound_id) void {
     return LoadSound(assets, ID);
 }
 
-pub inline fn GetNextSoundInChain(assets: *game_assets, ID: h.sound_id) h.sound_id {
-    var result = h.sound_id{};
+pub inline fn GetNextSoundInChain(assets: *game_assets, ID: sound_id) sound_id {
+    var result = sound_id{};
 
     const info = assets.GetSoundInfo(ID);
     switch (info.chain) {
@@ -796,7 +795,7 @@ pub inline fn GetNextSoundInChain(assets: *game_assets, ID: h.sound_id) h.sound_
     return result;
 }
 
-pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: h.asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) u32 {
+pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) u32 {
     debug.TIMED_FUNCTION(.{});
     // AUTOGENERATED ----------------------------------------------------------
     var __t_blk__15 = debug.TIMED_FUNCTION__impl(15, @src()).Init(.{});
@@ -815,12 +814,12 @@ pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: h.asset_type_id, matc
             var totalWeightedDiff: f32 = 0.0;
 
             for (a.hha.firstTagIndex..a.hha.onePastLastTagIndex) |tagIndex| {
-                const tag: h.hha_tag = assets.tags[tagIndex];
+                const tag: hha_tag = assets.tags[tagIndex];
 
                 const _a = matchVector.e[tag.ID];
                 const _b = tag.value;
-                const d0 = h.AbsoluteValue(_a - _b);
-                const d1 = h.AbsoluteValue((_a - assets.tagRange[tag.ID] * h.SignOf(f32, _a)) - _b);
+                const d0 = h.intrinsics_ns.AbsoluteValue(_a - _b);
+                const d1 = h.intrinsics_ns.AbsoluteValue((_a - assets.tagRange[tag.ID] * h.intrinsics_ns.SignOf(f32, _a)) - _b);
                 const difference = @min(d0, d1);
 
                 const weightedDiff = weightVector.e[tag.ID] * difference;
@@ -837,7 +836,7 @@ pub fn GetBestMatchAssetFrom(assets: *game_assets, typeID: h.asset_type_id, matc
     return result;
 }
 
-fn GetRandomAssetFrom(assets: *game_assets, typeID: h.asset_type_id, series: *h.random_series) u32 {
+fn GetRandomAssetFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_ns.random_series) u32 {
     debug.TIMED_FUNCTION(.{});
     // AUTOGENERATED ----------------------------------------------------------
     var __t_blk__16 = debug.TIMED_FUNCTION__impl(16, @src()).Init(.{});
@@ -857,7 +856,7 @@ fn GetRandomAssetFrom(assets: *game_assets, typeID: h.asset_type_id, series: *h.
     return result;
 }
 
-fn GetFirstAssetFrom(assets: *game_assets, typeID: h.asset_type_id) u32 {
+fn GetFirstAssetFrom(assets: *game_assets, typeID: asset_type_id) u32 {
     debug.TIMED_FUNCTION(.{});
     // AUTOGENERATED ----------------------------------------------------------
     var __t_blk__17 = debug.TIMED_FUNCTION__impl(17, @src()).Init(.{});
@@ -875,42 +874,42 @@ fn GetFirstAssetFrom(assets: *game_assets, typeID: h.asset_type_id) u32 {
     return result;
 }
 
-pub inline fn GetBestMatchBitmapFrom(assets: *game_assets, typeID: h.asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) h.bitmap_id {
-    const result = h.bitmap_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
+pub inline fn GetBestMatchBitmapFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) bitmap_id {
+    const result = bitmap_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
     return result;
 }
 
-pub inline fn GetFirstBitmapFrom(assets: *game_assets, typeID: h.asset_type_id) h.bitmap_id {
-    const result = h.bitmap_id{ .value = GetFirstAssetFrom(assets, typeID) };
+pub inline fn GetFirstBitmapFrom(assets: *game_assets, typeID: asset_type_id) bitmap_id {
+    const result = bitmap_id{ .value = GetFirstAssetFrom(assets, typeID) };
     return result;
 }
 
-pub inline fn GetRandomBitmapFrom(assets: *game_assets, typeID: h.asset_type_id, series: *h.random_series) h.bitmap_id {
-    const result = h.bitmap_id{ .value = GetRandomAssetFrom(assets, typeID, series) };
+pub inline fn GetRandomBitmapFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_ns.random_series) bitmap_id {
+    const result = bitmap_id{ .value = GetRandomAssetFrom(assets, typeID, series) };
     return result;
 }
 
-pub inline fn GetBestMatchSoundFrom(assets: *game_assets, typeID: h.asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) h.sound_id {
-    const result = h.sound_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
+pub inline fn GetBestMatchSoundFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) sound_id {
+    const result = sound_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
     return result;
 }
 
-pub inline fn GetFirstSoundFrom(assets: *game_assets, typeID: h.asset_type_id) h.sound_id {
-    const result = h.sound_id{ .value = GetFirstAssetFrom(assets, typeID) };
+pub inline fn GetFirstSoundFrom(assets: *game_assets, typeID: asset_type_id) sound_id {
+    const result = sound_id{ .value = GetFirstAssetFrom(assets, typeID) };
     return result;
 }
 
-pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: h.asset_type_id, series: *h.random_series) h.sound_id {
-    const result = h.sound_id{ .value = GetRandomAssetFrom(assets, typeID, series) };
+pub inline fn GetRandomSoundFrom(assets: *game_assets, typeID: asset_type_id, series: *h.random_ns.random_series) sound_id {
+    const result = sound_id{ .value = GetRandomAssetFrom(assets, typeID, series) };
     return result;
 }
 
-pub inline fn GetBestMatchFontFrom(assets: *game_assets, typeID: h.asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) h.font_id {
-    const result = h.font_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
+pub inline fn GetBestMatchFontFrom(assets: *game_assets, typeID: asset_type_id, matchVector: *asset_vector, weightVector: *asset_vector) font_id {
+    const result = font_id{ .value = GetBestMatchAssetFrom(assets, typeID, matchVector, weightVector) };
     return result;
 }
 
-inline fn GetGlyphFromCodePoint(info: *h.hha_font, font: *loaded_font, codePoint: u32) u32 {
+inline fn GetGlyphFromCodePoint(info: *hha_font, font: *loaded_font, codePoint: u32) u32 {
     var result: u32 = 0;
 
     if (codePoint < info.onePastHighestCodepoint) {
@@ -921,7 +920,7 @@ inline fn GetGlyphFromCodePoint(info: *h.hha_font, font: *loaded_font, codePoint
     return result;
 }
 
-pub fn GetHorizontalAdvanceForPair(info: *h.hha_font, font: *loaded_font, desiredPrevCodePoint: u32, desiredCodePoint: u32) f32 {
+pub fn GetHorizontalAdvanceForPair(info: *hha_font, font: *loaded_font, desiredPrevCodePoint: u32, desiredCodePoint: u32) f32 {
     const prevGlyph = GetGlyphFromCodePoint(info, font, desiredPrevCodePoint);
     const glyph = GetGlyphFromCodePoint(info, font, desiredCodePoint);
     const result = font.horizontalAdvance[prevGlyph * info.glyphCount + glyph];
@@ -929,20 +928,20 @@ pub fn GetHorizontalAdvanceForPair(info: *h.hha_font, font: *loaded_font, desire
     return result;
 }
 
-pub fn GetBitmapForGlyph(_: *game_assets, info: *h.hha_font, font: *loaded_font, desiredCodePoint: u32) h.bitmap_id {
+pub fn GetBitmapForGlyph(_: *game_assets, info: *hha_font, font: *loaded_font, desiredCodePoint: u32) bitmap_id {
     const glyph = GetGlyphFromCodePoint(info, font, desiredCodePoint);
     var result = font.glyphs[glyph].bitmapID;
     result.value += font.bitmapIDOffset;
     return result;
 }
 
-pub fn GetLineAdvanceFor(info: *h.hha_font) f32 {
+pub fn GetLineAdvanceFor(info: *hha_font) f32 {
     const result = info.ascenderHeight + info.descenderHeight + info.externalLeading;
 
     return result;
 }
 
-pub fn GetStartingBaselineY(info: *h.hha_font) f32 {
+pub fn GetStartingBaselineY(info: *hha_font) f32 {
     const result = info.ascenderHeight;
 
     return result;

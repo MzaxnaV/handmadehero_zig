@@ -29,28 +29,26 @@ pub const MAXUINT32 = @import("std").math.maxInt(u32);
 
 // ----------------------------------------------------------------------------------------------------------------------------------------
 
-pub const handmade_internal = if (HANDMADE_INTERNAL) struct {
-    pub const debug_read_file_result = struct {
-        contentSize: u32 = 0,
-        contents: [*]u8 = undefined,
-    };
+pub const debug_read_file_result = if (HANDMADE_INTERNAL) struct {
+    contentSize: u32 = 0,
+    contents: [*]u8 = undefined,
+};
 
-    pub const debug_executing_process = struct {
-        osHandle: u64 = 0,
-    };
+pub const debug_executing_process = if (HANDMADE_INTERNAL) struct {
+    osHandle: u64 = 0,
+};
 
-    pub const debug_executing_state = struct {
-        startedSuccessfully: bool = false,
-        isRunning: bool = false,
-        returnCode: i32 = 0,
-    };
+pub const debug_executing_state = if (HANDMADE_INTERNAL) struct {
+    startedSuccessfully: bool = false,
+    isRunning: bool = false,
+    returnCode: i32 = 0,
+};
 
-    pub const debug_free_file_memory = *const fn (*anyopaque) void;
-    pub const debug_read_entire_file = *const fn ([*:0]const u8) debug_read_file_result;
-    pub const debug_write_entire_file = *const fn (fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool;
-    pub const debug_execute_system_command = *const fn (path: [*:0]const u8, command: [*:0]const u8, commandline: [*:0]const u8) debug_executing_process;
-    pub const debug_get_process_state = *const fn (process: debug_executing_process) debug_executing_state;
-} else {};
+pub const debug_free_file_memory = if (HANDMADE_INTERNAL) *const fn (*anyopaque) void;
+pub const debug_read_entire_file = if (HANDMADE_INTERNAL) *const fn ([*:0]const u8) debug_read_file_result;
+pub const debug_write_entire_file = if (HANDMADE_INTERNAL) *const fn (fileName: [*:0]const u8, memorySize: u32, memory: *anyopaque) bool;
+pub const debug_execute_system_command = if (HANDMADE_INTERNAL) *const fn (path: [*:0]const u8, command: [*:0]const u8, commandline: [*:0]const u8) debug_executing_process;
+pub const debug_get_process_state = if (HANDMADE_INTERNAL) *const fn (process: debug_executing_process) debug_executing_state;
 
 pub fn __rdtsc() u64 {
     var low: u32 = 0;
@@ -156,8 +154,6 @@ pub const input = struct {
     controllers: [CONTROLLERS]controller_input = [1]controller_input{controller_input{}} ** CONTROLLERS,
 };
 
-const len = if (HANDMADE_INTERNAL) @typeInfo(handmade_internal.debug_cycle_counter_type).@"enum".fields.len else 0;
-
 pub const work_queue = opaque {};
 
 pub const work_queue_callback = *const fn (queue: ?*work_queue, data: *anyopaque) void;
@@ -212,11 +208,11 @@ pub const api = struct {
     AllocateMemory: platform_allocate_memory,
     DeallocateMemory: platform_deallocate_memory,
 
-    DEBUGFreeFileMemory: handmade_internal.debug_free_file_memory,
-    DEBUGReadEntireFile: handmade_internal.debug_read_entire_file,
-    DEBUGWriteEntireFile: handmade_internal.debug_write_entire_file,
-    DEBUGExecuteSystemCommand: handmade_internal.debug_execute_system_command,
-    DEBUGGetProcessState: handmade_internal.debug_get_process_state,
+    DEBUGFreeFileMemory: debug_free_file_memory,
+    DEBUGReadEntireFile: debug_read_entire_file,
+    DEBUGWriteEntireFile: debug_write_entire_file,
+    DEBUGExecuteSystemCommand: debug_execute_system_command,
+    DEBUGGetProcessState: debug_get_process_state,
 };
 
 pub const memory = struct {
@@ -515,7 +511,7 @@ pub inline fn TeraBytes(comptime value: comptime_int) comptime_int {
 
 pub inline fn Align(addr: usize, alignment: usize) usize {
     // return @import("std").mem.alignForward(usize, addr, alignment);
-    return addr + (alignment - 1) & ~(alignment - 1);
+    return (addr + (alignment - 1)) & ~(alignment - 1);
 }
 
 pub fn StringLength(string: [*]const u8) u32 {
@@ -547,7 +543,7 @@ pub var debugGlobalMemory: ?*memory = null;
 
 // exported functions ---------------------------------------------------------------------------------------------------------------------
 
-pub const DEBUGFrameEndsFnPtrType = *const fn (*memory) callconv(.C) *debug_table;
+pub const DEBUGFrameEndsFnPtrType = *const fn (*memory) callconv(.c) *debug_table;
 
-pub const GetSoundSamplesFnPtrType = *const fn (*memory, *sound_output_buffer) callconv(.C) void;
-pub const UpdateAndRenderFnPtrType = *const fn (*memory, *input, *offscreen_buffer) callconv(.C) void;
+pub const GetSoundSamplesFnPtrType = *const fn (*memory, *sound_output_buffer) callconv(.c) void;
+pub const UpdateAndRenderFnPtrType = *const fn (*memory, *input, *offscreen_buffer) callconv(.c) void;

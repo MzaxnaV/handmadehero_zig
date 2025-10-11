@@ -1,15 +1,16 @@
-const platform = @import("handmade_platform");
+const h = @import("handmade_all.zig");
 
-const h = struct {
-    usingnamespace @import("intrinsics");
-};
+const platform = @import("platform");
+const intrinsics = h.intrinsics_ns;
 
-// const MaxInt = @import("std").math.maxInt;
-
-// TODO: (Manav) change vectors to be structs ?
+// imported types -------------------------------------------------------------------------------------------------------------------------------
+const SquareRoot = intrinsics.SquareRoot;
+const Cos = intrinsics.Cos;
+const Sin = intrinsics.Sin;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------------
 
+// TODO: (Manav) change vectors to be structs ?
 pub const v2 = Vector(2);
 pub const v3 = Vector(3);
 pub const v4 = Vector(4);
@@ -441,7 +442,7 @@ pub inline fn LengthSq(a: anytype) f32 {
 }
 
 pub inline fn Length(a: anytype) f32 {
-    const result = h.SquareRoot(LengthSq(a));
+    const result = SquareRoot(LengthSq(a));
     return result;
 }
 
@@ -548,7 +549,7 @@ pub inline fn ClampV401(value: v4) v4 {
 }
 
 pub inline fn Arm2(angle: f32) v2 {
-    const result = v2{ h.Cos(angle), h.Sin(angle) };
+    const result = v2{ Cos(angle), Sin(angle) };
 
     return result;
 }
@@ -588,9 +589,9 @@ pub inline fn SRGB255ToLinear1(c: v4) v4 {
 pub inline fn Linear1ToSRGB255(c: v4) v4 {
     const one255 = 255;
     const result = v4{
-        one255 * h.SquareRoot(R(c)),
-        one255 * h.SquareRoot(G(c)),
-        one255 * h.SquareRoot(B(c)),
+        one255 * SquareRoot(R(c)),
+        one255 * SquareRoot(G(c)),
+        one255 * SquareRoot(B(c)),
         one255 * A(c),
     };
 

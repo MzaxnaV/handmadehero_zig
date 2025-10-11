@@ -1,6 +1,4 @@
-const h = struct {
-    usingnamespace @import("handmade_math.zig");
-};
+const math = @import("handmade_all.zig").math;
 
 // data -----------------------------------------------------------------------------------------------------------------------------------
 const maxRandomNumber = 0x05f5c21f;
@@ -550,7 +548,7 @@ pub const random_series = struct {
     }
 
     pub inline fn RandomBetweenF32(self: *Self, min: f32, max: f32) f32 {
-        const result = h.Lerp(min, self.RandomUnilateral(), max);
+        const result = math.Lerp(min, self.RandomUnilateral(), max);
         return result;
     }
 

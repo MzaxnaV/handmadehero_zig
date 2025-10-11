@@ -64,6 +64,15 @@
                 "kind": "build",
                 "isDefault": true
             },
+            "command": "zig build asset -p build --verbose --summary all"
+        },
+        {
+            "label": "Build Assets Release",
+            "type": "shell",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
             "command": "zig build asset -p build -Doptimize=ReleaseFast --verbose --summary all"
         },
         {

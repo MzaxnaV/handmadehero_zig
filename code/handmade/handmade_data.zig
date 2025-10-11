@@ -1,16 +1,14 @@
-const platform = @import("handmade_platform");
+const h = @import("handmade_all.zig");
 
-const h = struct {
-    usingnamespace @import("handmade_math.zig");
+const platform = @import("platform");
 
-    usingnamespace @import("handmade_audio.zig");
-    usingnamespace @import("handmade_asset.zig");
-    usingnamespace @import("handmade_file_formats.zig");
-    usingnamespace @import("handmade_random.zig");
-    usingnamespace @import("handmade_render_group.zig");
-    usingnamespace @import("handmade_sim_region.zig");
-    usingnamespace @import("handmade_world.zig");
-};
+// imported types -------------------------------------------------------------------------------------------------------------------------------
+
+const world_position = h.world_ns.world_position;
+const bitmap_id = h.file_formats_ns.bitmap_id;
+const sim_entity_collision_volume_group = h.sim_region_ns.sim_entity_collision_volume_group;
+
+const assert = platform.Assert;
 
 // global variables -----------------------------------------------------------------------------------------------------------------------
 
@@ -116,8 +114,8 @@ pub const temporary_memory = struct {
 };
 
 pub const low_entity = struct {
-    p: h.world_position,
-    sim: h.sim_entity,
+    p: world_position,
+    sim: h.sim_region_ns.sim_entity,
 };
 
 pub const controlled_hero = struct {
@@ -137,14 +135,14 @@ pub const pairwise_collision_rule = struct {
 };
 
 pub const ground_buffer = struct {
-    p: h.world_position,
-    bitmap: h.loaded_bitmap,
+    p: world_position,
+    bitmap: h.render_group_ns.loaded_bitmap,
 };
 
 pub const hero_bitmap_ids = struct {
-    head: h.bitmap_id,
-    cape: h.bitmap_id,
-    torso: h.bitmap_id,
+    head: bitmap_id,
+    cape: bitmap_id,
+    torso: bitmap_id,
 };
 
 pub const particle_cel = struct {
@@ -160,7 +158,7 @@ pub const particle = struct {
     ddP: h.v3,
     colour: h.v4,
     dColour: h.v4,
-    bitmapID: h.bitmap_id,
+    bitmapID: bitmap_id,
 };
 
 pub const game_state = struct {
@@ -168,13 +166,13 @@ pub const game_state = struct {
 
     metaArena: memory_arena,
     worldArena: memory_arena,
-    world: *h.world,
+    world: *h.world_ns.world,
 
     typicalFloorHeight: f32,
 
     cameraFollowingEntityIndex: u32,
-    cameraP: h.world_position = .{},
-    lastCameraP: h.world_position,
+    cameraP: world_position = .{},
+    lastCameraP: world_position,
 
     controlledHeroes: [platform.CONTROLLERS]controlled_hero,
 
@@ -184,25 +182,25 @@ pub const game_state = struct {
     collisionRuleHash: [256]?*pairwise_collision_rule,
     firstFreeCollisionRule: ?*pairwise_collision_rule,
 
-    nullCollision: *h.sim_entity_collision_volume_group,
-    swordCollision: *h.sim_entity_collision_volume_group,
-    stairCollision: *h.sim_entity_collision_volume_group,
-    playerCollision: *h.sim_entity_collision_volume_group,
-    monstarCollision: *h.sim_entity_collision_volume_group,
-    familiarCollision: *h.sim_entity_collision_volume_group,
-    wallCollision: *h.sim_entity_collision_volume_group,
-    standardRoomCollision: *h.sim_entity_collision_volume_group,
+    nullCollision: *sim_entity_collision_volume_group,
+    swordCollision: *sim_entity_collision_volume_group,
+    stairCollision: *sim_entity_collision_volume_group,
+    playerCollision: *sim_entity_collision_volume_group,
+    monstarCollision: *sim_entity_collision_volume_group,
+    familiarCollision: *sim_entity_collision_volume_group,
+    wallCollision: *sim_entity_collision_volume_group,
+    standardRoomCollision: *sim_entity_collision_volume_group,
 
     time: f32,
 
-    testDiffuse: h.loaded_bitmap,
-    testNormal: h.loaded_bitmap,
+    testDiffuse: h.render_group_ns.loaded_bitmap,
+    testNormal: h.render_group_ns.loaded_bitmap,
 
-    effectsEntropy: h.random_series,
+    effectsEntropy: h.random_ns.random_series,
     tSine: f32,
 
-    audioState: h.audio_state,
-    music: ?*h.playing_sound,
+    audioState: h.audio_ns.audio_state,
+    music: ?*h.audio_ns.playing_sound,
 
     nextParticle: u32,
     particles: [256]particle,
@@ -221,7 +219,7 @@ pub const transient_state = struct {
 
     tasks: [4]task_with_memory,
 
-    assets: *h.game_assets,
+    assets: *h.asset_ns.game_assets,
 
     groundBuffers: []ground_buffer,
 
@@ -230,7 +228,7 @@ pub const transient_state = struct {
 
     envMapWidth: u32,
     envMapHeight: u32,
-    envMaps: [3]h.environment_map,
+    envMaps: [3]h.render_group_ns.environment_map,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------
@@ -347,4 +345,43 @@ pub fn AddCollisionRule(gameState: *game_state, unsortedStorageIndexA: u32, unso
         rule.storageIndexA = storageIndexA;
         rule.storageIndexB = storageIndexB;
     }
+}
+
+pub fn BeginTaskWithMemory(tranState: *transient_state) ?*task_with_memory {
+    var foundTask: ?*task_with_memory = null;
+
+    var taskIndex: u32 = 0;
+    while (taskIndex < tranState.tasks.len) : (taskIndex += 1) {
+        var task: *task_with_memory = &tranState.tasks[taskIndex];
+        if (!task.beingUsed) {
+            foundTask = task;
+            task.beingUsed = true;
+            task.memoryFlush = BeginTemporaryMemory(&task.arena);
+            break;
+        }
+    }
+
+    return foundTask;
+}
+
+pub fn EndTaskWithMemory(task: *task_with_memory) void {
+    h.data_ns.EndTemporaryMemory(task.memoryFlush);
+
+    @atomicStore(bool, &task.beingUsed, false, .seq_cst);
+}
+
+pub inline fn ChunkPosFromTilePos(w: *h.world_ns.world, absTileX: i32, absTileY: i32, absTileZ: i32, additionalOffset: h.v3) world_position {
+    const basePos: world_position = .{};
+
+    const tileSideInMeters = 1.4;
+    const tileDepthInMeters = 3.0;
+
+    const tileDim = h.v3{ tileSideInMeters, tileSideInMeters, tileDepthInMeters };
+    const offset = h.math_ns.Hammard(tileDim, h.V3(absTileX, absTileY, absTileZ));
+
+    const result: world_position = h.world_ns.MapIntoChunkSpace(w, basePos, h.Add(offset, additionalOffset));
+
+    assert(h.world_ns.IsCanonical(w, result.offset_));
+
+    return result;
 }

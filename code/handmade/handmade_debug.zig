@@ -4,23 +4,9 @@
 //! - `const debug = @import("handmade_debug.zig");` must be within the top two lines of the file.
 
 const std = @import("std");
-const platform = struct {
-    usingnamespace @import("handmade_platform");
-    usingnamespace @import("handmade_platform").handmade_internal;
-};
+const h = @import("handmade_all.zig");
 
-const h = struct {
-    usingnamespace @import("intrinsics");
-
-    usingnamespace @import("handmade_asset.zig");
-    usingnamespace @import("handmade_data.zig");
-    usingnamespace @import("handmade_debug_variables.zig");
-    usingnamespace @import("handmade_math.zig");
-    usingnamespace @import("handmade_render_group.zig");
-
-    usingnamespace @import("handmade_file_formats.zig");
-};
-
+const platform = @import("platform");
 const ignore = platform.ignore;
 
 pub const perf_analyzer = struct {
@@ -30,13 +16,13 @@ pub const perf_analyzer = struct {
 
     pub fn Start(comptime m: method, comptime region: []const u8) void {
         switch (m) {
-            .llvm_mca => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: "memory"),
+            .llvm_mca => asm volatile ("# LLVM-MCA-BEGIN " ++ region ::: .{ .memory = true }),
         }
     }
 
     pub fn End(comptime m: method, comptime region: []const u8) void {
         switch (m) {
-            .llvm_mca => asm volatile ("# LLVM-MCA-END " ++ region ::: "memory"),
+            .llvm_mca => asm volatile ("# LLVM-MCA-END " ++ region ::: .{ .memory = true }),
         }
     }
 };
@@ -194,11 +180,11 @@ pub const debug_state = struct {
 
     highPriorityQueue: *platform.work_queue,
 
-    debugArena: h.memory_arena,
+    debugArena: h.data_ns.memory_arena,
 
-    renderGroup: *h.render_group,
-    debugFont: ?*h.loaded_font,
-    debugFontInfo: *h.hha_font,
+    renderGroup: *h.render_group_ns.render_group,
+    debugFont: ?*h.asset_ns.loaded_font,
+    debugFontInfo: *h.file_formats_ns.hha_font,
 
     compiling: bool,
     compiler: platform.debug_executing_process,
@@ -224,14 +210,14 @@ pub const debug_state = struct {
     rightEdge: f32,
     atY: f32,
     fontScale: f32,
-    fontID: h.font_id,
+    fontID: h.file_formats_ns.font_id,
     globalWidth: f32,
     globalHeight: f32,
 
     scopeToRecord: ?*platform.debug_record,
 
-    collateArena: h.memory_arena,
-    collateTemp: h.temporary_memory,
+    collateArena: h.data_ns.memory_arena,
+    collateTemp: h.data_ns.temporary_memory,
 
     collationArrayIndex: u32,
     collationFrame: ?*debug_frame,
@@ -292,7 +278,7 @@ fn UpdateDebugRecords(debugState: *debug_state, counters: []platform.debug_recor
 
 inline fn DEBUGGetStateMem(memory: ?*platform.memory) ?*debug_state {
     if (memory) |_| {
-        const debugState: *debug_state = @alignCast(@ptrCast(memory.?.debugStorage));
+        const debugState: *debug_state = @ptrCast(@alignCast(memory.?.debugStorage));
         platform.Assert(debugState.initialized);
 
         return debugState;
@@ -307,11 +293,11 @@ inline fn DEBUGGetState() ?*debug_state {
     return result;
 }
 
-pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
+pub fn Start(assets: *h.asset_ns.game_assets, width: u32, height: u32) void {
     var block = TIMED_FUNCTION__impl(__COUNTER__(), @src()).Init(.{});
     defer block.End();
 
-    if (@as(?*debug_state, @alignCast(@ptrCast(platform.debugGlobalMemory.?.debugStorage)))) |debugState| {
+    if (@as(?*debug_state, @ptrCast(@alignCast(platform.debugGlobalMemory.?.debugStorage)))) |debugState| {
         if (!debugState.initialized) {
             debugState.hierarchySentinel.next = &debugState.hierarchySentinel;
             debugState.hierarchySentinel.prev = &debugState.hierarchySentinel;
@@ -324,32 +310,37 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
                 @ptrCast(@as([*]debug_state, @ptrCast(debugState)) + 1),
             );
 
-            var context = h.debug_variable_definition_context{
+            var context = h.debug_variables_ns.debug_variable_definition_context{
                 .state = debugState,
                 .arena = &debugState.debugArena,
                 .group = null,
             };
 
-            context.group = h.DEBUGBeginVariableGroup(&context, "Root");
-            _ = h.DEBUGBeginVariableGroup(&context, "Debugging");
+            const DEBUGBeginVariableGroup = h.debug_variables_ns.DEBUGBeginVariableGroup;
+            const DEBUGEndVariableGroup = h.debug_variables_ns.DEBUGEndVariableGroup;
+            const DEBUGCreateVariables = h.debug_variables_ns.DEBUGCreateVariables;
+            const DEBUGAddVariable = h.debug_variables_ns.DEBUGAddVariable;
 
-            h.DEBUGCreateVariables(&context);
-            _ = h.DEBUGBeginVariableGroup(&context, "Profile");
-            _ = h.DEBUGBeginVariableGroup(&context, "By Thread");
-            const threadList = h.DEBUGAddVariable(&context, "", .counterThreadList, .{ .dimension = h.v2{ 1024, 100 } });
+            context.group = DEBUGBeginVariableGroup(&context, "Root");
+            _ = DEBUGBeginVariableGroup(&context, "Debugging");
+
+            DEBUGCreateVariables(&context);
+            _ = DEBUGBeginVariableGroup(&context, "Profile");
+            _ = DEBUGBeginVariableGroup(&context, "By Thread");
+            const threadList = DEBUGAddVariable(&context, "", .counterThreadList, .{ .dimension = h.v2{ 1024, 100 } });
             _ = threadList;
-            h.DEBUGEndVariableGroup(&context);
-            _ = h.DEBUGBeginVariableGroup(&context, "By Function");
-            const functionList = h.DEBUGAddVariable(&context, "", .counterThreadList, .{ .dimension = h.v2{ 1024, 200 } });
+            DEBUGEndVariableGroup(&context);
+            _ = DEBUGBeginVariableGroup(&context, "By Function");
+            const functionList = DEBUGAddVariable(&context, "", .counterThreadList, .{ .dimension = h.v2{ 1024, 200 } });
             _ = functionList;
-            h.DEBUGEndVariableGroup(&context);
-            h.DEBUGEndVariableGroup(&context);
+            DEBUGEndVariableGroup(&context);
+            DEBUGEndVariableGroup(&context);
 
-            h.DEBUGEndVariableGroup(&context);
+            DEBUGEndVariableGroup(&context);
 
             debugState.rootGroup = context.group.?;
 
-            debugState.renderGroup = h.render_group.Allocate(assets, &debugState.debugArena, platform.MegaBytes(16), false);
+            debugState.renderGroup = h.render_group_ns.render_group.Allocate(assets, &debugState.debugArena, platform.MegaBytes(16), false);
 
             debugState.paused = false;
             debugState.scopeToRecord = null;
@@ -357,27 +348,27 @@ pub fn Start(assets: *h.game_assets, width: u32, height: u32) void {
             debugState.initialized = true;
 
             debugState.collateArena.SubArena(&debugState.debugArena, 4, platform.MegaBytes(32));
-            debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
+            debugState.collateTemp = h.data_ns.BeginTemporaryMemory(&debugState.collateArena);
 
             RestartCollation(debugState, 0);
 
             _ = AddHierarchy(debugState, debugState.rootGroup, .{ -0.5 * @as(f32, @floatFromInt(width)), 0.5 * @as(f32, @floatFromInt(height)) });
         }
 
-        h.BeginRender(debugState.renderGroup);
+        h.render_group_ns.BeginRender(debugState.renderGroup);
         debugState.debugFont = debugState.renderGroup.PushFont(debugState.fontID);
         debugState.debugFontInfo = debugState.renderGroup.assets.GetFontInfo(debugState.fontID);
 
         debugState.globalWidth = @floatFromInt(width);
         debugState.globalHeight = @floatFromInt(height);
 
-        var matchVectorFont = h.asset_vector{};
-        var weightVectorFont = h.asset_vector{};
+        var matchVectorFont = h.asset_ns.asset_vector{};
+        var weightVectorFont = h.asset_ns.asset_vector{};
 
-        matchVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_FontType)] = @floatFromInt(@as(i32, @intFromEnum(h.asset_font_type.FontType_Debug)));
-        weightVectorFont.e[@intFromEnum(h.asset_tag_id.Tag_FontType)] = 1.0;
+        matchVectorFont.e[@intFromEnum(h.file_formats_ns.asset_tag_id.Tag_FontType)] = @floatFromInt(@as(i32, @intFromEnum(h.file_formats_ns.asset_font_type.FontType_Debug)));
+        weightVectorFont.e[@intFromEnum(h.file_formats_ns.asset_tag_id.Tag_FontType)] = 1.0;
 
-        debugState.fontID = h.GetBestMatchFontFrom(
+        debugState.fontID = h.asset_ns.GetBestMatchFontFrom(
             assets,
             .Asset_Font,
             &matchVectorFont,
@@ -432,8 +423,8 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
 
     if (debugState) |_| {
         if (debugState.?.debugFont) |font| {
-            const renderGroup: *h.render_group = debugState.?.renderGroup;
-            const info: *h.hha_font = debugState.?.debugFontInfo;
+            const renderGroup: *h.render_group_ns.render_group = debugState.?.renderGroup;
+            const info: *h.file_formats_ns.hha_font = debugState.?.debugFontInfo;
 
             var prevCodePoint: u32 = 0;
             var charScale = debugState.?.fontScale;
@@ -444,7 +435,7 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
             while (at[0] != 0) {
                 if (at[0] == '\\' and at[1] == '#' and at[2] != 0 and at[3] != 0 and at[4] != 0) {
                     const cScale = 1.0 / 9.0;
-                    colour = h.ClampV401(h.v4{
+                    colour = h.math_ns.ClampV401(h.v4{
                         h.Clampf01(cScale * @as(f32, @floatFromInt(at[2] - '0'))),
                         h.Clampf01(cScale * @as(f32, @floatFromInt(at[3] - '0'))),
                         h.Clampf01(cScale * @as(f32, @floatFromInt(at[4] - '0'))),
@@ -472,12 +463,12 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
                         at += 4;
                     }
 
-                    const advanceX: f32 = charScale * h.GetHorizontalAdvanceForPair(info, font, prevCodePoint, codePoint);
+                    const advanceX: f32 = charScale * h.asset_ns.GetHorizontalAdvanceForPair(info, font, prevCodePoint, codePoint);
                     atX += advanceX;
 
                     // NOTE (Manav): this can have issues with handling newlines or other special characters.
                     if (codePoint != ' ') {
-                        const bitmapID = h.GetBitmapForGlyph(renderGroup.assets, info, font, codePoint);
+                        const bitmapID = h.asset_ns.GetBitmapForGlyph(renderGroup.assets, info, font, codePoint);
                         const info_ = renderGroup.assets.GetBitmapInfo(bitmapID);
 
                         const bitmapScale = charScale * @as(f32, @floatFromInt(info_.dim[1]));
@@ -487,7 +478,7 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
                             .DEBUGTextOp_DrawText => renderGroup.PushBitmap2(bitmapID, bitmapScale, bitmapOffset, colour),
                             .DEBUGTextOp_SizeText => {
                                 if (renderGroup.assets.GetBitmap(bitmapID, renderGroup.generationID)) |bitmap| {
-                                    const dim = h.GetBitmapDim(renderGroup, bitmap, bitmapScale, bitmapOffset);
+                                    const dim = h.render_group_ns.GetBitmapDim(renderGroup, bitmap, bitmapScale, bitmapOffset);
                                     const glyphDim = h.rect2.InitMinDim(h.XY(dim.p), dim.size);
 
                                     result = h.rect2.Union(result, glyphDim);
@@ -510,7 +501,7 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
 /// `colour = .{ 1, 1, 1, 1 }` by default
 fn DEBUGTextOutAt(p: h.v2, string: []const u8, colour: h.v4) void {
     if (DEBUGGetState()) |debugState| {
-        const renderGroup: *h.render_group = debugState.renderGroup;
+        const renderGroup: *h.render_group_ns.render_group = debugState.renderGroup;
         _ = renderGroup;
 
         _ = DEBUGTextOp(debugState, .DEBUGTextOp_DrawText, p, string, colour);
@@ -525,16 +516,16 @@ fn DEBUGGetTextSize(debugState: *debug_state, string: []const u8) h.rect2 {
 
 fn DEBUGTextLine(string: []const u8) void {
     if (DEBUGGetState()) |debugState| {
-        const renderGroup: *h.render_group = debugState.renderGroup;
+        const renderGroup: *h.render_group_ns.render_group = debugState.renderGroup;
         if (renderGroup.PushFont(debugState.fontID)) |_| {
             const info = renderGroup.assets.GetFontInfo(debugState.fontID);
 
             DEBUGTextOutAt(.{
                 debugState.leftEdge,
-                debugState.atY - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo),
+                debugState.atY - debugState.fontScale * h.asset_ns.GetStartingBaselineY(debugState.debugFontInfo),
             }, string, .{ 1, 1, 1, 1 });
 
-            debugState.atY -= h.GetLineAdvanceFor(info) * debugState.fontScale;
+            debugState.atY -= h.asset_ns.GetLineAdvanceFor(info) * debugState.fontScale;
         }
     }
 }
@@ -779,7 +770,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
         // TODO (Manav): remove duplicate declarations.
     }
 
-    _ = h.platformAPI.DEBUGWriteEntireFile("../code/handmade/handmade_config.zig", written, temp[0..written].ptr);
+    _ = h.data_ns.platformAPI.DEBUGWriteEntireFile("../code/handmade/handmade_config.zig", written, temp[0..written].ptr);
 
     if (!debugState.compiling) {
         // NOTE (Manav): compilation is incredibly slow, wait for incremental compilation support (use -fincremental) in 0.14
@@ -791,7 +782,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
         };
 
         debugState.compiling = true;
-        debugState.compiler = h.platformAPI.DEBUGExecuteSystemCommand("..\\", "c:\\windows\\system32\\cmd.exe", commandline);
+        debugState.compiler = h.data_ns.platformAPI.DEBUGExecuteSystemCommand("..\\", "c:\\windows\\system32\\cmd.exe", commandline);
     }
 }
 
@@ -885,12 +876,12 @@ fn DrawProfileIn(debugState: *debug_state, profileRect: h.rect2, mouseP: h.v2) v
 
 }
 
-fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2) void {
+fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_group, mouseP: h.v2) void {
     var hierarchy = debugState.hierarchySentinel.next;
     while (hierarchy != &debugState.hierarchySentinel) : (hierarchy = hierarchy.next) {
         const atX: f32 = h.X(hierarchy.uiP);
         var atY: f32 = h.Y(hierarchy.uiP);
-        const lineAdvance: f32 = debugState.fontScale * h.GetLineAdvanceFor(debugState.debugFontInfo);
+        const lineAdvance: f32 = debugState.fontScale * h.asset_ns.GetLineAdvanceFor(debugState.debugFontInfo);
 
         const spacingY = 4.0;
         var depth: i32 = 0;
@@ -942,7 +933,7 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
 
                     bounds = h.rect2.InitMinMax(.{ leftPx + h.X(textBounds.min), topPy - lineAdvance }, .{ leftPx + h.X(textBounds.max), topPy });
 
-                    DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
+                    DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.asset_ns.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
 
                     if (bounds.IsInRect(mouseP)) {
                         debugState.nextHotInteraction = .None;
@@ -972,7 +963,7 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
         debugState.atY = atY;
 
         if (true) {
-            const moveBox = h.rect2.InitCenterHalfDim(h.Sub(hierarchy.uiP, .{ 4, -4 }), .{ 4, 4 });
+            const moveBox = h.rect2.InitCenterHalfDim(h.Sub(hierarchy.uiP, .{ 4, 4 }), .{ 4, 4 });
             debugState.renderGroup.PushRect2(moveBox, 0, .{ 1, 1, 1, 1 });
 
             if (moveBox.IsInRect(mouseP)) {
@@ -1011,7 +1002,7 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group, mouseP: h.v2)
             DEBUGTextOutAt(h.Sub(textP, h.Scale(textBounds.GetDim(), 0.5)), text, itemColour);
         }
 
-        if (h.LengthSq(h.Sub(mouseP, debugState.menuP)) > h.Square(menuRadius)) {
+        if (h.math_ns.LengthSq(h.Sub(mouseP, debugState.menuP)) > h.Square(menuRadius)) {
             debugState.hotMenuIndex = newHotMenuIndex;
         } else {
             debugState.hotMenuIndex = h.debugVariableList.len;
@@ -1118,8 +1109,8 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
             },
             .TearValue => {
                 if (debugState.draggingHierarchy == null) {
-                    const rootGroup: *debug_variable_reference = h.DEBUGAddRootGroup(debugState, "NewUserGroup");
-                    _ = h.DEBUGAddVariableReference__(debugState, rootGroup, debugState.interactingWith.?);
+                    const rootGroup: *debug_variable_reference = h.debug_variables_ns.DEBUGAddRootGroup(debugState, "NewUserGroup");
+                    _ = h.debug_variables_ns.DEBUGAddVariableReference__(debugState, rootGroup, debugState.interactingWith.?);
                     debugState.draggingHierarchy = AddHierarchy(debugState, rootGroup, .{ 0, 0 });
                 }
 
@@ -1179,13 +1170,13 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
     debugState.lastMouseP = mouseP;
 }
 
-pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
+pub fn End(input: *platform.input, drawBuffer: *h.render_group_ns.loaded_bitmap) void {
     TIMED_FUNCTION(.{});
     var block = TIMED_FUNCTION__impl(__COUNTER__() + 1, @src()).Init(.{});
     defer block.End();
 
     if (DEBUGGetState()) |debugState| {
-        const renderGroup: *h.render_group = debugState.renderGroup;
+        const renderGroup: *h.render_group_ns.render_group = debugState.renderGroup;
 
         debugState.nextHot = null;
         debugState.nextHotHierarchy = null;
@@ -1198,7 +1189,7 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
         Interact(debugState, input, mouseP);
 
         if (debugState.compiling) {
-            const state = h.platformAPI.DEBUGGetProcessState(debugState.compiler);
+            const state = h.data_ns.platformAPI.DEBUGGetProcessState(debugState.compiler);
             if (state.isRunning) {
                 DEBUGTextLine("Compiling...");
             } else {
@@ -1296,7 +1287,7 @@ pub fn End(input: *platform.input, drawBuffer: *h.loaded_bitmap) void {
         }
 
         renderGroup.TiledRenderGroupToOutput(debugState.highPriorityQueue, drawBuffer);
-        h.EndRender(renderGroup);
+        h.render_group_ns.EndRender(renderGroup);
     }
 }
 
@@ -1355,8 +1346,8 @@ fn StringsAreEqual(strA: [*:0]const u8, strB: [*:0]const u8) bool {
 }
 
 fn RestartCollation(debugState: *debug_state, invalidArrayIndex: u32) void {
-    h.EndTemporaryMemory(debugState.collateTemp);
-    debugState.collateTemp = h.BeginTemporaryMemory(&debugState.collateArena);
+    h.data_ns.EndTemporaryMemory(debugState.collateTemp);
+    debugState.collateTemp = h.data_ns.BeginTemporaryMemory(&debugState.collateArena);
 
     debugState.firstThread = null;
     debugState.firstFreeBlock = null;
@@ -1500,7 +1491,7 @@ pub export fn DEBUGFrameEnd(memory: *platform.memory) *platform.debug_table {
         platform.globalDebugTable.currentEventArrayIndex = 0;
     }
 
-    const arrayIndex_eventIndex = h.AtomicExchange(
+    const arrayIndex_eventIndex = h.intrinsics_ns.AtomicExchange(
         u64,
         @ptrCast(&platform.globalDebugTable.indices),
         @as(u64, platform.globalDebugTable.currentEventArrayIndex) << 32,

@@ -32,14 +32,6 @@ pub fn build(b: *std.Build) void {
     });
     platform.addOptions("options", build_options);
 
-    const intrinsics = b.createModule(.{
-        .root_source_file = b.path("code/handmade/handmade_intrinsics.zig"),
-        .imports = &.{
-            .{ .name = "handmade_platform", .module = platform },
-        },
-        .optimize = .ReleaseFast,
-    });
-
     const win32 = b.dependency("zigwin32", .{}).module("win32");
 
     // ----------------------------------------------------------------------------------------------------
@@ -54,11 +46,15 @@ pub fn build(b: *std.Build) void {
     // ----------------------------------------------------------------------------------------------------
     // Tools - process timed blocks -----------------------------------------------------------------------
 
-    const preprocess_profile = b.addExecutable(.{
-        .name = "prepocess_profile",
+    const preprocess_profile_root_module = b.createModule(.{
         .root_source_file = b.path("code/tools/preprocess_profile.zig"),
         .target = b.graph.host,
         .optimize = .ReleaseSafe,
+    });
+
+    const preprocess_profile = b.addExecutable(.{
+        .name = "prepocess_profile",
+        .root_module = preprocess_profile_root_module,
     });
 
     preprocess_profile.root_module.addOptions("config", preprocess_options);
@@ -67,24 +63,25 @@ pub fn build(b: *std.Build) void {
     run_prepocess_profile.setCwd(code_build_path);
 
     const prepocess_profile_test = b.addTest(.{
-        .root_source_file = b.path("code/tools/preprocess_profile.zig"),
-        .target = b.graph.host,
-        .optimize = .ReleaseSafe,
+        .root_module = preprocess_profile_root_module,
     });
 
     const run_prepocess_profile_test = b.addRunArtifact(prepocess_profile_test);
 
     // ----------------------------------------------------------------------------------------------------
     // Handmade library -----------------------------------------------------------------------------------
-    const lib = b.addSharedLibrary(.{
+    const lib = b.addLibrary(.{
+        .linkage = .dynamic,
         .name = lib_name,
-        .root_source_file = b.path("code/handmade/handmade.zig"),
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("code/handmade/handmade.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
         .version = .{ .major = 0, .minor = 1, .patch = 0 },
-        .target = target,
-        .optimize = optimize,
     });
-    lib.root_module.addImport("handmade_platform", platform);
-    lib.root_module.addImport("intrinsics", intrinsics);
+
+    lib.root_module.addImport("platform", platform);
 
     if (!self_compilation) {
         lib.step.dependOn(&run_prepocess_profile.step);
@@ -105,12 +102,14 @@ pub fn build(b: *std.Build) void {
     // Handmade exe ---------------------------------------------------------------------------------------
     const exe = b.addExecutable(.{
         .name = "win32_handmade",
-        .root_source_file = b.path("code/win32_handmade.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("code/win32_handmade.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
+    exe.root_module.addImport("platform", platform);
     exe.root_module.addImport("win32", win32);
-    exe.root_module.addImport("handmade_platform", platform);
     exe.step.dependOn(&run_prepocess_profile.step);
 
     const exe_install_step = b.addInstallArtifact(exe, .{
@@ -124,13 +123,14 @@ pub fn build(b: *std.Build) void {
     // Tools - asset builder ------------------------------------------------------------------------------
     const asset_builder = b.addExecutable(.{
         .name = "asset_builder",
-        .root_source_file = b.path("./code/handmade/asset_builder.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("./code/handmade/asset_builder.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     asset_builder.root_module.addImport("win32", win32);
-    asset_builder.root_module.addImport("handmade_platform", platform);
-    asset_builder.root_module.addImport("intrinsics", intrinsics);
+    asset_builder.root_module.addImport("platform", platform);
 
     asset_builder.root_module.addCSourceFile(.{
         // NOTE: Need to add a source file to make zig compile the stb_truetype implementation
@@ -165,13 +165,17 @@ pub fn build(b: *std.Build) void {
     const llvm_mca = b.addSystemCommand(&.{ "llvm-mca", "-all-stats", "-all-views" });
     llvm_mca.addFileArg(lib.getEmittedAsm());
 
+    const llvm_mca_parser_root_module = b.createModule(.{
+        .root_source_file = b.path("code/tools/parse_llvm_mca.zig"),
+        .target = b.graph.host,
+        .optimize = .ReleaseSafe,
+    });
+
     const output = llvm_mca.captureStdOut();
 
     const llvm_mca_parser = b.addExecutable(.{
         .name = "parse_llvm_mca",
-        .root_source_file = b.path("code/tools/parse_llvm_mca.zig"),
-        .target = b.graph.host,
-        .optimize = .ReleaseSafe,
+        .root_module = llvm_mca_parser_root_module,
     });
 
     const run_llvm_mca_parser = b.addRunArtifact(llvm_mca_parser);
@@ -182,9 +186,7 @@ pub fn build(b: *std.Build) void {
     llvm_mca_parser_step.dependOn(&run_llvm_mca_parser.step);
 
     const llvm_mca_parser_test = b.addTest(.{
-        .root_source_file = b.path("code/tools/parse_llvm_mca.zig"),
-        .target = b.graph.host,
-        .optimize = .ReleaseSafe,
+        .root_module = llvm_mca_parser_root_module,
     });
 
     const run_llvm_mca_parser_test = b.addRunArtifact(llvm_mca_parser_test);
@@ -192,12 +194,13 @@ pub fn build(b: *std.Build) void {
     // ----------------------------------------------------------------------------------------------------
     // Tests ----------------------------------------------------------------------------------------------
     const lib_tests = b.addTest(.{
-        .root_source_file = b.path("code/handmade/handmade_tests.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("code/handmade/handmade_tests.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
-    lib_tests.root_module.addImport("handmade_platform", platform);
-    lib_tests.root_module.addImport("intrinsics", intrinsics);
+    lib_tests.root_module.addImport("platform", platform);
 
     const run_lib_test = b.addRunArtifact(lib_tests);
 

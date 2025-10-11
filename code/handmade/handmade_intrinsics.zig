@@ -1,6 +1,9 @@
+const builtin = @import("builtin");
 const math = @import("std").math;
 
-const platform = @import("handmade_platform");
+const h = @import("handmade_all.zig");
+
+const platform = @import("platform");
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------------------------------------------
@@ -112,11 +115,29 @@ pub inline fn Atan2(y: f32, x: f32) f32 {
 }
 
 // NOTE (Manav): Read this. https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_BitScanForward&expand=375&ig_expand=465,5629,463
-pub inline fn FindLeastSignificantSetBit(value: u32) u32 {
-    const result = asm ("bsf %[val], %[ret]"
+pub inline fn _BitScanForward(index: *u32, a: u32) bool {
+    if (a == 0) return false;
+
+    const idx: u32 = asm ("bsf %[val], %[ret]"
         : [ret] "=r" (-> u32),
-        : [val] "rm" (value),
+        : [val] "rm" (a),
     );
+
+    index.* = idx;
+    return true;
+}
+
+const bit_scan_result = struct { found: bool = false, index: u32 = 0 };
+
+pub inline fn FindLeastSignificantSetBit(value: u32) bit_scan_result {
+    var result = bit_scan_result{};
+
+    if (builtin.target.cpu.arch == .x86_64) {
+        result.found = _BitScanForward(&result.index, value);
+    } else {
+        result.index = @ctz(value);
+        result.found = true;
+    }
 
     return result;
 }
@@ -144,22 +165,22 @@ pub const GetThreadID = platform.GetThreadID;
 pub const z = struct {
     // TODO (Manav): untested
     pub fn _mm_storeu_ps(ptr: [*]f32, vec: f32x4) void {
-        @as(*align(1) f32x4, @alignCast(@ptrCast(ptr))).* = vec;
+        @as(*align(1) f32x4, @ptrCast(@alignCast(ptr))).* = vec;
     }
 
     // TODO (Manav): untested
     pub fn _mm_store_ps(ptr: [*]f32, vec: f32x4) void {
-        @as(*f32x4, @alignCast(@ptrCast(ptr))).* = vec;
+        @as(*f32x4, @ptrCast(@alignCast(ptr))).* = vec;
     }
 
     // TODO (Manav): untested
     pub fn _mm_load_ps(ptr: [*]const f32) f32x4 {
-        return @as(*const f32x4, @alignCast(@ptrCast(ptr))).*;
+        return @as(*const f32x4, @ptrCast(@alignCast(ptr))).*;
     }
 
     // TODO (Manav): untested
     pub fn _mm_loadu_ps(ptr: [*]const f32) f32x4 {
-        return @as(*align(1) const f32x4, @alignCast(@ptrCast(ptr))).*;
+        return @as(*align(1) const f32x4, @ptrCast(@alignCast(ptr))).*;
     }
 
     pub fn _mm_cvttps_epi32(v: f32x4) i32x4 {

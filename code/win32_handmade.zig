@@ -1,56 +1,28 @@
 pub const UNICODE = true;
 
 const std = @import("std");
+const platform = @import("platform");
 
-const win32 = struct {
-    usingnamespace @import("win32").foundation;
-    usingnamespace @import("win32").graphics.gdi;
-    usingnamespace @import("win32").media;
-    usingnamespace @import("win32").media.audio;
-    usingnamespace @import("win32").media.audio.direct_sound;
-    usingnamespace @import("win32").storage.file_system;
-    usingnamespace @import("win32").system.com;
-    usingnamespace @import("win32").system.diagnostics.debug;
-    usingnamespace @import("win32").system.io;
-    usingnamespace @import("win32").system.library_loader;
-    usingnamespace @import("win32").system.memory;
-    usingnamespace @import("win32").system.performance;
-    usingnamespace @import("win32").system.threading;
-    usingnamespace @import("win32").ui.input.keyboard_and_mouse;
-    usingnamespace @import("win32").ui.input.xbox_controller;
-    usingnamespace @import("win32").ui.windows_and_messaging;
+const win32 = @import("win32").everything;
 
-    usingnamespace @import("win32").zig;
+const INFINITE = @as(u32, 4294967295);
+const INVALID_FIND_HANDLE_VALUE = @as(win32.FindFileHandle, -1);
 
-    const INFINITE = @as(u32, 4294967295);
-    const INVALID_FIND_HANDLE_VALUE = @as(win32.FindFileHandle, -1);
+/// struct to keep definitions that doesn't conflict with win32 import
+extern "USER32" fn wsprintfW(
+    param0: ?win32.PWSTR,
+    param1: ?[*:0]const u16,
+    ...,
+) callconv(.winapi) i32;
 
-    /// struct to keep definitions that doesn't conflict with win32 import
-    const x = struct {
-        extern "USER32" fn wsprintfW(
-            param0: ?win32.PWSTR,
-            param1: ?[*:0]const u16,
-            ...,
-        ) callconv(@import("std").os.windows.WINAPI) i32;
-
-        extern "USER32" fn wsprintfA(
-            param0: ?win32.PSTR,
-            param1: ?[*:0]const u8,
-            ...,
-        ) callconv(@import("std").os.windows.WINAPI) i32;
-
-        const SEMAPHORE_ALL_ACCESS = 0x1f003;
-    };
-};
+extern "USER32" fn wsprintfA(
+    param0: ?win32.PSTR,
+    param1: ?[*:0]const u8,
+    ...,
+) callconv(.winapi) i32;
 
 const atomic = std.atomic;
 const DWORD = std.os.windows.DWORD;
-const WINAPI = std.os.windows.WINAPI;
-
-const platform = struct {
-    usingnamespace @import("handmade_platform");
-    usingnamespace @import("handmade_platform").handmade_internal;
-};
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -166,8 +138,8 @@ var globalWindowPosition = win32.WINDOWPLACEMENT{
 
 // library defs ---------------------------------------------------------------------------------------------------------------------------
 
-var XInputGetState: *const fn (u32, ?*win32.XINPUT_STATE) callconv(WINAPI) isize = undefined;
-var XInputSetState: *const fn (u32, ?*win32.XINPUT_VIBRATION) callconv(WINAPI) isize = undefined;
+var XInputGetState: *const fn (u32, ?*win32.XINPUT_STATE) callconv(.winapi) isize = undefined;
+var XInputSetState: *const fn (u32, ?*win32.XINPUT_VIBRATION) callconv(.winapi) isize = undefined;
 
 // Debug/temp functions ------------------------------------------------------------------------------------------------------------------
 
@@ -382,7 +354,7 @@ fn Win32LoadXinput() void {
             XInputGetState = @as(@TypeOf(XInputGetState), @ptrCast(funcptr));
         } else {
             const state = struct {
-                fn XInputGetStateInternal(_: u32, _: ?*win32.XINPUT_STATE) callconv(WINAPI) isize {
+                fn XInputGetStateInternal(_: u32, _: ?*win32.XINPUT_STATE) callconv(.winapi) isize {
                     return @intFromEnum(win32.ERROR_DEVICE_NOT_CONNECTED);
                 }
             };
@@ -393,7 +365,7 @@ fn Win32LoadXinput() void {
             XInputSetState = @as(@TypeOf(XInputSetState), @ptrCast(funcptr));
         } else {
             const state = struct {
-                fn XInputSetStateInternal(_: u32, _: ?*win32.XINPUT_VIBRATION) callconv(WINAPI) isize {
+                fn XInputSetStateInternal(_: u32, _: ?*win32.XINPUT_VIBRATION) callconv(.winapi) isize {
                     return @intFromEnum(win32.ERROR_DEVICE_NOT_CONNECTED);
                 }
             };
@@ -409,7 +381,7 @@ fn Win32LoadXinput() void {
 fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) void {
     if (win32.LoadLibraryW(win32.L("dsound.dll"))) |DSoundLibrary| {
         if (win32.GetProcAddress(DSoundLibrary, "DirectSoundCreate")) |funcptr| {
-            const DirectSoundCreateFnPtrType = *const fn (?*const win32.Guid, ?*?*win32.IDirectSound, ?*win32.IUnknown) callconv(WINAPI) i32;
+            const DirectSoundCreateFnPtrType = *const fn (?*const win32.Guid, ?*?*win32.IDirectSound, ?*win32.IUnknown) callconv(.winapi) i32;
             const DirectSoundCreate = @as(DirectSoundCreateFnPtrType, @ptrCast(funcptr));
 
             var dS: ?*win32.IDirectSound = null;
@@ -571,7 +543,7 @@ fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: wi
     }
 }
 
-fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(WINAPI) win32.LRESULT {
+fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(.winapi) win32.LRESULT {
     var result: win32.LRESULT = 0;
 
     switch (message) {
@@ -651,7 +623,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
     if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
         if (region1) |ptr| {
             const region1SampleCount = region1Size / soundOutput.bytesPerSample;
-            var destSample: [*]i16 = @alignCast(@ptrCast(ptr));
+            var destSample: [*]i16 = @ptrCast(@alignCast(ptr));
             const sourceSample = sourceBuffer.samples;
 
             for (0..region1SampleCount) |sampleIndex| {
@@ -664,7 +636,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
 
         if (region2) |ptr| {
             const region2SampleCount = region2Size / soundOutput.bytesPerSample;
-            var destSample: [*]i16 = @alignCast(@ptrCast(ptr));
+            var destSample: [*]i16 = @ptrCast(@alignCast(ptr));
             const sourceSample = sourceBuffer.samples;
 
             for (0..region2SampleCount) |sampleIndex| {
@@ -708,7 +680,7 @@ fn Win32GetInputFileLocation(state: *win32_state, inputStream: bool, slotIndex: 
 
     const s = if (inputStream) win32.L("input") else win32.L("state");
 
-    _ = win32.x.wsprintfW(@ptrCast(&exeName), win32.L("loop_edit_%d_%s.hmi"), slotIndex, s);
+    _ = wsprintfW(@ptrCast(&exeName), win32.L("loop_edit_%d_%s.hmi"), slotIndex, s);
 
     Win32BuildEXEPathFileName(state, exeName[0..64], dest);
 }
@@ -838,7 +810,7 @@ fn ToggleFullscreen(window: win32.HWND) void {
 
 fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platform.controller_input) void {
     var message: win32.MSG = undefined;
-    while (win32.PeekMessage(&message, null, 0, 0, win32.PM_REMOVE) != 0) {
+    while (win32.PeekMessageW(&message, null, 0, 0, win32.PM_REMOVE) != 0) {
         switch (message.message) {
             win32.WM_QUIT => globalRunning = false,
             win32.WM_KEYDOWN, win32.WM_KEYUP, win32.WM_SYSKEYDOWN, win32.WM_SYSKEYUP => {
@@ -901,7 +873,7 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platfor
             },
             else => {
                 _ = win32.TranslateMessage(&message);
-                _ = win32.DispatchMessage(&message);
+                _ = win32.DispatchMessageW(&message);
             },
         }
     }
@@ -1056,7 +1028,7 @@ const win32_work_queue = struct {
     fn MakeQueue(queue: *win32_work_queue, comptime threadCount: comptime_int) void {
         const initialCount = 0;
 
-        queue.semaphoreHandle = win32.CreateSemaphoreEx(null, initialCount, threadCount, null, 0, win32.x.SEMAPHORE_ALL_ACCESS);
+        queue.semaphoreHandle = win32.CreateSemaphoreExW(null, initialCount, threadCount, null, 0, @bitCast(win32.SEMAPHORE_ALL_ACCESS));
 
         var threadIndex = @as(u32, 0);
         while (threadIndex < threadCount) : (threadIndex += 1) {
@@ -1076,7 +1048,7 @@ const win32_work_queue = struct {
     }
 
     fn from(queue: *platform.work_queue) *Self {
-        return @alignCast(@ptrCast(queue));
+        return @ptrCast(@alignCast(queue));
     }
 
     fn to(self: *Self) *platform.work_queue {
@@ -1129,8 +1101,8 @@ fn Win32CompleteAllWork(q: *platform.work_queue) void {
     queue.completionCount.store(0, .seq_cst);
 }
 
-fn ThreadProc(lpParameter: ?*anyopaque) callconv(WINAPI) DWORD {
-    const queue: *win32_work_queue = @alignCast(@ptrCast(lpParameter.?));
+fn ThreadProc(lpParameter: ?*anyopaque) callconv(.winapi) DWORD {
+    const queue: *win32_work_queue = @ptrCast(@alignCast(lpParameter.?));
 
     const testThreadID = platform.GetThreadID();
 
@@ -1164,7 +1136,7 @@ const win32_platform_file_group = extern struct {
 fn Win32GetAllFilesOfTypeBegin(fileType: platform.file_type) platform.file_group {
     var result = platform.file_group{ .fileCount = 0, .platform = null };
 
-    var win32FileGroup: *win32_platform_file_group = @alignCast(@ptrCast(win32.VirtualAlloc(
+    var win32FileGroup: *win32_platform_file_group = @ptrCast(@alignCast(win32.VirtualAlloc(
         null,
         @sizeOf(win32_platform_file_group),
         allocationReserveCommit,
@@ -1181,7 +1153,7 @@ fn Win32GetAllFilesOfTypeBegin(fileType: platform.file_type) platform.file_group
     var findData: win32.WIN32_FIND_DATAW = undefined;
     const fileHandle = win32.FindFirstFileW(extension[0..], &findData);
 
-    while (fileHandle != win32.INVALID_FIND_HANDLE_VALUE) {
+    while (fileHandle != INVALID_FIND_HANDLE_VALUE) {
         result.fileCount += 1;
 
         if (win32.FindNextFileW(fileHandle, &findData) != win32.TRUE) {
@@ -1197,7 +1169,7 @@ fn Win32GetAllFilesOfTypeBegin(fileType: platform.file_type) platform.file_group
 }
 
 fn Win32GetAllFilesOfTypeEnd(fileGroup: *platform.file_group) void {
-    const win32FileGroup: ?*win32_platform_file_group = @alignCast(@ptrCast(fileGroup.platform));
+    const win32FileGroup: ?*win32_platform_file_group = @ptrCast(@alignCast(fileGroup.platform));
     if (win32FileGroup) |_| {
         _ = win32.FindClose(win32FileGroup.?.fileHandle);
 
@@ -1206,12 +1178,12 @@ fn Win32GetAllFilesOfTypeEnd(fileGroup: *platform.file_group) void {
 }
 
 fn Win32OpenNextFile(fileGroup: *platform.file_group) platform.file_handle {
-    var win32FileGroup: *win32_platform_file_group = @alignCast(@ptrCast(fileGroup.platform));
+    var win32FileGroup: *win32_platform_file_group = @ptrCast(@alignCast(fileGroup.platform));
 
     var result: platform.file_handle = .{ .noErrors = false, .platform = null };
 
-    if (win32FileGroup.fileHandle != win32.INVALID_FIND_HANDLE_VALUE) {
-        const win32Handle: ?*win32_platform_file_handle = @alignCast(@ptrCast(win32.VirtualAlloc(
+    if (win32FileGroup.fileHandle != INVALID_FIND_HANDLE_VALUE) {
+        const win32Handle: ?*win32_platform_file_handle = @ptrCast(@alignCast(win32.VirtualAlloc(
             null,
             @sizeOf(win32_platform_file_handle),
             allocationReserveCommit,
@@ -1229,7 +1201,7 @@ fn Win32OpenNextFile(fileGroup: *platform.file_group) platform.file_handle {
 
         if (win32.FindNextFileW(win32FileGroup.fileHandle, &win32FileGroup.findData) != win32.TRUE) {
             _ = win32.FindClose(win32FileGroup.fileHandle);
-            win32FileGroup.fileHandle = win32.INVALID_FIND_HANDLE_VALUE;
+            win32FileGroup.fileHandle = INVALID_FIND_HANDLE_VALUE;
         }
     }
 
@@ -1238,7 +1210,7 @@ fn Win32OpenNextFile(fileGroup: *platform.file_group) platform.file_handle {
 
 fn Win32ReadDataFromFile(source: *platform.file_handle, offset: u64, size: u64, dest: *anyopaque) void {
     if (platform.NoFileErrors(source)) {
-        const handle: *win32_platform_file_handle = @alignCast(@ptrCast(source.platform.?));
+        const handle: *win32_platform_file_handle = @ptrCast(@alignCast(source.platform.?));
 
         var overlapped = win32.OVERLAPPED{
             .Internal = 0,
@@ -1286,7 +1258,7 @@ fn Win32DeallocateMemory(memory: ?*anyopaque) void {
 
 var globalDebugTable_: platform.debug_table = .{};
 
-pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(WINAPI) c_int {
+pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(.winapi) c_int {
     var win32State = win32_state{
         .gameMemoryBlock = undefined,
         .recordingHandle = undefined,
@@ -1830,7 +1802,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             var soundBuffer = platform.sound_output_buffer{
                                 .samplesPerSecond = soundOutput.samplesPerSecond,
                                 .sampleCount = @intCast(platform.Align(bytesToWrite / soundOutput.bytesPerSample, 8)),
-                                .samples = @alignCast(@ptrCast(samples)),
+                                .samples = @ptrCast(@alignCast(samples)),
                             };
 
                             bytesToWrite = soundBuffer.sampleCount * soundOutput.bytesPerSample;

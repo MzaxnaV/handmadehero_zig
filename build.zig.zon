@@ -16,12 +16,12 @@
     // modify the field.
     .fingerprint = 0xe99befa396d2f5af, // Changing this has security and trust implications.
 
-    .minimum_zig_version = "0.14.0",
+    .minimum_zig_version = "0.15.1",
 
     .dependencies = .{
         .zigwin32 = .{
-            .url = "https://github.com/marlersoft/zigwin32/archive/7b434a47c2b85f395d8e5a6dca47af6a74422521.tar.gz",
-            .hash = "zigwin32-25.0.28-preview-AAAAALqY-wMp_N2rd4U4tD9LAxh0TbUPLKhzx6lngGQK",
+            .url = "https://github.com/marlersoft/zigwin32/archive/5587b16fa040573846a6bf531301f6206d31a6bf.tar.gz",
+            .hash = "zigwin32-25.0.28-preview-AAAAAICM5AMResOGQnQ85mfe60TTOQeMtt7GRATUOKoP",
         },
     },
 

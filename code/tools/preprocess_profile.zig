@@ -64,10 +64,8 @@ const LINES_SEARCHED_FOR_DEBUG_IMPORT = 2;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
-    defer {
-        _ = gpa.detectLeaks();
-    }
 
     var counter: u32 = 0;
 
@@ -118,7 +116,7 @@ fn processDir(allocator: std.mem.Allocator, dir_path: []const u8, counter: *u32)
                     defer file.close();
 
                     for (0..LINES_SEARCHED_FOR_DEBUG_IMPORT) |_| {
-                        if (try file.reader().readUntilDelimiterOrEofAlloc(allocator, '\n', 1000)) |line| {
+                        if (try file.deprecatedReader().readUntilDelimiterOrEofAlloc(allocator, '\n', 1000)) |line| {
                             defer allocator.free(line);
                             if (std.mem.indexOf(u8, line, "const debug = @import(")) |_| {
                                 found = true;
@@ -163,7 +161,7 @@ const process_file_result = struct {
 fn processFile(allocator: std.mem.Allocator, _: []const u8, buffer: []const u8, counter: *u32) !?process_file_result {
     var result: process_file_result = .{};
 
-    var out_buffer = std.ArrayList(u8).init(allocator);
+    var out_buffer = std.array_list.Managed(u8).init(allocator);
     defer out_buffer.deinit();
 
     var found_call = false;
@@ -296,7 +294,7 @@ fn processDebug(allocator: std.mem.Allocator, file: *std.fs.File, counter: u32) 
 
     _ = try file.readAll(buffer);
 
-    var out_buffer = std.ArrayList(u8).init(allocator);
+    var out_buffer = std.array_list.Managed(u8).init(allocator);
     defer out_buffer.deinit();
 
     var found_call = false;
