@@ -11,6 +11,8 @@ pub const render_group_ns = @import("handmade_render_group.zig");
 pub const sim_region_ns = @import("handmade_sim_region.zig");
 pub const world_ns = @import("handmade_world.zig");
 
+// convenience re-exports
+
 pub const v2 = math_ns.v2;
 pub const v3 = math_ns.v3;
 pub const v4 = math_ns.v4;
@@ -21,10 +23,6 @@ pub const V2 = math_ns.V2;
 pub const V3 = math_ns.V3;
 pub const ToV3 = math_ns.ToV3;
 pub const ToV4 = math_ns.ToV4;
-
-pub const Sin = intrinsics_ns.Sin;
-pub const Cos = intrinsics_ns.Cos;
-pub const Atan2 = intrinsics_ns.Atan2;
 
 pub const Add = math_ns.Add;
 pub const AddTo = math_ns.AddTo;

@@ -724,7 +724,7 @@ pub fn MoveEntity(gameState: *game_state, simRegion: *sim_region, entity: *sim_e
     if ((h.X(entity.dP) == 0) and (h.Y(entity.dP) == 0)) {
         // NOTE(casey): Leave FacingDirection whatever it was
     } else {
-        entity.facingDirection = h.Atan2(h.Y(entity.dP), h.X(entity.dP));
+        entity.facingDirection = h.intrinsics_ns.Atan2(h.Y(entity.dP), h.X(entity.dP));
         // if (entity.facingDirection < 0) {
         //     entity.facingDirection += platform.Tau32;
         // }

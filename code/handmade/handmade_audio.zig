@@ -44,7 +44,7 @@ fn OutputTestSineWave(gameState: *h.game_state, soundBuffer: *platform.sound_out
         var sineValue: f32 = 0;
         var sampleValue: i16 = 0;
         if (!ignore) {
-            sineValue = h.Sin(gameState.tSine);
+            sineValue = h.intrinsics_ns.Sin(gameState.tSine);
             sampleValue = @intFromFloat(sineValue * toneVolume);
         } else {
             sampleValue = 0;

@@ -1277,7 +1277,7 @@ pub export fn UpdateAndRender(
                     if (entity.tBob > platform.Tau32) {
                         entity.tBob -= platform.Tau32;
                     }
-                    const bobSin = h.Sin(2 * entity.tBob);
+                    const bobSin = h.intrinsics_ns.Sin(2 * entity.tBob);
 
                     renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
                     renderGroup.PushBitmap2(heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
@@ -1356,12 +1356,12 @@ pub export fn UpdateAndRender(
         const origin = screenCenter;
 
         const angle = 0.1 * gameState.time;
-        const disp: h.v2 = if (!ignore) .{ 100 * h.Cos(5 * angle), 100 * h.Sin(3 * angle) } else .{ 0, 0 };
+        const disp: h.v2 = if (!ignore) .{ 100 * h.intrinsics_ns.Cos(5 * angle), 100 * h.intrinsics_ns.Sin(3 * angle) } else .{ 0, 0 };
 
         var xAxis: h.v2 = undefined;
         var yAxis: h.v2 = undefined;
         if (!ignore) {
-            xAxis = h.Scale(h.v2{ h.Cos(10 * angle), h.Sin(10 * angle) }, 100);
+            xAxis = h.Scale(h.v2{ h.intrinsics_ns.Cos(10 * angle), h.intrinsics_ns.Sin(10 * angle) }, 100);
             yAxis = h.Perp(xAxis);
         } else {
             xAxis = h.v2{ 100, 0 };
@@ -1374,10 +1374,10 @@ pub export fn UpdateAndRender(
 
         if (ignore) {
             colour = .{
-                0.5 + 0.5 * h.Sin(cAngle),
-                0.5 + 0.5 * h.Sin(2.9 * cAngle),
-                0.5 + 0.5 * h.Cos(9.9 * cAngle),
-                0.5 + 0.5 * h.Sin(10 * cAngle),
+                0.5 + 0.5 * h.intrinsics_ns.Sin(cAngle),
+                0.5 + 0.5 * h.intrinsics_ns.Sin(2.9 * cAngle),
+                0.5 + 0.5 * h.intrinsics_ns.Cos(9.9 * cAngle),
+                0.5 + 0.5 * h.intrinsics_ns.Sin(10 * cAngle),
             };
         } else {
             colour = .{ 1, 1, 1, 1 };
