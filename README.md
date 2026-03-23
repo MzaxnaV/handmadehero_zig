@@ -6,3 +6,7 @@ For debug profiler display set `PROFILE` option to `true` in build.zig.
 Custom tools on [code/tools](/code/tools).
 
 In addition to handmade hero stuff you'll find [references](/misc/RESOURCES.md) and other things in the [misc folder](/misc/README.md).
+
+## Instructions:
+- Get Handmade Hero Assets and put it inside [data](/data/) folder
+- Install LiberationMono-Regular.ttf

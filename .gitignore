@@ -13,3 +13,5 @@ zig-out
 /misc/*.rdbg
 
 *.zig_e
+
+original_c++/

@@ -1042,16 +1042,19 @@ fn WriteFonts() void {
     var assets = game_assets{};
     assets.Initialize();
 
-    const fonts = [_]*loaded_font{
-        LoadFont("c:/windows/fonts/arial.ttf", "Arial", 128, allocator) catch |err| {
-            std.debug.print("Failed to load debug font, {}\n", .{err});
-            return;
-        },
-        LoadFont("c:/windows/fonts/LiberationMono-Regular.ttf", "Liberation Mono", 20, allocator) catch |err| {
-            std.debug.print("Failed to load debug font, {}\n", .{err});
-            return;
-        },
+    const font0 = LoadFont("c:/windows/fonts/arial.ttf", "Arial", 128, allocator) catch |err| {
+        std.debug.print("Failed to load debug font, {}\n", .{err});
+        return;
     };
+    defer FreeFont(font0, allocator);
+
+    const font1 = LoadFont("c:/windows/fonts/LiberationMono-Regular.ttf", "Liberation Mono", 20, allocator) catch |err| {
+        std.debug.print("Failed to load debug font, {}\n", .{err});
+        return;
+    };
+    defer FreeFont(font1, allocator);
+
+    const fonts = [_]*loaded_font{ font0, font1 };
 
     assets.BeginAssetType(.Asset_FontGlyph);
     for (fonts) |font| {
