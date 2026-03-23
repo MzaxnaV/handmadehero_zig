@@ -162,10 +162,12 @@ const debug_thread = struct {
     next: ?*debug_thread,
 };
 
-const debug_interaction = enum {
+const debug_interaction_type = enum {
     None,
 
     NOP,
+
+    AutoModifyVariable,
 
     ToggleValue,
     DragValue,
@@ -173,6 +175,15 @@ const debug_interaction = enum {
 
     ResizeProfile,
     MoveHierarchy,
+};
+
+const debug_interaction = struct {
+    type: debug_interaction_type,
+    data: extern union { // NOTE (Manav): consider tagged union
+        generic: ?*anyopaque,
+        variable: ?*debug_variable,
+        hierarchy: ?*debug_variable_hierarchy,
+    },
 };
 
 pub const debug_state = struct {
@@ -195,16 +206,10 @@ pub const debug_state = struct {
     rootGroup: *debug_variable_reference,
     hierarchySentinel: debug_variable_hierarchy,
 
-    interaction: debug_interaction,
     lastMouseP: h.v2,
+    interaction: debug_interaction,
     hotInteraction: debug_interaction,
-    hot: ?*debug_variable,
-    interactingWith: ?*debug_variable,
     nextHotInteraction: debug_interaction,
-    nextHot: ?*debug_variable,
-    nextHotHierarchy: ?*debug_variable_hierarchy,
-
-    draggingHierarchy: ?*debug_variable_hierarchy,
 
     leftEdge: f32,
     rightEdge: f32,
@@ -876,6 +881,18 @@ fn DrawProfileIn(debugState: *debug_state, profileRect: h.rect2, mouseP: h.v2) v
 
 }
 
+fn InteractionsAreEqual(a: debug_interaction, b: debug_interaction) bool {
+    const result: bool = (a.type == b.type) and (a.data.generic == b.data.generic);
+
+    return result;
+}
+
+fn InteractionsIsHot(debugState: *debug_state, b: debug_interaction) bool {
+    const result = InteractionsAreEqual(debugState.hotInteraction, b);
+
+    return result;
+}
+
 fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_group, mouseP: h.v2) void {
     var hierarchy = debugState.hierarchySentinel.next;
     while (hierarchy != &debugState.hierarchySentinel) : (hierarchy = hierarchy.next) {
@@ -888,8 +905,16 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
         var ref: ?*debug_variable_reference = hierarchy.group.variable.value.group.firstChild;
         while (ref) |_| {
             const variable = ref.?.variable;
-            const isHot = debugState.hot == variable;
-            const itemColour: h.v4 = if (isHot and debugState.hotInteraction == .None) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 };
+
+            const itemInteraction: debug_interaction = .{
+                .type = .AutoModifyVariable,
+                .data = .{
+                    .variable = variable,
+                },
+            };
+
+            const isHot = InteractionsIsHot(debugState, itemInteraction);
+            const itemColour: h.v4 = if (isHot) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 };
 
             var bounds = h.rect2{};
             switch (variable.type) {
@@ -900,19 +925,24 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
                     bounds = h.rect2.InitMinMax(minCorner, maxCorner);
                     DrawProfileIn(debugState, bounds, mouseP);
 
+                    const sizeInteraction: debug_interaction = .{
+                        .type = .ResizeProfile,
+                        .data = .{
+                            .variable = variable,
+                        },
+                    };
+
                     const sizeBox = h.rect2.InitCenterHalfDim(sizeP, .{ 4, 4 });
                     debugState.renderGroup.PushRect2(
                         sizeBox,
                         0,
-                        if (isHot and debugState.hotInteraction == .ResizeProfile) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
+                        if (InteractionsIsHot(debugState, sizeInteraction)) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
                     );
 
                     if (sizeBox.IsInRect(mouseP)) {
-                        debugState.nextHotInteraction = .ResizeProfile;
-                        debugState.nextHot = variable;
+                        debugState.nextHotInteraction = sizeInteraction;
                     } else if (bounds.IsInRect(mouseP)) {
-                        debugState.nextHotInteraction = .None;
-                        debugState.nextHot = variable;
+                        debugState.nextHotInteraction = itemInteraction;
                     }
 
                     // bounds.min.y -= spaceingY;
@@ -936,8 +966,7 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
                     DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.asset_ns.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
 
                     if (bounds.IsInRect(mouseP)) {
-                        debugState.nextHotInteraction = .None;
-                        debugState.nextHot = variable;
+                        debugState.nextHotInteraction = itemInteraction;
                     }
                 },
             }
@@ -963,12 +992,22 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
         debugState.atY = atY;
 
         if (true) {
+            const moveInteraction: debug_interaction = .{
+                .type = .MoveHierarchy,
+                .data = .{
+                    .hierarchy = hierarchy,
+                },
+            };
+
             const moveBox = h.rect2.InitCenterHalfDim(h.Sub(hierarchy.uiP, .{ 4, 4 }), .{ 4, 4 });
-            debugState.renderGroup.PushRect2(moveBox, 0, .{ 1, 1, 1, 1 });
+            debugState.renderGroup.PushRect2(
+                moveBox,
+                0,
+                if (InteractionsIsHot(debugState, moveInteraction)) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
+            );
 
             if (moveBox.IsInRect(mouseP)) {
-                debugState.nextHotInteraction = .MoveHierarchy;
-                debugState.nextHotHierarchy = hierarchy;
+                debugState.nextHotInteraction = moveInteraction;
             }
         }
     }
@@ -1011,62 +1050,57 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
 }
 
 fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2, altUI: bool) void {
-    if (debugState.hotInteraction != .None) {
-        debugState.interaction = debugState.hotInteraction;
-    } else {
-        if (debugState.hot) |hotVariable| {
-            if (altUI) {
-                debugState.interaction = .TearValue;
-            } else {
-                switch (hotVariable.type) {
-                    .bool => {
-                        debugState.interaction = .ToggleValue;
-                    },
-                    .f32 => {
-                        debugState.interaction = .DragValue;
-                    },
-                    .group => {
-                        debugState.interaction = .ToggleValue;
-                    },
-                    else => {},
-                }
+    if (debugState.hotInteraction.type != .None) {
+        if (debugState.hotInteraction.type == .AutoModifyVariable) {
+            switch (debugState.hotInteraction.data.variable.?.type) {
+                .bool => {
+                    debugState.hotInteraction.type = .ToggleValue;
+                },
+                .f32 => {
+                    debugState.hotInteraction.type = .DragValue;
+                },
+                .group => {
+                    debugState.hotInteraction.type = .ToggleValue;
+                },
+                else => {},
             }
 
-            if (debugState.interaction != .None) {
-                debugState.interactingWith = debugState.hot;
-            }
-        } else {
-            debugState.interaction = .NOP;
+            if (altUI) {
+                debugState.hotInteraction.type = .TearValue;
+            } else {}
         }
+
+        debugState.interaction = debugState.hotInteraction;
+    } else {
+        debugState.interaction.type = .NOP;
     }
 }
 
 fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
-    if (debugState.interaction != .NOP) {
-        // NOTE (Manav): debugState.interactingWith can be null .NOP
-        switch (debugState.interaction) {
-            .ToggleValue => {
-                var variable = debugState.interactingWith.?;
-                switch (variable.type) {
-                    .bool => {
-                        variable.value.bool = !variable.value.bool;
-                    },
-                    .group => {
-                        variable.value.group.expanded = !variable.value.group.expanded;
-                    },
-                    else => {},
-                }
-            },
-
-            else => {},
-        }
-
-        WriteHandmadeConfig(debugState);
+    switch (debugState.interaction.type) {
+        .ToggleValue => {
+            var variable = debugState.interaction.data.variable.?;
+            switch (variable.type) {
+                .bool => {
+                    variable.value.bool = !variable.value.bool;
+                },
+                .group => {
+                    variable.value.group.expanded = !variable.value.group.expanded;
+                },
+                else => {},
+            }
+        },
+        else => {},
     }
 
-    debugState.interaction = .None;
-    debugState.interactingWith = null;
-    debugState.draggingHierarchy = null;
+    WriteHandmadeConfig(debugState);
+
+    debugState.interaction = .{
+        .type = .None,
+        .data = .{
+            .generic = null,
+        },
+    };
 }
 
 fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void {
@@ -1079,11 +1113,12 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
     //     DrawDebugMainMenu(debugState, renderGroup, mouseP);
     // } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
 
-    if (debugState.interaction != .None) {
+    if (debugState.interaction.type != .None) {
         // Mouse move interaction
-        var variable: ?*debug_variable = debugState.interactingWith; // NOTE (Manav): variable can be null with .NOP
+        var variable: ?*debug_variable = debugState.interaction.data.variable; // NOTE (Manav): variable can be null with .NOP
+        var hierarchy: ?*debug_variable_hierarchy = debugState.interaction.data.hierarchy; // NOTE (Manav): hierarchy can be null with .NOP
 
-        switch (debugState.interaction) {
+        switch (debugState.interaction.type) {
             .DragValue => {
                 switch (variable.?.type) {
                     .f32 => {
@@ -1104,17 +1139,18 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
                 }
             },
             .MoveHierarchy => {
-                // debugState.draggingHierarchy.uiP += .{ dMouseP.x, dMouseP.y };
-                h.AddTo(&debugState.draggingHierarchy.?.uiP, .{ h.X(dMouseP), h.Y(dMouseP) });
+                // hierarchy.uiP += .{ dMouseP.x, dMouseP.y };
+                h.AddTo(&hierarchy.?.uiP, .{ h.X(dMouseP), h.Y(dMouseP) });
             },
             .TearValue => {
-                if (debugState.draggingHierarchy == null) {
+                if (hierarchy == null) {
                     const rootGroup: *debug_variable_reference = h.debug_variables_ns.DEBUGAddRootGroup(debugState, "NewUserGroup");
-                    _ = h.debug_variables_ns.DEBUGAddVariableReference__(debugState, rootGroup, debugState.interactingWith.?);
-                    debugState.draggingHierarchy = AddHierarchy(debugState, rootGroup, .{ 0, 0 });
+                    _ = h.debug_variables_ns.DEBUGAddVariableReference__(debugState, rootGroup, debugState.interaction.data.variable.?);
+                    debugState.interaction.data.hierarchy = AddHierarchy(debugState, rootGroup, .{ 0, 0 });
+                    hierarchy = debugState.interaction.data.hierarchy;
                 }
 
-                debugState.draggingHierarchy.?.uiP = mouseP;
+                hierarchy.?.uiP = mouseP;
             },
             else => {},
         }
@@ -1132,9 +1168,7 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
             EndInteract(debugState, input, mouseP);
         }
     } else {
-        debugState.hot = debugState.nextHot;
         debugState.hotInteraction = debugState.nextHotInteraction;
-        debugState.draggingHierarchy = debugState.nextHotHierarchy;
 
         const altUI = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown != 0;
 
@@ -1178,9 +1212,8 @@ pub fn End(input: *platform.input, drawBuffer: *h.render_group_ns.loaded_bitmap)
     if (DEBUGGetState()) |debugState| {
         const renderGroup: *h.render_group_ns.render_group = debugState.renderGroup;
 
-        debugState.nextHot = null;
-        debugState.nextHotHierarchy = null;
-        debugState.nextHotInteraction = .None;
+        h.data_ns.ZeroStruct(debug_interaction, &debugState.nextHotInteraction);
+
         const hotRecord: ?*platform.debug_record = null;
 
         const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
