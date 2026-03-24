@@ -173,8 +173,8 @@ const debug_interaction_type = enum {
     DragValue,
     TearValue,
 
-    ResizeProfile,
-    MoveHierarchy,
+    Resize,
+    Move,
 };
 
 const debug_interaction = struct {
@@ -183,6 +183,7 @@ const debug_interaction = struct {
         generic: ?*anyopaque,
         variable: ?*debug_variable,
         hierarchy: ?*debug_variable_hierarchy,
+        p: ?*h.v2,
     },
 };
 
@@ -926,9 +927,9 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
                     DrawProfileIn(debugState, bounds, mouseP);
 
                     const sizeInteraction: debug_interaction = .{
-                        .type = .ResizeProfile,
+                        .type = .Resize,
                         .data = .{
-                            .variable = variable,
+                            .p = &variable.value.profile.dimension,
                         },
                     };
 
@@ -993,9 +994,9 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
 
         if (true) {
             const moveInteraction: debug_interaction = .{
-                .type = .MoveHierarchy,
+                .type = .Move,
                 .data = .{
-                    .hierarchy = hierarchy,
+                    .p = &hierarchy.uiP,
                 },
             };
 
@@ -1067,7 +1068,19 @@ fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2, altUI: b
 
             if (altUI) {
                 debugState.hotInteraction.type = .TearValue;
-            } else {}
+            }
+        }
+
+        switch (debugState.hotInteraction.type) {
+            .TearValue => {
+                const rootGroup: *debug_variable_reference = h.debug_variables_ns.DEBUGAddRootGroup(debugState, "NewUserGroup");
+                _ = h.debug_variables_ns.DEBUGAddVariableReference__(debugState, rootGroup, debugState.hotInteraction.data.variable.?);
+                var hierarchy = AddHierarchy(debugState, rootGroup, .{ 0, 0 });
+                hierarchy.uiP = debugState.lastMouseP;
+                debugState.hotInteraction.type = .Move;
+                debugState.hotInteraction.data.p = &hierarchy.uiP;
+            },
+            else => {},
         }
 
         debugState.interaction = debugState.hotInteraction;
@@ -1115,8 +1128,9 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
 
     if (debugState.interaction.type != .None) {
         // Mouse move interaction
-        var variable: ?*debug_variable = debugState.interaction.data.variable; // NOTE (Manav): variable can be null with .NOP
-        var hierarchy: ?*debug_variable_hierarchy = debugState.interaction.data.hierarchy; // NOTE (Manav): hierarchy can be null with .NOP
+        var variable: ?*debug_variable = debugState.interaction.data.variable;
+        // var hierarchy: ?*debug_variable_hierarchy = debugState.interaction.data.hierarchy;
+        const p: ?*h.v2 = debugState.interaction.data.p;
 
         switch (debugState.interaction.type) {
             .DragValue => {
@@ -1128,29 +1142,20 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
                     else => {},
                 }
             },
-            .ResizeProfile => {
-                if (variable != null) { // NOTE (Manav): variable can be null with .ResizeProfile when it's in a hierarchy
-                    // variable.value.profile.dimension += .{ dMouseP.x, -dMouseP.y };
-                    h.AddTo(&variable.?.value.profile.dimension, .{ h.X(dMouseP), -h.Y(dMouseP) });
-                    // variable.value.profile.dimension.x = @max(variable.value.profile.dimension.x, 10.0);
-                    h.SetX(&variable.?.value.profile.dimension, @max(h.X(variable.?.value.profile.dimension), 10.0));
-                    // variable.value.profile.dimension.y = @max(variable.value.profile.dimension.y, 10.0);
-                    h.SetY(&variable.?.value.profile.dimension, @max(h.Y(variable.?.value.profile.dimension), 10.0));
-                }
-            },
-            .MoveHierarchy => {
-                // hierarchy.uiP += .{ dMouseP.x, dMouseP.y };
-                h.AddTo(&hierarchy.?.uiP, .{ h.X(dMouseP), h.Y(dMouseP) });
-            },
-            .TearValue => {
-                if (hierarchy == null) {
-                    const rootGroup: *debug_variable_reference = h.debug_variables_ns.DEBUGAddRootGroup(debugState, "NewUserGroup");
-                    _ = h.debug_variables_ns.DEBUGAddVariableReference__(debugState, rootGroup, debugState.interaction.data.variable.?);
-                    debugState.interaction.data.hierarchy = AddHierarchy(debugState, rootGroup, .{ 0, 0 });
-                    hierarchy = debugState.interaction.data.hierarchy;
-                }
+            .Resize => {
+                if (variable != null) { // NOTE (Manav): variable can be null with .Resize when it's in a hierarchy
 
-                hierarchy.?.uiP = mouseP;
+                    // p += .{ dMouseP.x, -dMouseP.y };
+                    h.AddTo(p.?, .{ h.X(dMouseP), -h.Y(dMouseP) });
+                    // p.x = @max(p.x, 10.0);
+                    h.SetX(p.?, @max(h.X(p.?.*), 10.0));
+                    // p.y = @max(p.y, 10.0);
+                    h.SetY(p.?, @max(h.Y(p.?.*), 10.0));
+                }
+            },
+            .Move => {
+                // p += .{ dMouseP.x, dMouseP.y };
+                h.AddTo(p.?, .{ h.X(dMouseP), h.Y(dMouseP) });
             },
             else => {},
         }
