@@ -117,6 +117,13 @@ pub fn DEBUGAddVariable(
         .v3 => .{ .v3 = value },
         .v4 => .{ .v4 = value },
         .counterThreadList => .{ .profile = value },
+        .bitmapDisplay => .{
+            .bitmapDisplay = .{
+                .id = value,
+                .dim = .{ 25, 25 },
+                .alpha = true,
+            },
+        },
         else => platform.InvalidCodePath("Unsupported debug variable type"),
     };
 
@@ -141,6 +148,7 @@ inline fn VariableListing(context: *debug_variable_definition_context, comptime 
         h.v2 => .v2,
         h.v3 => .v3,
         h.v4 => .v4,
+        h.file_formats_ns.bitmap_id => .bitmapDisplay,
         else => platform.InvalidCodePath("Unsupported debug variable type"),
     };
 
@@ -178,7 +186,4 @@ pub fn DEBUGCreateVariables(context: *debug_variable_definition_context) void {
     _ = VariableListing(context, "UseSpaceOutlines");
     _ = VariableListing(context, "FamiliarFollowsHero");
     _ = VariableListing(context, "FauxV4");
-
-    // NOTE (Manav): Comment out this until we can make sure there's only one declaration of the variable
-    // _ = AddVariableReference(context, useDebugCamRef.variable);
 }

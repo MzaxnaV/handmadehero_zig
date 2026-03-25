@@ -266,7 +266,7 @@ fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
                     const stamp = h.asset_ns.GetRandomBitmapFrom(work.tranState.assets, if (series.RandomChoice(2) == 1) .Asset_Grass else .Asset_Stone, &series);
 
                     const p = h.Add(center, h.math_ns.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
-                    renderGroup.PushBitmap2(stamp, 2.5, h.ToV3(p, 0), colour);
+                    renderGroup.PushBitmap2(stamp, 2.5, h.ToV3(p, 0), .{ .colour = colour, .cAlign = 1.0 });
                 }
             }
         }
@@ -290,7 +290,7 @@ fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
                     const stamp: h.file_formats_ns.bitmap_id = h.asset_ns.GetRandomBitmapFrom(work.tranState.assets, .Asset_Tuft, &series);
 
                     const p = h.Add(center, h.math_ns.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
-                    renderGroup.PushBitmap2(stamp, 0.1, h.ToV3(p, 0), .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(stamp, 0.1, h.ToV3(p, 0), .{});
                 }
             }
         }
@@ -877,7 +877,7 @@ pub export fn UpdateAndRender(
 
                 if ((h.Z(delta) >= -1.0) and (h.Z(delta) < 1.0)) {
                     const groundSideInMeters = h.X(world.chunkDimInMeters);
-                    renderGroup.PushBitmap(bitmap, 1.0 * groundSideInMeters, delta, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap(bitmap, 1.0 * groundSideInMeters, delta, .{});
                     if (config.DEBUGUI_GroundChunkOutlines) {
                         renderGroup.PushRectOutline(delta, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
                     }
@@ -1096,10 +1096,10 @@ pub export fn UpdateAndRender(
             switch (entity.entityType) {
                 .Hero => {
                     const heroSizeC = 2.5;
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap2(heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                    renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
-                    renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, shadowAlpha }, .cAlign = 1.0 });
+                    renderGroup.PushBitmap2(heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{});
+                    renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{});
+                    renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{});
 
                     if (config.DEBUGUI_ParticleTest) {
                         for (0..3) |_| {
@@ -1252,14 +1252,14 @@ pub export fn UpdateAndRender(
                         if (h.A(colour) > 0.9) {
                             h.math_ns.SetA(&colour, 0.9 * h.math_ns.ClampMapToRange(1, h.A(colour), 0.9));
                         }
-                        renderGroup.PushBitmap2(particle.bitmapID, 1, particle.p, colour);
+                        renderGroup.PushBitmap2(particle.bitmapID, 1, particle.p, .{ .colour = colour, .cAlign = 1.0 });
                     }
 
                     DrawHitpoints(entity, renderGroup);
                 },
 
                 .Wall => {
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Tree), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Tree), 2.5, .{ 0, 0, 0 }, .{});
                 },
 
                 .Stairwell => {
@@ -1268,8 +1268,8 @@ pub export fn UpdateAndRender(
                 },
 
                 .Sword => {
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Sword), 0.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 0.5, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, shadowAlpha }, .cAlign = 1.0 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Sword), 0.5, .{ 0, 0, 0 }, .{});
                 },
 
                 .Familiar => {
@@ -1279,13 +1279,13 @@ pub export fn UpdateAndRender(
                     }
                     const bobSin = h.intrinsics_ns.Sin(2 * entity.tBob);
 
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) });
-                    renderGroup.PushBitmap2(heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) }, .cAlign = 1.0 });
+                    renderGroup.PushBitmap2(heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{});
                 },
 
                 .Monstar => {
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, shadowAlpha });
-                    renderGroup.PushBitmap2(heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{ 1, 1, 1, 1 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 4.5, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, shadowAlpha }, .cAlign = 1.0 });
+                    renderGroup.PushBitmap2(heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{});
 
                     DrawHitpoints(entity, renderGroup);
                 },

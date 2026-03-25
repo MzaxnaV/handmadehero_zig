@@ -46,6 +46,7 @@ pub const debug_variable_type = enum {
     v4,
 
     counterThreadList,
+    bitmapDisplay,
 
     group,
 
@@ -60,12 +61,13 @@ pub const debug_variable_type = enum {
             .v4 => h.v4,
             .group => debug_variable_group,
             .counterThreadList => debug_profile_settings,
+            .bitmapDisplay => h.file_formats_ns.bitmap_id,
         };
     }
 };
 
 pub fn ShouldBeWritten(t: debug_variable_type) bool {
-    const result = (t != .counterThreadList);
+    const result = ((t != .counterThreadList) and (t != .bitmapDisplay));
     return result;
 }
 
@@ -93,6 +95,12 @@ const debug_profile_settings = struct {
     dimension: h.v2,
 };
 
+const debug_bitmap_display = struct {
+    id: h.file_formats_ns.bitmap_id,
+    dim: h.v2,
+    alpha: bool,
+};
+
 pub const debug_variable = struct {
     type: debug_variable_type,
     name: [:0]const u8,
@@ -107,6 +115,7 @@ pub const debug_variable = struct {
         v4: h.v4,
         group: debug_variable_group,
         profile: debug_profile_settings,
+        bitmapDisplay: debug_bitmap_display,
     },
 };
 
@@ -162,17 +171,29 @@ const debug_thread = struct {
     next: ?*debug_thread,
 };
 
-const debug_interaction = enum {
+const debug_interaction_type = enum {
     None,
 
     NOP,
+
+    AutoModifyVariable,
 
     ToggleValue,
     DragValue,
     TearValue,
 
-    ResizeProfile,
-    MoveHierarchy,
+    Resize,
+    Move,
+};
+
+const debug_interaction = struct {
+    type: debug_interaction_type,
+    data: extern union { // NOTE (Manav): consider tagged union
+        generic: ?*anyopaque,
+        variable: ?*debug_variable,
+        hierarchy: ?*debug_variable_hierarchy,
+        p: ?*h.v2,
+    },
 };
 
 pub const debug_state = struct {
@@ -195,16 +216,10 @@ pub const debug_state = struct {
     rootGroup: *debug_variable_reference,
     hierarchySentinel: debug_variable_hierarchy,
 
-    interaction: debug_interaction,
     lastMouseP: h.v2,
+    interaction: debug_interaction,
     hotInteraction: debug_interaction,
-    hot: ?*debug_variable,
-    interactingWith: ?*debug_variable,
     nextHotInteraction: debug_interaction,
-    nextHot: ?*debug_variable,
-    nextHotHierarchy: ?*debug_variable_hierarchy,
-
-    draggingHierarchy: ?*debug_variable_hierarchy,
 
     leftEdge: f32,
     rightEdge: f32,
@@ -335,6 +350,16 @@ pub fn Start(assets: *h.asset_ns.game_assets, width: u32, height: u32) void {
             _ = functionList;
             DEBUGEndVariableGroup(&context);
             DEBUGEndVariableGroup(&context);
+
+            var matchVector = h.asset_ns.asset_vector{};
+            matchVector.e[@intFromEnum(h.file_formats_ns.asset_tag_id.Tag_FacingDirection)] = 0.0;
+
+            var weightVector = h.asset_ns.asset_vector{};
+            weightVector.e[@intFromEnum(h.file_formats_ns.asset_tag_id.Tag_FacingDirection)] = 1.0;
+
+            const id = h.asset_ns.GetBestMatchBitmapFrom(assets, .Asset_Head, &matchVector, &weightVector);
+
+            _ = DEBUGAddVariable(&context, "Test Bitmap", .bitmapDisplay, id);
 
             DEBUGEndVariableGroup(&context);
 
@@ -475,10 +500,10 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
                         const bitmapOffset: h.v3 = .{ atX, atY, 0 };
 
                         switch (op) {
-                            .DEBUGTextOp_DrawText => renderGroup.PushBitmap2(bitmapID, bitmapScale, bitmapOffset, colour),
+                            .DEBUGTextOp_DrawText => renderGroup.PushBitmap2(bitmapID, bitmapScale, bitmapOffset, .{ .colour = colour, .cAlign = 1.0 }),
                             .DEBUGTextOp_SizeText => {
                                 if (renderGroup.assets.GetBitmap(bitmapID, renderGroup.generationID)) |bitmap| {
-                                    const dim = h.render_group_ns.GetBitmapDim(renderGroup, bitmap, bitmapScale, bitmapOffset);
+                                    const dim = h.render_group_ns.GetBitmapDim(renderGroup, bitmap, bitmapScale, bitmapOffset, 1.0);
                                     const glyphDim = h.rect2.InitMinDim(h.XY(dim.p), dim.size);
 
                                     result = h.rect2.Union(result, glyphDim);
@@ -876,6 +901,18 @@ fn DrawProfileIn(debugState: *debug_state, profileRect: h.rect2, mouseP: h.v2) v
 
 }
 
+fn InteractionsAreEqual(a: debug_interaction, b: debug_interaction) bool {
+    const result: bool = (a.type == b.type) and (a.data.generic == b.data.generic);
+
+    return result;
+}
+
+fn InteractionsIsHot(debugState: *debug_state, b: debug_interaction) bool {
+    const result = InteractionsAreEqual(debugState.hotInteraction, b);
+
+    return result;
+}
+
 fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_group, mouseP: h.v2) void {
     var hierarchy = debugState.hierarchySentinel.next;
     while (hierarchy != &debugState.hierarchySentinel) : (hierarchy = hierarchy.next) {
@@ -888,8 +925,16 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
         var ref: ?*debug_variable_reference = hierarchy.group.variable.value.group.firstChild;
         while (ref) |_| {
             const variable = ref.?.variable;
-            const isHot = debugState.hot == variable;
-            const itemColour: h.v4 = if (isHot and debugState.hotInteraction == .None) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 };
+
+            const itemInteraction: debug_interaction = .{
+                .type = .AutoModifyVariable,
+                .data = .{
+                    .variable = variable,
+                },
+            };
+
+            const isHot = InteractionsIsHot(debugState, itemInteraction);
+            const itemColour: h.v4 = if (isHot) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 };
 
             var bounds = h.rect2{};
             switch (variable.type) {
@@ -898,26 +943,86 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
                     const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.value.profile.dimension), atY };
                     const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
                     bounds = h.rect2.InitMinMax(minCorner, maxCorner);
+
                     DrawProfileIn(debugState, bounds, mouseP);
+
+                    const sizeInteraction: debug_interaction = .{
+                        .type = .Resize,
+                        .data = .{
+                            .p = &variable.value.profile.dimension,
+                        },
+                    };
 
                     const sizeBox = h.rect2.InitCenterHalfDim(sizeP, .{ 4, 4 });
                     debugState.renderGroup.PushRect2(
                         sizeBox,
                         0,
-                        if (isHot and debugState.hotInteraction == .ResizeProfile) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
+                        if (InteractionsIsHot(debugState, sizeInteraction)) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
                     );
 
                     if (sizeBox.IsInRect(mouseP)) {
-                        debugState.nextHotInteraction = .ResizeProfile;
-                        debugState.nextHot = variable;
+                        debugState.nextHotInteraction = sizeInteraction;
                     } else if (bounds.IsInRect(mouseP)) {
-                        debugState.nextHotInteraction = .None;
-                        debugState.nextHot = variable;
+                        debugState.nextHotInteraction = itemInteraction;
                     }
 
                     // bounds.min.y -= spaceingY;
                     h.SetY(&bounds.min, h.Y(bounds.min) - spacingY);
                 },
+
+                .bitmapDisplay => {
+                    const bitmapScale = h.Y(variable.value.bitmapDisplay.dim);
+                    const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - bitmapScale };
+
+                    if (debugState.renderGroup.assets.GetBitmap(variable.value.bitmapDisplay.id, debugState.renderGroup.generationID)) |bitmap| {
+                        const dim = h.render_group_ns.GetBitmapDim(debugState.renderGroup, bitmap, bitmapScale, h.ToV3(minCorner, 0), 1.0);
+                        h.SetX(&variable.value.bitmapDisplay.dim, h.X(dim.size));
+                    }
+
+                    const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.value.bitmapDisplay.dim), atY };
+                    const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
+                    bounds = h.rect2.InitMinMax(minCorner, maxCorner);
+
+                    debugState.renderGroup.PushRect2(bounds, 0, .{ 0, 0, 0, 1 });
+
+                    debugState.renderGroup.PushBitmap2(
+                        variable.value.bitmapDisplay.id,
+                        bitmapScale,
+                        h.ToV3(minCorner, 0),
+                        .{ .colour = .{ 1, 1, 1, 1 }, .cAlign = 0.0 },
+                    );
+
+                    const sizeInteraction: debug_interaction = .{
+                        .type = .Resize,
+                        .data = .{
+                            .p = &variable.value.bitmapDisplay.dim,
+                        },
+                    };
+
+                    const sizeBox = h.rect2.InitCenterHalfDim(sizeP, .{ 4, 4 });
+                    debugState.renderGroup.PushRect2(
+                        sizeBox,
+                        0,
+                        if (InteractionsIsHot(debugState, sizeInteraction)) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
+                    );
+
+                    if (sizeBox.IsInRect(mouseP)) {
+                        debugState.nextHotInteraction = sizeInteraction;
+                    } else if (bounds.IsInRect(mouseP)) {
+                        const tearInteraction: debug_interaction = .{
+                            .type = .TearValue,
+                            .data = .{
+                                .variable = variable,
+                            },
+                        };
+
+                        debugState.nextHotInteraction = tearInteraction;
+                    }
+
+                    // bounds.min.y -= spaceingY;
+                    h.SetY(&bounds.min, h.Y(bounds.min) - spacingY);
+                },
+
                 else => {
                     var text = [1]u8{0} ** 256;
 
@@ -936,8 +1041,7 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
                     DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.asset_ns.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
 
                     if (bounds.IsInRect(mouseP)) {
-                        debugState.nextHotInteraction = .None;
-                        debugState.nextHot = variable;
+                        debugState.nextHotInteraction = itemInteraction;
                     }
                 },
             }
@@ -963,12 +1067,22 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
         debugState.atY = atY;
 
         if (true) {
+            const moveInteraction: debug_interaction = .{
+                .type = .Move,
+                .data = .{
+                    .p = &hierarchy.uiP,
+                },
+            };
+
             const moveBox = h.rect2.InitCenterHalfDim(h.Sub(hierarchy.uiP, .{ 4, 4 }), .{ 4, 4 });
-            debugState.renderGroup.PushRect2(moveBox, 0, .{ 1, 1, 1, 1 });
+            debugState.renderGroup.PushRect2(
+                moveBox,
+                0,
+                if (InteractionsIsHot(debugState, moveInteraction)) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
+            );
 
             if (moveBox.IsInRect(mouseP)) {
-                debugState.nextHotInteraction = .MoveHierarchy;
-                debugState.nextHotHierarchy = hierarchy;
+                debugState.nextHotInteraction = moveInteraction;
             }
         }
     }
@@ -1011,62 +1125,69 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
 }
 
 fn BeginInteract(debugState: *debug_state, _: *platform.input, _: h.v2, altUI: bool) void {
-    if (debugState.hotInteraction != .None) {
-        debugState.interaction = debugState.hotInteraction;
-    } else {
-        if (debugState.hot) |hotVariable| {
-            if (altUI) {
-                debugState.interaction = .TearValue;
-            } else {
-                switch (hotVariable.type) {
-                    .bool => {
-                        debugState.interaction = .ToggleValue;
-                    },
-                    .f32 => {
-                        debugState.interaction = .DragValue;
-                    },
-                    .group => {
-                        debugState.interaction = .ToggleValue;
-                    },
-                    else => {},
-                }
+    if (debugState.hotInteraction.type != .None) {
+        if (debugState.hotInteraction.type == .AutoModifyVariable) {
+            switch (debugState.hotInteraction.data.variable.?.type) {
+                .bool => {
+                    debugState.hotInteraction.type = .ToggleValue;
+                },
+                .f32 => {
+                    debugState.hotInteraction.type = .DragValue;
+                },
+                .group => {
+                    debugState.hotInteraction.type = .ToggleValue;
+                },
+                else => {},
             }
 
-            if (debugState.interaction != .None) {
-                debugState.interactingWith = debugState.hot;
+            if (altUI) {
+                debugState.hotInteraction.type = .TearValue;
             }
-        } else {
-            debugState.interaction = .NOP;
         }
+
+        switch (debugState.hotInteraction.type) {
+            .TearValue => {
+                const rootGroup: *debug_variable_reference = h.debug_variables_ns.DEBUGAddRootGroup(debugState, "NewUserGroup");
+                _ = h.debug_variables_ns.DEBUGAddVariableReference__(debugState, rootGroup, debugState.hotInteraction.data.variable.?);
+                var hierarchy = AddHierarchy(debugState, rootGroup, .{ 0, 0 });
+                hierarchy.uiP = debugState.lastMouseP;
+                debugState.hotInteraction.type = .Move;
+                debugState.hotInteraction.data.p = &hierarchy.uiP;
+            },
+            else => {},
+        }
+
+        debugState.interaction = debugState.hotInteraction;
+    } else {
+        debugState.interaction.type = .NOP;
     }
 }
 
 fn EndInteract(debugState: *debug_state, _: *platform.input, _: h.v2) void {
-    if (debugState.interaction != .NOP) {
-        // NOTE (Manav): debugState.interactingWith can be null .NOP
-        switch (debugState.interaction) {
-            .ToggleValue => {
-                var variable = debugState.interactingWith.?;
-                switch (variable.type) {
-                    .bool => {
-                        variable.value.bool = !variable.value.bool;
-                    },
-                    .group => {
-                        variable.value.group.expanded = !variable.value.group.expanded;
-                    },
-                    else => {},
-                }
-            },
-
-            else => {},
-        }
-
-        WriteHandmadeConfig(debugState);
+    switch (debugState.interaction.type) {
+        .ToggleValue => {
+            var variable = debugState.interaction.data.variable.?;
+            switch (variable.type) {
+                .bool => {
+                    variable.value.bool = !variable.value.bool;
+                },
+                .group => {
+                    variable.value.group.expanded = !variable.value.group.expanded;
+                },
+                else => {},
+            }
+        },
+        else => {},
     }
 
-    debugState.interaction = .None;
-    debugState.interactingWith = null;
-    debugState.draggingHierarchy = null;
+    WriteHandmadeConfig(debugState);
+
+    debugState.interaction = .{
+        .type = .None,
+        .data = .{
+            .generic = null,
+        },
+    };
 }
 
 fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void {
@@ -1079,11 +1200,13 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
     //     DrawDebugMainMenu(debugState, renderGroup, mouseP);
     // } else if (input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
 
-    if (debugState.interaction != .None) {
+    if (debugState.interaction.type != .None) {
         // Mouse move interaction
-        var variable: ?*debug_variable = debugState.interactingWith; // NOTE (Manav): variable can be null with .NOP
+        var variable: ?*debug_variable = debugState.interaction.data.variable;
+        // var hierarchy: ?*debug_variable_hierarchy = debugState.interaction.data.hierarchy;
+        const p: ?*h.v2 = debugState.interaction.data.p;
 
-        switch (debugState.interaction) {
+        switch (debugState.interaction.type) {
             .DragValue => {
                 switch (variable.?.type) {
                     .f32 => {
@@ -1093,28 +1216,20 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
                     else => {},
                 }
             },
-            .ResizeProfile => {
-                if (variable != null) { // NOTE (Manav): variable can be null with .ResizeProfile when it's in a hierarchy
-                    // variable.value.profile.dimension += .{ dMouseP.x, -dMouseP.y };
-                    h.AddTo(&variable.?.value.profile.dimension, .{ h.X(dMouseP), -h.Y(dMouseP) });
-                    // variable.value.profile.dimension.x = @max(variable.value.profile.dimension.x, 10.0);
-                    h.SetX(&variable.?.value.profile.dimension, @max(h.X(variable.?.value.profile.dimension), 10.0));
-                    // variable.value.profile.dimension.y = @max(variable.value.profile.dimension.y, 10.0);
-                    h.SetY(&variable.?.value.profile.dimension, @max(h.Y(variable.?.value.profile.dimension), 10.0));
-                }
-            },
-            .MoveHierarchy => {
-                // debugState.draggingHierarchy.uiP += .{ dMouseP.x, dMouseP.y };
-                h.AddTo(&debugState.draggingHierarchy.?.uiP, .{ h.X(dMouseP), h.Y(dMouseP) });
-            },
-            .TearValue => {
-                if (debugState.draggingHierarchy == null) {
-                    const rootGroup: *debug_variable_reference = h.debug_variables_ns.DEBUGAddRootGroup(debugState, "NewUserGroup");
-                    _ = h.debug_variables_ns.DEBUGAddVariableReference__(debugState, rootGroup, debugState.interactingWith.?);
-                    debugState.draggingHierarchy = AddHierarchy(debugState, rootGroup, .{ 0, 0 });
-                }
+            .Resize => {
+                if (variable != null) { // NOTE (Manav): variable can be null with .Resize when it's in a hierarchy
 
-                debugState.draggingHierarchy.?.uiP = mouseP;
+                    // p += .{ dMouseP.x, -dMouseP.y };
+                    h.AddTo(p.?, .{ h.X(dMouseP), -h.Y(dMouseP) });
+                    // p.x = @max(p.x, 10.0);
+                    h.SetX(p.?, @max(h.X(p.?.*), 10.0));
+                    // p.y = @max(p.y, 10.0);
+                    h.SetY(p.?, @max(h.Y(p.?.*), 10.0));
+                }
+            },
+            .Move => {
+                // p += .{ dMouseP.x, dMouseP.y };
+                h.AddTo(p.?, .{ h.X(dMouseP), h.Y(dMouseP) });
             },
             else => {},
         }
@@ -1132,9 +1247,7 @@ fn Interact(debugState: *debug_state, input: *platform.input, mouseP: h.v2) void
             EndInteract(debugState, input, mouseP);
         }
     } else {
-        debugState.hot = debugState.nextHot;
         debugState.hotInteraction = debugState.nextHotInteraction;
-        debugState.draggingHierarchy = debugState.nextHotHierarchy;
 
         const altUI = input.mouseButtons[@intFromEnum(platform.input_mouse_button.PlatformMouseButton_Right)].endedDown != 0;
 
@@ -1178,9 +1291,8 @@ pub fn End(input: *platform.input, drawBuffer: *h.render_group_ns.loaded_bitmap)
     if (DEBUGGetState()) |debugState| {
         const renderGroup: *h.render_group_ns.render_group = debugState.renderGroup;
 
-        debugState.nextHot = null;
-        debugState.nextHotHierarchy = null;
-        debugState.nextHotInteraction = .None;
+        h.data_ns.ZeroStruct(debug_interaction, &debugState.nextHotInteraction);
+
         const hotRecord: ?*platform.debug_record = null;
 
         const mouseP: h.v2 = h.V2(input.mouseX, input.mouseY);
