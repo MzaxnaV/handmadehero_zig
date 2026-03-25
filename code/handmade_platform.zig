@@ -5,7 +5,7 @@ const options = @import("options");
 const SourceLocation = std.builtin.SourceLocation;
 
 /// Debug: build constant to dynamically ignore code sections
-pub const ignore = !options.ignore;
+pub const IGNORE = !options.ignore;
 /// Debug: `False` - slow code not allowed, `True` - slow code welcome.
 pub const HANDMADE_SLOW = options.HANDMADE_SLOW;
 /// Debug: `False` - Build for public release, `True` - Build for developer only
@@ -249,9 +249,9 @@ pub const debug_record = extern struct {
 };
 
 const debug_event_type = enum(u8) {
-    DebugEvent_FrameMarker,
-    DebugEvent_BeginBlock,
-    DebugEvent_EndBlock,
+    FrameMarker,
+    BeginBlock,
+    EndBlock,
 };
 
 const threadid_coreIndex = packed struct(u32) {
@@ -299,7 +299,7 @@ fn RecordDebugEvent(comptime recordIndex: comptime_int, comptime eventType: debu
     event.eventType = eventType;
 
     switch (eventType) {
-        .DebugEvent_FrameMarker => {
+        .FrameMarker => {
             event.data = .{ .secondsElapsed = secondsElapsed };
         },
         else => {
@@ -392,7 +392,7 @@ inline fn BEGIN_BLOCK_(comptime __counter__: comptime_int, comptime source: Sour
     record.lineNumber = source.line;
     record.blockName = block_name.ptr;
 
-    RecordDebugEvent(__counter__, .DebugEvent_BeginBlock, 0);
+    RecordDebugEvent(__counter__, .BeginBlock, 0);
 }
 
 /// The function at call site  will be replaced, using a preprocesing tool, with
@@ -424,7 +424,7 @@ pub inline fn END_BLOCK__impl(comptime __counter__: comptime_int, comptime _: []
 pub inline fn END_BLOCK(comptime _: []const u8) void {}
 
 inline fn END_BLOCK_(comptime __counter__: comptime_int) void {
-    RecordDebugEvent(__counter__, .DebugEvent_EndBlock, 0);
+    RecordDebugEvent(__counter__, .EndBlock, 0);
 }
 
 /// The function at call site  will be replaced, using a preprocesing tool, with
@@ -446,7 +446,7 @@ pub inline fn FRAME_MARKER__impl(comptime __counter__: comptime_int, comptime so
     record.lineNumber = source.line;
     record.blockName = block_name.ptr;
 
-    RecordDebugEvent(__counter__, .DebugEvent_FrameMarker, secondsElapsed);
+    RecordDebugEvent(__counter__, .FrameMarker, secondsElapsed);
 }
 
 // functions ------------------------------------------------------------------------------------------------------------------------------

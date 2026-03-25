@@ -1,12 +1,11 @@
 const h = @import("handmade_all.zig");
 
-const platform = @import("platform");
-const intrinsics = h.intrinsics_ns;
+const Platform = @import("platform");
 
 // imported types -------------------------------------------------------------------------------------------------------------------------------
-const SquareRoot = intrinsics.SquareRoot;
-const Cos = intrinsics.Cos;
-const Sin = intrinsics.Sin;
+const SquareRoot = h.Intrinsics.SquareRoot;
+const Cos = h.Intrinsics.Cos;
+const Sin = h.Intrinsics.Sin;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -60,10 +59,10 @@ pub const rect2i = struct {
 
     pub inline fn InvertedInfinityRectangle() Self {
         const result = Self{
-            .xMin = platform.MAXINT32,
-            .yMin = platform.MAXINT32,
-            .xMax = -platform.MAXINT32,
-            .yMax = -platform.MAXINT32,
+            .xMin = Platform.MAXINT32,
+            .yMin = Platform.MAXINT32,
+            .xMax = -Platform.MAXINT32,
+            .yMax = -Platform.MAXINT32,
         };
 
         return result;
@@ -183,8 +182,8 @@ inline fn Rectangle(comptime n: comptime_int) type {
 
         pub inline fn InvertedInfinity() Self {
             const result = Self{
-                .min = .{ platform.F32MAXIMUM, platform.F32MAXIMUM },
-                .max = .{ -platform.F32MAXIMUM, -platform.F32MAXIMUM },
+                .min = .{ Platform.F32MAXIMUM, Platform.F32MAXIMUM },
+                .max = .{ -Platform.F32MAXIMUM, -Platform.F32MAXIMUM },
             };
 
             return result;

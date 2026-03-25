@@ -10,11 +10,10 @@ const h = @import("handmade_all.zig");
 
 // imported types -------------------------------------------------------------------------------------------------------------------------------
 const platform = @import("platform");
-const math = h.math_ns;
-const asset_type_id = h.file_formats_ns.asset_type_id;
+const asset_type_id = h.FileFormats.asset_type_id;
 
 const assert = std.debug.assert;
-const FindLeastSignificantSetBit = h.intrinsics_ns.FindLeastSignificantSetBit;
+const FindLeastSignificantSetBit = h.Intrinsics.FindLeastSignificantSetBit;
 
 // constants and types  --------------------------------------------------------------------------------------------------------------------------
 
@@ -53,7 +52,7 @@ const loaded_font = struct {
     lineAdvance: f32,
 
     /// `glyphs.len` is `maxGlyphCount`
-    glyphs: []h.file_formats_ns.hha_font_glyph,
+    glyphs: []h.FileFormats.hha_font_glyph,
     horizontalAdvance: []f32,
 
     minCodePoint: u32,
@@ -192,28 +191,28 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !loaded_bitmap {
     while (index < @as(u32, @intCast(header.height * header.width))) : (index += 1) {
         const c = sourceDest[index];
 
-        var texel = math.v4{
+        var texel = h.v4{
             @as(f32, @floatFromInt((c & redMask) >> redShiftDown)),
             @as(f32, @floatFromInt((c & greenMask) >> greenShiftDown)),
             @as(f32, @floatFromInt((c & blueMask) >> blueShiftDown)),
             @as(f32, @floatFromInt((c & alphaMask) >> alphaShiftDown)),
         };
 
-        texel = math.SRGB255ToLinear1(texel);
+        texel = h.Math.SRGB255ToLinear1(texel);
 
         // if (!ignore)
         {
             // texel.rgb *= texel.a;
-            texel = math.ToV4(math.Scale(math.RGB(texel), math.A(texel)), math.A(texel));
+            texel = h.ToV4(h.Scale(h.Math.RGB(texel), h.A(texel)), h.A(texel));
         }
 
-        texel = math.Linear1ToSRGB255(texel);
+        texel = h.Math.Linear1ToSRGB255(texel);
 
         sourceDest[index] =
-            (@as(u32, @intFromFloat((math.A(texel) + 0.5))) << 24 |
-                @as(u32, @intFromFloat((math.R(texel) + 0.5))) << 16 |
-                @as(u32, @intFromFloat((math.G(texel) + 0.5))) << 8 |
-                @as(u32, @intFromFloat((math.B(texel) + 0.5))) << 0);
+            (@as(u32, @intFromFloat((h.A(texel) + 0.5))) << 24 |
+                @as(u32, @intFromFloat((h.R(texel) + 0.5))) << 16 |
+                @as(u32, @intFromFloat((h.G(texel) + 0.5))) << 8 |
+                @as(u32, @intFromFloat((h.B(texel) + 0.5))) << 0);
     }
 
     result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
@@ -264,12 +263,12 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, pixelHeight: i32, al
     font.glyphIndexFromCodePoint = try allocator.alloc(u32, ONE_PAST_MAX_FONT_CODEPOINT);
     @memset(font.glyphIndexFromCodePoint, 0);
 
-    font.glyphs = try allocator.alloc(h.file_formats_ns.hha_font_glyph, maxGlyphCount);
+    font.glyphs = try allocator.alloc(h.FileFormats.hha_font_glyph, maxGlyphCount);
     font.horizontalAdvance = try allocator.alloc(f32, font.glyphs.len * font.glyphs.len);
     @memset(font.horizontalAdvance, 0);
 
     // NOTE (Manav): this has to be set to zero otherwise 0xaa will be written which would point to invalid bitmap_ids
-    @memset(font.glyphs, h.file_formats_ns.hha_font_glyph{ .bitmapID = .{ .value = 0 }, .unicodeCodePoint = 0 });
+    @memset(font.glyphs, h.FileFormats.hha_font_glyph{ .bitmapID = .{ .value = 0 }, .unicodeCodePoint = 0 });
 
     font.onePastHighestCodepoint = 0;
 
@@ -346,7 +345,7 @@ fn InitializeFontDC() void {
     _ = win32.SetBkColor(global.fontDeviceContext, 0x00000000);
 }
 
-fn LoadGlyphBitmap(font: *loaded_font, codePoint: u32, asset: *h.file_formats_ns.hha_asset, allocator: std.mem.Allocator) !loaded_bitmap {
+fn LoadGlyphBitmap(font: *loaded_font, codePoint: u32, asset: *h.FileFormats.hha_asset, allocator: std.mem.Allocator) !loaded_bitmap {
     var result = loaded_bitmap{};
 
     const glyphIndex: u32 = font.glyphIndexFromCodePoint[codePoint];
@@ -447,20 +446,20 @@ fn LoadGlyphBitmap(font: *loaded_font, codePoint: u32, asset: *h.file_formats_ns
                     const pixel = source[0];
 
                     const gray: f32 = @floatFromInt(pixel & 0xff);
-                    var texel = math.v4{ 255, 255, 255, gray };
+                    var texel = h.v4{ 255, 255, 255, gray };
 
-                    texel = math.SRGB255ToLinear1(texel);
+                    texel = h.Math.SRGB255ToLinear1(texel);
 
                     // texel.rgb *= texel.a;
-                    texel = math.ToV4(math.Scale(math.RGB(texel), math.A(texel)), math.A(texel));
+                    texel = h.ToV4(h.Scale(h.Math.RGB(texel), h.A(texel)), h.A(texel));
 
-                    texel = math.Linear1ToSRGB255(texel);
+                    texel = h.Math.Linear1ToSRGB255(texel);
 
                     dest[0] =
-                        (@as(u32, @intFromFloat((math.A(texel) + 0.5))) << 24 |
-                            @as(u32, @intFromFloat((math.R(texel) + 0.5))) << 16 |
-                            @as(u32, @intFromFloat((math.G(texel) + 0.5))) << 8 |
-                            @as(u32, @intFromFloat((math.B(texel) + 0.5))) << 0);
+                        (@as(u32, @intFromFloat((h.A(texel) + 0.5))) << 24 |
+                            @as(u32, @intFromFloat((h.R(texel) + 0.5))) << 16 |
+                            @as(u32, @intFromFloat((h.G(texel) + 0.5))) << 8 |
+                            @as(u32, @intFromFloat((h.B(texel) + 0.5))) << 0);
                     dest += 1;
 
                     source += 1;
@@ -750,22 +749,22 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
 
 const added_asset = struct {
     id: u32,
-    hha: *h.file_formats_ns.hha_asset,
+    hha: *h.FileFormats.hha_asset,
     source: *asset_source,
 };
 
 const game_assets = struct {
     tagCount: u32 = 0,
-    tags: [VERY_LARGE_NO]h.file_formats_ns.hha_tag = undefined,
+    tags: [VERY_LARGE_NO]h.FileFormats.hha_tag = undefined,
 
     assetTypeCount: u32 = 0,
-    assetTypes: [h.file_formats_ns.asset_type_id.count()]h.file_formats_ns.hha_asset_type = undefined,
+    assetTypes: [h.FileFormats.asset_type_id.count()]h.FileFormats.hha_asset_type = undefined,
 
     assetCount: u32 = 0,
     assetSources: [VERY_LARGE_NO]asset_source = undefined,
-    assets: [VERY_LARGE_NO]h.file_formats_ns.hha_asset = undefined,
+    assets: [VERY_LARGE_NO]h.FileFormats.hha_asset = undefined,
 
-    DEBUGAssetType: ?*h.file_formats_ns.hha_asset_type = null,
+    DEBUGAssetType: ?*h.FileFormats.hha_asset_type = null,
     assetIndex: u32 = 0,
 
     fn Initialize(self: *game_assets) void {
@@ -775,11 +774,11 @@ const game_assets = struct {
         self.assetIndex = 0;
 
         // NOTE (Manav): Not really needed for us
-        self.assetTypeCount = h.file_formats_ns.asset_type_id.count();
-        self.assetTypes = [1]h.file_formats_ns.hha_asset_type{.{ .typeID = 0, .firstAssetIndex = 0, .onePastLastAssetIndex = 0 }} ** h.file_formats_ns.asset_type_id.count();
+        self.assetTypeCount = h.FileFormats.asset_type_id.count();
+        self.assetTypes = [1]h.FileFormats.hha_asset_type{.{ .typeID = 0, .firstAssetIndex = 0, .onePastLastAssetIndex = 0 }} ** h.FileFormats.asset_type_id.count();
     }
 
-    fn BeginAssetType(self: *game_assets, typeID: h.file_formats_ns.asset_type_id) void {
+    fn BeginAssetType(self: *game_assets, typeID: h.FileFormats.asset_type_id) void {
         assert(self.DEBUGAssetType == null);
 
         self.DEBUGAssetType = &self.assetTypes[@intFromEnum(typeID)];
@@ -803,7 +802,7 @@ const game_assets = struct {
         self.DEBUGAssetType.?.onePastLastAssetIndex += 1;
 
         const source: *asset_source = &self.assetSources[index];
-        const hha: *h.file_formats_ns.hha_asset = &self.assets[index];
+        const hha: *h.FileFormats.hha_asset = &self.assets[index];
         hha.firstTagIndex = self.tagCount;
         hha.onePastLastTagIndex = hha.firstTagIndex;
 
@@ -815,10 +814,10 @@ const game_assets = struct {
         };
     }
 
-    fn AddBitmapAsset(self: *game_assets, fileName: [:0]const u8, alignPercentage: [2]f32) h.file_formats_ns.bitmap_id {
+    fn AddBitmapAsset(self: *game_assets, fileName: [:0]const u8, alignPercentage: [2]f32) h.FileFormats.bitmap_id {
         var asset = self.AddAsset();
 
-        asset.hha.data = .{ .bitmap = h.file_formats_ns.hha_bitmap{
+        asset.hha.data = .{ .bitmap = h.FileFormats.hha_bitmap{
             .dim = .{ 0, 0 },
             .alignPercentage = alignPercentage,
         } };
@@ -828,18 +827,18 @@ const game_assets = struct {
             .fileName = fileName,
         } };
 
-        return h.file_formats_ns.bitmap_id{ .value = asset.id };
+        return h.FileFormats.bitmap_id{ .value = asset.id };
     }
 
     /// Defaults: ```alignPercentage = .{ 0.5, 0.5 }```
-    inline fn AddDefaultBitmapAsset(self: *game_assets, fileName: [:0]const u8) h.file_formats_ns.bitmap_id {
+    inline fn AddDefaultBitmapAsset(self: *game_assets, fileName: [:0]const u8) h.FileFormats.bitmap_id {
         return self.AddBitmapAsset(fileName, .{ 0.5, 0.5 });
     }
 
-    fn AddCharacterAsset(self: *game_assets, font: *loaded_font, codePoint: u32) h.file_formats_ns.bitmap_id {
+    fn AddCharacterAsset(self: *game_assets, font: *loaded_font, codePoint: u32) h.FileFormats.bitmap_id {
         var asset = self.AddAsset();
 
-        asset.hha.data = .{ .bitmap = h.file_formats_ns.hha_bitmap{
+        asset.hha.data = .{ .bitmap = h.FileFormats.hha_bitmap{
             .dim = .{ 0, 0 },
             .alignPercentage = .{ 0, 0 },
         } };
@@ -850,7 +849,7 @@ const game_assets = struct {
             .codePoint = codePoint,
         } };
 
-        const result = h.file_formats_ns.bitmap_id{ .value = asset.id };
+        const result = h.FileFormats.bitmap_id{ .value = asset.id };
 
         const glyphIndex = font.glyphCount;
         font.glyphCount += 1;
@@ -870,13 +869,13 @@ const game_assets = struct {
         return result;
     }
 
-    fn AddSoundAsset(self: *game_assets, fileName: [:0]const u8, firstSampleIndex: u32, sampleCount: u32) h.file_formats_ns.sound_id {
+    fn AddSoundAsset(self: *game_assets, fileName: [:0]const u8, firstSampleIndex: u32, sampleCount: u32) h.FileFormats.sound_id {
         var asset = self.AddAsset();
 
-        asset.hha.data = .{ .sound = h.file_formats_ns.hha_sound{
+        asset.hha.data = .{ .sound = h.FileFormats.hha_sound{
             .channelCount = 0,
             .sampleCount = sampleCount,
-            .chain = .HHASOUNDCHAIN_None,
+            .chain = .None,
         } };
 
         asset.source.t = .AssetType_Sound;
@@ -885,16 +884,16 @@ const game_assets = struct {
             .firstSampleIndex = firstSampleIndex,
         } };
 
-        return h.file_formats_ns.sound_id{ .value = asset.id };
+        return h.FileFormats.sound_id{ .value = asset.id };
     }
 
     /// Defaults: ```firstSampleIndex = 0, sampleCount = 0```
-    inline fn AddDefaultSoundAsset(self: *game_assets, fileName: [:0]const u8) h.file_formats_ns.sound_id {
+    inline fn AddDefaultSoundAsset(self: *game_assets, fileName: [:0]const u8) h.FileFormats.sound_id {
         return self.AddSoundAsset(fileName, 0, 0);
     }
 
     /// Defaults: ```alignPercentage = .{ 0.5, 0.5 }```
-    fn AddFontAsset(self: *game_assets, font: *loaded_font) h.file_formats_ns.font_id {
+    fn AddFontAsset(self: *game_assets, font: *loaded_font) h.FileFormats.font_id {
         var asset = self.AddAsset();
 
         asset.hha.data = .{ .font = .{
@@ -912,16 +911,16 @@ const game_assets = struct {
             .font = font,
         } };
 
-        return h.file_formats_ns.font_id{ .value = asset.id };
+        return h.FileFormats.font_id{ .value = asset.id };
     }
 
-    fn AddTag(self: *game_assets, ID: h.file_formats_ns.asset_tag_id, value: f32) void {
+    fn AddTag(self: *game_assets, ID: h.FileFormats.asset_tag_id, value: f32) void {
         assert(self.assetIndex != 0);
 
-        const hha: *h.file_formats_ns.hha_asset = &self.assets[self.assetIndex];
+        const hha: *h.FileFormats.hha_asset = &self.assets[self.assetIndex];
         hha.onePastLastTagIndex += 1;
 
-        var tag: *h.file_formats_ns.hha_tag = &self.tags[self.tagCount];
+        var tag: *h.FileFormats.hha_tag = &self.tags[self.tagCount];
         self.tagCount += 1;
 
         tag.ID = @intFromEnum(ID);
@@ -941,20 +940,20 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
     defer out.close();
 
     {
-        var header = h.file_formats_ns.hha_header{
-            .magicValue = h.file_formats_ns.HHA_MAGIC_VALUE,
-            .version = h.file_formats_ns.HHA_VERSION,
+        var header = h.FileFormats.hha_header{
+            .magicValue = h.FileFormats.HHA_MAGIC_VALUE,
+            .version = h.FileFormats.HHA_VERSION,
             .tagCount = assets.tagCount,
             .assetCount = assets.assetCount,
-            .assetTypeCount = h.file_formats_ns.asset_type_id.count(),
-            .tags = @sizeOf(h.file_formats_ns.hha_header),
+            .assetTypeCount = h.FileFormats.asset_type_id.count(),
+            .tags = @sizeOf(h.FileFormats.hha_header),
             .assets = 0,
             .assetTypes = 0,
         };
 
-        const tagArraySize = @sizeOf(h.file_formats_ns.hha_tag) * header.tagCount;
-        const assetTypeArraySize = @sizeOf(h.file_formats_ns.hha_asset_type) * header.assetTypeCount;
-        const assetArraySize = @sizeOf(h.file_formats_ns.hha_asset) * header.assetCount;
+        const tagArraySize = @sizeOf(h.FileFormats.hha_tag) * header.tagCount;
+        const assetTypeArraySize = @sizeOf(h.FileFormats.hha_asset_type) * header.assetTypeCount;
+        const assetArraySize = @sizeOf(h.FileFormats.hha_asset) * header.assetCount;
 
         header.assetTypes = header.tags + tagArraySize;
         header.assets = header.assetTypes + assetTypeArraySize;
@@ -966,7 +965,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
 
         for (1..@as(usize, header.assetCount)) |assetIndex| {
             const source = assets.assetSources[assetIndex];
-            var dest: *h.file_formats_ns.hha_asset = &assets.assets[assetIndex];
+            var dest: *h.FileFormats.hha_asset = &assets.assets[assetIndex];
 
             dest.dataOffset = try out.getPos();
 
@@ -1056,7 +1055,7 @@ fn WriteFonts() void {
 
     const fonts = [_]*loaded_font{ font0, font1 };
 
-    assets.BeginAssetType(.Asset_FontGlyph);
+    assets.BeginAssetType(.FontGlyph);
     for (fonts) |font| {
         _ = assets.AddCharacterAsset(font, ' ');
 
@@ -1072,11 +1071,11 @@ fn WriteFonts() void {
     }
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Font);
+    assets.BeginAssetType(.Font);
     _ = assets.AddFontAsset(fonts[0]);
-    _ = assets.AddTag(.Tag_FontType, @floatFromInt(@as(u32, @intFromEnum(h.file_formats_ns.asset_font_type.FontType_Default))));
+    _ = assets.AddTag(.FontType, @floatFromInt(@as(u32, @intFromEnum(h.FileFormats.asset_font_type.Default))));
     _ = assets.AddFontAsset(fonts[1]);
-    _ = assets.AddTag(.Tag_FontType, @floatFromInt(@as(u32, @intFromEnum(h.file_formats_ns.asset_font_type.FontType_Debug))));
+    _ = assets.AddTag(.FontType, @floatFromInt(@as(u32, @intFromEnum(h.FileFormats.asset_font_type.Debug))));
 
     assets.EndAssetType();
 
@@ -1097,37 +1096,37 @@ fn WriteHero() void {
 
     const heroAlign: [2]f32 = .{ 0.5, 0.156682029 };
 
-    assets.BeginAssetType(.Asset_Head);
+    assets.BeginAssetType(.Head);
     _ = assets.AddBitmapAsset("test/test_hero_right_head.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleRight);
+    assets.AddTag(.FacingDirection, angleRight);
     _ = assets.AddBitmapAsset("test/test_hero_back_head.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleBack);
+    assets.AddTag(.FacingDirection, angleBack);
     _ = assets.AddBitmapAsset("test/test_hero_left_head.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleLeft);
+    assets.AddTag(.FacingDirection, angleLeft);
     _ = assets.AddBitmapAsset("test/test_hero_front_head.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleFront);
+    assets.AddTag(.FacingDirection, angleFront);
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Cape);
+    assets.BeginAssetType(.Cape);
     _ = assets.AddBitmapAsset("test/test_hero_right_cape.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleRight);
+    assets.AddTag(.FacingDirection, angleRight);
     _ = assets.AddBitmapAsset("test/test_hero_back_cape.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleBack);
+    assets.AddTag(.FacingDirection, angleBack);
     _ = assets.AddBitmapAsset("test/test_hero_left_cape.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleLeft);
+    assets.AddTag(.FacingDirection, angleLeft);
     _ = assets.AddBitmapAsset("test/test_hero_front_cape.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleFront);
+    assets.AddTag(.FacingDirection, angleFront);
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Torso);
+    assets.BeginAssetType(.Torso);
     _ = assets.AddBitmapAsset("test/test_hero_right_torso.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleRight);
+    assets.AddTag(.FacingDirection, angleRight);
     _ = assets.AddBitmapAsset("test/test_hero_back_torso.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleBack);
+    assets.AddTag(.FacingDirection, angleBack);
     _ = assets.AddBitmapAsset("test/test_hero_left_torso.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleLeft);
+    assets.AddTag(.FacingDirection, angleLeft);
     _ = assets.AddBitmapAsset("test/test_hero_front_torso.bmp", heroAlign);
-    assets.AddTag(.Tag_FacingDirection, angleFront);
+    assets.AddTag(.FacingDirection, angleFront);
     assets.EndAssetType();
 
     WriteHHA(&assets, "test1.hha") catch |err| {
@@ -1140,34 +1139,34 @@ fn WriteNonHero() void {
     var assets = game_assets{};
     assets.Initialize();
 
-    assets.BeginAssetType(.Asset_Test_Bitmap);
+    assets.BeginAssetType(.TestBitmap);
     _ = assets.AddBitmapAsset("structured_art.bmp", .{ 0, 0 });
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Shadow);
+    assets.BeginAssetType(.Shadow);
     _ = assets.AddBitmapAsset("test/test_hero_shadow.bmp", .{ 0.5, 0.156682029 });
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Tree);
+    assets.BeginAssetType(.Tree);
     _ = assets.AddBitmapAsset("test2/tree00.bmp", .{ 0.493827164, 0.295652181 });
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Sword);
+    assets.BeginAssetType(.Sword);
     _ = assets.AddBitmapAsset("test2/rock03.bmp", .{ 0.5, 0.65625 });
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Grass);
+    assets.BeginAssetType(.Grass);
     _ = assets.AddDefaultBitmapAsset("test2/grass00.bmp");
     _ = assets.AddDefaultBitmapAsset("test2/grass01.bmp");
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Tuft);
+    assets.BeginAssetType(.Tuft);
     _ = assets.AddDefaultBitmapAsset("test2/tuft00.bmp");
     _ = assets.AddDefaultBitmapAsset("test2/tuft01.bmp");
     _ = assets.AddDefaultBitmapAsset("test2/tuft02.bmp");
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Stone);
+    assets.BeginAssetType(.Stone);
     _ = assets.AddDefaultBitmapAsset("test2/ground00.bmp");
     _ = assets.AddDefaultBitmapAsset("test2/ground01.bmp");
     _ = assets.AddDefaultBitmapAsset("test2/ground02.bmp");
@@ -1184,7 +1183,7 @@ fn WriteSounds() void {
     var assets = game_assets{};
     assets.Initialize();
 
-    assets.BeginAssetType(.Asset_Bloop);
+    assets.BeginAssetType(.Bloop);
     _ = assets.AddDefaultSoundAsset("test3/bloop_00.wav");
     _ = assets.AddDefaultSoundAsset("test3/bloop_01.wav");
     _ = assets.AddDefaultSoundAsset("test3/bloop_02.wav");
@@ -1192,22 +1191,22 @@ fn WriteSounds() void {
     _ = assets.AddDefaultSoundAsset("test3/bloop_04.wav");
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Crack);
+    assets.BeginAssetType(.Crack);
     _ = assets.AddDefaultSoundAsset("test3/crack_00.wav");
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Drop);
+    assets.BeginAssetType(.Drop);
     _ = assets.AddDefaultSoundAsset("test3/drop_00.wav");
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Glide);
+    assets.BeginAssetType(.Glide);
     _ = assets.AddDefaultSoundAsset("test3/glide_00.wav");
     assets.EndAssetType();
 
     const oneMusicChunk = 48000 * 10;
     // const totalMusicSampleCount = 48000 * 20;
     const totalMusicSampleCount = 7468095;
-    assets.BeginAssetType(.Asset_Music);
+    assets.BeginAssetType(.Music);
     var firstSampleIndex: u32 = 0;
     while (firstSampleIndex < totalMusicSampleCount) : (firstSampleIndex += oneMusicChunk) {
         var sampleCount = totalMusicSampleCount - firstSampleIndex;
@@ -1216,17 +1215,17 @@ fn WriteSounds() void {
         }
         const thisMusic = assets.AddSoundAsset("test3/music_test.wav", firstSampleIndex, sampleCount);
         if ((firstSampleIndex + oneMusicChunk) < totalMusicSampleCount) {
-            assets.assets[thisMusic.value].data.sound.chain = .HHASOUNDCHAIN_Advance;
+            assets.assets[thisMusic.value].data.sound.chain = .Advance;
         }
     }
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_Puhp);
+    assets.BeginAssetType(.Puhp);
     _ = assets.AddDefaultSoundAsset("test3/puhp_00.wav");
     _ = assets.AddDefaultSoundAsset("test3/puhp_01.wav");
     assets.EndAssetType();
 
-    assets.BeginAssetType(.Asset_test_stereo);
+    assets.BeginAssetType(.TestStereo);
     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1sec.wav");
     assets.EndAssetType();
 

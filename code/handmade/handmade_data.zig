@@ -1,65 +1,66 @@
 const h = @import("handmade_all.zig");
 
-const platform = @import("platform");
+const Platform = @import("platform");
 
 // imported types -------------------------------------------------------------------------------------------------------------------------------
 
-const world_position = h.world_ns.world_position;
-const bitmap_id = h.file_formats_ns.bitmap_id;
-const sim_entity_collision_volume_group = h.sim_region_ns.sim_entity_collision_volume_group;
+const world_position = h.World.world_position;
+const bitmap_id = h.FileFormats.bitmap_id;
+const sim_entity_collision_volume_group = h.SimRegion.sim_entity_collision_volume_group;
+const memory_index = Platform.memory_index;
 
-const assert = platform.Assert;
+const Assert = Platform.Assert;
 
 // global variables -----------------------------------------------------------------------------------------------------------------------
 
-pub var platformAPI: platform.api = undefined;
+pub var platformAPI: Platform.api = undefined;
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
 pub const memory_arena = struct {
-    size: platform.memory_index,
-    base_addr: platform.memory_index,
-    used: platform.memory_index,
+    size: memory_index,
+    base_addr: memory_index,
+    used: memory_index,
     tempCount: u32,
 
-    pub inline fn Initialize(self: *memory_arena, size: platform.memory_index, base: [*]u8) void {
+    pub inline fn Initialize(self: *memory_arena, size: memory_index, base: [*]u8) void {
         self.size = size;
         self.base_addr = @intFromPtr(base);
         self.used = 0;
         self.tempCount = 0;
     }
 
-    pub inline fn PushSize(self: *memory_arena, size: platform.memory_index) [*]align(@alignOf(u32)) u8 {
+    pub inline fn PushSize(self: *memory_arena, size: memory_index) [*]align(@alignOf(u32)) u8 {
         return self.PushSizeAlign(@alignOf(u32), size);
     }
 
-    pub inline fn PushCopy(self: *memory_arena, size: platform.memory_index, source: []const u8) [*]u8 {
-        platform.Assert(size <= source.len);
+    pub inline fn PushCopy(self: *memory_arena, size: memory_index, source: []const u8) [*]u8 {
+        Assert(size <= source.len);
         const dest = self.PushSize(size);
         Copy(size, @ptrCast(source.ptr), @ptrCast(dest));
 
         return dest;
     }
 
-    pub fn PushSizeAlign(self: *memory_arena, comptime alignment: u5, sizeInit: platform.memory_index) [*]align(alignment) u8 {
+    pub fn PushSizeAlign(self: *memory_arena, comptime alignment: u5, sizeInit: memory_index) [*]align(alignment) u8 {
         const alignmentOffset = self.GetAlignmentOffset(alignment);
 
         const size = sizeInit + alignmentOffset;
-        platform.Assert((self.used + size) <= self.size);
+        Assert((self.used + size) <= self.size);
 
         const result: [*]align(alignment) u8 = @ptrFromInt(self.base_addr + self.used + alignmentOffset);
         self.used += size;
 
-        platform.Assert(size >= sizeInit);
+        Assert(size >= sizeInit);
 
         return result;
     }
 
-    pub inline fn GetAlignmentOffset(self: *memory_arena, comptime alignment: u5) platform.memory_index {
-        return platform.GetAlignForwardOffset(self.base_addr + self.used, alignment);
+    pub inline fn GetAlignmentOffset(self: *memory_arena, comptime alignment: u5) memory_index {
+        return Platform.GetAlignForwardOffset(self.base_addr + self.used, alignment);
     }
 
-    pub inline fn GetSizeRemaining(self: *memory_arena, comptime alignment: u5) platform.memory_index {
+    pub inline fn GetSizeRemaining(self: *memory_arena, comptime alignment: u5) memory_index {
         const result = self.size - (self.used + self.GetAlignmentOffset(alignment));
 
         return result;
@@ -69,20 +70,20 @@ pub const memory_arena = struct {
         return @as(*T, @ptrCast(self.PushSizeAlign(@alignOf(T), @sizeOf(T))));
     }
 
-    pub inline fn PushSlice(self: *memory_arena, comptime T: type, count: platform.memory_index) []T {
+    pub inline fn PushSlice(self: *memory_arena, comptime T: type, count: memory_index) []T {
         return self.PushArray(T, count)[0..count];
     }
 
-    pub inline fn PushArray(self: *memory_arena, comptime T: type, count: platform.memory_index) [*]T {
+    pub inline fn PushArray(self: *memory_arena, comptime T: type, count: memory_index) [*]T {
         return @as([*]T, @ptrCast(self.PushSizeAlign(@alignOf(T), count * @sizeOf(T))));
     }
 
     pub fn CheckArena(self: *memory_arena) void {
-        platform.Assert(self.tempCount == 0);
+        Assert(self.tempCount == 0);
     }
 
     pub fn PushString(self: *memory_arena, source: [*:0]const u8) [*:0]const u8 {
-        var size: platform.memory_index = 0;
+        var size: memory_index = 0;
 
         while (source[size] != 0) : (size += 1) {}
 
@@ -100,7 +101,7 @@ pub const memory_arena = struct {
     /// Initialize arena of given `size` from `parentArena`.
     ///
     /// Defaults: `alignment = 16`
-    pub inline fn SubArena(self: *memory_arena, parentArena: *memory_arena, alignment: u5, size: platform.memory_index) void {
+    pub inline fn SubArena(self: *memory_arena, parentArena: *memory_arena, alignment: u5, size: memory_index) void {
         self.size = size;
         self.base_addr = @intFromPtr(parentArena.PushSizeAlign(alignment, size));
         self.used = 0;
@@ -110,12 +111,12 @@ pub const memory_arena = struct {
 
 pub const temporary_memory = struct {
     arena: *memory_arena,
-    used: platform.memory_index,
+    used: memory_index,
 };
 
 pub const low_entity = struct {
     p: world_position,
-    sim: h.sim_region_ns.sim_entity,
+    sim: h.SimRegion.sim_entity,
 };
 
 pub const controlled_hero = struct {
@@ -136,7 +137,7 @@ pub const pairwise_collision_rule = struct {
 
 pub const ground_buffer = struct {
     p: world_position,
-    bitmap: h.render_group_ns.loaded_bitmap,
+    bitmap: h.RenderGroup.loaded_bitmap,
 };
 
 pub const hero_bitmap_ids = struct {
@@ -166,7 +167,7 @@ pub const game_state = struct {
 
     metaArena: memory_arena,
     worldArena: memory_arena,
-    world: *h.world_ns.world,
+    world: *h.World.world,
 
     typicalFloorHeight: f32,
 
@@ -174,7 +175,7 @@ pub const game_state = struct {
     cameraP: world_position = .{},
     lastCameraP: world_position,
 
-    controlledHeroes: [platform.CONTROLLERS]controlled_hero,
+    controlledHeroes: [Platform.CONTROLLERS]controlled_hero,
 
     lowEntityCount: u32,
     lowEntities: [100000]low_entity,
@@ -193,14 +194,14 @@ pub const game_state = struct {
 
     time: f32,
 
-    testDiffuse: h.render_group_ns.loaded_bitmap,
-    testNormal: h.render_group_ns.loaded_bitmap,
+    testDiffuse: h.RenderGroup.loaded_bitmap,
+    testNormal: h.RenderGroup.loaded_bitmap,
 
-    effectsEntropy: h.random_ns.random_series,
+    effectsEntropy: h.Random.random_series,
     tSine: f32,
 
-    audioState: h.audio_ns.audio_state,
-    music: ?*h.audio_ns.playing_sound,
+    audioState: h.Audio.audio_state,
+    music: ?*h.Audio.playing_sound,
 
     nextParticle: u32,
     particles: [256]particle,
@@ -219,21 +220,21 @@ pub const transient_state = struct {
 
     tasks: [4]task_with_memory,
 
-    assets: *h.asset_ns.game_assets,
+    assets: *h.Asset.game_assets,
 
     groundBuffers: []ground_buffer,
 
-    highPriorityQueue: *platform.work_queue,
-    lowPriorityQueue: *platform.work_queue,
+    highPriorityQueue: *Platform.work_queue,
+    lowPriorityQueue: *Platform.work_queue,
 
     envMapWidth: u32,
     envMapHeight: u32,
-    envMaps: [3]h.render_group_ns.environment_map,
+    envMaps: [3]h.RenderGroup.environment_map,
 };
 
 // inline pub functions -------------------------------------------------------------------------------------------------------------------
 
-pub inline fn ZeroSize(size: platform.memory_index, ptr: [*]u8) void {
+pub inline fn ZeroSize(size: memory_index, ptr: [*]u8) void {
     @memset(ptr[0..size], 0);
 }
 
@@ -271,9 +272,9 @@ pub inline fn BeginTemporaryMemory(arena: *memory_arena) temporary_memory {
 
 pub inline fn EndTemporaryMemory(tempMem: temporary_memory) void {
     var arena = tempMem.arena;
-    platform.Assert(arena.used >= tempMem.used);
+    Assert(arena.used >= tempMem.used);
     arena.used = tempMem.used;
-    platform.Assert(tempMem.arena.tempCount > 0);
+    Assert(tempMem.arena.tempCount > 0);
     arena.tempCount -= 1;
 }
 
@@ -365,23 +366,23 @@ pub fn BeginTaskWithMemory(tranState: *transient_state) ?*task_with_memory {
 }
 
 pub fn EndTaskWithMemory(task: *task_with_memory) void {
-    h.data_ns.EndTemporaryMemory(task.memoryFlush);
+    h.Data.EndTemporaryMemory(task.memoryFlush);
 
     @atomicStore(bool, &task.beingUsed, false, .seq_cst);
 }
 
-pub inline fn ChunkPosFromTilePos(w: *h.world_ns.world, absTileX: i32, absTileY: i32, absTileZ: i32, additionalOffset: h.v3) world_position {
+pub inline fn ChunkPosFromTilePos(w: *h.World.world, absTileX: i32, absTileY: i32, absTileZ: i32, additionalOffset: h.v3) world_position {
     const basePos: world_position = .{};
 
     const tileSideInMeters = 1.4;
     const tileDepthInMeters = 3.0;
 
     const tileDim = h.v3{ tileSideInMeters, tileSideInMeters, tileDepthInMeters };
-    const offset = h.math_ns.Hammard(tileDim, h.V3(absTileX, absTileY, absTileZ));
+    const offset = h.Math.Hammard(tileDim, h.V3(absTileX, absTileY, absTileZ));
 
-    const result: world_position = h.world_ns.MapIntoChunkSpace(w, basePos, h.Add(offset, additionalOffset));
+    const result: world_position = h.World.MapIntoChunkSpace(w, basePos, h.Add(offset, additionalOffset));
 
-    assert(h.world_ns.IsCanonical(w, result.offset_));
+    Assert(h.World.IsCanonical(w, result.offset_));
 
     return result;
 }

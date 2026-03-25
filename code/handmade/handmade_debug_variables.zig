@@ -1,25 +1,25 @@
-const debug = @import("handmade_debug.zig");
-const config = @import("handmade_config.zig");
+const Debug = @import("handmade_debug.zig");
+const Config = @import("handmade_config.zig");
 const h = @import("handmade_all.zig");
 
 const platform = @import("platform");
 
-const debug_state = debug.debug_state;
-const debug_variable = debug.debug_variable;
-const debug_variable_type = debug.debug_variable_type;
-const debug_variable_group = debug.debug_variable_group;
-const debug_variable_reference = debug.debug_variable_reference;
+const debug_state = Debug.debug_state;
+const debug_variable = Debug.debug_variable;
+const debug_variable_type = Debug.debug_variable_type;
+const debug_variable_group = Debug.debug_variable_group;
+const debug_variable_reference = Debug.debug_variable_reference;
 
 pub const debug_variable_definition_context = struct {
     state: *debug_state,
-    arena: *h.data_ns.memory_arena,
+    arena: *h.Data.memory_arena,
 
     group: ?*debug_variable_reference,
 };
 
 fn AddUnreferencedVariable(
     state: *debug_state,
-    comptime t: debug.debug_variable_type,
+    comptime t: Debug.debug_variable_type,
     comptime name: [:0]const u8,
 ) *debug_variable {
     var debugVar: *debug_variable = state.debugArena.PushStruct(debug_variable);
@@ -138,7 +138,7 @@ pub fn DEBUGEndVariableGroup(context: *debug_variable_definition_context) void {
 
 inline fn VariableListing(context: *debug_variable_definition_context, comptime name: [:0]const u8) *debug_variable_reference {
     const debug_name = "DEBUGUI_" ++ name;
-    const config_variable = @field(config, debug_name);
+    const config_variable = @field(Config, debug_name);
 
     const t: debug_variable_type = comptime switch (@TypeOf(config_variable)) {
         bool => .bool,
@@ -148,7 +148,7 @@ inline fn VariableListing(context: *debug_variable_definition_context, comptime 
         h.v2 => .v2,
         h.v3 => .v3,
         h.v4 => .v4,
-        h.file_formats_ns.bitmap_id => .bitmapDisplay,
+        h.FileFormats.bitmap_id => .bitmapDisplay,
         else => platform.InvalidCodePath("Unsupported debug variable type"),
     };
 

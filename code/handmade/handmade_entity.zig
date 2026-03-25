@@ -1,12 +1,11 @@
 const h = @import("handmade_all.zig");
 
 // imported types -------------------------------------------------------------------------------------------------------------------------------
-const platform = @import("platform");
-const assert = platform.Assert;
-const math = h.math_ns;
+const Platform = @import("platform");
+const Assert = Platform.Assert;
 
-const sim_entity = h.sim_region_ns.sim_entity;
-const sim_entity_flags = h.sim_region_ns.sim_entity_flags;
+const sim_entity = h.SimRegion.sim_entity;
+const sim_entity_flags = h.SimRegion.sim_entity_flags;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
@@ -50,16 +49,16 @@ pub inline fn GetEntityGroundPoint(entity: *sim_entity) h.v3 {
 }
 
 pub inline fn GetStairGround(entity: *sim_entity, atGroundPoint: h.v3) f32 {
-    assert(entity.entityType == .Stairwell);
+    Assert(entity.entityType == .Stairwell);
     const regionRect = h.rect2.InitCenterDim(h.XY(entity.p), entity.walkableDim);
-    const bary = h.math_ns.ClampV201(regionRect.GetBarycentric(h.XY(atGroundPoint)));
+    const bary = h.Math.ClampV201(regionRect.GetBarycentric(h.XY(atGroundPoint)));
     const result = h.Z(entity.p) + h.Y(bary) * entity.walkableHeight;
 
     return result;
 }
 
-pub inline fn DefaultMoveSpec() h.sim_region_ns.move_spec {
-    const result = h.sim_region_ns.move_spec{
+pub inline fn DefaultMoveSpec() h.SimRegion.move_spec {
+    const result = h.SimRegion.move_spec{
         .unitMaxAccelVector = false,
         .speed = 1,
         .drag = 0,

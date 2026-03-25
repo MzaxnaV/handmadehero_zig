@@ -4,10 +4,10 @@ const h = @import("handmade_all.zig");
 
 const testing = std.testing;
 
-const intrinsics = h.intrinsics_ns;
-const data = h.data_ns;
-const math = h.math_ns;
-const random = h.random_ns;
+const intrinsics = h.Intrinsics;
+const data = h.Data;
+const math = h.Math;
+const random = h.Random;
 
 test "language" {
     try testing.expectEqual(@divTrunc(-10, 21), 0);

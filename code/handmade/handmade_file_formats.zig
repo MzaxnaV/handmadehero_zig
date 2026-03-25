@@ -13,43 +13,43 @@ pub const HHA_MAGIC_VALUE = HHA_CODE('h', 'h', 'a', 'f');
 pub const HHA_VERSION = 0;
 
 pub const asset_type_id = enum(u32) {
-    Asset_NONE = 0,
+    None = 0,
 
     //
     // Bitmaps
     //
 
-    Asset_Test_Bitmap,
+    TestBitmap,
 
-    Asset_Shadow,
-    Asset_Tree,
-    Asset_Sword,
-    // Asset_Stairwell,
-    Asset_Rock,
+    Shadow,
+    Tree,
+    Sword,
+    // Stairwell,
+    Rock,
 
-    Asset_Grass,
-    Asset_Tuft,
-    Asset_Stone,
+    Grass,
+    Tuft,
+    Stone,
 
-    Asset_Head,
-    Asset_Cape,
-    Asset_Torso,
+    Head,
+    Cape,
+    Torso,
 
-    Asset_Font,
-    Asset_FontGlyph,
+    Font,
+    FontGlyph,
 
     //
     // Sounds
     //
 
-    Asset_Bloop,
-    Asset_Crack,
-    Asset_Drop,
-    Asset_Glide,
-    Asset_Music,
-    Asset_Puhp,
+    Bloop,
+    Crack,
+    Drop,
+    Glide,
+    Music,
+    Puhp,
 
-    Asset_test_stereo,
+    TestStereo,
 
     pub fn count() comptime_int {
         comptime {
@@ -59,16 +59,16 @@ pub const asset_type_id = enum(u32) {
 };
 
 pub const asset_font_type = enum(u32) {
-    FontType_Default = 0,
-    FontType_Debug = 10,
+    Default = 0,
+    Debug = 10,
 };
 
 pub const asset_tag_id = enum {
-    Tag_Smoothness,
-    Tag_Flatness,
-    Tag_FacingDirection,
-    Tag_UnicodeCodepoint,
-    Tag_FontType,
+    Smoothness,
+    Flatness,
+    FacingDirection,
+    UnicodeCodepoint,
+    FontType,
 
     pub fn len() comptime_int {
         comptime {
@@ -141,9 +141,9 @@ pub const hha_asset_type = extern struct {
 };
 
 pub const hha_sound_chain = enum(u32) {
-    HHASOUNDCHAIN_None,
-    HHASOUNDCHAIN_Loop,
-    HHASOUNDCHAIN_Advance,
+    None,
+    Loop,
+    Advance,
 };
 
 pub const hha_bitmap = extern struct {

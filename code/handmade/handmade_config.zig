@@ -1,7 +1,7 @@
-const math = @import("handmade_math.zig");
-const v2 = math.v2;
-const v3 = math.v3;
-const v4 = math.v4;
+const Math = @import("handmade_math.zig");
+const v2 = Math.v2;
+const v3 = Math.v3;
+const v4 = Math.v4;
 
 // pub const DEBUGUI_Debugging: group = ;
 	// pub const DEBUGUI_Ground Chunks: group = ;

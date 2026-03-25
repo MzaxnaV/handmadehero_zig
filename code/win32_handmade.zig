@@ -1,7 +1,7 @@
 pub const UNICODE = true;
 
 const std = @import("std");
-const platform = @import("platform");
+const Platform = @import("platform");
 
 const win32 = @import("win32").everything;
 
@@ -26,8 +26,8 @@ const DWORD = std.os.windows.DWORD;
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 
-const ignore = platform.ignore;
-const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
+const IGNORE = Platform.IGNORE;
+const HANDMADE_INTERNAL = Platform.HANDMADE_INTERNAL;
 const WIN32_STATE_FILE_NAME_COUNT = win32.MAX_PATH;
 
 const allocationReserveCommit = win32.VIRTUAL_ALLOCATION_TYPE{ .RESERVE = 1, .COMMIT = 1 }; // = @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT));
@@ -90,9 +90,9 @@ const win32_debug_time_marker = struct {
 const win32_game_code = struct {
     gameCodeDLL: ?win32.HINSTANCE = null,
     dllLastWriteTime: win32.FILETIME = undefined,
-    UpdateAndRender: ?platform.UpdateAndRenderFnPtrType = null,
-    GetSoundSamples: ?platform.GetSoundSamplesFnPtrType = null,
-    DEBUGFrameEnd: ?platform.DEBUGFrameEndsFnPtrType = null,
+    UpdateAndRender: ?Platform.UpdateAndRenderFnPtrType = null,
+    GetSoundSamples: ?Platform.GetSoundSamplesFnPtrType = null,
+    DEBUGFrameEnd: ?Platform.DEBUGFrameEndsFnPtrType = null,
 
     isValid: bool = false,
 };
@@ -172,14 +172,14 @@ fn DEBUGPlatformFreeFileMemory(memory: *anyopaque) void {
     _ = win32.VirtualFree(memory, 0, win32.MEM_RELEASE);
 }
 
-fn DEBUGPlatformReadEntireFile(filename: [*:0]const u8) platform.debug_read_file_result {
-    var result = platform.debug_read_file_result{};
+fn DEBUGPlatformReadEntireFile(filename: [*:0]const u8) Platform.debug_read_file_result {
+    var result = Platform.debug_read_file_result{};
     const fileHandle = win32.CreateFileA(filename, win32.FILE_GENERIC_READ, win32.FILE_SHARE_READ, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
 
     if (fileHandle != win32.INVALID_HANDLE_VALUE) {
         var fileSize = win32.LARGE_INTEGER{ .QuadPart = 0 };
         if (win32.GetFileSizeEx(fileHandle, &fileSize) != 0) {
-            const fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @as(u32, @intCast(fileSize.QuadPart)) else platform.InvalidCodePath("");
+            const fileSize32 = if (fileSize.QuadPart < 0xFFFFFFFF) @as(u32, @intCast(fileSize.QuadPart)) else Platform.InvalidCodePath("");
             if (win32.VirtualAlloc(null, fileSize32, allocationReserveCommit, win32.PAGE_READWRITE)) |data| {
                 var bytesRead: DWORD = 0;
                 if (win32.ReadFile(fileHandle, data, fileSize32, &bytesRead, null) != 0 and fileSize32 == bytesRead) {
@@ -222,8 +222,8 @@ fn DEBUGPlatformWriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory
     return result;
 }
 
-fn DEBUGExecuteSystemCommand(path: [*:0]const u8, command: [*:0]const u8, commandline: [*:0]const u8) platform.debug_executing_process {
-    var result: platform.debug_executing_process = .{};
+fn DEBUGExecuteSystemCommand(path: [*:0]const u8, command: [*:0]const u8, commandline: [*:0]const u8) Platform.debug_executing_process {
+    var result: Platform.debug_executing_process = .{};
 
     var startUpInfo = std.mem.zeroes(win32.STARTUPINFOA);
     startUpInfo.cb = @sizeOf(win32.STARTUPINFOA);
@@ -244,7 +244,7 @@ fn DEBUGExecuteSystemCommand(path: [*:0]const u8, command: [*:0]const u8, comman
         &startUpInfo,
         &processInfo,
     ) != 0) {
-        // platform.Assert(@sizeOf(result.osHandle) >= @sizeOf(processInfo.hProcess));
+        // Platform.Assert(@sizeOf(result.osHandle) >= @sizeOf(processInfo.hProcess));
         const ptr: *win32.HANDLE = @ptrCast(&result.osHandle);
         ptr.* = processInfo.hProcess.?;
     } else {
@@ -256,8 +256,8 @@ fn DEBUGExecuteSystemCommand(path: [*:0]const u8, command: [*:0]const u8, comman
     return result;
 }
 
-fn DEBUGGetProcessState(process: platform.debug_executing_process) platform.debug_executing_state {
-    var result: platform.debug_executing_state = .{};
+fn DEBUGGetProcessState(process: Platform.debug_executing_process) Platform.debug_executing_state {
+    var result: Platform.debug_executing_state = .{};
 
     const hProcess: *const win32.HANDLE = @ptrCast(&process.osHandle);
     if (hProcess.* != win32.INVALID_HANDLE_VALUE) {
@@ -488,7 +488,7 @@ fn Win32ResizeDIBSection(buffer: *win32_offscreen_buffer, width: u32, height: u3
     buffer.info.bmiHeader.biBitCount = 32;
     buffer.info.bmiHeader.biCompression = win32.BI_RGB;
 
-    buffer.pitch = platform.Align(@as(usize, @intCast(width)) * bytesPerPixel, @alignOf(u16));
+    buffer.pitch = Platform.Align(@as(usize, @intCast(width)) * bytesPerPixel, @alignOf(u16));
 
     const bitmapMemorySize: usize = buffer.pitch * buffer.height;
     buffer.memory = win32.VirtualAlloc(null, bitmapMemorySize, allocationReserveCommit, win32.PAGE_READWRITE);
@@ -515,7 +515,7 @@ fn Win32DisplayBufferInWindow(buffer: *win32_offscreen_buffer, deviceContext: wi
         var offsetX: i32 = 0;
         var offsetY: i32 = 0;
 
-        if (ignore) {
+        if (IGNORE) {
             offsetX = 10;
             offsetY = 10;
 
@@ -558,7 +558,7 @@ fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32
         },
 
         win32.WM_ACTIVATEAPP => {
-            if (ignore) {
+            if (IGNORE) {
                 if (wParam == win32.TRUE) {
                     _ = win32.SetLayeredWindowAttributes(windowHandle, @as(u32, @bitCast(win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 })), 255, win32.LWA_ALPHA);
                 } else {
@@ -570,7 +570,7 @@ fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32
         win32.WM_DESTROY => globalRunning = false,
 
         win32.WM_KEYDOWN, win32.WM_KEYUP, win32.WM_SYSKEYDOWN, win32.WM_SYSKEYUP => {
-            platform.InvalidCodePath("Keyboard input came in through a non-dispatch message!");
+            Platform.InvalidCodePath("Keyboard input came in through a non-dispatch message!");
         },
         win32.WM_PAINT => {
             var paint: win32.PAINTSTRUCT = undefined;
@@ -614,7 +614,7 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
     }
 }
 
-fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, bytesToWrite: DWORD, sourceBuffer: *platform.sound_output_buffer) void {
+fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, bytesToWrite: DWORD, sourceBuffer: *Platform.sound_output_buffer) void {
     var region1: ?*anyopaque = undefined;
     var region1Size: DWORD = undefined;
     var region2: ?*anyopaque = undefined;
@@ -651,14 +651,14 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
     }
 }
 
-fn Win32ProcessKeyboardMessage(newState: *platform.button_state, isDown: u32) void {
+fn Win32ProcessKeyboardMessage(newState: *Platform.button_state, isDown: u32) void {
     if (newState.endedDown != isDown) {
         newState.endedDown = isDown;
         newState.halfTransitionCount += 1;
     }
 }
 
-fn Win32ProcessXinputDigitalButton(xInputButtonState: DWORD, oldState: *platform.button_state, buttonBit: DWORD, newState: *platform.button_state) void {
+fn Win32ProcessXinputDigitalButton(xInputButtonState: DWORD, oldState: *Platform.button_state, buttonBit: DWORD, newState: *Platform.button_state) void {
     newState.endedDown = @as(u32, @intFromBool((xInputButtonState & buttonBit) == buttonBit));
     newState.halfTransitionCount = if (oldState.endedDown != newState.endedDown) 1 else 0;
 }
@@ -709,7 +709,7 @@ fn Win32BeginRecordingInput(state: *win32_state, inputRecordingIndex: u32) void 
             std.debug.print("Failed to create File Handle: {s}\n", .{"Win32BeginRecordingInput"});
         }
 
-        if (ignore) {
+        if (IGNORE) {
             var filePosition: win32.LARGE_INTEGER = undefined;
             filePosition.QuadPart = state.totalSize;
             _ = win32.SetFilePointerEx(state.recordingHandle, filePosition, null, win32.FILE_BEGIN);
@@ -741,7 +741,7 @@ fn Win32BeginInputPlayBack(state: *win32_state, inputPlayingIndex: u32) void {
             std.debug.print("Failed to create File Handle: {s}\n", .{"Win32BeginInputPlayBack"});
         }
 
-        if (ignore) {
+        if (IGNORE) {
             var filePosition: win32.LARGE_INTEGER = undefined;
             filePosition.QuadPart = state.totalSize;
             _ = win32.SetFilePointerEx(state.playBackHandle, filePosition, null, win32.FILE_BEGIN);
@@ -756,12 +756,12 @@ fn Win32EndInputPlayBack(state: *win32_state) void {
     state.inputPlayingIndex = 0;
 }
 
-fn Win32RecordInput(state: *win32_state, newInput: *platform.input) void {
+fn Win32RecordInput(state: *win32_state, newInput: *Platform.input) void {
     var bytesWritten = @as(DWORD, 0);
     _ = win32.WriteFile(state.recordingHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesWritten, null);
 }
 
-fn Win32PlayBackInput(state: *win32_state, newInput: *platform.input) void {
+fn Win32PlayBackInput(state: *win32_state, newInput: *Platform.input) void {
     var bytesRead = @as(DWORD, 0);
     if (win32.ReadFile(state.playBackHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesRead, null) != win32.FALSE) {
         if (bytesRead == 0) {
@@ -808,7 +808,7 @@ fn ToggleFullscreen(window: win32.HWND) void {
     }
 }
 
-fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platform.controller_input) void {
+fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *Platform.controller_input) void {
     var message: win32.MSG = undefined;
     while (win32.PeekMessageW(&message, null, 0, 0, win32.PM_REMOVE) != 0) {
         switch (message.message) {
@@ -879,7 +879,7 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *platfor
     }
 }
 
-// fn HandleDebugCycleCounters(_: *platform.memory) void {
+// fn HandleDebugCycleCounters(_: *Platform.memory) void {
 //     if (HANDMADE_INTERNAL) {
 //         _ = win32.OutputDebugStringW(win32.L("DEBUG CYCLE COUNTS:\n"));
 //         for (&gameMemory.counters) |*counter| {
@@ -926,7 +926,7 @@ inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) vo
     // }
 }
 
-// ignore:
+// IGNORE:
 // fn Win32DebugDrawVertical(backBuffer: *win32_offscreen_buffer, x: u32, top: u32, bottom: u32, colour: u32) void {
 //     var safeTop = top;
 //     var safeBottom = bottom;
@@ -1009,7 +1009,7 @@ inline fn CopyMemory(dest: *anyopaque, source: *const anyopaque, size: usize) vo
 // main -----------------------------------------------------------------------------------------------------------------------------------
 
 const win32_work_queue_entry = struct {
-    callback: ?platform.work_queue_callback = null,
+    callback: ?Platform.work_queue_callback = null,
     data: ?*anyopaque = null,
 };
 
@@ -1047,16 +1047,16 @@ const win32_work_queue = struct {
         }
     }
 
-    fn from(queue: *platform.work_queue) *Self {
+    fn from(queue: *Platform.work_queue) *Self {
         return @ptrCast(@alignCast(queue));
     }
 
-    fn to(self: *Self) *platform.work_queue {
+    fn to(self: *Self) *Platform.work_queue {
         return @ptrCast(self);
     }
 };
 
-fn Win32AddEntry(q: *platform.work_queue, callback: platform.work_queue_callback, data: *anyopaque) void {
+fn Win32AddEntry(q: *Platform.work_queue, callback: Platform.work_queue_callback, data: *anyopaque) void {
     const queue = win32_work_queue.from(q);
 
     const newNextEntryToWrite: u32 = ((queue.nextEntryToWrite.raw + 1) % @as(u32, queue.entries.len));
@@ -1091,7 +1091,7 @@ fn Win32DoNextWorkQueueEntry(queue: *win32_work_queue) bool {
     return weShouldSleep;
 }
 
-fn Win32CompleteAllWork(q: *platform.work_queue) void {
+fn Win32CompleteAllWork(q: *Platform.work_queue) void {
     const queue = win32_work_queue.from(q);
     while (queue.completionGoal.raw != queue.completionCount.raw) {
         _ = Win32DoNextWorkQueueEntry(queue);
@@ -1104,9 +1104,9 @@ fn Win32CompleteAllWork(q: *platform.work_queue) void {
 fn ThreadProc(lpParameter: ?*anyopaque) callconv(.winapi) DWORD {
     const queue: *win32_work_queue = @ptrCast(@alignCast(lpParameter.?));
 
-    const testThreadID = platform.GetThreadID();
+    const testThreadID = Platform.GetThreadID();
 
-    platform.Assert(testThreadID == std.os.windows.GetCurrentThreadId());
+    Platform.Assert(testThreadID == std.os.windows.GetCurrentThreadId());
 
     while (true) {
         if (Win32DoNextWorkQueueEntry(queue)) {
@@ -1117,7 +1117,7 @@ fn ThreadProc(lpParameter: ?*anyopaque) callconv(.winapi) DWORD {
     return 0;
 }
 
-fn DoWorkerWork(_: ?*platform.work_queue, data: *anyopaque) void {
+fn DoWorkerWork(_: ?*Platform.work_queue, data: *anyopaque) void {
     var buffer = [1:0]u8{0} ** 256;
 
     std.debug.print("Thread {}: {s}\n", .{ win32.GetCurrentThreadId(), @as([*:0]const u8, @ptrCast(data)) });
@@ -1133,8 +1133,8 @@ const win32_platform_file_group = extern struct {
     findData: win32.WIN32_FIND_DATAW,
 };
 
-fn Win32GetAllFilesOfTypeBegin(fileType: platform.file_type) platform.file_group {
-    var result = platform.file_group{ .fileCount = 0, .platform = null };
+fn Win32GetAllFilesOfTypeBegin(fileType: Platform.file_type) Platform.file_group {
+    var result = Platform.file_group{ .fileCount = 0, .platform = null };
 
     var win32FileGroup: *win32_platform_file_group = @ptrCast(@alignCast(win32.VirtualAlloc(
         null,
@@ -1168,7 +1168,7 @@ fn Win32GetAllFilesOfTypeBegin(fileType: platform.file_type) platform.file_group
     return result;
 }
 
-fn Win32GetAllFilesOfTypeEnd(fileGroup: *platform.file_group) void {
+fn Win32GetAllFilesOfTypeEnd(fileGroup: *Platform.file_group) void {
     const win32FileGroup: ?*win32_platform_file_group = @ptrCast(@alignCast(fileGroup.platform));
     if (win32FileGroup) |_| {
         _ = win32.FindClose(win32FileGroup.?.fileHandle);
@@ -1177,10 +1177,10 @@ fn Win32GetAllFilesOfTypeEnd(fileGroup: *platform.file_group) void {
     }
 }
 
-fn Win32OpenNextFile(fileGroup: *platform.file_group) platform.file_handle {
+fn Win32OpenNextFile(fileGroup: *Platform.file_group) Platform.file_handle {
     var win32FileGroup: *win32_platform_file_group = @ptrCast(@alignCast(fileGroup.platform));
 
-    var result: platform.file_handle = .{ .noErrors = false, .platform = null };
+    var result: Platform.file_handle = .{ .noErrors = false, .platform = null };
 
     if (win32FileGroup.fileHandle != INVALID_FIND_HANDLE_VALUE) {
         const win32Handle: ?*win32_platform_file_handle = @ptrCast(@alignCast(win32.VirtualAlloc(
@@ -1208,8 +1208,8 @@ fn Win32OpenNextFile(fileGroup: *platform.file_group) platform.file_handle {
     return result;
 }
 
-fn Win32ReadDataFromFile(source: *platform.file_handle, offset: u64, size: u64, dest: *anyopaque) void {
-    if (platform.NoFileErrors(source)) {
+fn Win32ReadDataFromFile(source: *Platform.file_handle, offset: u64, size: u64, dest: *anyopaque) void {
+    if (Platform.NoFileErrors(source)) {
         const handle: *win32_platform_file_handle = @ptrCast(@alignCast(source.platform.?));
 
         var overlapped = win32.OVERLAPPED{
@@ -1231,7 +1231,7 @@ fn Win32ReadDataFromFile(source: *platform.file_handle, offset: u64, size: u64, 
     }
 }
 
-fn Win32FileError(source: *platform.file_handle, message: [:0]const u8) void {
+fn Win32FileError(source: *Platform.file_handle, message: [:0]const u8) void {
     if (HANDMADE_INTERNAL) {
         _ = win32.OutputDebugStringA("Win32 File Error: ");
 
@@ -1243,7 +1243,7 @@ fn Win32FileError(source: *platform.file_handle, message: [:0]const u8) void {
     source.noErrors = false;
 }
 
-fn Win32AllocateMemory(size: platform.memory_index) ?*anyopaque {
+fn Win32AllocateMemory(size: Platform.memory_index) ?*anyopaque {
     const memory = win32.VirtualAlloc(null, size, allocationReserveCommit, win32.PAGE_READWRITE);
     return memory;
 }
@@ -1252,11 +1252,11 @@ fn Win32DeallocateMemory(memory: ?*anyopaque) void {
     _ = win32.VirtualFree(memory, 0, win32.MEM_RELEASE);
 }
 
-// fn Win32CloseFile(fileHandle: *platform.file_handle) void {
+// fn Win32CloseFile(fileHandle: *Platform.file_handle) void {
 //     _ = win32.CloseHandle(fileHandle);
 // }
 
-var globalDebugTable_: platform.debug_table = .{};
+var globalDebugTable_: Platform.debug_table = .{};
 
 pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0]u16, _: u32) callconv(.winapi) c_int {
     var win32State = win32_state{
@@ -1271,7 +1271,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
     var lowPriorityQueue = win32_work_queue{};
     lowPriorityQueue.MakeQueue(1);
 
-    if (ignore) {
+    if (IGNORE) {
         var a0 = "String A0".*;
         var a1 = "String A1".*;
         var a2 = "String A2".*;
@@ -1412,7 +1412,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
             globalRunning = true;
 
-            if (ignore) {
+            if (IGNORE) {
                 while (globalRunning) {
                     var playCursor: DWORD = 0;
                     var writeCursor: DWORD = 0;
@@ -1424,22 +1424,22 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             const samples: ?*anyopaque = win32.VirtualAlloc(null, soundOutput.secondaryBufferSize + maxPossibleOverrun, allocationReserveCommit, win32.PAGE_READWRITE);
             // defer _ = win32.VirtualFree();
 
-            const baseAddress: ?[*]u8 = if (HANDMADE_INTERNAL) @ptrFromInt(platform.TeraBytes(2)) else null;
+            const baseAddress: ?[*]u8 = if (HANDMADE_INTERNAL) @ptrFromInt(Platform.TeraBytes(2)) else null;
 
-            var gameMemory = platform.memory{
-                .permanentStorageSize = platform.MegaBytes(256),
+            var gameMemory = Platform.memory{
+                .permanentStorageSize = Platform.MegaBytes(256),
                 .permanentStorage = undefined,
 
-                .transientStorageSize = platform.GigaBytes(1),
+                .transientStorageSize = Platform.GigaBytes(1),
                 .transientStorage = undefined,
 
-                .debugStorageSize = platform.MegaBytes(64),
+                .debugStorageSize = Platform.MegaBytes(64),
                 .debugStorage = null,
 
                 .highPriorityQueue = highPriorityQueue.to(),
                 .lowPriorityQueue = lowPriorityQueue.to(),
 
-                .platformAPI = platform.api{
+                .platformAPI = Platform.api{
                     .AddEntry = Win32AddEntry,
                     .CompleteAllWork = Win32CompleteAllWork,
 
@@ -1511,10 +1511,10 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             }
 
             if (samples != null) {
-                var inputs = [1]platform.input{platform.input{}} ** 2;
+                var inputs = [1]Platform.input{Platform.input{}} ** 2;
 
-                var newInput: *platform.input = &inputs[0];
-                var oldInput: *platform.input = &inputs[1];
+                var newInput: *Platform.input = &inputs[0];
+                var oldInput: *Platform.input = &inputs[1];
 
                 var lastCounter = Win32GetWallClock();
                 var flipWallClock = Win32GetWallClock();
@@ -1534,9 +1534,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     //
                     //
 
-                    platform.BEGIN_BLOCK("ExecutableRefresh");
+                    Platform.BEGIN_BLOCK("ExecutableRefresh");
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.BEGIN_BLOCK__impl(0, @src(), "ExecutableRefresh");
+                    Platform.BEGIN_BLOCK__impl(0, @src(), "ExecutableRefresh");
                     // AUTOGENERATED ----------------------------------------------------------
 
                     newInput.dtForFrame = targetSecondsPerFrame;
@@ -1547,29 +1547,29 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         Win32CompleteAllWork(@ptrCast(&highPriorityQueue));
                         Win32CompleteAllWork(@ptrCast(&lowPriorityQueue));
 
-                        platform.globalDebugTable = &globalDebugTable_;
+                        Platform.globalDebugTable = &globalDebugTable_;
                         Win32UnloadGameCode(&gameCode);
                         gameCode = Win32LoadGameCode(&sourceGameCodeDLLFullPath, &tempGameCodeDLLFullPath, &gameCodeLockFullPath);
                         gameMemory.executableReloaded = true;
                     }
-                    platform.END_BLOCK("ExecutableRefresh");
+                    Platform.END_BLOCK("ExecutableRefresh");
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.END_BLOCK__impl(0, "ExecutableRefresh");
+                    Platform.END_BLOCK__impl(0, "ExecutableRefresh");
                     // AUTOGENERATED ----------------------------------------------------------
 
                     //
                     //
                     //
 
-                    platform.BEGIN_BLOCK("InputProcessing");
+                    Platform.BEGIN_BLOCK("InputProcessing");
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.BEGIN_BLOCK__impl(1, @src(), "InputProcessing");
+                    Platform.BEGIN_BLOCK__impl(1, @src(), "InputProcessing");
                     // AUTOGENERATED ----------------------------------------------------------
 
-                    const oldKeyboardController: *platform.controller_input = &oldInput.controllers[0];
-                    const newKeyboardController: *platform.controller_input = &newInput.controllers[0];
+                    const oldKeyboardController: *Platform.controller_input = &oldInput.controllers[0];
+                    const newKeyboardController: *Platform.controller_input = &newInput.controllers[0];
 
-                    newKeyboardController.* = platform.controller_input{
+                    newKeyboardController.* = Platform.controller_input{
                         .isConnected = true,
                     };
 
@@ -1588,7 +1588,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         newInput.mouseY = (0.5 * @as(f32, @floatFromInt(globalBackBuffer.height)) - 0.5) - @as(f32, @floatFromInt(mouseP.y));
                         newInput.mouseZ = 0;
 
-                        const winButtonID: [platform.input_mouse_button.len()]i32 = .{
+                        const winButtonID: [Platform.input_mouse_button.len()]i32 = .{
                             @intFromEnum(win32.VK_LBUTTON),
                             @intFromEnum(win32.VK_MBUTTON),
                             @intFromEnum(win32.VK_RBUTTON),
@@ -1596,7 +1596,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             @intFromEnum(win32.VK_XBUTTON2),
                         };
 
-                        for (0..platform.input_mouse_button.len()) |buttonIndex| {
+                        for (0..Platform.input_mouse_button.len()) |buttonIndex| {
                             newInput.mouseButtons[buttonIndex] = oldInput.mouseButtons[buttonIndex];
                             newInput.mouseButtons[buttonIndex].halfTransitionCount = 0;
 
@@ -1695,22 +1695,22 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    platform.END_BLOCK("InputProcessing");
+                    Platform.END_BLOCK("InputProcessing");
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.END_BLOCK__impl(1, "InputProcessing");
+                    Platform.END_BLOCK__impl(1, "InputProcessing");
                     // AUTOGENERATED ----------------------------------------------------------
 
                     //
                     //
                     //
 
-                    platform.BEGIN_BLOCK("GameUpdate");
+                    Platform.BEGIN_BLOCK("GameUpdate");
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.BEGIN_BLOCK__impl(2, @src(), "GameUpdate");
+                    Platform.BEGIN_BLOCK__impl(2, @src(), "GameUpdate");
                     // AUTOGENERATED ----------------------------------------------------------
 
                     if (!globalPause) {
-                        var buffer = platform.offscreen_buffer{
+                        var buffer = Platform.offscreen_buffer{
                             .memory = globalBackBuffer.memory,
                             .width = globalBackBuffer.width,
                             .height = globalBackBuffer.height,
@@ -1737,18 +1737,18 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    platform.END_BLOCK("GameUpdate");
+                    Platform.END_BLOCK("GameUpdate");
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.END_BLOCK__impl(2, "GameUpdate");
+                    Platform.END_BLOCK__impl(2, "GameUpdate");
                     // AUTOGENERATED ----------------------------------------------------------
 
                     //
                     //
                     //
 
-                    platform.BEGIN_BLOCK("AudioUpdate");
+                    Platform.BEGIN_BLOCK("AudioUpdate");
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.BEGIN_BLOCK__impl(3, @src(), "AudioUpdate");
+                    Platform.BEGIN_BLOCK__impl(3, @src(), "AudioUpdate");
                     // AUTOGENERATED ----------------------------------------------------------
 
                     if (!globalPause) {
@@ -1799,9 +1799,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 bytesToWrite = targetCursor - byteToLock;
                             }
 
-                            var soundBuffer = platform.sound_output_buffer{
+                            var soundBuffer = Platform.sound_output_buffer{
                                 .samplesPerSecond = soundOutput.samplesPerSecond,
-                                .sampleCount = @intCast(platform.Align(bytesToWrite / soundOutput.bytesPerSample, 8)),
+                                .sampleCount = @intCast(Platform.Align(bytesToWrite / soundOutput.bytesPerSample, 8)),
                                 .samples = @ptrCast(@alignCast(samples)),
                             };
 
@@ -1828,7 +1828,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 audioLatencyBytes = unwrappedWriteCursor - playCursor;
                                 audioLatencySeconds = (@as(f32, @floatFromInt(audioLatencyBytes)) / @as(f32, @floatFromInt(soundOutput.bytesPerSample))) / @as(f32, @floatFromInt(soundOutput.samplesPerSecond));
 
-                                if (ignore) {
+                                if (IGNORE) {
                                     var textbuffer = [1:0]u8{0} ** 256;
                                     std.fmt.bufPrintZ(textbuffer[0.. :0], "BTL:{} TC:{} BTW:{} - PC:{} WC:{} DELTA:{} ({}s)", .{
                                         byteToLock,
@@ -1850,19 +1850,19 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         }
                     }
 
-                    platform.END_BLOCK("AudioUpdate");
+                    Platform.END_BLOCK("AudioUpdate");
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.END_BLOCK__impl(3, "AudioUpdate");
+                    Platform.END_BLOCK__impl(3, "AudioUpdate");
                     // AUTOGENERATED ----------------------------------------------------------
 
                     //
                     //
                     //
 
-                    if (platform.ignore) {
-                        platform.BEGIN_BLOCK("FramerateWait");
+                    if (Platform.IGNORE) {
+                        Platform.BEGIN_BLOCK("FramerateWait");
                         // AUTOGENERATED ----------------------------------------------------------
-                        platform.BEGIN_BLOCK__impl(4, @src(), "FramerateWait");
+                        Platform.BEGIN_BLOCK__impl(4, @src(), "FramerateWait");
                         // AUTOGENERATED ----------------------------------------------------------
 
                         if (!globalPause) {
@@ -1891,9 +1891,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             }
                         }
 
-                        platform.END_BLOCK("FramerateWait");
+                        Platform.END_BLOCK("FramerateWait");
                         // AUTOGENERATED ----------------------------------------------------------
-                        platform.END_BLOCK__impl(4, "FramerateWait");
+                        Platform.END_BLOCK__impl(4, "FramerateWait");
                         // AUTOGENERATED ----------------------------------------------------------
                     }
 
@@ -1901,9 +1901,9 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     //
                     //
 
-                    platform.BEGIN_BLOCK("FrameDisplay");
+                    Platform.BEGIN_BLOCK("FrameDisplay");
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.BEGIN_BLOCK__impl(5, @src(), "FrameDisplay");
+                    Platform.BEGIN_BLOCK__impl(5, @src(), "FrameDisplay");
                     // AUTOGENERATED ----------------------------------------------------------
 
                     const dimension = Win32GetWindowDimenstion(windowHandle);
@@ -1920,40 +1920,40 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                     newInput = oldInput;
                     oldInput = temp;
 
-                    platform.END_BLOCK("FrameDisplay");
+                    Platform.END_BLOCK("FrameDisplay");
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.END_BLOCK__impl(5, "FrameDisplay");
+                    Platform.END_BLOCK__impl(5, "FrameDisplay");
                     // AUTOGENERATED ----------------------------------------------------------
 
                     if (HANDMADE_INTERNAL) {
-                        platform.BEGIN_BLOCK("DebugCollation");
+                        Platform.BEGIN_BLOCK("DebugCollation");
                         // AUTOGENERATED ----------------------------------------------------------
-                        platform.BEGIN_BLOCK__impl(6, @src(), "DebugCollation");
+                        Platform.BEGIN_BLOCK__impl(6, @src(), "DebugCollation");
                         // AUTOGENERATED ----------------------------------------------------------
 
                         if (gameCode.DEBUGFrameEnd) |DEBUGFrameEnd| {
-                            platform.globalDebugTable = DEBUGFrameEnd(&gameMemory);
+                            Platform.globalDebugTable = DEBUGFrameEnd(&gameMemory);
                         } else {
                             std.debug.print("DEBUGFrameEnd not present.\n", .{});
                         }
                         globalDebugTable_.indices = .{};
 
-                        platform.END_BLOCK("DebugCollation");
+                        Platform.END_BLOCK("DebugCollation");
                         // AUTOGENERATED ----------------------------------------------------------
-                        platform.END_BLOCK__impl(6, "DebugCollation");
+                        Platform.END_BLOCK__impl(6, "DebugCollation");
                         // AUTOGENERATED ----------------------------------------------------------
                     }
 
                     const endCounter: win32.LARGE_INTEGER = Win32GetWallClock();
                     const frameMarkerSecondsElapsed: f32 = Win32GetSecondsElapsed(lastCounter, endCounter);
-                    platform.FRAME_MARKER(frameMarkerSecondsElapsed);
+                    Platform.FRAME_MARKER(frameMarkerSecondsElapsed);
                     // AUTOGENERATED ----------------------------------------------------------
-                    platform.FRAME_MARKER__impl(7, @src(), frameMarkerSecondsElapsed);
+                    Platform.FRAME_MARKER__impl(7, @src(), frameMarkerSecondsElapsed);
                     // AUTOGENERATED ----------------------------------------------------------
 
                     lastCounter = endCounter;
 
-                    // platform.globalDebugTable.recordCount[1] = ...; // NOTE (Manav): not needed
+                    // Platform.globalDebugTable.recordCount[1] = ...; // NOTE (Manav): not needed
                 }
             } else {
                 // TODO: LOGGING

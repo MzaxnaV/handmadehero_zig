@@ -3,7 +3,7 @@ const math = @import("std").math;
 
 const h = @import("handmade_all.zig");
 
-const platform = @import("platform");
+const Platform = @import("platform");
 
 // constants ------------------------------------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------------------------------------------
@@ -142,15 +142,15 @@ pub inline fn FindLeastSignificantSetBit(value: u32) bit_scan_result {
     return result;
 }
 
-pub const __rdtsc = platform.__rdtsc;
+pub const __rdtsc = Platform.__rdtsc;
 
-pub const AtomicCompareExchange = platform.AtomicCompareExchange;
+pub const AtomicCompareExchange = Platform.AtomicCompareExchange;
 
-pub const AtomicAdd = platform.AtomicAdd;
+pub const AtomicAdd = Platform.AtomicAdd;
 
-pub const AtomicExchange = platform.AtomicExchange;
+pub const AtomicExchange = Platform.AtomicExchange;
 
-pub const GetThreadID = platform.GetThreadID;
+pub const GetThreadID = Platform.GetThreadID;
 
 // inline fn __readgsqword(comptime offset: comptime_int) *anyopaque {
 //     return asm volatile ("movq %%gs:" ++ std.fmt.comptimePrint("{}", .{offset}) ++ ", %[res]"

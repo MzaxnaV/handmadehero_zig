@@ -1,37 +1,37 @@
-const debug = @import("handmade_debug.zig");
-const config = @import("handmade_config.zig");
+const Debug = @import("handmade_debug.zig");
+const Config = @import("handmade_config.zig");
 const h = @import("handmade_all.zig");
 
-const platform = @import("platform");
+const Platform = @import("platform");
 
-const assert = platform.Assert;
-const ignore = platform.ignore;
-const HANDMADE_INTERNAL = platform.HANDMADE_INTERNAL;
+const Assert = Platform.Assert;
+const IGNORE = Platform.IGNORE;
+const HANDMADE_INTERNAL = Platform.HANDMADE_INTERNAL;
 
 // imported types -------------------------------------------------------------------------------------------------------------------------------
-const PARTICLE_CEL_DIM = h.data_ns.PARTICLE_CEL_DIM;
+const PARTICLE_CEL_DIM = h.Data.PARTICLE_CEL_DIM;
 
-const game_state = h.data_ns.game_state;
-const sim_entity_flags = h.sim_region_ns.sim_entity_flags;
-const sim_entity_collision_volume_group = h.sim_region_ns.sim_entity_collision_volume_group;
-const world_position = h.world_ns.world_position;
-const transient_state = h.data_ns.transient_state;
-const ground_buffer = h.data_ns.ground_buffer;
-const loaded_bitmap = h.render_group_ns.loaded_bitmap;
-const asset_tag_id = h.file_formats_ns.asset_tag_id;
+const game_state = h.Data.game_state;
+const sim_entity_flags = h.SimRegion.sim_entity_flags;
+const sim_entity_collision_volume_group = h.SimRegion.sim_entity_collision_volume_group;
+const world_position = h.World.world_position;
+const transient_state = h.Data.transient_state;
+const ground_buffer = h.Data.ground_buffer;
+const loaded_bitmap = h.RenderGroup.loaded_bitmap;
+const asset_tag_id = h.FileFormats.asset_tag_id;
 
-const NullPosition = h.world_ns.NullPosition;
-const AddFlags = h.entity_ns.AddFlags;
-const GetFirstBitmapFrom = h.asset_ns.GetFirstBitmapFrom;
+const NullPosition = h.World.NullPosition;
+const AddFlags = h.Entity.AddFlags;
+const GetFirstBitmapFrom = h.Asset.GetFirstBitmapFrom;
 
 // local functions ------------------------------------------------------------------------------------------------------------------------
 const add_low_entity_result = struct {
-    low: *h.data_ns.low_entity,
+    low: *h.Data.low_entity,
     lowIndex: u32,
 };
 
-fn AddLowEntity(gameState: *game_state, entityType: h.sim_region_ns.entity_type, pos: world_position) add_low_entity_result {
-    assert(gameState.lowEntityCount < gameState.lowEntities.len);
+fn AddLowEntity(gameState: *game_state, entityType: h.SimRegion.entity_type, pos: world_position) add_low_entity_result {
+    Assert(gameState.lowEntityCount < gameState.lowEntities.len);
     const entityIndex = gameState.lowEntityCount;
     gameState.lowEntityCount += 1;
 
@@ -45,7 +45,7 @@ fn AddLowEntity(gameState: *game_state, entityType: h.sim_region_ns.entity_type,
         .p = NullPosition(),
     };
 
-    h.world_ns.ChangeEntityLocation(&gameState.worldArena, gameState.world, entityIndex, entityLow, pos);
+    h.World.ChangeEntityLocation(&gameState.worldArena, gameState.world, entityIndex, entityLow, pos);
 
     const result = add_low_entity_result{
         .low = entityLow,
@@ -55,14 +55,14 @@ fn AddLowEntity(gameState: *game_state, entityType: h.sim_region_ns.entity_type,
     return result;
 }
 
-fn AddGroundedEntity(gameState: *game_state, entityType: h.sim_region_ns.entity_type, p: world_position, collision: *sim_entity_collision_volume_group) add_low_entity_result {
+fn AddGroundedEntity(gameState: *game_state, entityType: h.SimRegion.entity_type, p: world_position, collision: *sim_entity_collision_volume_group) add_low_entity_result {
     const entity = AddLowEntity(gameState, entityType, p);
     entity.low.sim.collision = collision;
     return entity;
 }
 
 fn AddStandardRoom(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
-    const p = h.data_ns.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
+    const p = h.Data.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Space, p, gameState.standardRoomCollision);
 
     AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Traversable));
@@ -71,7 +71,7 @@ fn AddStandardRoom(gameState: *game_state, absTileX: u32, absTileY: u32, absTile
 }
 
 fn AddWall(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
-    const p = h.data_ns.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
+    const p = h.Data.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Wall, p, gameState.wallCollision);
 
     AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides));
@@ -80,7 +80,7 @@ fn AddWall(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: i32) 
 }
 
 fn AddStairs(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: i32) add_low_entity_result {
-    const p = h.data_ns.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
+    const p = h.Data.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Stairwell, p, gameState.stairCollision);
 
     AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides));
@@ -90,15 +90,15 @@ fn AddStairs(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: i32
     return entity;
 }
 
-fn InitHitPoints(entityLow: *h.data_ns.low_entity, hitPointCount: u32) void {
-    assert(hitPointCount <= entityLow.sim.hitPoint.len);
+fn InitHitPoints(entityLow: *h.Data.low_entity, hitPointCount: u32) void {
+    Assert(hitPointCount <= entityLow.sim.hitPoint.len);
     entityLow.sim.hitPointMax = hitPointCount;
 
     var hitPointIndex = @as(u32, 0);
     while (hitPointIndex < entityLow.sim.hitPointMax) : (hitPointIndex += 1) {
         const hitPoint = &entityLow.sim.hitPoint[hitPointIndex];
         hitPoint.flags = 0;
-        hitPoint.filledAmount = h.sim_region_ns.HIT_POINT_SUB_COUNT;
+        hitPoint.filledAmount = h.SimRegion.HIT_POINT_SUB_COUNT;
     }
 }
 
@@ -131,7 +131,7 @@ fn AddPlayer(gameState: *game_state) add_low_entity_result {
 }
 
 fn AddMonstar(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = h.data_ns.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
+    const p = h.Data.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Monstar, p, gameState.monstarCollision);
 
     AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides) | @intFromEnum(sim_entity_flags.Movable));
@@ -142,7 +142,7 @@ fn AddMonstar(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: u3
 }
 
 fn AddFamiliar(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: u32) add_low_entity_result {
-    const p = h.data_ns.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
+    const p = h.Data.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Familiar, p, gameState.familiarCollision);
 
     AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides) | @intFromEnum(sim_entity_flags.Movable));
@@ -150,7 +150,7 @@ fn AddFamiliar(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: u
     return entity;
 }
 
-fn DrawHitpoints(entity: *h.sim_region_ns.sim_entity, pieceGroup: *h.render_group_ns.render_group) void {
+fn DrawHitpoints(entity: *h.SimRegion.sim_entity, pieceGroup: *h.RenderGroup.render_group) void {
     if (entity.hitPointMax >= 1) {
         const healthDim = h.v2{ 0.2, 0.2 };
         const spacingX = 1.5 * h.X(healthDim);
@@ -177,7 +177,7 @@ fn MakeSimpleGroundedCollision(gameState: *game_state, dimX: f32, dimY: f32, dim
     const group: *sim_entity_collision_volume_group = gameState.worldArena.PushStruct(sim_entity_collision_volume_group);
 
     const volumeCount = 1;
-    group.volumes = gameState.worldArena.PushSlice(h.sim_region_ns.sim_entity_collision_volume, volumeCount);
+    group.volumes = gameState.worldArena.PushSlice(h.SimRegion.sim_entity_collision_volume, volumeCount);
     group.totalVolume.offsetP = h.v3{ 0, 0, 0.5 * dimZ };
     group.totalVolume.dim = h.v3{ dimX, dimY, dimZ };
     group.volumes[0] = group.totalVolume;
@@ -203,19 +203,19 @@ const fill_ground_chunk_work = struct {
     groundBuffer: *ground_buffer,
     chunkP: world_position,
 
-    task: *h.data_ns.task_with_memory,
+    task: *h.Data.task_with_memory,
 };
 
-fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
+fn FillGroundChunkWork(_: ?*Platform.work_queue, data: *anyopaque) void {
     comptime {
-        if (@typeInfo(platform.work_queue_callback).pointer.child != @TypeOf(FillGroundChunkWork)) {
+        if (@typeInfo(Platform.work_queue_callback).pointer.child != @TypeOf(FillGroundChunkWork)) {
             @compileError("Function signature mismatch!");
         }
     }
 
-    debug.TIMED_FUNCTION(.{});
+    Debug.TIMED_FUNCTION(.{});
     // AUTOGENERATED ----------------------------------------------------------
-    var __t_blk__8 = debug.TIMED_FUNCTION__impl(8, @src()).Init(.{});
+    var __t_blk__8 = Debug.TIMED_FUNCTION__impl(8, @src()).Init(.{});
     defer __t_blk__8.End();
     // AUTOGENERATED ----------------------------------------------------------
 
@@ -227,11 +227,11 @@ fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
     const width = h.X(work.gameState.world.chunkDimInMeters);
     const height = h.Y(work.gameState.world.chunkDimInMeters);
-    assert(width == height);
+    Assert(width == height);
     const haldDim = h.Scale(.{ width, height }, 0.5);
 
-    const renderGroup = h.render_group_ns.render_group.Allocate(work.tranState.assets, &work.task.arena, 0, true);
-    h.render_group_ns.BeginRender(renderGroup);
+    const renderGroup = h.RenderGroup.render_group.Allocate(work.tranState.assets, &work.task.arena, 0, true);
+    h.RenderGroup.BeginRender(renderGroup);
     renderGroup.Orthographic(
         @intCast(buffer.width),
         @intCast(buffer.height),
@@ -248,11 +248,11 @@ fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
                 const chunkY = work.chunkP.chunkY + chunkOffsetY;
                 const chunkZ = work.chunkP.chunkZ;
 
-                var series = h.random_ns.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
+                var series = h.Random.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
 
                 var colour = h.v4{ 1, 1, 1, 1 };
 
-                if (config.DEBUGUI_GroundChunkCheckerboards) {
+                if (Config.DEBUGUI_GroundChunkCheckerboards) {
                     colour = h.v4{ 1, 0, 0, 1 };
                     if (@mod(chunkX, 2) == @mod(chunkY, 2)) {
                         colour = h.v4{ 0, 0, 1, 1 };
@@ -263,9 +263,9 @@ fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
 
                 var grassIndex: u32 = 0;
                 while (grassIndex < 50) : (grassIndex += 1) {
-                    const stamp = h.asset_ns.GetRandomBitmapFrom(work.tranState.assets, if (series.RandomChoice(2) == 1) .Asset_Grass else .Asset_Stone, &series);
+                    const stamp = h.Asset.GetRandomBitmapFrom(work.tranState.assets, if (series.RandomChoice(2) == 1) .Grass else .Stone, &series);
 
-                    const p = h.Add(center, h.math_ns.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
+                    const p = h.Add(center, h.Math.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
                     renderGroup.PushBitmap2(stamp, 2.5, h.ToV3(p, 0), .{ .colour = colour, .cAlign = 1.0 });
                 }
             }
@@ -281,27 +281,27 @@ fn FillGroundChunkWork(_: ?*platform.work_queue, data: *anyopaque) void {
                 const chunkY = work.chunkP.chunkY + chunkOffsetY;
                 const chunkZ = work.chunkP.chunkZ;
 
-                var series = h.random_ns.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
+                var series = h.Random.RandomSeed(@as(u32, @bitCast(139 * chunkX + 593 * chunkY + 329 * chunkZ)));
 
                 const center = h.v2{ @as(f32, @floatFromInt(chunkOffsetX)) * width, @as(f32, @floatFromInt(chunkOffsetY)) * height };
 
                 var grassIndex = @as(u32, 0);
                 while (grassIndex < 50) : (grassIndex += 1) {
-                    const stamp: h.file_formats_ns.bitmap_id = h.asset_ns.GetRandomBitmapFrom(work.tranState.assets, .Asset_Tuft, &series);
+                    const stamp: h.FileFormats.bitmap_id = h.Asset.GetRandomBitmapFrom(work.tranState.assets, .Tuft, &series);
 
-                    const p = h.Add(center, h.math_ns.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
+                    const p = h.Add(center, h.Math.Hammard(haldDim, .{ series.RandomBilateral(), series.RandomBilateral() }));
                     renderGroup.PushBitmap2(stamp, 0.1, h.ToV3(p, 0), .{});
                 }
             }
         }
     }
 
-    assert(renderGroup.AllResourcesPresent());
+    Assert(renderGroup.AllResourcesPresent());
 
     renderGroup.NonTiledRenderGroupToOutput(buffer);
-    h.render_group_ns.EndRender(renderGroup);
+    h.RenderGroup.EndRender(renderGroup);
 
-    h.data_ns.EndTaskWithMemory(work.task);
+    h.Data.EndTaskWithMemory(work.task);
 }
 
 fn FillGroundChunk(
@@ -310,7 +310,7 @@ fn FillGroundChunk(
     groundBuffer: *ground_buffer,
     chunkP: *const world_position,
 ) void {
-    if (h.data_ns.BeginTaskWithMemory(tranState)) |task| {
+    if (h.Data.BeginTaskWithMemory(tranState)) |task| {
         var work: *fill_ground_chunk_work = task.arena.PushStruct(fill_ground_chunk_work);
         work.task = task;
         work.tranState = tranState;
@@ -319,25 +319,25 @@ fn FillGroundChunk(
         work.chunkP = chunkP.*;
         groundBuffer.p = chunkP.*;
 
-        h.data_ns.platformAPI.AddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
+        h.Data.platformAPI.AddEntry(tranState.lowPriorityQueue, FillGroundChunkWork, work);
     }
 }
 
 fn ClearBitmap(bitmap: *loaded_bitmap) void {
-    const totalBitmapSize = @as(usize, @intCast(bitmap.width * bitmap.height * platform.BITMAP_BYTES_PER_PIXEL));
-    h.data_ns.ZeroSize(totalBitmapSize, bitmap.memory);
+    const totalBitmapSize = @as(usize, @intCast(bitmap.width * bitmap.height * Platform.BITMAP_BYTES_PER_PIXEL));
+    h.Data.ZeroSize(totalBitmapSize, bitmap.memory);
 }
 
-fn MakeEmptyBitmap(arena: *h.data_ns.memory_arena, width: i32, height: i32, clearToZero: bool) loaded_bitmap {
+fn MakeEmptyBitmap(arena: *h.Data.memory_arena, width: i32, height: i32, clearToZero: bool) loaded_bitmap {
     var result = loaded_bitmap{
         .alignPercentage = .{ 0.5, 0.5 },
-        .widthOverHeight = h.math_ns.SafeRatiof1(@floatFromInt(width), @floatFromInt(height)),
+        .widthOverHeight = h.Math.SafeRatiof1(@floatFromInt(width), @floatFromInt(height)),
         .width = width,
         .height = height,
     };
 
-    result.pitch = result.width * platform.BITMAP_BYTES_PER_PIXEL;
-    const totalBitmapSize: usize = @intCast(@as(i32, result.width) * @as(i32, result.height) * platform.BITMAP_BYTES_PER_PIXEL);
+    result.pitch = result.width * Platform.BITMAP_BYTES_PER_PIXEL;
+    const totalBitmapSize: usize = @intCast(@as(i32, result.width) * @as(i32, result.height) * Platform.BITMAP_BYTES_PER_PIXEL);
     result.memory = arena.PushSizeAlign(16, totalBitmapSize); // NOTE (Manav): force alignment by design, make aligned loaded bitmap ?
     if (clearToZero) {
         ClearBitmap(&result);
@@ -408,7 +408,7 @@ fn MakeSphereNormalMap(bitmap: *const loaded_bitmap, roughness: f32, cX: f32, cY
             const nY = cY * (2 * h.Y(bitmapUV) - 1);
             const nZ_sq = 1 - nX * nX - nY * nY;
 
-            const normal: h.v3 = if (nZ_sq >= 0) .{ nX, nY, h.intrinsics_ns.SquareRoot(nZ_sq) } else .{ 0, 0.70710678118, 0.70710678118 };
+            const normal: h.v3 = if (nZ_sq >= 0) .{ nX, nY, h.Intrinsics.SquareRoot(nZ_sq) } else .{ 0, 0.70710678118, 0.70710678118 };
 
             const colour = h.v4{
                 255 * (0.5 * (h.X(normal) + 1)),
@@ -479,32 +479,32 @@ fn MakePyramidNormalMap(bitmap: *const loaded_bitmap, roughness: f32) void {
 // public functions -----------------------------------------------------------------------------------------------------------------------
 
 pub export fn UpdateAndRender(
-    gameMemory: *platform.memory,
-    gameInput: *platform.input,
-    buffer: *platform.offscreen_buffer,
+    gameMemory: *Platform.memory,
+    gameInput: *Platform.input,
+    buffer: *Platform.offscreen_buffer,
 ) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
-        if (@typeInfo(platform.UpdateAndRenderFnPtrType).pointer.child != @TypeOf(UpdateAndRender)) {
+        if (@typeInfo(Platform.UpdateAndRenderFnPtrType).pointer.child != @TypeOf(UpdateAndRender)) {
             @compileError("Function signature mismatch!");
         }
     }
 
-    const particle_cel = h.data_ns.particle_cel;
+    const particle_cel = h.Data.particle_cel;
 
-    h.data_ns.platformAPI = gameMemory.platformAPI;
+    h.Data.platformAPI = gameMemory.platformAPI;
 
     if (HANDMADE_INTERNAL) {
-        platform.debugGlobalMemory = gameMemory;
+        Platform.debugGlobalMemory = gameMemory;
     }
 
-    debug.TIMED_FUNCTION(.{});
+    Debug.TIMED_FUNCTION(.{});
     // AUTOGENERATED ----------------------------------------------------------
-    var __t_blk__9 = debug.TIMED_FUNCTION__impl(9, @src()).Init(.{});
+    var __t_blk__9 = Debug.TIMED_FUNCTION__impl(9, @src()).Init(.{});
     defer __t_blk__9.End();
     // AUTOGENERATED ----------------------------------------------------------
 
-    assert(@sizeOf(game_state) <= gameMemory.permanentStorageSize);
+    Assert(@sizeOf(game_state) <= gameMemory.permanentStorageSize);
     const gameState: *game_state = @ptrCast(@alignCast(gameMemory.permanentStorage));
 
     const groundBufferWidth = 256.0;
@@ -516,7 +516,7 @@ pub export fn UpdateAndRender(
         const tilesPerHeight = 9;
 
         gameState.typicalFloorHeight = 3.0;
-        gameState.effectsEntropy = h.random_ns.RandomSeed(1234);
+        gameState.effectsEntropy = h.Random.RandomSeed(1234);
 
         const worldChunkDimInMeters = h.v3{
             pixelsToMeters * groundBufferWidth,
@@ -529,13 +529,13 @@ pub export fn UpdateAndRender(
             gameMemory.permanentStorage + @sizeOf(game_state),
         );
 
-        h.audio_ns.InitializeAudioState(&gameState.audioState, &gameState.worldArena);
+        h.Audio.InitializeAudioState(&gameState.audioState, &gameState.worldArena);
 
         _ = AddLowEntity(gameState, .Null, NullPosition());
 
-        gameState.world = gameState.worldArena.PushStruct(h.world_ns.world);
+        gameState.world = gameState.worldArena.PushStruct(h.World.world);
         const world = gameState.world;
-        h.world_ns.InitializeWorld(world, worldChunkDimInMeters);
+        h.World.InitializeWorld(world, worldChunkDimInMeters);
 
         const tileSideInMeters = 1.4;
         const tileDepthInMeters = gameState.typicalFloorHeight;
@@ -555,7 +555,7 @@ pub export fn UpdateAndRender(
             0.9 * tileDepthInMeters,
         );
 
-        var series = h.random_ns.RandomSeed(1234);
+        var series = h.Random.RandomSeed(1234);
 
         const screenBaseX = @as(u32, 0);
         const screenBaseY = @as(u32, 0);
@@ -574,7 +574,7 @@ pub export fn UpdateAndRender(
         var screenIndex: u32 = 0;
         while (screenIndex < 2000) : (screenIndex += 1) {
             var doorDirection = @as(u32, 0);
-            if (!ignore) {
+            if (!IGNORE) {
                 doorDirection = series.RandomChoice(if (doorUp or doorDown) 2 else 4);
             } else {
                 doorDirection = series.RandomChoice(2);
@@ -664,7 +664,7 @@ pub export fn UpdateAndRender(
             }
         }
 
-        if (ignore) {
+        if (IGNORE) {
             while (gameState.lowEntityCount < (gameState.lowEntities.len - 16)) {
                 const coordinate = 1024 + gameState.lowEntityCount;
                 AddWall(gameState, coordinate, coordinate, coordinate);
@@ -675,7 +675,7 @@ pub export fn UpdateAndRender(
         const cameraTileY = screenBaseY * tilesPerHeight + 9 / 2;
         const cameraTileZ = screenBaseZ;
 
-        const newCameraP = h.data_ns.ChunkPosFromTilePos(gameState.world, cameraTileX, cameraTileY, cameraTileZ, .{ 0, 0, 0 });
+        const newCameraP = h.Data.ChunkPosFromTilePos(gameState.world, cameraTileX, cameraTileY, cameraTileZ, .{ 0, 0, 0 });
 
         gameState.cameraP = newCameraP;
 
@@ -698,7 +698,7 @@ pub export fn UpdateAndRender(
         gameState.isInitialized = true;
     }
 
-    assert(@sizeOf(transient_state) <= gameMemory.transientStorageSize);
+    Assert(@sizeOf(transient_state) <= gameMemory.transientStorageSize);
     const tranState = @as(*transient_state, @ptrCast(@alignCast(gameMemory.transientStorage)));
     if (!tranState.initialized) {
         tranState.tranArena.Initialize(
@@ -713,18 +713,18 @@ pub export fn UpdateAndRender(
             var task = &tranState.tasks[taskIndex];
 
             task.beingUsed = false;
-            task.arena.SubArena(&tranState.tranArena, 16, platform.MegaBytes(1));
+            task.arena.SubArena(&tranState.tranArena, 16, Platform.MegaBytes(1));
         }
 
-        tranState.assets = h.asset_ns.game_assets.AllocateGameAssets(&tranState.tranArena, platform.MegaBytes(16), tranState);
+        tranState.assets = h.Asset.game_assets.AllocateGameAssets(&tranState.tranArena, Platform.MegaBytes(16), tranState);
 
         // gameState.music = h.PlaySound(&gameState.audioState, h.GetFirstSoundFrom(tranState.assets, .Asset_Music));
 
         const groundBufferCount = 256; // 64
-        tranState.groundBuffers = tranState.tranArena.PushSlice(h.data_ns.ground_buffer, groundBufferCount);
+        tranState.groundBuffers = tranState.tranArena.PushSlice(h.Data.ground_buffer, groundBufferCount);
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
-            var groundBuffer: *h.data_ns.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
+            var groundBuffer: *h.Data.ground_buffer = &tranState.groundBuffers[groundBufferIndex];
             groundBuffer.bitmap = MakeEmptyBitmap(&tranState.tranArena, groundBufferWidth, groundBufferHeight, false);
             groundBuffer.p = NullPosition();
         }
@@ -752,9 +752,9 @@ pub export fn UpdateAndRender(
         tranState.initialized = true;
     }
 
-    debug.Start(tranState.assets, buffer.width, buffer.height);
+    Debug.Start(tranState.assets, buffer.width, buffer.height);
 
-    if (config.DEBUGUI_RecomputeGroundChunksOnExeChange) {
+    if (Config.DEBUGUI_RecomputeGroundChunksOnExeChange) {
         if (gameMemory.executableReloaded) {
             var groundBufferIndex = @as(u32, 0);
             while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
@@ -766,10 +766,10 @@ pub export fn UpdateAndRender(
 
     {
         var musicVolume: h.v2 = .{ 0, 0 };
-        musicVolume[1] = h.math_ns.SafeRatiof0(gameInput.mouseX, @floatFromInt(buffer.width));
+        musicVolume[1] = h.Math.SafeRatiof0(gameInput.mouseX, @floatFromInt(buffer.width));
         musicVolume[0] = 1 - musicVolume[1];
 
-        h.audio_ns.ChangeVolume(&gameState.audioState, gameState.music, 0.01, musicVolume);
+        h.Audio.ChangeVolume(&gameState.audioState, gameState.music, 0.01, musicVolume);
     }
 
     const world = gameState.world;
@@ -810,20 +810,20 @@ pub export fn UpdateAndRender(
             conHero.dSword = .{ 0, 0 };
 
             if (controller.buttons.mapped.actionUp.endedDown != 0) {
-                h.audio_ns.ChangeVolume(&gameState.audioState, gameState.music, 10, .{ 1, 1 });
+                h.Audio.ChangeVolume(&gameState.audioState, gameState.music, 10, .{ 1, 1 });
                 conHero.dSword[1] = 1.0;
             }
             if (controller.buttons.mapped.actionDown.endedDown != 0) {
-                h.audio_ns.ChangeVolume(&gameState.audioState, gameState.music, 10, .{ 0, 0 });
+                h.Audio.ChangeVolume(&gameState.audioState, gameState.music, 10, .{ 0, 0 });
                 conHero.dSword[1] = -1.0;
             }
             if (controller.buttons.mapped.actionLeft.endedDown != 0) {
-                h.audio_ns.ChangeVolume(&gameState.audioState, gameState.music, 5, .{ 1, 0 });
+                h.Audio.ChangeVolume(&gameState.audioState, gameState.music, 5, .{ 1, 0 });
 
                 conHero.dSword[0] = -1.0;
             }
             if (controller.buttons.mapped.actionRight.endedDown != 0) {
-                h.audio_ns.ChangeVolume(&gameState.audioState, gameState.music, 5, .{ 0, 1 });
+                h.Audio.ChangeVolume(&gameState.audioState, gameState.music, 5, .{ 0, 1 });
 
                 conHero.dSword[0] = 1.0;
             }
@@ -838,14 +838,14 @@ pub export fn UpdateAndRender(
     };
     const drawBuffer = &drawBuffer_;
 
-    if (config.DEBUGUI_TestWeirdDrawBufferSize) {
+    if (Config.DEBUGUI_TestWeirdDrawBufferSize) {
         drawBuffer.width = 1279;
         drawBuffer.height = 719;
     }
 
-    const renderMemory = h.data_ns.BeginTemporaryMemory(&tranState.tranArena);
-    const renderGroup = h.render_group_ns.render_group.Allocate(tranState.assets, &tranState.tranArena, platform.MegaBytes(4), false);
-    h.render_group_ns.BeginRender(renderGroup);
+    const renderMemory = h.Data.BeginTemporaryMemory(&tranState.tranArena);
+    const renderGroup = h.RenderGroup.render_group.Allocate(tranState.assets, &tranState.tranArena, Platform.MegaBytes(4), false);
+    h.RenderGroup.BeginRender(renderGroup);
 
     const widthOfMonitorInMeters = 0.635;
     const metersToPixels = @as(f32, @floatFromInt(drawBuffer.width)) * widthOfMonitorInMeters;
@@ -862,23 +862,23 @@ pub export fn UpdateAndRender(
         0.5 * @as(f32, @floatFromInt(drawBuffer.height)),
     };
 
-    const screenBounds = h.render_group_ns.GetCameraRectangleAtTarget(renderGroup);
+    const screenBounds = h.RenderGroup.GetCameraRectangleAtTarget(renderGroup);
     var cameraBoundsInMeters = h.rect3{ .min = h.ToV3(screenBounds.min, 0), .max = h.ToV3(screenBounds.max, 0) };
     cameraBoundsInMeters.min[2] = -3 * gameState.typicalFloorHeight;
     cameraBoundsInMeters.max[2] = 1 * gameState.typicalFloorHeight;
 
-    if (!ignore) {
+    if (!IGNORE) {
         var groundBufferIndex = @as(u32, 0);
         while (groundBufferIndex < tranState.groundBuffers.len) : (groundBufferIndex += 1) {
             var groundBuffer: *ground_buffer = &tranState.groundBuffers[groundBufferIndex];
-            if (h.world_ns.IsValid(groundBuffer.p)) {
+            if (h.World.IsValid(groundBuffer.p)) {
                 const bitmap = &groundBuffer.bitmap;
-                const delta = h.world_ns.Substract(world, &groundBuffer.p, &gameState.cameraP);
+                const delta = h.World.Substract(world, &groundBuffer.p, &gameState.cameraP);
 
                 if ((h.Z(delta) >= -1.0) and (h.Z(delta) < 1.0)) {
                     const groundSideInMeters = h.X(world.chunkDimInMeters);
                     renderGroup.PushBitmap(bitmap, 1.0 * groundSideInMeters, delta, .{});
-                    if (config.DEBUGUI_GroundChunkOutlines) {
+                    if (Config.DEBUGUI_GroundChunkOutlines) {
                         renderGroup.PushRectOutline(delta, .{ groundSideInMeters, groundSideInMeters }, .{ 1, 1, 0, 1 });
                     }
                 }
@@ -886,8 +886,8 @@ pub export fn UpdateAndRender(
         }
 
         {
-            const minChunkP = h.world_ns.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMinCorner());
-            const maxChunkP = h.world_ns.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMaxCorner());
+            const minChunkP = h.World.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMinCorner());
+            const maxChunkP = h.World.MapIntoChunkSpace(world, gameState.cameraP, cameraBoundsInMeters.GetMaxCorner());
 
             var chunkZ = minChunkP.chunkZ;
             while (chunkZ <= maxChunkP.chunkZ) : (chunkZ += 1) {
@@ -897,8 +897,8 @@ pub export fn UpdateAndRender(
                     while (chunkX <= maxChunkP.chunkX) : (chunkX += 1) {
                         // if (game.GetWorldChunk(null, world, )) |chunk|
                         {
-                            const chunkCenterP = h.world_ns.CenteredChunkPoint(chunkX, chunkY, chunkZ);
-                            const relP = h.world_ns.Substract(world, &chunkCenterP, &gameState.cameraP);
+                            const chunkCenterP = h.World.CenteredChunkPoint(chunkX, chunkY, chunkZ);
+                            const relP = h.World.Substract(world, &chunkCenterP, &gameState.cameraP);
                             _ = relP;
 
                             var furthestBufferLengthSq = @as(f32, 0);
@@ -906,18 +906,18 @@ pub export fn UpdateAndRender(
                             var index = @as(u32, 0);
                             while (index < tranState.groundBuffers.len) : (index += 1) {
                                 const groundBuffer = &tranState.groundBuffers[index];
-                                if (h.world_ns.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
+                                if (h.World.AreInSameChunk(world, &groundBuffer.p, &chunkCenterP)) {
                                     furthestBuffer = null;
                                     break;
-                                } else if (h.world_ns.IsValid(groundBuffer.p)) {
-                                    const distance = h.world_ns.Substract(world, &groundBuffer.p, &gameState.cameraP);
-                                    const bufferLengthSq = h.math_ns.LengthSq(h.XY(distance));
+                                } else if (h.World.IsValid(groundBuffer.p)) {
+                                    const distance = h.World.Substract(world, &groundBuffer.p, &gameState.cameraP);
+                                    const bufferLengthSq = h.Math.LengthSq(h.XY(distance));
                                     if (furthestBufferLengthSq < bufferLengthSq) {
                                         furthestBufferLengthSq = bufferLengthSq;
                                         furthestBuffer = groundBuffer;
                                     }
                                 } else {
-                                    furthestBufferLengthSq = platform.F32MAXIMUM;
+                                    furthestBufferLengthSq = Platform.F32MAXIMUM;
                                     furthestBuffer = groundBuffer;
                                 }
                             }
@@ -934,11 +934,11 @@ pub export fn UpdateAndRender(
 
     const simBoundsExpansion = h.v3{ 15, 15, 0 };
     const simBounds = cameraBoundsInMeters.AddRadius(simBoundsExpansion);
-    const simMemory = h.data_ns.BeginTemporaryMemory(&tranState.tranArena);
+    const simMemory = h.Data.BeginTemporaryMemory(&tranState.tranArena);
     const simCenterP = gameState.cameraP;
-    const simRegion = h.sim_region_ns.BeginSim(&tranState.tranArena, gameState, gameState.world, simCenterP, simBounds, gameInput.dtForFrame);
+    const simRegion = h.SimRegion.BeginSim(&tranState.tranArena, gameState, gameState.world, simCenterP, simBounds, gameInput.dtForFrame);
 
-    const cameraP: h.v3 = h.world_ns.Substract(world, &gameState.cameraP, &simCenterP);
+    const cameraP: h.v3 = h.World.Substract(world, &gameState.cameraP, &simCenterP);
 
     renderGroup.PushRectOutline(.{ 0, 0, 0 }, screenBounds.GetDim(), .{ 1, 1, 0, 1 });
     // renderGroup.PushRectOutline( .{0, 0, 0}, game.XY(cameraBoundsInMeters.GetDim()), .{1, 1, 1, 1});
@@ -948,7 +948,7 @@ pub export fn UpdateAndRender(
 
     var entityIndex = @as(u32, 0);
     while (entityIndex < simRegion.entityCount) : (entityIndex += 1) {
-        const entity: *h.sim_region_ns.sim_entity = &simRegion.entities[entityIndex];
+        const entity: *h.SimRegion.sim_entity = &simRegion.entities[entityIndex];
 
         if (entity.updatable) {
             const dt = gameInput.dtForFrame;
@@ -956,45 +956,45 @@ pub export fn UpdateAndRender(
             const alpha = 1 - 0.5 * h.Z(entity.p);
             const shadowAlpha = h.Clampf01(alpha);
 
-            var moveSpec = h.entity_ns.DefaultMoveSpec();
+            var moveSpec = h.Entity.DefaultMoveSpec();
             var ddP = h.v3{ 0, 0, 0 };
 
-            const cameraRelativeGroundP: h.v3 = h.Sub(h.entity_ns.GetEntityGroundPoint(entity), cameraP);
+            const cameraRelativeGroundP: h.v3 = h.Sub(h.Entity.GetEntityGroundPoint(entity), cameraP);
             const fadeTopEndZ = 0.75 * gameState.typicalFloorHeight;
             const fadeTopStartZ = 0.5 * gameState.typicalFloorHeight;
             const fadeBottomStartZ = -2 * gameState.typicalFloorHeight;
             const fadeBottomEndZ = -2.5 * gameState.typicalFloorHeight;
             renderGroup.globalAlpha = 1.0;
             if (h.Z(cameraRelativeGroundP) > fadeTopStartZ) {
-                renderGroup.globalAlpha = h.math_ns.ClampMapToRange(fadeTopEndZ, h.Z(cameraRelativeGroundP), fadeTopStartZ);
+                renderGroup.globalAlpha = h.Math.ClampMapToRange(fadeTopEndZ, h.Z(cameraRelativeGroundP), fadeTopStartZ);
             } else if (h.Z(cameraRelativeGroundP) < fadeBottomStartZ) {
-                renderGroup.globalAlpha = h.math_ns.ClampMapToRange(fadeBottomEndZ, h.Z(cameraRelativeGroundP), fadeBottomStartZ);
+                renderGroup.globalAlpha = h.Math.ClampMapToRange(fadeBottomEndZ, h.Z(cameraRelativeGroundP), fadeBottomStartZ);
             }
 
-            var matchVector = h.asset_ns.asset_vector{};
-            matchVector.e[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = entity.facingDirection;
+            var matchVector = h.Asset.asset_vector{};
+            matchVector.e[@intFromEnum(asset_tag_id.FacingDirection)] = entity.facingDirection;
 
-            var weightVector = h.asset_ns.asset_vector{};
-            weightVector.e[@intFromEnum(asset_tag_id.Tag_FacingDirection)] = 1.0;
+            var weightVector = h.Asset.asset_vector{};
+            weightVector.e[@intFromEnum(asset_tag_id.FacingDirection)] = 1.0;
 
             // if (entity.facingDirection != 0) {
             //     @import("std").debug.print("{}, {}, {}\n", .{
             //         entity.facingDirection,
-            //         asset_tag_id.Tag_FacingDirection,
-            //         matchVector.e[@intFromEnum(asset_tag_id.Tag_FacingDirection)],
+            //         asset_tag_id.FacingDirection,
+            //         matchVector.e[@intFromEnum(asset_tag_id.FacingDirection)],
             //     });
             //     @import("std").debug.print("{}, {}, {}\n", .{
             //         entity.facingDirection,
-            //         asset_tag_id.Tag_FacingDirection,
-            //         weightVector.e[@intFromEnum(asset_tag_id.Tag_FacingDirection)],
+            //         asset_tag_id.FacingDirection,
+            //         weightVector.e[@intFromEnum(asset_tag_id.FacingDirection)],
             //     });
             // }
 
             // Update (pre-physics entity)
-            const heroBitmaps = h.data_ns.hero_bitmap_ids{
-                .head = h.asset_ns.GetBestMatchBitmapFrom(tranState.assets, .Asset_Head, &matchVector, &weightVector),
-                .cape = h.asset_ns.GetBestMatchBitmapFrom(tranState.assets, .Asset_Cape, &matchVector, &weightVector),
-                .torso = h.asset_ns.GetBestMatchBitmapFrom(tranState.assets, .Asset_Torso, &matchVector, &weightVector),
+            const heroBitmaps = h.Data.hero_bitmap_ids{
+                .head = h.Asset.GetBestMatchBitmapFrom(tranState.assets, .Head, &matchVector, &weightVector),
+                .cape = h.Asset.GetBestMatchBitmapFrom(tranState.assets, .Cape, &matchVector, &weightVector),
+                .torso = h.Asset.GetBestMatchBitmapFrom(tranState.assets, .Torso, &matchVector, &weightVector),
             };
 
             switch (entity.entityType) {
@@ -1013,18 +1013,18 @@ pub export fn UpdateAndRender(
                                 switch (entity.sword) {
                                     .ptr => {
                                         const sword = entity.sword.ptr;
-                                        if (h.entity_ns.IsSet(sword, @intFromEnum(sim_entity_flags.NonSpatial))) {
+                                        if (h.Entity.IsSet(sword, @intFromEnum(sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
                                             const dSwordV3 = h.v3{ h.X(conHero.dSword), h.Y(conHero.dSword), 0 };
-                                            h.entity_ns.MakeEntitySpatial(sword, entity.p, h.Add(entity.dP, (h.Scale(dSwordV3, 5))));
-                                            h.data_ns.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
+                                            h.Entity.MakeEntitySpatial(sword, entity.p, h.Add(entity.dP, (h.Scale(dSwordV3, 5))));
+                                            h.Data.AddCollisionRule(gameState, sword.storageIndex, entity.storageIndex, false);
 
-                                            _ = h.audio_ns.PlaySound(&gameState.audioState, h.asset_ns.GetRandomSoundFrom(tranState.assets, .Asset_Bloop, &gameState.effectsEntropy));
+                                            _ = h.Audio.PlaySound(&gameState.audioState, h.Asset.GetRandomSoundFrom(tranState.assets, .Bloop, &gameState.effectsEntropy));
                                         }
                                     },
 
                                     .index => {
-                                        platform.InvalidCodePath("");
+                                        Platform.InvalidCodePath("");
                                     },
                                 }
                             }
@@ -1038,8 +1038,8 @@ pub export fn UpdateAndRender(
                     moveSpec.drag = 0;
 
                     if (entity.distanceLimit == 0) {
-                        h.data_ns.ClearCollisionRulesFor(gameState, entity.storageIndex);
-                        h.entity_ns.MakeEntityNonSpatial(entity);
+                        h.Data.ClearCollisionRulesFor(gameState, entity.storageIndex);
+                        h.Entity.MakeEntityNonSpatial(entity);
                     } else {
                         // NOTE (Manav): invalid z position causes float overflow down the line when drawing bitmap because of zFudge,
                         // so not pushing bitmap when entity becomes non spatial
@@ -1047,14 +1047,14 @@ pub export fn UpdateAndRender(
                 },
 
                 .Familiar => {
-                    var closestHero: ?*h.sim_region_ns.sim_entity = null;
-                    var closestHeroDSq = h.math_ns.Square(10);
-                    if (config.DEBUGUI_FamiliarFollowsHero) {
+                    var closestHero: ?*h.SimRegion.sim_entity = null;
+                    var closestHeroDSq = h.Math.Square(10);
+                    if (Config.DEBUGUI_FamiliarFollowsHero) {
                         var testEntityIndex = @as(u32, 0);
                         while (testEntityIndex < simRegion.entityCount) : (testEntityIndex += 1) {
-                            const testEntity: *h.sim_region_ns.sim_entity = &simRegion.entities[testEntityIndex];
+                            const testEntity: *h.SimRegion.sim_entity = &simRegion.entities[testEntityIndex];
                             if (testEntity.entityType == .Hero) {
-                                const testDSq = h.math_ns.LengthSq(h.Sub(testEntity.p, entity.p));
+                                const testDSq = h.Math.LengthSq(h.Sub(testEntity.p, entity.p));
 
                                 if (closestHeroDSq > testDSq) {
                                     closestHero = testEntity;
@@ -1065,9 +1065,9 @@ pub export fn UpdateAndRender(
                     }
 
                     if (closestHero) |hero| {
-                        if (closestHeroDSq > h.math_ns.Square(3)) {
+                        if (closestHeroDSq > h.Math.Square(3)) {
                             const accelaration = 0.5;
-                            const oneOverLength = accelaration / h.intrinsics_ns.SquareRoot(closestHeroDSq);
+                            const oneOverLength = accelaration / h.Intrinsics.SquareRoot(closestHeroDSq);
                             ddP = h.Scale(h.Sub(hero.p, entity.p), oneOverLength);
                         }
                     }
@@ -1078,32 +1078,32 @@ pub export fn UpdateAndRender(
                 },
 
                 .Null => {
-                    platform.InvalidCodePath("");
+                    Platform.InvalidCodePath("");
                 },
 
                 else => {},
             }
 
-            if (!h.entity_ns.IsSet(entity, @intFromEnum(sim_entity_flags.NonSpatial)) and
-                h.entity_ns.IsSet(entity, @intFromEnum(sim_entity_flags.Movable)))
+            if (!h.Entity.IsSet(entity, @intFromEnum(sim_entity_flags.NonSpatial)) and
+                h.Entity.IsSet(entity, @intFromEnum(sim_entity_flags.Movable)))
             {
-                h.sim_region_ns.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
+                h.SimRegion.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
 
-            renderGroup.transform.offsetP = h.entity_ns.GetEntityGroundPoint(entity);
+            renderGroup.transform.offsetP = h.Entity.GetEntityGroundPoint(entity);
 
             // Render (post-physics entity)
             switch (entity.entityType) {
                 .Hero => {
                     const heroSizeC = 2.5;
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, shadowAlpha }, .cAlign = 1.0 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Shadow), heroSizeC * 1.0, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, shadowAlpha }, .cAlign = 1.0 });
                     renderGroup.PushBitmap2(heroBitmaps.torso, heroSizeC * 1.2, .{ 0, 0, 0 }, .{});
                     renderGroup.PushBitmap2(heroBitmaps.cape, heroSizeC * 1.2, .{ 0, 0, 0 }, .{});
                     renderGroup.PushBitmap2(heroBitmaps.head, heroSizeC * 1.2, .{ 0, 0, 0 }, .{});
 
-                    if (config.DEBUGUI_ParticleTest) {
+                    if (Config.DEBUGUI_ParticleTest) {
                         for (0..3) |_| {
-                            const particle: *h.data_ns.particle = &gameState.particles[gameState.nextParticle];
+                            const particle: *h.Data.particle = &gameState.particles[gameState.nextParticle];
                             gameState.nextParticle += 1;
 
                             if (gameState.nextParticle >= gameState.particles.len) {
@@ -1125,32 +1125,32 @@ pub export fn UpdateAndRender(
                             };
                             particle.dColour = .{ 0, 0, 0, -0.25 };
 
-                            var matchVectorFont = h.asset_ns.asset_vector{};
-                            var weightVectorFont = h.asset_ns.asset_vector{};
+                            var matchVectorFont = h.Asset.asset_vector{};
+                            var weightVectorFont = h.Asset.asset_vector{};
 
                             const nothings = "NOTHINGS";
 
-                            matchVectorFont.e[@intFromEnum(asset_tag_id.Tag_UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
-                            weightVectorFont.e[@intFromEnum(asset_tag_id.Tag_UnicodeCodepoint)] = 1.0;
+                            matchVectorFont.e[@intFromEnum(asset_tag_id.UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
+                            weightVectorFont.e[@intFromEnum(asset_tag_id.UnicodeCodepoint)] = 1.0;
 
-                            particle.bitmapID = heroBitmaps.head; // h.asset_ns.GetBestMatchBitmapFrom(tranState.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
-                            // particle.bitmapID = h.asset_ns.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
+                            particle.bitmapID = heroBitmaps.head; // h.Asset.GetBestMatchBitmapFrom(tranState.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
+                            // particle.bitmapID = h.Asset.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);
                         }
                     }
 
-                    h.data_ns.ZeroStruct(@TypeOf(gameState.particleCels), &gameState.particleCels);
+                    h.Data.ZeroStruct(@TypeOf(gameState.particleCels), &gameState.particleCels);
 
                     const gridScale = 0.25;
                     const invGridScale = 1.0 / gridScale;
                     const gridOrigin = h.v3{ -0.5 * gridScale * PARTICLE_CEL_DIM, 0, 0 };
 
                     for (0..gameState.particles.len) |i| {
-                        const particle: *h.data_ns.particle = &gameState.particles[i];
+                        const particle: *h.Data.particle = &gameState.particles[i];
 
                         const p = h.Scale(h.Sub(particle.p, gridOrigin), invGridScale);
 
-                        var x = h.intrinsics_ns.TruncateF32ToI32(h.X(p));
-                        var y = h.intrinsics_ns.TruncateF32ToI32(h.Y(p));
+                        var x = h.Intrinsics.TruncateF32ToI32(h.X(p));
+                        var y = h.Intrinsics.TruncateF32ToI32(h.Y(p));
 
                         if (x < 0) {
                             x = 0;
@@ -1173,7 +1173,7 @@ pub export fn UpdateAndRender(
                         h.AddTo(&cel.velocityTimesDensity, h.Scale(particle.dP, density));
                     }
 
-                    if (config.DEBUGUI_ParticleGrid) {
+                    if (Config.DEBUGUI_ParticleGrid) {
                         for (0..PARTICLE_CEL_DIM) |y| {
                             for (0..PARTICLE_CEL_DIM) |x| {
                                 const cel: *particle_cel = &gameState.particleCels[y][x];
@@ -1190,12 +1190,12 @@ pub export fn UpdateAndRender(
                     }
 
                     for (0..gameState.particles.len) |i| {
-                        const particle: *h.data_ns.particle = &gameState.particles[i];
+                        const particle: *h.Data.particle = &gameState.particles[i];
 
                         const p = h.Scale(h.Sub(particle.p, gridOrigin), invGridScale);
 
-                        var x = h.intrinsics_ns.TruncateF32ToI32(h.X(p));
-                        var y = h.intrinsics_ns.TruncateF32ToI32(h.Y(p));
+                        var x = h.Intrinsics.TruncateF32ToI32(h.X(p));
+                        var y = h.Intrinsics.TruncateF32ToI32(h.Y(p));
 
                         if (x < 1) {
                             x = 1;
@@ -1230,8 +1230,8 @@ pub export fn UpdateAndRender(
 
                         const particleDDP = h.Add(particle.ddP, dispersion);
 
-                        // particle.p += 0.5* h.math_ns.Square(gameInput.dtForFrame) * particleDDP + particle.dp * gameInput.dtForFrame;
-                        h.AddTo(&particle.p, h.Add(h.Scale(particleDDP, 0.5 * h.math_ns.Square(gameInput.dtForFrame)), h.Scale(particle.dP, gameInput.dtForFrame)));
+                        // particle.p += 0.5* h.Math.Square(gameInput.dtForFrame) * particleDDP + particle.dp * gameInput.dtForFrame;
+                        h.AddTo(&particle.p, h.Add(h.Scale(particleDDP, 0.5 * h.Math.Square(gameInput.dtForFrame)), h.Scale(particle.dP, gameInput.dtForFrame)));
 
                         // particle.dp += particleDDP * gameInput.dtForFrame;
                         h.AddTo(&particle.dP, h.Scale(particleDDP, gameInput.dtForFrame));
@@ -1247,10 +1247,10 @@ pub export fn UpdateAndRender(
                             h.SetX(&particle.dP, coefficientOfFriction * h.X(particle.dP));
                         }
 
-                        var colour: h.v4 = h.math_ns.ClampV401(particle.colour);
+                        var colour: h.v4 = h.Math.ClampV401(particle.colour);
 
                         if (h.A(colour) > 0.9) {
-                            h.math_ns.SetA(&colour, 0.9 * h.math_ns.ClampMapToRange(1, h.A(colour), 0.9));
+                            h.Math.SetA(&colour, 0.9 * h.Math.ClampMapToRange(1, h.A(colour), 0.9));
                         }
                         renderGroup.PushBitmap2(particle.bitmapID, 1, particle.p, .{ .colour = colour, .cAlign = 1.0 });
                     }
@@ -1259,7 +1259,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Wall => {
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Tree), 2.5, .{ 0, 0, 0 }, .{});
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Tree), 2.5, .{ 0, 0, 0 }, .{});
                 },
 
                 .Stairwell => {
@@ -1268,30 +1268,30 @@ pub export fn UpdateAndRender(
                 },
 
                 .Sword => {
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 0.5, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, shadowAlpha }, .cAlign = 1.0 });
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Sword), 0.5, .{ 0, 0, 0 }, .{});
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Shadow), 0.5, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, shadowAlpha }, .cAlign = 1.0 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Sword), 0.5, .{ 0, 0, 0 }, .{});
                 },
 
                 .Familiar => {
                     entity.tBob += dt;
-                    if (entity.tBob > platform.Tau32) {
-                        entity.tBob -= platform.Tau32;
+                    if (entity.tBob > Platform.Tau32) {
+                        entity.tBob -= Platform.Tau32;
                     }
-                    const bobSin = h.intrinsics_ns.Sin(2 * entity.tBob);
+                    const bobSin = h.Intrinsics.Sin(2 * entity.tBob);
 
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 2.5, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) }, .cAlign = 1.0 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Shadow), 2.5, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, (0.5 * shadowAlpha) + (0.2 * bobSin) }, .cAlign = 1.0 });
                     renderGroup.PushBitmap2(heroBitmaps.head, 2.5, .{ 0, 0, 0.25 * bobSin }, .{});
                 },
 
                 .Monstar => {
-                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Asset_Shadow), 4.5, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, shadowAlpha }, .cAlign = 1.0 });
+                    renderGroup.PushBitmap2(GetFirstBitmapFrom(tranState.assets, .Shadow), 4.5, .{ 0, 0, 0 }, .{ .colour = .{ 1, 1, 1, shadowAlpha }, .cAlign = 1.0 });
                     renderGroup.PushBitmap2(heroBitmaps.torso, 4.5, .{ 0, 0, 0 }, .{});
 
                     DrawHitpoints(entity, renderGroup);
                 },
 
                 .Space => {
-                    if (config.DEBUGUI_UseSpaceOutlines) {
+                    if (Config.DEBUGUI_UseSpaceOutlines) {
                         var volumeIndex = @as(u32, 0);
                         while (volumeIndex < entity.collision.volumes.len) : (volumeIndex += 1) {
                             const volume = entity.collision.volumes[volumeIndex];
@@ -1301,7 +1301,7 @@ pub export fn UpdateAndRender(
                 },
 
                 .Null => {
-                    platform.InvalidCodePath("");
+                    Platform.InvalidCodePath("");
                 },
             }
         }
@@ -1309,7 +1309,7 @@ pub export fn UpdateAndRender(
 
     renderGroup.globalAlpha = 1.0;
 
-    if (ignore) {
+    if (IGNORE) {
         gameState.time += gameInput.dtForFrame;
 
         const mapColour = [_]h.v3{
@@ -1356,12 +1356,12 @@ pub export fn UpdateAndRender(
         const origin = screenCenter;
 
         const angle = 0.1 * gameState.time;
-        const disp: h.v2 = if (!ignore) .{ 100 * h.intrinsics_ns.Cos(5 * angle), 100 * h.intrinsics_ns.Sin(3 * angle) } else .{ 0, 0 };
+        const disp: h.v2 = if (!IGNORE) .{ 100 * h.Intrinsics.Cos(5 * angle), 100 * h.Intrinsics.Sin(3 * angle) } else .{ 0, 0 };
 
         var xAxis: h.v2 = undefined;
         var yAxis: h.v2 = undefined;
-        if (!ignore) {
-            xAxis = h.Scale(h.v2{ h.intrinsics_ns.Cos(10 * angle), h.intrinsics_ns.Sin(10 * angle) }, 100);
+        if (!IGNORE) {
+            xAxis = h.Scale(h.v2{ h.Intrinsics.Cos(10 * angle), h.Intrinsics.Sin(10 * angle) }, 100);
             yAxis = h.Perp(xAxis);
         } else {
             xAxis = h.v2{ 100, 0 };
@@ -1372,12 +1372,12 @@ pub export fn UpdateAndRender(
 
         var colour: h.v4 = undefined;
 
-        if (ignore) {
+        if (IGNORE) {
             colour = .{
-                0.5 + 0.5 * h.intrinsics_ns.Sin(cAngle),
-                0.5 + 0.5 * h.intrinsics_ns.Sin(2.9 * cAngle),
-                0.5 + 0.5 * h.intrinsics_ns.Cos(9.9 * cAngle),
-                0.5 + 0.5 * h.intrinsics_ns.Sin(10 * cAngle),
+                0.5 + 0.5 * h.Intrinsics.Sin(cAngle),
+                0.5 + 0.5 * h.Intrinsics.Sin(2.9 * cAngle),
+                0.5 + 0.5 * h.Intrinsics.Cos(9.9 * cAngle),
+                0.5 + 0.5 * h.Intrinsics.Sin(10 * cAngle),
             };
         } else {
             colour = .{ 1, 1, 1, 1 };
@@ -1413,29 +1413,29 @@ pub export fn UpdateAndRender(
     }
 
     renderGroup.TiledRenderGroupToOutput(tranState.highPriorityQueue, drawBuffer);
-    h.render_group_ns.EndRender(renderGroup);
+    h.RenderGroup.EndRender(renderGroup);
 
-    h.sim_region_ns.EndSim(simRegion, gameState); // TODO (Manav): use defer
-    h.data_ns.EndTemporaryMemory(simMemory);
-    h.data_ns.EndTemporaryMemory(renderMemory);
+    h.SimRegion.EndSim(simRegion, gameState); // TODO (Manav): use defer
+    h.Data.EndTemporaryMemory(simMemory);
+    h.Data.EndTemporaryMemory(renderMemory);
 
     gameState.worldArena.CheckArena();
     tranState.tranArena.CheckArena();
 
-    debug.End(gameInput, drawBuffer);
+    Debug.End(gameInput, drawBuffer);
 }
 
-pub export fn GetSoundSamples(gameMemory: *platform.memory, soundBuffer: *platform.sound_output_buffer) void {
+pub export fn GetSoundSamples(gameMemory: *Platform.memory, soundBuffer: *Platform.sound_output_buffer) void {
     comptime {
         // NOTE (Manav): This is hacky atm. Need to check as we're using win32.LoadLibrary()
-        if (@typeInfo(platform.GetSoundSamplesFnPtrType).pointer.child != @TypeOf(GetSoundSamples)) {
+        if (@typeInfo(Platform.GetSoundSamplesFnPtrType).pointer.child != @TypeOf(GetSoundSamples)) {
             @compileError("Function signature mismatch!");
         }
     }
 
     const gameState: *game_state = @ptrCast(@alignCast(gameMemory.permanentStorage));
-    const tranState: *h.data_ns.transient_state = @ptrCast(@alignCast(gameMemory.transientStorage));
+    const tranState: *h.Data.transient_state = @ptrCast(@alignCast(gameMemory.transientStorage));
 
-    h.audio_ns.OutputPlayingSounds(&gameState.audioState, soundBuffer, tranState.assets, &tranState.tranArena);
-    // h.audio_ns.OutputTestSineWave(gameState, soundBuffer, 400);
+    h.Audio.OutputPlayingSounds(&gameState.audioState, soundBuffer, tranState.assets, &tranState.tranArena);
+    // h.Audio.OutputTestSineWave(gameState, soundBuffer, 400);
 }
