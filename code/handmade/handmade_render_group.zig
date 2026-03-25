@@ -1145,7 +1145,20 @@ pub const render_group = struct {
 
     // Render API routines ----------------------------------------------------------------------------------------------------------------------
 
-    pub fn PushBitmap2(self: *Self, ID: h.file_formats_ns.bitmap_id, height: f32, offset: h.v3, colour: h.v4) void {
+    pub fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: h.v3, defaults: struct { colour: h.v4 = .{ 1.0, 1.0, 1.0, 1.0 }, cAlign: f32 = 1.0 }) void {
+        const dim = GetBitmapDim(self, bitmap, height, offset, defaults.cAlign);
+
+        if (dim.basis.valid) {
+            if (PushRenderElements(self, .Bitmap)) |entry| {
+                entry.bitmap = bitmap;
+                entry.p = dim.basis.p;
+                entry.colour = h.Scale(defaults.colour, self.globalAlpha);
+                entry.size = h.Scale(dim.size, dim.basis.scale);
+            }
+        }
+    }
+
+    pub fn PushBitmap2(self: *Self, ID: h.file_formats_ns.bitmap_id, height: f32, offset: h.v3, defaults: struct { colour: h.v4 = .{ 1.0, 1.0, 1.0, 1.0 }, cAlign: f32 = 1.0 }) void {
         var bitmap = self.assets.GetBitmap(ID, self.generationID);
 
         if (self.rendersInBackground and bitmap == null) {
@@ -1154,25 +1167,11 @@ pub const render_group = struct {
         }
 
         if (bitmap) |b| {
-            self.PushBitmap(b, height, offset, colour);
+            self.PushBitmap(b, height, offset, .{ .colour = defaults.colour, .cAlign = defaults.cAlign });
         } else {
             assert(!self.rendersInBackground);
             h.asset_ns.LoadBitmap(self.assets, ID, false);
             self.missingResourceCount += 1;
-        }
-    }
-
-    /// Defaults: ```colour = .{ 1.0, 1.0, 1.0, 1.0 }```
-    pub fn PushBitmap(self: *Self, bitmap: *loaded_bitmap, height: f32, offset: h.v3, colour: h.v4) void {
-        const dim = GetBitmapDim(self, bitmap, height, offset);
-
-        if (dim.basis.valid) {
-            if (PushRenderElements(self, .Bitmap)) |entry| {
-                entry.bitmap = bitmap;
-                entry.p = dim.basis.p;
-                entry.colour = h.Scale(colour, self.globalAlpha);
-                entry.size = h.Scale(dim.size, dim.basis.scale);
-            }
         }
     }
 
@@ -1490,11 +1489,12 @@ pub const render_group = struct {
     }
 };
 
-pub inline fn GetBitmapDim(group: *render_group, bitmap: *loaded_bitmap, height: f32, offset: h.v3) used_bitmap_dim {
+/// Defaults: ```cAlign = 1.0```
+pub inline fn GetBitmapDim(group: *render_group, bitmap: *loaded_bitmap, height: f32, offset: h.v3, cAlign: f32) used_bitmap_dim {
     var dim: used_bitmap_dim = .{};
 
     dim.size = h.V2(height * bitmap.widthOverHeight, height);
-    dim.alignment = h.math_ns.Hammard(bitmap.alignPercentage, dim.size);
+    dim.alignment = h.Scale(h.math_ns.Hammard(bitmap.alignPercentage, dim.size), cAlign);
     dim.p = h.Sub(offset, h.ToV3(dim.alignment, 0));
     dim.basis = GetRenderEntityBasisP(&group.transform, dim.p);
 

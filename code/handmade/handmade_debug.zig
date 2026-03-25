@@ -500,10 +500,10 @@ fn DEBUGTextOp(debugState: ?*debug_state, op: debug_text_op, p: h.v2, string: []
                         const bitmapOffset: h.v3 = .{ atX, atY, 0 };
 
                         switch (op) {
-                            .DEBUGTextOp_DrawText => renderGroup.PushBitmap2(bitmapID, bitmapScale, bitmapOffset, colour),
+                            .DEBUGTextOp_DrawText => renderGroup.PushBitmap2(bitmapID, bitmapScale, bitmapOffset, .{ .colour = colour, .cAlign = 1.0 }),
                             .DEBUGTextOp_SizeText => {
                                 if (renderGroup.assets.GetBitmap(bitmapID, renderGroup.generationID)) |bitmap| {
-                                    const dim = h.render_group_ns.GetBitmapDim(renderGroup, bitmap, bitmapScale, bitmapOffset);
+                                    const dim = h.render_group_ns.GetBitmapDim(renderGroup, bitmap, bitmapScale, bitmapOffset, 1.0);
                                     const glyphDim = h.rect2.InitMinDim(h.XY(dim.p), dim.size);
 
                                     result = h.rect2.Union(result, glyphDim);
@@ -979,8 +979,8 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
                     debugState.renderGroup.PushBitmap2(
                         variable.value.bitmapDisplay.id,
                         h.Y(variable.value.bitmapDisplay.dim),
-                        h.ToV3(bounds.GetCenter(), 0),
-                        .{ 1.0, 1.0, 1.0, 1.0 },
+                        h.ToV3(bounds.GetMinCorner(), 0),
+                        .{ .colour = .{ 1, 1, 1, 1 }, .cAlign = 0.0 },
                     );
 
                     const sizeInteraction: debug_interaction = .{
