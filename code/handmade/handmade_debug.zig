@@ -912,15 +912,140 @@ fn InteractionsIsHot(debugState: *debug_state, b: debug_interaction) bool {
     return result;
 }
 
+const debug_layout = struct {
+    debugState: *debug_state,
+    mouseP: h.v2,
+    at: h.v2,
+    depth: i32,
+    lineAdvance: f32,
+    spacingY: f32,
+};
+
+fn PlaceRectangle(layout: *debug_layout, dim: h.v2) h.rect2 {
+    _ = layout;
+    _ = dim;
+}
+
+const layout_element = struct {
+    // NOTE (Manav): Storage:
+    _layout: *debug_layout,
+    dim: *h.v2,
+    size: ?*h.v2,
+    interaction: debug_interaction,
+
+    // NOTE (Manav): Out:
+    bounds: h.rect2,
+};
+
+fn BeginElementRectangle(_layout: *debug_layout, dim: *h.v2) layout_element {
+    const element: layout_element = .{
+        ._layout = _layout,
+        .dim = dim,
+        .size = null,
+        .interaction = .{ .type = .None, .data = .{ .generic = null } },
+        .bounds = h.rect2{ .min = .{ 0, 0 }, .max = .{ 0, 0 } },
+    };
+
+    return element;
+}
+
+fn MakeElementSizable(element: *layout_element) void {
+    element.size = element.dim;
+}
+
+fn DefaultInteraction(element: *layout_element, interaction: debug_interaction) void {
+    element.interaction = interaction;
+}
+
+fn EndElement(element: *layout_element) void {
+    const _layout = element._layout;
+    const debugState = _layout.debugState;
+
+    const sizeHandlePixels = 4.0;
+
+    var frame: h.v2 = .{ 0, 0 };
+    if (element.size) |_| {
+        frame = .{ sizeHandlePixels, sizeHandlePixels };
+    }
+
+    const totalDim = h.Add(element.dim.*, h.Scale(frame, 2));
+
+    const totalMinCorner = h.v2{
+        h.X(_layout.at) + @as(f32, @floatFromInt(_layout.depth)) * 2 * _layout.lineAdvance,
+        h.Y(_layout.at) - h.Y(totalDim),
+    };
+    const totalMaxCorner = h.Add(totalMinCorner, totalDim);
+
+    const interiorMinCorner = h.Add(totalMinCorner, frame);
+    const interiorMaxCorner = h.Add(interiorMinCorner, element.dim.*);
+
+    const totalBounds = h.rect2.InitMinMax(totalMinCorner, totalMaxCorner);
+    element.bounds = h.rect2.InitMinMax(interiorMinCorner, interiorMaxCorner);
+
+    if (element.interaction.type != .None and element.bounds.IsInRect(_layout.mouseP)) {
+        debugState.nextHotInteraction = element.interaction;
+    }
+
+    if (element.size) |_| {
+        debugState.renderGroup.PushRect2(h.rect2.InitMinMax(
+            h.v2{ h.X(totalMinCorner), h.Y(interiorMinCorner) },
+            h.v2{ h.X(interiorMinCorner), h.Y(interiorMaxCorner) },
+        ), 0, .{ 0, 0, 0, 1 });
+        debugState.renderGroup.PushRect2(h.rect2.InitMinMax(
+            h.v2{ h.X(interiorMaxCorner), h.Y(interiorMinCorner) },
+            h.v2{ h.X(totalMaxCorner), h.Y(interiorMaxCorner) },
+        ), 0, .{ 0, 0, 0, 1 });
+        debugState.renderGroup.PushRect2(h.rect2.InitMinMax(
+            h.v2{ h.X(interiorMinCorner), h.Y(totalMinCorner) },
+            h.v2{ h.X(interiorMaxCorner), h.Y(interiorMinCorner) },
+        ), 0, .{ 0, 0, 0, 1 });
+        debugState.renderGroup.PushRect2(h.rect2.InitMinMax(
+            h.v2{ h.X(interiorMinCorner), h.Y(totalMaxCorner) },
+            h.v2{ h.X(interiorMaxCorner), h.Y(totalMaxCorner) },
+        ), 0, .{ 0, 0, 0, 1 });
+
+        const sizeInteraction: debug_interaction = .{
+            .type = .Resize,
+            .data = .{
+                .p = element.size,
+            },
+        };
+
+        const sizeBox = h.rect2.InitMinMax(
+            h.v2{ h.X(interiorMaxCorner), h.Y(totalMinCorner) },
+            h.v2{ h.X(totalMaxCorner), h.Y(interiorMinCorner) },
+        );
+        debugState.renderGroup.PushRect2(
+            sizeBox,
+            0,
+            if (InteractionsIsHot(debugState, sizeInteraction)) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
+        );
+
+        if (sizeBox.IsInRect(_layout.mouseP)) {
+            debugState.nextHotInteraction = sizeInteraction;
+        }
+    }
+
+    const spacingY = _layout.spacingY;
+    if (false) {
+        spacingY = 0;
+    }
+    // _layout.at.Y = bounds.GetMinCorner() - spaceingY;
+    h.SetY(&_layout.at, h.Y(totalBounds.GetMinCorner()) - spacingY);
+}
+
 fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.RenderGroup.render_group, mouseP: h.v2) void {
     var hierarchy = debugState.hierarchySentinel.next;
     while (hierarchy != &debugState.hierarchySentinel) : (hierarchy = hierarchy.next) {
-        const atX: f32 = h.X(hierarchy.uiP);
-        var atY: f32 = h.Y(hierarchy.uiP);
-        const lineAdvance: f32 = debugState.fontScale * h.Asset.GetLineAdvanceFor(debugState.debugFontInfo);
+        var layout = debug_layout{
+            .debugState = debugState,
+            .mouseP = mouseP,
+            .at = hierarchy.uiP,
+            .lineAdvance = debugState.fontScale * h.Asset.GetLineAdvanceFor(debugState.debugFontInfo),
+            .depth = 0,
+            .spacingY = 4.0,
+        };
 
-        const spacingY = 4.0;
-        var depth: i32 = 0;
         var ref: ?*debug_variable_reference = hierarchy.group.variable.value.group.firstChild;
         while (ref) |_| {
             const variable = ref.?.variable;
@@ -935,91 +1060,46 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.RenderGroup.render_group, m
             const isHot = InteractionsIsHot(debugState, itemInteraction);
             const itemColour: h.v4 = if (isHot) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 };
 
-            var bounds = h.rect2{};
             switch (variable.type) {
                 .counterThreadList => {
-                    const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - h.Y(variable.value.profile.dimension) };
-                    const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.value.profile.dimension), atY };
-                    const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
-                    bounds = h.rect2.InitMinMax(minCorner, maxCorner);
+                    var element: layout_element = BeginElementRectangle(&layout, &variable.value.profile.dimension);
+                    MakeElementSizable(&element);
+                    DefaultInteraction(&element, itemInteraction);
+                    EndElement(&element);
 
-                    DrawProfileIn(debugState, bounds, mouseP);
-
-                    const sizeInteraction: debug_interaction = .{
-                        .type = .Resize,
-                        .data = .{
-                            .p = &variable.value.profile.dimension,
-                        },
-                    };
-
-                    const sizeBox = h.rect2.InitCenterHalfDim(sizeP, .{ 4, 4 });
-                    debugState.renderGroup.PushRect2(
-                        sizeBox,
-                        0,
-                        if (InteractionsIsHot(debugState, sizeInteraction)) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
-                    );
-
-                    if (sizeBox.IsInRect(mouseP)) {
-                        debugState.nextHotInteraction = sizeInteraction;
-                    } else if (bounds.IsInRect(mouseP)) {
-                        debugState.nextHotInteraction = itemInteraction;
-                    }
-
-                    // bounds.min.y -= spaceingY;
-                    h.SetY(&bounds.min, h.Y(bounds.min) - spacingY);
+                    DrawProfileIn(debugState, element.bounds, mouseP);
                 },
 
                 .bitmapDisplay => {
                     const bitmapScale = h.Y(variable.value.bitmapDisplay.dim);
-                    const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - bitmapScale };
-
-                    if (debugState.renderGroup.assets.GetBitmap(variable.value.bitmapDisplay.id, debugState.renderGroup.generationID)) |bitmap| {
-                        const dim = h.RenderGroup.GetBitmapDim(debugState.renderGroup, bitmap, bitmapScale, h.ToV3(minCorner, 0), 1.0);
+                    if (debugState.renderGroup.assets.GetBitmap(
+                        variable.value.bitmapDisplay.id,
+                        debugState.renderGroup.generationID,
+                    )) |bitmap| {
+                        const dim = h.RenderGroup.GetBitmapDim(debugState.renderGroup, bitmap, bitmapScale, .{ 0, 0, 0 }, 1.0);
+                        // variable.value.bitmapDisplay.dim.x = dim.size.x;
                         h.SetX(&variable.value.bitmapDisplay.dim, h.X(dim.size));
                     }
 
-                    const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.value.bitmapDisplay.dim), atY };
-                    const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
-                    bounds = h.rect2.InitMinMax(minCorner, maxCorner);
-
-                    debugState.renderGroup.PushRect2(bounds, 0, .{ 0, 0, 0, 1 });
-
-                    debugState.renderGroup.PushBitmap2(
-                        variable.value.bitmapDisplay.id,
-                        bitmapScale,
-                        h.ToV3(minCorner, 0),
-                        .{ .colour = .{ 1, 1, 1, 1 }, .cAlign = 0.0 },
-                    );
-
-                    const sizeInteraction: debug_interaction = .{
-                        .type = .Resize,
+                    const tearInteraction: debug_interaction = .{
+                        .type = .TearValue,
                         .data = .{
-                            .p = &variable.value.bitmapDisplay.dim,
+                            .variable = variable,
                         },
                     };
 
-                    const sizeBox = h.rect2.InitCenterHalfDim(sizeP, .{ 4, 4 });
-                    debugState.renderGroup.PushRect2(
-                        sizeBox,
-                        0,
-                        if (InteractionsIsHot(debugState, sizeInteraction)) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
+                    var element: layout_element = BeginElementRectangle(&layout, &variable.value.bitmapDisplay.dim);
+                    MakeElementSizable(&element);
+                    DefaultInteraction(&element, tearInteraction);
+                    EndElement(&element);
+
+                    debugState.renderGroup.PushRect2(element.bounds, 0, .{ 0, 0, 0, 1 });
+                    debugState.renderGroup.PushBitmap2(
+                        variable.value.bitmapDisplay.id,
+                        bitmapScale,
+                        h.ToV3(element.bounds.GetMinCorner(), 0),
+                        .{ .colour = .{ 1, 1, 1, 1 }, .cAlign = 0.0 },
                     );
-
-                    if (sizeBox.IsInRect(mouseP)) {
-                        debugState.nextHotInteraction = sizeInteraction;
-                    } else if (bounds.IsInRect(mouseP)) {
-                        const tearInteraction: debug_interaction = .{
-                            .type = .TearValue,
-                            .data = .{
-                                .variable = variable,
-                            },
-                        };
-
-                        debugState.nextHotInteraction = tearInteraction;
-                    }
-
-                    // bounds.min.y -= spaceingY;
-                    h.SetY(&bounds.min, h.Y(bounds.min) - spacingY);
                 },
 
                 else => {
@@ -1030,26 +1110,23 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.RenderGroup.render_group, m
                         .Colon = true,
                     });
 
-                    const leftPx = atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance;
-                    const topPy = atY;
-
                     const textBounds: h.rect2 = DEBUGGetTextSize(debugState, text[0..]);
+                    var dim: h.v2 = .{ h.X(textBounds.GetDim()), layout.lineAdvance };
 
-                    bounds = h.rect2.InitMinMax(.{ leftPx + h.X(textBounds.min), topPy - lineAdvance }, .{ leftPx + h.X(textBounds.max), topPy });
+                    var element: layout_element = BeginElementRectangle(&layout, &dim);
+                    DefaultInteraction(&element, itemInteraction);
+                    EndElement(&element);
 
-                    DEBUGTextOutAt(.{ leftPx, topPy - debugState.fontScale * h.Asset.GetStartingBaselineY(debugState.debugFontInfo) }, text[0..], itemColour);
-
-                    if (bounds.IsInRect(mouseP)) {
-                        debugState.nextHotInteraction = itemInteraction;
-                    }
+                    DEBUGTextOutAt(.{
+                        h.X(element.bounds.GetMinCorner()),
+                        h.Y(element.bounds.GetMaxCorner()) - debugState.fontScale * h.Asset.GetStartingBaselineY(debugState.debugFontInfo),
+                    }, text[0..], itemColour);
                 },
             }
 
-            atY = h.Y(bounds.GetMinCorner());
-
             if (variable.type == .group and variable.value.group.expanded) {
                 ref = variable.value.group.firstChild;
-                depth += 1;
+                layout.depth += 1;
             } else {
                 while (ref) |_| {
                     if (ref.?.next) |_| {
@@ -1057,13 +1134,13 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.RenderGroup.render_group, m
                         break;
                     } else {
                         ref = ref.?.parent;
-                        depth -= 1;
+                        layout.depth -= 1;
                     }
                 }
             }
         }
 
-        debugState.atY = atY;
+        debugState.atY = h.Y(layout.at);
 
         if (true) {
             const moveInteraction: debug_interaction = .{
