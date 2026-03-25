@@ -46,6 +46,7 @@ pub const debug_variable_type = enum {
     v4,
 
     counterThreadList,
+    bitmapDisplay,
 
     group,
 
@@ -60,12 +61,13 @@ pub const debug_variable_type = enum {
             .v4 => h.v4,
             .group => debug_variable_group,
             .counterThreadList => debug_profile_settings,
+            .bitmapDisplay => h.file_formats_ns.bitmap_id,
         };
     }
 };
 
 pub fn ShouldBeWritten(t: debug_variable_type) bool {
-    const result = (t != .counterThreadList);
+    const result = ((t != .counterThreadList) and (t != .bitmapDisplay));
     return result;
 }
 
@@ -93,6 +95,12 @@ const debug_profile_settings = struct {
     dimension: h.v2,
 };
 
+const debug_bitmap_display = struct {
+    id: h.file_formats_ns.bitmap_id,
+    dim: h.v2,
+    alpha: bool,
+};
+
 pub const debug_variable = struct {
     type: debug_variable_type,
     name: [:0]const u8,
@@ -107,6 +115,7 @@ pub const debug_variable = struct {
         v4: h.v4,
         group: debug_variable_group,
         profile: debug_profile_settings,
+        bitmapDisplay: debug_bitmap_display,
     },
 };
 
@@ -341,6 +350,16 @@ pub fn Start(assets: *h.asset_ns.game_assets, width: u32, height: u32) void {
             _ = functionList;
             DEBUGEndVariableGroup(&context);
             DEBUGEndVariableGroup(&context);
+
+            var matchVector = h.asset_ns.asset_vector{};
+            matchVector.e[@intFromEnum(h.file_formats_ns.asset_tag_id.Tag_FacingDirection)] = 0.0;
+
+            var weightVector = h.asset_ns.asset_vector{};
+            weightVector.e[@intFromEnum(h.file_formats_ns.asset_tag_id.Tag_FacingDirection)] = 1.0;
+
+            const id = h.asset_ns.GetBestMatchBitmapFrom(assets, .Asset_Head, &matchVector, &weightVector);
+
+            _ = DEBUGAddVariable(&context, "Test Bitmap", .bitmapDisplay, id);
 
             DEBUGEndVariableGroup(&context);
 
@@ -924,6 +943,7 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
                     const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.value.profile.dimension), atY };
                     const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
                     bounds = h.rect2.InitMinMax(minCorner, maxCorner);
+
                     DrawProfileIn(debugState, bounds, mouseP);
 
                     const sizeInteraction: debug_interaction = .{
@@ -949,6 +969,44 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
                     // bounds.min.y -= spaceingY;
                     h.SetY(&bounds.min, h.Y(bounds.min) - spacingY);
                 },
+
+                .bitmapDisplay => {
+                    const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - h.Y(variable.value.bitmapDisplay.dim) };
+                    const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.value.bitmapDisplay.dim), atY };
+                    const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
+                    bounds = h.rect2.InitMinMax(minCorner, maxCorner);
+
+                    debugState.renderGroup.PushBitmap2(
+                        variable.value.bitmapDisplay.id,
+                        h.Y(variable.value.bitmapDisplay.dim),
+                        h.ToV3(bounds.GetCenter(), 0),
+                        .{ 1.0, 1.0, 1.0, 1.0 },
+                    );
+
+                    const sizeInteraction: debug_interaction = .{
+                        .type = .Resize,
+                        .data = .{
+                            .p = &variable.value.bitmapDisplay.dim,
+                        },
+                    };
+
+                    const sizeBox = h.rect2.InitCenterHalfDim(sizeP, .{ 4, 4 });
+                    debugState.renderGroup.PushRect2(
+                        sizeBox,
+                        0,
+                        if (InteractionsIsHot(debugState, sizeInteraction)) .{ 1, 1, 0, 1 } else .{ 1, 1, 1, 1 },
+                    );
+
+                    if (sizeBox.IsInRect(mouseP)) {
+                        debugState.nextHotInteraction = sizeInteraction;
+                    } else if (bounds.IsInRect(mouseP)) {
+                        // debugState.nextHotInteraction = itemInteraction;
+                    }
+
+                    // bounds.min.y -= spaceingY;
+                    h.SetY(&bounds.min, h.Y(bounds.min) - spacingY);
+                },
+
                 else => {
                     var text = [1]u8{0} ** 256;
 
