@@ -971,15 +971,24 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
                 },
 
                 .bitmapDisplay => {
-                    const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - h.Y(variable.value.bitmapDisplay.dim) };
+                    const bitmapScale = h.Y(variable.value.bitmapDisplay.dim);
+                    const minCorner = h.v2{ atX + @as(f32, @floatFromInt(depth)) * 2 * lineAdvance, atY - bitmapScale };
+
+                    if (debugState.renderGroup.assets.GetBitmap(variable.value.bitmapDisplay.id, debugState.renderGroup.generationID)) |bitmap| {
+                        const dim = h.render_group_ns.GetBitmapDim(debugState.renderGroup, bitmap, bitmapScale, h.ToV3(minCorner, 0), 1.0);
+                        h.SetX(&variable.value.bitmapDisplay.dim, h.X(dim.size));
+                    }
+
                     const maxCorner = h.v2{ h.X(minCorner) + h.X(variable.value.bitmapDisplay.dim), atY };
                     const sizeP = h.v2{ h.X(maxCorner), h.Y(minCorner) };
                     bounds = h.rect2.InitMinMax(minCorner, maxCorner);
 
+                    debugState.renderGroup.PushRect2(bounds, 0, .{ 0, 0, 0, 1 });
+
                     debugState.renderGroup.PushBitmap2(
                         variable.value.bitmapDisplay.id,
-                        h.Y(variable.value.bitmapDisplay.dim),
-                        h.ToV3(bounds.GetMinCorner(), 0),
+                        bitmapScale,
+                        h.ToV3(minCorner, 0),
                         .{ .colour = .{ 1, 1, 1, 1 }, .cAlign = 0.0 },
                     );
 
@@ -1000,7 +1009,14 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.render_group_ns.render_grou
                     if (sizeBox.IsInRect(mouseP)) {
                         debugState.nextHotInteraction = sizeInteraction;
                     } else if (bounds.IsInRect(mouseP)) {
-                        // debugState.nextHotInteraction = itemInteraction;
+                        const tearInteraction: debug_interaction = .{
+                            .type = .TearValue,
+                            .data = .{
+                                .variable = variable,
+                            },
+                        };
+
+                        debugState.nextHotInteraction = tearInteraction;
                     }
 
                     // bounds.min.y -= spaceingY;
