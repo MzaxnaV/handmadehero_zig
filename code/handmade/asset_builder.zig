@@ -110,14 +110,10 @@ fn ReadEntireFile(file: struct { name: []const u8, absolute: bool = false }, all
 
     const prefix = if (file.absolute) "" else "../data/";
 
-    const newFileName = try std.mem.concat(allocator, u8, &[_][]const u8{ prefix, file.name });
+    var pathBuffer: [std.fs.max_path_bytes]u8 = undefined;
+    const newFileName = try std.fmt.bufPrint(&pathBuffer, "{s}{s}", .{ prefix, file.name });
 
-    const f = try std.fs.cwd().openFile(newFileName, .{ .mode = .read_only });
-    defer f.close();
-
-    result.contents = try f.readToEndAlloc(allocator, platform.GigaBytes(8));
-
-    allocator.free(newFileName);
+    result.contents = try std.fs.cwd().readFileAlloc(allocator, newFileName, platform.GigaBytes(8));
 
     return result;
 }
@@ -929,7 +925,7 @@ const game_assets = struct {
 };
 
 fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .verbose_log = true }){};
+    var gpa: std.heap.DebugAllocator(.{ .verbose_log = true }) = .init;
     defer {
         const st = gpa.deinit();
         if (st == .leak) @panic("memory leak");
@@ -938,6 +934,10 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
 
     const out = try std.fs.cwd().createFile(filename, .{});
     defer out.close();
+
+    var outBuffer: [4096]u8 = undefined;
+    var fileWriter = out.writer(&outBuffer);
+    const writer = &fileWriter.interface;
 
     {
         var header = h.FileFormats.hha_header{
@@ -958,16 +958,17 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
         header.assetTypes = header.tags + tagArraySize;
         header.assets = header.assetTypes + assetTypeArraySize;
 
-        try out.writeAll(std.mem.asBytes(&header));
-        try out.writeAll(std.mem.sliceAsBytes(assets.tags[0..header.tagCount]));
-        try out.writeAll(std.mem.sliceAsBytes(assets.assetTypes[0..header.assetTypeCount]));
-        try out.seekBy(assetArraySize);
+        try writer.writeAll(std.mem.asBytes(&header));
+        try writer.writeAll(std.mem.sliceAsBytes(assets.tags[0..header.tagCount]));
+        try writer.writeAll(std.mem.sliceAsBytes(assets.assetTypes[0..header.assetTypeCount]));
+        try writer.flush();
+        try fileWriter.seekTo(header.assets + assetArraySize);
 
         for (1..@as(usize, header.assetCount)) |assetIndex| {
             const source = assets.assetSources[assetIndex];
             var dest: *h.FileFormats.hha_asset = &assets.assets[assetIndex];
 
-            dest.dataOffset = try out.getPos();
+            dest.dataOffset = fileWriter.pos + writer.buffered().len;
 
             switch (source.t) {
                 .AssetType_Sound => {
@@ -984,7 +985,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
 
                     for (0..w.channelCount) |channelIndex| {
                         const data: []i16 = w.samples[channelIndex].?[0..dest.data.sound.sampleCount];
-                        try out.writeAll(std.mem.sliceAsBytes(data));
+                        try writer.writeAll(std.mem.sliceAsBytes(data));
                     }
                 },
                 .AssetType_Font => {
@@ -992,10 +993,10 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
 
                     try FinalizeFontKerning(font, allocator);
 
-                    try out.writeAll(std.mem.sliceAsBytes(font.glyphs[0..font.glyphCount]));
+                    try writer.writeAll(std.mem.sliceAsBytes(font.glyphs[0..font.glyphCount]));
                     var horizontalAdvance: [*]u8 = @ptrCast(font.horizontalAdvance.ptr);
                     for (0..font.glyphCount) |_| {
-                        try out.writeAll(horizontalAdvance[0 .. font.glyphCount * @sizeOf(f32)]);
+                        try writer.writeAll(horizontalAdvance[0 .. font.glyphCount * @sizeOf(f32)]);
                         horizontalAdvance += font.glyphs.len * @sizeOf(f32);
                     }
                 },
@@ -1018,19 +1019,21 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
 
                     if (b.width > 0 and b.height > 0) {
                         const data: []u8 = b.memory[0..@intCast(b.width * b.height * 4)];
-                        try out.writeAll(data);
+                        try writer.writeAll(data);
                     }
                 },
             }
         }
 
-        try out.seekTo(header.assets);
-        try out.writeAll(std.mem.sliceAsBytes(assets.assets[0..header.assetCount]));
+        try writer.flush();
+        try fileWriter.seekTo(header.assets);
+        try writer.writeAll(std.mem.sliceAsBytes(assets.assets[0..header.assetCount]));
+        try writer.flush();
     }
 }
 
 fn WriteFonts() void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .verbose_log = false }){};
+    var gpa: std.heap.DebugAllocator(.{ .verbose_log = false }) = .init;
     defer {
         const st = gpa.deinit();
         if (st == .leak) @panic("memory leak");
