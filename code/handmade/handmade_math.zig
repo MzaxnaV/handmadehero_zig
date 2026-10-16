@@ -99,8 +99,8 @@ inline fn Rectangle(comptime n: comptime_int) type {
 
         const v = Vector(n);
 
-        min: v = [1]f32{0} ** n,
-        max: v = [1]f32{0} ** n,
+        min: v = @splat(0),
+        max: v = @splat(0),
 
         pub inline fn InitMinMax(min: v, max: v) Self {
             const result = Self{
@@ -171,7 +171,7 @@ inline fn Rectangle(comptime n: comptime_int) type {
         }
 
         pub inline fn GetBarycentric(self: *const Self, p: v) v {
-            var result: v = [1]f32{0} ** n;
+            var result: v = @splat(0);
 
             inline for (0..n) |i| {
                 result[i] = SafeRatiof0(p[i] - self.min[i], self.max[i] - self.min[i]);
@@ -216,7 +216,7 @@ inline fn Rectangle(comptime n: comptime_int) type {
 
 /// returns `a + b`
 pub inline fn Add(a: anytype, b: [a.len]f32) [a.len]f32 {
-    var result = [1]f32{0} ** a.len;
+    var result: [a.len]f32 = @splat(0);
 
     inline for (0..result.len) |i| {
         result[i] = a[i] + b[i];
@@ -247,7 +247,7 @@ pub inline fn Neg(vec: anytype) [vec.len]f32 {
 
 /// returns `a - b`
 pub inline fn Sub(a: anytype, b: [a.len]f32) [a.len]f32 {
-    var result = [1]f32{0} ** a.len;
+    var result: [a.len]f32 = @splat(0);
 
     inline for (0..result.len) |i| {
         result[i] = a[i] - b[i];
@@ -271,7 +271,7 @@ pub inline fn SubFrom(vec: anytype, other: [vec.len]f32) void {
 }
 
 pub inline fn Scale(vec: anytype, val: f32) [vec.len]f32 {
-    var result = [1]f32{0} ** vec.len;
+    var result: [vec.len]f32 = @splat(0);
 
     inline for (0..result.len) |i| {
         result[i] = val * vec[i];
@@ -281,7 +281,7 @@ pub inline fn Scale(vec: anytype, val: f32) [vec.len]f32 {
 }
 
 pub inline fn Hammard(a: anytype, b: [a.len]f32) [a.len]f32 {
-    var result = [1]f32{0} ** a.len;
+    var result: [a.len]f32 = @splat(0);
 
     inline for (0..result.len) |i| {
         result[i] = a[i] * b[i];

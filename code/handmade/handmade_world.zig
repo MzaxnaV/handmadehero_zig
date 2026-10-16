@@ -264,7 +264,7 @@ pub fn ChangeEntityLocation(arena: *h.Data.memory_arena, w: *world, lowEntityInd
     var oldP: ?*const world_position = null;
     var newP: ?*const world_position = null;
 
-    if (!h.Entity.IsSet(&lowEntity.sim, @intFromEnum(h.SimRegion.sim_entity_flags.NonSpatial)) and IsValid(lowEntity.p)) {
+    if (!h.Entity.IsSet(&lowEntity.sim, @backingInt(h.SimRegion.sim_entity_flags.NonSpatial)) and IsValid(lowEntity.p)) {
         oldP = &lowEntity.p;
     }
 
@@ -276,10 +276,10 @@ pub fn ChangeEntityLocation(arena: *h.Data.memory_arena, w: *world, lowEntityInd
 
     if (newP) |p| {
         lowEntity.p = p.*;
-        h.Entity.ClearFlags(&lowEntity.sim, @intFromEnum(h.SimRegion.sim_entity_flags.NonSpatial));
+        h.Entity.ClearFlags(&lowEntity.sim, @backingInt(h.SimRegion.sim_entity_flags.NonSpatial));
     } else {
         lowEntity.p = NullPosition();
-        h.Entity.AddFlags(&lowEntity.sim, @intFromEnum(h.SimRegion.sim_entity_flags.NonSpatial));
+        h.Entity.AddFlags(&lowEntity.sim, @backingInt(h.SimRegion.sim_entity_flags.NonSpatial));
     }
 }
 

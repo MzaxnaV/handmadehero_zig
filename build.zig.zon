@@ -16,7 +16,7 @@
     // modify the field.
     .fingerprint = 0xe99befa396d2f5af, // Changing this has security and trust implications.
 
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
 
     .dependencies = .{
         .zigwin32 = .{

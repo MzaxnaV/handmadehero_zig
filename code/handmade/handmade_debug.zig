@@ -340,10 +340,10 @@ pub fn Start(assets: *h.Asset.game_assets, width: u32, height: u32) void {
             DEBUGEndVariableGroup(&context);
 
             var matchVector = h.Asset.asset_vector{};
-            matchVector.e[@intFromEnum(h.FileFormats.asset_tag_id.FacingDirection)] = 0.0;
+            matchVector.e[@backingInt(h.FileFormats.asset_tag_id.FacingDirection)] = 0.0;
 
             var weightVector = h.Asset.asset_vector{};
-            weightVector.e[@intFromEnum(h.FileFormats.asset_tag_id.FacingDirection)] = 1.0;
+            weightVector.e[@backingInt(h.FileFormats.asset_tag_id.FacingDirection)] = 1.0;
 
             const id = h.Asset.GetBestMatchBitmapFrom(assets, .Head, &matchVector, &weightVector);
 
@@ -378,8 +378,8 @@ pub fn Start(assets: *h.Asset.game_assets, width: u32, height: u32) void {
         var matchVectorFont = h.Asset.asset_vector{};
         var weightVectorFont = h.Asset.asset_vector{};
 
-        matchVectorFont.e[@intFromEnum(h.FileFormats.asset_tag_id.FontType)] = @floatFromInt(@as(i32, @intFromEnum(h.FileFormats.asset_font_type.Debug)));
-        weightVectorFont.e[@intFromEnum(h.FileFormats.asset_tag_id.FontType)] = 1.0;
+        matchVectorFont.e[@backingInt(h.FileFormats.asset_tag_id.FontType)] = @floatFromInt(@as(i32, @backingInt(h.FileFormats.asset_font_type.Debug)));
+        weightVectorFont.e[@backingInt(h.FileFormats.asset_tag_id.FontType)] = 1.0;
 
         debugState.fontID = h.Asset.GetBestMatchFontFrom(
             assets,
@@ -725,7 +725,7 @@ fn VariableToText(buffer: []u8, variable: *debug_variable, flags: debug_variable
 }
 
 fn WriteHandmadeConfig(debugState: *debug_state) void {
-    var temp = [1]u8{0} ** 4096;
+    var temp: [4096]u8 = @splat(0);
     var written: u32 = 0;
 
     var depth: i32 = 0;
@@ -787,12 +787,7 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
 
     if (!debugState.compiling) {
         // NOTE (Manav): compilation is incredibly slow (LLVM is the bottleneck)
-        const commandline = "/C zig build lib -p build -Dself_compilation=true -fincremental -Doptimize=" ++ switch (@import("builtin").mode) {
-            .Debug => "Debug",
-            .ReleaseFast => "ReleaseFast",
-            .ReleaseSafe => "ReleaseSafe",
-            .ReleaseSmall => "ReleaseSmall",
-        };
+        const commandline = "/C zig build lib -p build -Dself_compilation=true -fincremental -Doptimize=" ++ @tagName(@import("builtin").mode);
 
         debugState.compiling = true;
         debugState.compiler = h.Data.platformAPI.DEBUGExecuteSystemCommand("..\\", "c:\\windows\\system32\\cmd.exe", commandline);
@@ -863,7 +858,7 @@ fn DrawProfileIn(debugState: *debug_state, profileRect: h.rect2, mouseP: h.v2) v
             if (regionRect.IsInRect(mouseP)) {
                 const record: *Platform.debug_record = region.record;
 
-                var textBuffer = [1]u8{0} ** 256;
+                var textBuffer: [256]u8 = @splat(0);
                 const buffer = std.fmt.bufPrint(textBuffer[0..], "{s}: {:10}cy [{s}({d})]\n", .{
                     record.blockName.?,
                     region.cycleCount,
@@ -1092,7 +1087,7 @@ fn DEBUGDrawMainMenu(debugState: *debug_state, _: *h.RenderGroup.render_group, m
                 },
 
                 else => {
-                    var text = [1]u8{0} ** 256;
+                    var text: [256]u8 = @splat(0);
 
                     _ = VariableToText(text[0..], variable, .{
                         .Name = true,
@@ -1258,12 +1253,12 @@ fn EndInteract(debugState: *debug_state, _: *Platform.input, _: h.v2) void {
 fn Interact(debugState: *debug_state, input: *Platform.input, mouseP: h.v2) void {
     const dMouseP: h.v2 = h.Sub(mouseP, debugState.lastMouseP);
 
-    // if (input.mouseButtons[@intFromEnum(input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
-    //     if (input.mouseButtons[@intFromEnum(input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
+    // if (input.mouseButtons[@backingInt(input_mouse_button.PlatformMouseButton_Right)].endedDown > 0) {
+    //     if (input.mouseButtons[@backingInt(input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0) {
     //         debugState.menuP = mouseP;
     //     }
     //     DrawDebugMainMenu(debugState, renderGroup, mouseP);
-    // } else if (input.mouseButtons[@intFromEnum(input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
+    // } else if (input.mouseButtons[@backingInt(input_mouse_button.PlatformMouseButton_Right)].halfTransitionCount > 0)
 
     if (debugState.interaction.type != .None) {
         // Mouse move interaction
@@ -1299,36 +1294,36 @@ fn Interact(debugState: *debug_state, input: *Platform.input, mouseP: h.v2) void
             else => {},
         }
 
-        const altUI = input.mouseButtons[@intFromEnum(Platform.input_mouse_button.PlatformMouseButton_Right)].endedDown != 0;
+        const altUI = input.mouseButtons[@backingInt(Platform.input_mouse_button.PlatformMouseButton_Right)].endedDown != 0;
 
         // Mouse click interaction
-        var transitionIndex = input.mouseButtons[@intFromEnum(Platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
+        var transitionIndex = input.mouseButtons[@backingInt(Platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
         while (transitionIndex > 1) : (transitionIndex -= 1) {
             EndInteract(debugState, input, mouseP);
             BeginInteract(debugState, input, mouseP, altUI);
         }
 
-        if (input.mouseButtons[@intFromEnum(Platform.input_mouse_button.PlatformMouseButton_Left)].endedDown == 0) {
+        if (input.mouseButtons[@backingInt(Platform.input_mouse_button.PlatformMouseButton_Left)].endedDown == 0) {
             EndInteract(debugState, input, mouseP);
         }
     } else {
         debugState.hotInteraction = debugState.nextHotInteraction;
 
-        const altUI = input.mouseButtons[@intFromEnum(Platform.input_mouse_button.PlatformMouseButton_Right)].endedDown != 0;
+        const altUI = input.mouseButtons[@backingInt(Platform.input_mouse_button.PlatformMouseButton_Right)].endedDown != 0;
 
-        var transitionIndex = input.mouseButtons[@intFromEnum(Platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
+        var transitionIndex = input.mouseButtons[@backingInt(Platform.input_mouse_button.PlatformMouseButton_Left)].halfTransitionCount;
         while (transitionIndex > 1) : (transitionIndex -= 1) {
             BeginInteract(debugState, input, mouseP, altUI);
             EndInteract(debugState, input, mouseP);
         }
 
-        if (input.mouseButtons[@intFromEnum(Platform.input_mouse_button.PlatformMouseButton_Left)].endedDown != 0) {
+        if (input.mouseButtons[@backingInt(Platform.input_mouse_button.PlatformMouseButton_Left)].endedDown != 0) {
             BeginInteract(debugState, input, mouseP, altUI);
         }
     }
 
     if (Platform.IGNORE) {
-        if (Platform.WasPressed(&input.mouseButtons[@intFromEnum(Platform.input_mouse_button.PlatformMouseButton_Left)])) {
+        if (Platform.WasPressed(&input.mouseButtons[@backingInt(Platform.input_mouse_button.PlatformMouseButton_Left)])) {
             if (debugState.hotVariable) |hotVariable| {
                 switch (hotVariable.type) {
                     .bool => {
@@ -1426,7 +1421,7 @@ pub fn End(input: *Platform.input, drawBuffer: *h.RenderGroup.loaded_bitmap) voi
                         }
 
                         if (!Platform.IGNORE) {
-                            var textBuffer = [1]u8{0} ** 256;
+                            var textBuffer: [256]u8 = @splat(0);
                             const buffer = std.fmt.bufPrint(textBuffer[0..], "{s:32}({:4}) - {:10}cy {:8}h {:10}cy/h\n", .{
                                 blockName,
                                 counter.lineNumber,
@@ -1445,7 +1440,7 @@ pub fn End(input: *Platform.input, drawBuffer: *h.RenderGroup.loaded_bitmap) voi
             }
 
             if (debugState.frameCount != 0) {
-                var textBuffer = [1]u8{0} ** 256;
+                var textBuffer: [256]u8 = @splat(0);
                 const buffer = std.fmt.bufPrint(textBuffer[0..], "Last Frame Time: {d:5.2}ms\n", .{
                     debugState.frames[debugState.frameCount - 1].wallSecondsElapsed * 1000,
                 }) catch |err| {
@@ -1456,7 +1451,7 @@ pub fn End(input: *Platform.input, drawBuffer: *h.RenderGroup.loaded_bitmap) voi
                 DEBUGTextLine(buffer);
             }
         }
-        if (Platform.WasPressed(&input.mouseButtons[@intFromEnum(Platform.input_mouse_button.PlatformMouseButton_Left)])) {
+        if (Platform.WasPressed(&input.mouseButtons[@backingInt(Platform.input_mouse_button.PlatformMouseButton_Left)])) {
             if (hotRecord) |_| {
                 debugState.scopeToRecord = hotRecord;
             } else {

@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
     const preprocess_profile_root_module = b.createModule(.{
         .root_source_file = b.path("code/tools/preprocess_profile.zig"),
         .target = b.graph.host,
-        .optimize = .ReleaseSafe,
+        .optimize = .safe,
     });
 
     const preprocess_profile = b.addExecutable(.{
@@ -171,7 +171,7 @@ pub fn build(b: *std.Build) void {
     const llvm_mca_parser_root_module = b.createModule(.{
         .root_source_file = b.path("code/tools/parse_llvm_mca.zig"),
         .target = b.graph.host,
-        .optimize = .ReleaseSafe,
+        .optimize = .safe,
     });
 
     const llvm_mca_parser_step = b.step("parse_llvm_mca", "Parse llvm-mca output generator (requires -Dmca)");

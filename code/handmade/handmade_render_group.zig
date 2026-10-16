@@ -1437,7 +1437,7 @@ pub const render_group = struct {
 
         const tileCountX = 4;
         const tileCountY = 4;
-        var workArray: [tileCountX * tileCountY]tile_render_work = [1]tile_render_work{.{}} ** (tileCountX * tileCountY);
+        var workArray: [tileCountX * tileCountY]tile_render_work = @splat(.{});
 
         Assert((@intFromPtr(outputTarget.memory) & 15) == 0); // TODO (Manav): use alignment as a requirement in the stuct itself?
 

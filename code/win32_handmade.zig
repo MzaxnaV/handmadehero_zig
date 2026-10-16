@@ -39,7 +39,7 @@ const IGNORE = Platform.IGNORE;
 const HANDMADE_INTERNAL = Platform.HANDMADE_INTERNAL;
 const WIN32_STATE_FILE_NAME_COUNT = win32.MAX_PATH;
 
-const allocationReserveCommit = win32.VIRTUAL_ALLOCATION_TYPE{ .RESERVE = 1, .COMMIT = 1 }; // = @enumFromInt(@intFromEnum(win32.MEM_RESERVE) | @intFromEnum(win32.MEM_COMMIT));
+const allocationReserveCommit = win32.VIRTUAL_ALLOCATION_TYPE{ .RESERVE = 1, .COMMIT = 1 }; // = @enumFromInt(@backingInt(win32.MEM_RESERVE) | @backingInt(win32.MEM_COMMIT));
 
 // data types -----------------------------------------------------------------------------------------------------------------------------
 
@@ -116,7 +116,7 @@ const win32_replay_buffer = struct {
 const win32_state = struct {
     totalSize: u64 = 0,
     gameMemoryBlock: *anyopaque,
-    replayBuffers: [4]win32_replay_buffer = [1]win32_replay_buffer{.{}} ** 4,
+    replayBuffers: [4]win32_replay_buffer = @splat(.{}),
 
     recordingHandle: win32.HANDLE,
     inputRecordingIndex: u32 = 0,
@@ -364,7 +364,7 @@ fn Win32LoadXinput() void {
         } else {
             const state = struct {
                 fn XInputGetStateInternal(_: u32, _: ?*win32.XINPUT_STATE) callconv(.winapi) isize {
-                    return @intFromEnum(win32.ERROR_DEVICE_NOT_CONNECTED);
+                    return @backingInt(win32.ERROR_DEVICE_NOT_CONNECTED);
                 }
             };
             XInputGetState = state.XInputGetStateInternal;
@@ -375,7 +375,7 @@ fn Win32LoadXinput() void {
         } else {
             const state = struct {
                 fn XInputSetStateInternal(_: u32, _: ?*win32.XINPUT_VIBRATION) callconv(.winapi) isize {
-                    return @intFromEnum(win32.ERROR_DEVICE_NOT_CONNECTED);
+                    return @backingInt(win32.ERROR_DEVICE_NOT_CONNECTED);
                 }
             };
             XInputSetState = state.XInputSetStateInternal;
@@ -569,9 +569,9 @@ fn Win32MainWindowCallback(windowHandle: win32.HWND, message: u32, wParam: win32
         win32.WM_ACTIVATEAPP => {
             if (IGNORE) {
                 if (wParam == win32.TRUE) {
-                    _ = win32.SetLayeredWindowAttributes(windowHandle, @as(u32, @bitCast(win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 })), 255, win32.LWA_ALPHA);
+                    _ = win32.SetLayeredWindowAttributes(windowHandle, 0, 255, win32.LWA_ALPHA);
                 } else {
-                    _ = win32.SetLayeredWindowAttributes(windowHandle, @as(u32, @bitCast(win32.RGBQUAD{ .rgbBlue = 0, .rgbGreen = 0, .rgbRed = 0, .rgbReserved = 0 })), 128, win32.LWA_ALPHA);
+                    _ = win32.SetLayeredWindowAttributes(windowHandle, 0, 128, win32.LWA_ALPHA);
                 }
             }
         },
@@ -685,7 +685,7 @@ fn Win32ProcessXInputStickValue(value: i16, deadZoneThreshold: u32) f32 {
 }
 
 fn Win32GetInputFileLocation(state: *win32_state, inputStream: bool, slotIndex: usize, dest: [:0]u16) void {
-    var exeName: [64]u16 = [1]u16{0} ** 64;
+    var exeName: [64]u16 = @splat(0);
 
     const s = if (inputStream) win32.L("input") else win32.L("state");
 
@@ -707,7 +707,7 @@ fn Win32BeginRecordingInput(state: *win32_state, inputRecordingIndex: u32) void 
     if (replayBuffer.memoryBlock) |replayMemBlock| {
         state.inputRecordingIndex = inputRecordingIndex;
 
-        var fileName = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
+        var fileName: [WIN32_STATE_FILE_NAME_COUNT:0]u16 = @splat(0);
         Win32GetInputFileLocation(state, true, inputRecordingIndex, fileName[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
         const handle = win32.CreateFileW(&fileName, win32.FILE_GENERIC_WRITE, win32.FILE_SHARE_NONE, null, win32.CREATE_ALWAYS, win32.SECURITY_ANONYMOUS, null);
@@ -739,7 +739,7 @@ fn Win32BeginInputPlayBack(state: *win32_state, inputPlayingIndex: u32) void {
     if (replayBuffer.memoryBlock) |replayMemBlock| {
         state.inputPlayingIndex = inputPlayingIndex;
 
-        var fileName = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
+        var fileName: [WIN32_STATE_FILE_NAME_COUNT:0]u16 = @splat(0);
         Win32GetInputFileLocation(state, true, inputPlayingIndex, fileName[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
         const handle = win32.CreateFileW(&fileName, win32.FILE_GENERIC_READ, win32.FILE_SHARE_NONE, null, win32.OPEN_EXISTING, win32.SECURITY_ANONYMOUS, null);
@@ -823,7 +823,7 @@ fn Win32ProcessPendingMessages(state: *win32_state, keyboardController: *Platfor
         switch (message.message) {
             win32.WM_QUIT => globalRunning = false,
             win32.WM_KEYDOWN, win32.WM_KEYUP, win32.WM_SYSKEYDOWN, win32.WM_SYSKEYUP => {
-                const vkCode: win32.VIRTUAL_KEY = @enumFromInt(message.wParam);
+                const vkCode: win32.VIRTUAL_KEY = @fromBackingInt(@intCast(message.wParam));
                 const wasDown = ((message.lParam & (1 << 30)) != 0);
                 const isDown = ((message.lParam & (1 << 31)) == 0);
 
@@ -1032,7 +1032,7 @@ const win32_work_queue = struct {
     nextEntryToRead: atomic.Value(u32) = atomic.Value(u32).init(0),
     semaphoreHandle: ?win32.HANDLE = null,
 
-    entries: [256]win32_work_queue_entry = [1]win32_work_queue_entry{.{}} ** 256,
+    entries: [256]win32_work_queue_entry = @splat(.{}),
 
     fn MakeQueue(queue: *win32_work_queue, comptime threadCount: comptime_int) void {
         const initialCount = 0;
@@ -1127,7 +1127,7 @@ fn ThreadProc(lpParameter: ?*anyopaque) callconv(.winapi) DWORD {
 }
 
 fn DoWorkerWork(_: ?*Platform.work_queue, data: *anyopaque) void {
-    var buffer = [1:0]u8{0} ** 256;
+    var buffer: [256]u8 = @splat(0);
 
     std.debug.print("Thread {}: {s}\n", .{ win32.GetCurrentThreadId(), @as([*:0]const u8, @ptrCast(data)) });
     _ = win32.OutputDebugStringA(&buffer);
@@ -1334,14 +1334,14 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
     Win32GetEXEFileName(&win32State);
 
-    var sourceGameCodeDLLFullPath = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
+    var sourceGameCodeDLLFullPath: [WIN32_STATE_FILE_NAME_COUNT:0]u16 = @splat(0);
     Win32BuildEXEPathFileName(&win32State, win32.L("handmade.dll"), sourceGameCodeDLLFullPath[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
-    var tempGameCodeDLLFullPath = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
+    var tempGameCodeDLLFullPath: [WIN32_STATE_FILE_NAME_COUNT:0]u16 = @splat(0);
     Win32BuildEXEPathFileName(&win32State, win32.L("handmade_temp.dll"), tempGameCodeDLLFullPath[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
     // NOTE (Manav): we don't need lock
-    var gameCodeLockFullPath = [_:0]u16{0} ** WIN32_STATE_FILE_NAME_COUNT;
+    var gameCodeLockFullPath: [WIN32_STATE_FILE_NAME_COUNT:0]u16 = @splat(0);
     Win32BuildEXEPathFileName(&win32State, win32.L("lock.tmp"), gameCodeLockFullPath[0..WIN32_STATE_FILE_NAME_COUNT :0]);
 
     const desiredSchedulerMS = 1;
@@ -1520,7 +1520,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
             }
 
             if (samples != null) {
-                var inputs = [1]Platform.input{Platform.input{}} ** 2;
+                var inputs: [2]Platform.input = @splat(Platform.input{});
 
                 var newInput: *Platform.input = &inputs[0];
                 var oldInput: *Platform.input = &inputs[1];
@@ -1529,7 +1529,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                 var flipWallClock = Win32GetWallClock();
 
                 const debugTimeMarkerIndex: u32 = 0;
-                var debugTimeMarkers = [1]win32_debug_time_marker{.{}} ** 30;
+                var debugTimeMarkers: [30]win32_debug_time_marker = @splat(.{});
 
                 var audioLatencyBytes: DWORD = 0;
                 var audioLatencySeconds: f32 = 0;
@@ -1598,11 +1598,11 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         newInput.mouseZ = 0;
 
                         const winButtonID: [Platform.input_mouse_button.len()]i32 = .{
-                            @intFromEnum(win32.VK_LBUTTON),
-                            @intFromEnum(win32.VK_MBUTTON),
-                            @intFromEnum(win32.VK_RBUTTON),
-                            @intFromEnum(win32.VK_XBUTTON1),
-                            @intFromEnum(win32.VK_XBUTTON2),
+                            @backingInt(win32.VK_LBUTTON),
+                            @backingInt(win32.VK_MBUTTON),
+                            @backingInt(win32.VK_RBUTTON),
+                            @backingInt(win32.VK_XBUTTON1),
+                            @backingInt(win32.VK_XBUTTON2),
                         };
 
                         for (0..Platform.input_mouse_button.len()) |buttonIndex| {
@@ -1627,7 +1627,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                             const newController = &newInput.controllers[ourControllerIndex];
 
                             var controllerState: win32.XINPUT_STATE = undefined;
-                            if (XInputGetState(controllerIndex, &controllerState) == @intFromEnum(win32.ERROR_SUCCESS)) {
+                            if (XInputGetState(controllerIndex, &controllerState) == @backingInt(win32.ERROR_SUCCESS)) {
                                 newController.isConnected = true;
                                 newController.isAnalog = oldController.isAnalog;
 
@@ -1840,7 +1840,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                 audioLatencySeconds = (@as(f32, @floatFromInt(audioLatencyBytes)) / @as(f32, @floatFromInt(soundOutput.bytesPerSample))) / @as(f32, @floatFromInt(soundOutput.samplesPerSecond));
 
                                 if (IGNORE) {
-                                    var textbuffer = [1:0]u8{0} ** 256;
+                                    var textbuffer: [256]u8 = @splat(0);
                                     std.fmt.bufPrintZ(textbuffer[0.. :0], "BTL:{} TC:{} BTW:{} - PC:{} WC:{} DELTA:{} ({}s)", .{
                                         byteToLock,
                                         targetCursor,

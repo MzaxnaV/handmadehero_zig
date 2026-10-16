@@ -68,9 +68,9 @@ const MAX_SOURCE_FILE_BYTES = 1024 * 1024;
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
 
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer std.debug.assert(gpa.deinit() == .ok);
-    const allocator = gpa.allocator();
+    var safe: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
+    defer std.debug.assert(safe.deinit() == 0);
+    const allocator = safe.allocator();
 
     const win32_path = "../win32_handmade.zig";
     const debug_path = "handmade_debug.zig";

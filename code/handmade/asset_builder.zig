@@ -250,15 +250,15 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, pixelHeight: i32, al
         0,
         0,
         0,
-        @intFromEnum(win32.FW_NORMAL),
+        @backingInt(win32.FW_NORMAL),
         win32.FALSE,
         win32.FALSE,
         win32.FALSE,
-        @intFromEnum(win32.DEFAULT_CHARSET),
-        @intFromEnum(win32.OUT_DEFAULT_PRECIS),
+        @backingInt(win32.DEFAULT_CHARSET),
+        @backingInt(win32.OUT_DEFAULT_PRECIS),
         @as(u8, @bitCast(win32.CLIP_DEFAULT_PRECIS)),
-        @intFromEnum(win32.ANTIALIASED_QUALITY),
-        @intFromEnum(win32.FF_DONTCARE),
+        @backingInt(win32.ANTIALIASED_QUALITY),
+        @backingInt(win32.FF_DONTCARE),
         fontName.ptr,
     );
 
@@ -644,7 +644,7 @@ fn LoadWAV(io: std.Io, fileName: []const u8, sectionFirstSampleIndex: u32, secti
         fn GetType(self: *Self) chunk_type {
             const chunk: *wave_chunk = @ptrCast(self.at);
 
-            const result: chunk_type = @enumFromInt(chunk.ID);
+            const result: chunk_type = @fromBackingInt(@intCast(chunk.ID));
             return result;
         }
 
@@ -673,8 +673,8 @@ fn LoadWAV(io: std.Io, fileName: []const u8, sectionFirstSampleIndex: u32, secti
 
     const header: *wave_header = @ptrCast(readResult.contents);
 
-    assert(header.riffID == @intFromEnum(chunk_type.WAVE_ChunkID_RIFF));
-    assert(header.waveID == @intFromEnum(chunk_type.WAVE_ChunkID_WAVE));
+    assert(header.riffID == @backingInt(chunk_type.WAVE_ChunkID_RIFF));
+    assert(header.waveID == @backingInt(chunk_type.WAVE_ChunkID_WAVE));
 
     const at = @as([*]u8, @ptrCast(header)) + @sizeOf(wave_header);
     const stop = @as([*]u8, @ptrCast(header)) + @sizeOf(wave_header) + (header.size - 4);
@@ -786,14 +786,14 @@ const game_assets = struct {
 
         // NOTE (Manav): Not really needed for us
         self.assetTypeCount = h.FileFormats.asset_type_id.count();
-        self.assetTypes = [1]h.FileFormats.hha_asset_type{.{ .typeID = 0, .firstAssetIndex = 0, .onePastLastAssetIndex = 0 }} ** h.FileFormats.asset_type_id.count();
+        self.assetTypes = @splat(.{ .typeID = 0, .firstAssetIndex = 0, .onePastLastAssetIndex = 0 });
     }
 
     fn BeginAssetType(self: *game_assets, typeID: h.FileFormats.asset_type_id) void {
         assert(self.DEBUGAssetType == null);
 
-        self.DEBUGAssetType = &self.assetTypes[@intFromEnum(typeID)];
-        self.DEBUGAssetType.?.typeID = @intFromEnum(typeID);
+        self.DEBUGAssetType = &self.assetTypes[@backingInt(typeID)];
+        self.DEBUGAssetType.?.typeID = @backingInt(typeID);
         self.DEBUGAssetType.?.firstAssetIndex = self.assetCount;
         self.DEBUGAssetType.?.onePastLastAssetIndex = self.DEBUGAssetType.?.firstAssetIndex;
     }
@@ -934,18 +934,15 @@ const game_assets = struct {
         var tag: *h.FileFormats.hha_tag = &self.tags[self.tagCount];
         self.tagCount += 1;
 
-        tag.ID = @intFromEnum(ID);
+        tag.ID = @backingInt(ID);
         tag.value = value;
     }
 };
 
 fn WriteHHA(io: std.Io, assets: *game_assets, filename: []const u8) !void {
-    var gpa: std.heap.DebugAllocator(.{ .verbose_log = true }) = .init;
-    defer {
-        const st = gpa.deinit();
-        if (st == .leak) @panic("memory leak");
-    }
-    const allocator = gpa.allocator();
+    var safe: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
+    defer std.debug.assert(safe.deinit() == 0);
+    const allocator = safe.allocator();
 
     const out = try std.Io.Dir.cwd().createFile(io, filename, .{});
     defer out.close(io);
@@ -1049,13 +1046,9 @@ fn WriteHHA(io: std.Io, assets: *game_assets, filename: []const u8) !void {
 }
 
 fn WriteFonts(io: std.Io) void {
-    var gpa: std.heap.DebugAllocator(.{ .verbose_log = false }) = .init;
-    defer {
-        const st = gpa.deinit();
-        if (st == .leak) @panic("memory leak");
-    }
-
-    const allocator = gpa.allocator();
+    var safe: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
+    defer std.debug.assert(safe.deinit() == 0);
+    const allocator = safe.allocator();
 
     var assets = game_assets{};
     assets.Initialize();
@@ -1092,9 +1085,9 @@ fn WriteFonts(io: std.Io) void {
 
     assets.BeginAssetType(.Font);
     _ = assets.AddFontAsset(fonts[0]);
-    _ = assets.AddTag(.FontType, @floatFromInt(@as(u32, @intFromEnum(h.FileFormats.asset_font_type.Default))));
+    _ = assets.AddTag(.FontType, @floatFromInt(@as(u32, @backingInt(h.FileFormats.asset_font_type.Default))));
     _ = assets.AddFontAsset(fonts[1]);
-    _ = assets.AddTag(.FontType, @floatFromInt(@as(u32, @intFromEnum(h.FileFormats.asset_font_type.Debug))));
+    _ = assets.AddTag(.FontType, @floatFromInt(@as(u32, @backingInt(h.FileFormats.asset_font_type.Debug))));
 
     assets.EndAssetType();
 
