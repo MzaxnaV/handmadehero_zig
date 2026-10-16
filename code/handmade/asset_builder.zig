@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const s = @cImport({
-    @cInclude("stb_truetype.h");
-});
+const s = @import("stb_truetype");
 
 const win32 = @import("win32").everything;
 
@@ -105,24 +103,33 @@ const entire_file = struct {
     contents: []u8 = undefined,
 };
 
-fn ReadEntireFile(file: struct { name: []const u8, absolute: bool = false }, allocator: std.mem.Allocator) !entire_file {
+fn ReadEntireFile(
+    io: std.Io,
+    file: struct { name: []const u8, absolute: bool = false },
+    allocator: std.mem.Allocator,
+) !entire_file {
     var result = entire_file{};
 
     const prefix = if (file.absolute) "" else "../data/";
 
-    const newFileName = try std.mem.concat(allocator, u8, &[_][]const u8{ prefix, file.name });
+    var pathBuffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const newFileName = try std.fmt.bufPrint(
+        &pathBuffer,
+        "{s}{s}",
+        .{ prefix, file.name },
+    );
 
-    const f = try std.fs.cwd().openFile(newFileName, .{ .mode = .read_only });
-    defer f.close();
-
-    result.contents = try f.readToEndAlloc(allocator, platform.GigaBytes(8));
-
-    allocator.free(newFileName);
+    result.contents = try std.Io.Dir.cwd().readFileAlloc(
+        io,
+        newFileName,
+        allocator,
+        .limited(platform.GigaBytes(8)),
+    );
 
     return result;
 }
 
-fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !loaded_bitmap {
+fn LoadBMP(io: std.Io, fileName: []const u8, allocator: std.mem.Allocator) !loaded_bitmap {
     const bitmap_header = extern struct {
         fileType: u16 align(1),
         fileSize: u32 align(1),
@@ -148,7 +155,11 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !loaded_bitmap {
 
     var result = loaded_bitmap{};
 
-    const readResult = ReadEntireFile(.{ .name = fileName }, allocator) catch |err| {
+    const readResult = ReadEntireFile(
+        io,
+        .{ .name = fileName },
+        allocator,
+    ) catch |err| {
         std.log.err("{}\nFilename: {s}", .{ err, fileName });
         return err;
     };
@@ -239,15 +250,15 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, pixelHeight: i32, al
         0,
         0,
         0,
-        win32.FW_NORMAL,
+        @backingInt(win32.FW_NORMAL),
         win32.FALSE,
         win32.FALSE,
         win32.FALSE,
-        win32.DEFAULT_CHARSET,
-        win32.OUT_DEFAULT_PRECIS,
-        win32.CLIP_DEFAULT_PRECIS,
-        win32.ANTIALIASED_QUALITY,
-        win32.FF_DONTCARE,
+        @backingInt(win32.DEFAULT_CHARSET),
+        @backingInt(win32.OUT_DEFAULT_PRECIS),
+        @as(u8, @bitCast(win32.CLIP_DEFAULT_PRECIS)),
+        @backingInt(win32.ANTIALIASED_QUALITY),
+        @backingInt(win32.FF_DONTCARE),
         fontName.ptr,
     );
 
@@ -342,7 +353,7 @@ fn InitializeFontDC() void {
         0,
     );
     _ = win32.SelectObject(global.fontDeviceContext, bitmap);
-    _ = win32.SetBkColor(global.fontDeviceContext, 0x00000000);
+    _ = win32.SetBkColor(global.fontDeviceContext, .black);
 }
 
 fn LoadGlyphBitmap(font: *loaded_font, codePoint: u32, asset: *h.FileFormats.hha_asset, allocator: std.mem.Allocator) !loaded_bitmap {
@@ -374,7 +385,7 @@ fn LoadGlyphBitmap(font: *loaded_font, codePoint: u32, asset: *h.FileFormats.hha
 
         // _ = win32.PatBlt(static.deviceContext, 0, 0, width, height, win32.BLACKNESS);
         // _ = win32.SetBkMode(static.deviceContext, win32.TRANSPARENT);
-        _ = win32.SetTextColor(global.fontDeviceContext, 0x00ffffff); // TODO: Make an RGB macro for this
+        _ = win32.SetTextColor(global.fontDeviceContext, .white);
         _ = win32.TextOutW(global.fontDeviceContext, preStepX, 0, cheesePoint[0..], 1);
 
         var minX: i32 = 10000;
@@ -561,7 +572,7 @@ fn LoadGlyphBitmap(font: *loaded_font, codePoint: u32, asset: *h.FileFormats.hha
     return result;
 }
 
-fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCount: u32, allocator: std.mem.Allocator) !loaded_sound {
+fn LoadWAV(io: std.Io, fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCount: u32, allocator: std.mem.Allocator) !loaded_sound {
     const wave_header = extern struct {
         riffID: u32 align(1),
         size: u32 align(1),
@@ -633,7 +644,7 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
         fn GetType(self: *Self) chunk_type {
             const chunk: *wave_chunk = @ptrCast(self.at);
 
-            const result: chunk_type = @enumFromInt(chunk.ID);
+            const result: chunk_type = @fromBackingInt(@intCast(chunk.ID));
             return result;
         }
 
@@ -653,7 +664,7 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
 
     var result = loaded_sound{};
 
-    const readResult: entire_file = ReadEntireFile(.{ .name = fileName }, allocator) catch |err| {
+    const readResult: entire_file = ReadEntireFile(io, .{ .name = fileName }, allocator) catch |err| {
         std.log.err("{}\nFilename: {s}", .{ err, fileName });
         return err;
     };
@@ -662,8 +673,8 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
 
     const header: *wave_header = @ptrCast(readResult.contents);
 
-    assert(header.riffID == @intFromEnum(chunk_type.WAVE_ChunkID_RIFF));
-    assert(header.waveID == @intFromEnum(chunk_type.WAVE_ChunkID_WAVE));
+    assert(header.riffID == @backingInt(chunk_type.WAVE_ChunkID_RIFF));
+    assert(header.waveID == @backingInt(chunk_type.WAVE_ChunkID_WAVE));
 
     const at = @as([*]u8, @ptrCast(header)) + @sizeOf(wave_header);
     const stop = @as([*]u8, @ptrCast(header)) + @sizeOf(wave_header) + (header.size - 4);
@@ -775,14 +786,14 @@ const game_assets = struct {
 
         // NOTE (Manav): Not really needed for us
         self.assetTypeCount = h.FileFormats.asset_type_id.count();
-        self.assetTypes = [1]h.FileFormats.hha_asset_type{.{ .typeID = 0, .firstAssetIndex = 0, .onePastLastAssetIndex = 0 }} ** h.FileFormats.asset_type_id.count();
+        self.assetTypes = @splat(.{ .typeID = 0, .firstAssetIndex = 0, .onePastLastAssetIndex = 0 });
     }
 
     fn BeginAssetType(self: *game_assets, typeID: h.FileFormats.asset_type_id) void {
         assert(self.DEBUGAssetType == null);
 
-        self.DEBUGAssetType = &self.assetTypes[@intFromEnum(typeID)];
-        self.DEBUGAssetType.?.typeID = @intFromEnum(typeID);
+        self.DEBUGAssetType = &self.assetTypes[@backingInt(typeID)];
+        self.DEBUGAssetType.?.typeID = @backingInt(typeID);
         self.DEBUGAssetType.?.firstAssetIndex = self.assetCount;
         self.DEBUGAssetType.?.onePastLastAssetIndex = self.DEBUGAssetType.?.firstAssetIndex;
     }
@@ -923,21 +934,22 @@ const game_assets = struct {
         var tag: *h.FileFormats.hha_tag = &self.tags[self.tagCount];
         self.tagCount += 1;
 
-        tag.ID = @intFromEnum(ID);
+        tag.ID = @backingInt(ID);
         tag.value = value;
     }
 };
 
-fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .verbose_log = true }){};
-    defer {
-        const st = gpa.deinit();
-        if (st == .leak) @panic("memory leak");
-    }
-    const allocator = gpa.allocator();
+fn WriteHHA(io: std.Io, assets: *game_assets, filename: []const u8) !void {
+    var safe: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
+    defer std.debug.assert(safe.deinit() == 0);
+    const allocator = safe.allocator();
 
-    const out = try std.fs.cwd().createFile(filename, .{});
-    defer out.close();
+    const out = try std.Io.Dir.cwd().createFile(io, filename, .{});
+    defer out.close(io);
+
+    var outBuffer: [4096]u8 = undefined;
+    var fileWriter = out.writer(io, &outBuffer);
+    const writer = &fileWriter.interface;
 
     {
         var header = h.FileFormats.hha_header{
@@ -958,20 +970,22 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
         header.assetTypes = header.tags + tagArraySize;
         header.assets = header.assetTypes + assetTypeArraySize;
 
-        try out.writeAll(std.mem.asBytes(&header));
-        try out.writeAll(std.mem.sliceAsBytes(assets.tags[0..header.tagCount]));
-        try out.writeAll(std.mem.sliceAsBytes(assets.assetTypes[0..header.assetTypeCount]));
-        try out.seekBy(assetArraySize);
+        try writer.writeAll(std.mem.asBytes(&header));
+        try writer.writeAll(std.mem.sliceAsBytes(assets.tags[0..header.tagCount]));
+        try writer.writeAll(std.mem.sliceAsBytes(assets.assetTypes[0..header.assetTypeCount]));
+        try writer.flush();
+        try fileWriter.seekTo(header.assets + assetArraySize);
 
         for (1..@as(usize, header.assetCount)) |assetIndex| {
             const source = assets.assetSources[assetIndex];
             var dest: *h.FileFormats.hha_asset = &assets.assets[assetIndex];
 
-            dest.dataOffset = try out.getPos();
+            dest.dataOffset = fileWriter.pos + writer.buffered().len;
 
             switch (source.t) {
                 .AssetType_Sound => {
                     const w = try LoadWAV(
+                        io,
                         source.data.sound.fileName,
                         source.data.sound.firstSampleIndex,
                         dest.data.sound.sampleCount,
@@ -984,7 +998,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
 
                     for (0..w.channelCount) |channelIndex| {
                         const data: []i16 = w.samples[channelIndex].?[0..dest.data.sound.sampleCount];
-                        try out.writeAll(std.mem.sliceAsBytes(data));
+                        try writer.writeAll(std.mem.sliceAsBytes(data));
                     }
                 },
                 .AssetType_Font => {
@@ -992,10 +1006,10 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
 
                     try FinalizeFontKerning(font, allocator);
 
-                    try out.writeAll(std.mem.sliceAsBytes(font.glyphs[0..font.glyphCount]));
+                    try writer.writeAll(std.mem.sliceAsBytes(font.glyphs[0..font.glyphCount]));
                     var horizontalAdvance: [*]u8 = @ptrCast(font.horizontalAdvance.ptr);
                     for (0..font.glyphCount) |_| {
-                        try out.writeAll(horizontalAdvance[0 .. font.glyphCount * @sizeOf(f32)]);
+                        try writer.writeAll(horizontalAdvance[0 .. font.glyphCount * @sizeOf(f32)]);
                         horizontalAdvance += font.glyphs.len * @sizeOf(f32);
                     }
                 },
@@ -1008,7 +1022,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
                             allocator,
                         )
                     else
-                        try LoadBMP(source.data.bitmap.fileName, allocator);
+                        try LoadBMP(io, source.data.bitmap.fileName, allocator);
 
                     defer if (b.free) |buf| allocator.free(buf);
 
@@ -1018,25 +1032,23 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
 
                     if (b.width > 0 and b.height > 0) {
                         const data: []u8 = b.memory[0..@intCast(b.width * b.height * 4)];
-                        try out.writeAll(data);
+                        try writer.writeAll(data);
                     }
                 },
             }
         }
 
-        try out.seekTo(header.assets);
-        try out.writeAll(std.mem.sliceAsBytes(assets.assets[0..header.assetCount]));
+        try writer.flush();
+        try fileWriter.seekTo(header.assets);
+        try writer.writeAll(std.mem.sliceAsBytes(assets.assets[0..header.assetCount]));
+        try writer.flush();
     }
 }
 
-fn WriteFonts() void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .verbose_log = false }){};
-    defer {
-        const st = gpa.deinit();
-        if (st == .leak) @panic("memory leak");
-    }
-
-    const allocator = gpa.allocator();
+fn WriteFonts(io: std.Io) void {
+    var safe: std.heap.SafeAllocator = .init(std.heap.page_allocator, .{});
+    defer std.debug.assert(safe.deinit() == 0);
+    const allocator = safe.allocator();
 
     var assets = game_assets{};
     assets.Initialize();
@@ -1073,19 +1085,19 @@ fn WriteFonts() void {
 
     assets.BeginAssetType(.Font);
     _ = assets.AddFontAsset(fonts[0]);
-    _ = assets.AddTag(.FontType, @floatFromInt(@as(u32, @intFromEnum(h.FileFormats.asset_font_type.Default))));
+    _ = assets.AddTag(.FontType, @floatFromInt(@as(u32, @backingInt(h.FileFormats.asset_font_type.Default))));
     _ = assets.AddFontAsset(fonts[1]);
-    _ = assets.AddTag(.FontType, @floatFromInt(@as(u32, @intFromEnum(h.FileFormats.asset_font_type.Debug))));
+    _ = assets.AddTag(.FontType, @floatFromInt(@as(u32, @backingInt(h.FileFormats.asset_font_type.Debug))));
 
     assets.EndAssetType();
 
-    WriteHHA(&assets, "testfonts.hha") catch |err| {
+    WriteHHA(io, &assets, "testfonts.hha") catch |err| {
         std.debug.print("{}\n", .{err});
         return;
     };
 }
 
-fn WriteHero() void {
+fn WriteHero(io: std.Io) void {
     var assets = game_assets{};
     assets.Initialize();
 
@@ -1129,13 +1141,13 @@ fn WriteHero() void {
     assets.AddTag(.FacingDirection, angleFront);
     assets.EndAssetType();
 
-    WriteHHA(&assets, "test1.hha") catch |err| {
+    WriteHHA(io, &assets, "test1.hha") catch |err| {
         std.debug.print("{}\n", .{err});
         return;
     };
 }
 
-fn WriteNonHero() void {
+fn WriteNonHero(io: std.Io) void {
     var assets = game_assets{};
     assets.Initialize();
 
@@ -1173,13 +1185,13 @@ fn WriteNonHero() void {
     _ = assets.AddDefaultBitmapAsset("test2/ground03.bmp");
     assets.EndAssetType();
 
-    WriteHHA(&assets, "test2.hha") catch |err| {
+    WriteHHA(io, &assets, "test2.hha") catch |err| {
         std.debug.print("{}\n", .{err});
         return;
     };
 }
 
-fn WriteSounds() void {
+fn WriteSounds(io: std.Io) void {
     var assets = game_assets{};
     assets.Initialize();
 
@@ -1229,17 +1241,18 @@ fn WriteSounds() void {
     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1sec.wav");
     assets.EndAssetType();
 
-    WriteHHA(&assets, "test3.hha") catch |err| {
+    WriteHHA(io, &assets, "test3.hha") catch |err| {
         std.debug.print("{}\n", .{err});
         return;
     };
 }
 
-pub fn main() void {
+pub fn main(init: std.process.Init) void {
+    const io = init.io;
     InitializeFontDC();
 
-    WriteFonts();
-    WriteNonHero();
-    WriteHero();
-    WriteSounds();
+    WriteFonts(io);
+    WriteNonHero(io);
+    WriteHero(io);
+    WriteSounds(io);
 }

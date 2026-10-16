@@ -65,7 +65,7 @@ fn AddStandardRoom(gameState: *game_state, absTileX: u32, absTileY: u32, absTile
     const p = h.Data.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Space, p, gameState.standardRoomCollision);
 
-    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Traversable));
+    AddFlags(&entity.low.sim, @backingInt(sim_entity_flags.Traversable));
 
     return entity;
 }
@@ -74,7 +74,7 @@ fn AddWall(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: i32) 
     const p = h.Data.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Wall, p, gameState.wallCollision);
 
-    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides));
+    AddFlags(&entity.low.sim, @backingInt(sim_entity_flags.Collides));
 
     return entity;
 }
@@ -83,7 +83,7 @@ fn AddStairs(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: i32
     const p = h.Data.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), absTileZ, .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Stairwell, p, gameState.stairCollision);
 
-    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides));
+    AddFlags(&entity.low.sim, @backingInt(sim_entity_flags.Collides));
     entity.low.sim.walkableDim = .{ h.X(entity.low.sim.collision.totalVolume.dim), h.Y(entity.low.sim.collision.totalVolume.dim) };
     entity.low.sim.walkableHeight = gameState.typicalFloorHeight;
 
@@ -107,7 +107,7 @@ fn AddSword(gameState: *game_state) add_low_entity_result {
 
     entity.low.sim.collision = gameState.swordCollision;
 
-    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Movable));
+    AddFlags(&entity.low.sim, @backingInt(sim_entity_flags.Movable));
 
     return entity;
 }
@@ -116,7 +116,7 @@ fn AddPlayer(gameState: *game_state) add_low_entity_result {
     const p = gameState.cameraP;
     var entity = AddGroundedEntity(gameState, .Hero, p, gameState.playerCollision);
 
-    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides) | @intFromEnum(sim_entity_flags.Movable));
+    AddFlags(&entity.low.sim, @backingInt(sim_entity_flags.Collides) | @backingInt(sim_entity_flags.Movable));
 
     InitHitPoints(entity.low, 3);
 
@@ -134,7 +134,7 @@ fn AddMonstar(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: u3
     const p = h.Data.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Monstar, p, gameState.monstarCollision);
 
-    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides) | @intFromEnum(sim_entity_flags.Movable));
+    AddFlags(&entity.low.sim, @backingInt(sim_entity_flags.Collides) | @backingInt(sim_entity_flags.Movable));
 
     InitHitPoints(entity.low, 3);
 
@@ -145,7 +145,7 @@ fn AddFamiliar(gameState: *game_state, absTileX: u32, absTileY: u32, absTileZ: u
     const p = h.Data.ChunkPosFromTilePos(gameState.world, @as(i32, @intCast(absTileX)), @as(i32, @intCast(absTileY)), @as(i32, @intCast(absTileZ)), .{ 0, 0, 0 });
     var entity = AddGroundedEntity(gameState, .Familiar, p, gameState.familiarCollision);
 
-    AddFlags(&entity.low.sim, @intFromEnum(sim_entity_flags.Collides) | @intFromEnum(sim_entity_flags.Movable));
+    AddFlags(&entity.low.sim, @backingInt(sim_entity_flags.Collides) | @backingInt(sim_entity_flags.Movable));
 
     return entity;
 }
@@ -972,10 +972,10 @@ pub export fn UpdateAndRender(
             }
 
             var matchVector = h.Asset.asset_vector{};
-            matchVector.e[@intFromEnum(asset_tag_id.FacingDirection)] = entity.facingDirection;
+            matchVector.e[@backingInt(asset_tag_id.FacingDirection)] = entity.facingDirection;
 
             var weightVector = h.Asset.asset_vector{};
-            weightVector.e[@intFromEnum(asset_tag_id.FacingDirection)] = 1.0;
+            weightVector.e[@backingInt(asset_tag_id.FacingDirection)] = 1.0;
 
             // if (entity.facingDirection != 0) {
             //     @import("std").debug.print("{}, {}, {}\n", .{
@@ -1013,7 +1013,7 @@ pub export fn UpdateAndRender(
                                 switch (entity.sword) {
                                     .ptr => {
                                         const sword = entity.sword.ptr;
-                                        if (h.Entity.IsSet(sword, @intFromEnum(sim_entity_flags.NonSpatial))) {
+                                        if (h.Entity.IsSet(sword, @backingInt(sim_entity_flags.NonSpatial))) {
                                             sword.distanceLimit = 5.0;
                                             const dSwordV3 = h.v3{ h.X(conHero.dSword), h.Y(conHero.dSword), 0 };
                                             h.Entity.MakeEntitySpatial(sword, entity.p, h.Add(entity.dP, (h.Scale(dSwordV3, 5))));
@@ -1084,8 +1084,8 @@ pub export fn UpdateAndRender(
                 else => {},
             }
 
-            if (!h.Entity.IsSet(entity, @intFromEnum(sim_entity_flags.NonSpatial)) and
-                h.Entity.IsSet(entity, @intFromEnum(sim_entity_flags.Movable)))
+            if (!h.Entity.IsSet(entity, @backingInt(sim_entity_flags.NonSpatial)) and
+                h.Entity.IsSet(entity, @backingInt(sim_entity_flags.Movable)))
             {
                 h.SimRegion.MoveEntity(gameState, simRegion, entity, gameInput.dtForFrame, &moveSpec, ddP);
             }
@@ -1130,8 +1130,8 @@ pub export fn UpdateAndRender(
 
                             const nothings = "NOTHINGS";
 
-                            matchVectorFont.e[@intFromEnum(asset_tag_id.UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
-                            weightVectorFont.e[@intFromEnum(asset_tag_id.UnicodeCodepoint)] = 1.0;
+                            matchVectorFont.e[@backingInt(asset_tag_id.UnicodeCodepoint)] = @floatFromInt(nothings[gameState.effectsEntropy.RandomChoice(nothings.len)]);
+                            weightVectorFont.e[@backingInt(asset_tag_id.UnicodeCodepoint)] = 1.0;
 
                             particle.bitmapID = heroBitmaps.head; // h.Asset.GetBestMatchBitmapFrom(tranState.assets, .Asset_Font, &matchVectorFont, &weightVectorFont);
                             // particle.bitmapID = h.Asset.GetRandomBitmapFrom(tranState.assets, .Asset_Font, &gameState.effectsEntropy);

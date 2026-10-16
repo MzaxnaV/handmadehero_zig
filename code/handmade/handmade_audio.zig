@@ -206,7 +206,7 @@ pub fn OutputPlayingSounds(audioState: *audio_state, soundBuffer: *Platform.soun
                 }
 
                 const audioStateOutputChannelCount = 2;
-                var volumeEndsAt: [audioStateOutputChannelCount]u32 = [1]u32{0} ** audioStateOutputChannelCount;
+                var volumeEndsAt: [audioStateOutputChannelCount]u32 = @splat(0);
                 for (0..volumeEndsAt.len) |channelIndex| {
                     if (dVolumeChunk[channelIndex] != 0) {
                         const deltaVolume: f32 = playingSound.targetVolume[channelIndex] - volume[channelIndex];

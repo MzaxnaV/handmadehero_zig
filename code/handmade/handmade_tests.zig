@@ -165,7 +165,7 @@ test "rand" {
 }
 
 test "handmade_misc" {
-    var memRegion = [1]u8{0} ** 1024;
+    var memRegion: [1024]u8 = @splat(0);
 
     var mem: data.memory_arena = undefined;
     mem.Initialize(1024, &memRegion);

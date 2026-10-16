@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const options = @import("options");
 
-const SourceLocation = std.builtin.SourceLocation;
+const SourceLocation = std.lang.SourceLocation;
 
 /// Debug: build constant to dynamically ignore code sections
 pub const IGNORE = !options.ignore;
@@ -126,7 +126,7 @@ pub const controller_input = struct {
     stickAverageY: f32 = 0,
 
     buttons: input_buttons = input_buttons{
-        .states = [1]button_state{button_state{}} ** 12,
+        .states = @splat(button_state{}),
     },
 };
 
@@ -139,19 +139,19 @@ pub const input_mouse_button = enum {
 
     pub fn len() comptime_int {
         comptime {
-            return @typeInfo(@This()).@"enum".fields.len;
+            return @typeInfo(@This()).@"enum".field_names.len;
         }
     }
 };
 
 pub const input = struct {
-    mouseButtons: [input_mouse_button.len()]button_state = [1]button_state{button_state{}} ** input_mouse_button.len(),
+    mouseButtons: [input_mouse_button.len()]button_state = @splat(button_state{}),
     mouseX: f32 = 0,
     mouseY: f32 = 0,
     mouseZ: f32 = 0,
 
     dtForFrame: f32 = 0,
-    controllers: [CONTROLLERS]controller_input = [1]controller_input{controller_input{}} ** CONTROLLERS,
+    controllers: [CONTROLLERS]controller_input = @splat(controller_input{}),
 };
 
 pub const work_queue = opaque {};
@@ -176,7 +176,7 @@ pub const file_type = enum(u32) {
 
     pub fn count() comptime_int {
         comptime {
-            return @typeInfo(@This()).@"enum".fields.len;
+            return @typeInfo(@This()).@"enum".field_names.len;
         }
     }
 };
@@ -279,11 +279,11 @@ pub const debug_table = extern struct {
 
     currentEventArrayIndex: u32 = 0,
     indices: packed_indices = .{},
-    eventCount: [MAX_DEBUG_EVENT_ARRAY_COUNT]u32 = .{0} ** MAX_DEBUG_EVENT_ARRAY_COUNT,
-    events: [MAX_DEBUG_EVENT_ARRAY_COUNT][MAX_DEBUG_EVENT_COUNT]debug_event = .{[1]debug_event{.{}} ** MAX_DEBUG_EVENT_COUNT} ** MAX_DEBUG_EVENT_ARRAY_COUNT,
+    eventCount: [MAX_DEBUG_EVENT_ARRAY_COUNT]u32 = @splat(0),
+    events: [MAX_DEBUG_EVENT_ARRAY_COUNT][MAX_DEBUG_EVENT_COUNT]debug_event = @splat(@splat(.{})),
 
-    recordCount: [MAX_DEBUG_TRANSLATION_UNITS]u32 = .{0},
-    records: [MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_EVENT_RECORD_COUNT]debug_record = .{[1]debug_record{.{}} ** MAX_DEBUG_EVENT_RECORD_COUNT},
+    recordCount: [MAX_DEBUG_TRANSLATION_UNITS]u32 = @splat(0),
+    records: [MAX_DEBUG_TRANSLATION_UNITS][MAX_DEBUG_EVENT_RECORD_COUNT]debug_record = @splat(@splat(.{})),
 };
 
 var globalDebugTable_ = debug_table{};

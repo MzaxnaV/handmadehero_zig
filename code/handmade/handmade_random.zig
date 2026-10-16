@@ -1,4 +1,4 @@
-const math = @import("handmade_all.zig").math;
+const math = @import("handmade_all.zig").Math;
 
 // data -----------------------------------------------------------------------------------------------------------------------------------
 const maxRandomNumber = 0x05f5c21f;

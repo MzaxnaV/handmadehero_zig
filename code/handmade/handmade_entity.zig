@@ -28,12 +28,12 @@ pub inline fn ClearFlags(entity: *sim_entity, flag: u32) void {
 }
 
 pub inline fn MakeEntityNonSpatial(entity: *sim_entity) void {
-    AddFlags(entity, @intFromEnum(sim_entity_flags.NonSpatial));
+    AddFlags(entity, @backingInt(sim_entity_flags.NonSpatial));
     entity.p = Invalid;
 }
 
 pub inline fn MakeEntitySpatial(entity: *sim_entity, p: h.v3, dP: h.v3) void {
-    ClearFlags(entity, @intFromEnum(sim_entity_flags.NonSpatial));
+    ClearFlags(entity, @backingInt(sim_entity_flags.NonSpatial));
     entity.p = p;
     entity.dP = dP;
 }

@@ -14,6 +14,8 @@ pub fn build(b: *std.Build) void {
     const preprocess_options = b.addOptions();
     preprocess_options.addOption(bool, "PROFILE", true);
 
+    const emit_mca = b.option(bool, "mca", "Emit lib asm for llvm-mca") orelse false;
+
     const build_options = b.addOptions();
     // NOTE (Manav): for now this are independent of OptimizeMode
     build_options.addOption(bool, "ignore", true); // NOTE: true to ignore sections of code.
@@ -38,35 +40,33 @@ pub fn build(b: *std.Build) void {
     // Build targets --------------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------------------------
 
-    const stb_truetype_data = "#define STB_TRUETYPE_IMPLEMENTATION\n#include <stb_truetype.h>\n";
-    const misc_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "misc" } };
-    const data_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "data" } };
-    const code_build_path: std.Build.LazyPath = .{ .src_path = .{ .owner = b, .sub_path = "code/handmade/" } };
-
+    const misc_build_path = b.path("misc");
+    const data_build_path = b.path("data");
+    const code_build_path = b.path("code/handmade");
     // ----------------------------------------------------------------------------------------------------
     // Tools - process timed blocks -----------------------------------------------------------------------
 
     const preprocess_profile_root_module = b.createModule(.{
         .root_source_file = b.path("code/tools/preprocess_profile.zig"),
         .target = b.graph.host,
-        .optimize = .ReleaseSafe,
+        .optimize = .safe,
     });
 
     const preprocess_profile = b.addExecutable(.{
-        .name = "prepocess_profile",
+        .name = "preprocess_profile",
         .root_module = preprocess_profile_root_module,
     });
 
     preprocess_profile.root_module.addOptions("config", preprocess_options);
 
-    const run_prepocess_profile = b.addRunArtifact(preprocess_profile);
-    run_prepocess_profile.setCwd(code_build_path);
+    const run_preprocess_profile = b.addRunArtifact(preprocess_profile);
+    run_preprocess_profile.setCwd(code_build_path);
 
-    const prepocess_profile_test = b.addTest(.{
+    const preprocess_profile_test = b.addTest(.{
         .root_module = preprocess_profile_root_module,
     });
 
-    const run_prepocess_profile_test = b.addRunArtifact(prepocess_profile_test);
+    const run_preprocess_profile_test = b.addRunArtifact(preprocess_profile_test);
 
     // ----------------------------------------------------------------------------------------------------
     // Handmade library -----------------------------------------------------------------------------------
@@ -77,14 +77,13 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("code/handmade/handmade.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{.{ .name = "platform", .module = platform }},
         }),
         .version = .{ .major = 0, .minor = 1, .patch = 0 },
     });
 
-    lib.root_module.addImport("platform", platform);
-
     if (!self_compilation) {
-        lib.step.dependOn(&run_prepocess_profile.step);
+        lib.step.dependOn(&run_preprocess_profile.step);
     }
 
     const lib_install_step = b.addInstallArtifact(lib, .{
@@ -106,11 +105,14 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("code/win32_handmade.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{ .name = "platform", .module = platform },
+                .{ .name = "win32", .module = win32 },
+            },
         }),
     });
-    exe.root_module.addImport("platform", platform);
-    exe.root_module.addImport("win32", win32);
-    exe.step.dependOn(&run_prepocess_profile.step);
+
+    exe.step.dependOn(&run_preprocess_profile.step);
 
     const exe_install_step = b.addInstallArtifact(exe, .{
         .dest_dir = .{ .override = .prefix },
@@ -127,16 +129,20 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("./code/handmade/asset_builder.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{ .name = "platform", .module = platform },
+                .{ .name = "win32", .module = win32 },
+            },
         }),
     });
-    asset_builder.root_module.addImport("win32", win32);
-    asset_builder.root_module.addImport("platform", platform);
 
-    asset_builder.root_module.addCSourceFile(.{
-        // NOTE: Need to add a source file to make zig compile the stb_truetype implementation
-        .file = b.addWriteFiles().add("std_truetype.c", stb_truetype_data),
-        .flags = &.{""},
+    const std_truetype_c = b.addTranslateC(.{
+        .root_source_file = b.path("code/handmade//stb_truetype.h"),
+        .target = target,
+        .optimize = optimize,
     });
+
+    asset_builder.root_module.addImport("stb_truetype", std_truetype_c.createModule());
     asset_builder.root_module.addIncludePath(b.path("code/handmade/"));
     asset_builder.root_module.link_libc = true;
 
@@ -162,28 +168,35 @@ pub fn build(b: *std.Build) void {
     // ----------------------------------------------------------------------------------------------------
     // Tools - parse llvm ---------------------------------------------------------------------------------
 
-    const llvm_mca = b.addSystemCommand(&.{ "llvm-mca", "-all-stats", "-all-views" });
-    llvm_mca.addFileArg(lib.getEmittedAsm());
-
     const llvm_mca_parser_root_module = b.createModule(.{
         .root_source_file = b.path("code/tools/parse_llvm_mca.zig"),
         .target = b.graph.host,
-        .optimize = .ReleaseSafe,
+        .optimize = .safe,
     });
 
-    const output = llvm_mca.captureStdOut();
+    const llvm_mca_parser_step = b.step("parse_llvm_mca", "Parse llvm-mca output generator (requires -Dmca)");
 
-    const llvm_mca_parser = b.addExecutable(.{
-        .name = "parse_llvm_mca",
-        .root_module = llvm_mca_parser_root_module,
-    });
+    // NOTE (Manav): getEmittedAsm() makes every lib compile also emit asm, so only request it when asked for.
+    if (emit_mca) {
+        const llvm_mca = b.addSystemCommand(&.{ "llvm-mca", "-all-stats", "-all-views" });
+        llvm_mca.addFileArg(lib.getEmittedAsm());
 
-    const run_llvm_mca_parser = b.addRunArtifact(llvm_mca_parser);
-    run_llvm_mca_parser.setCwd(misc_build_path);
-    run_llvm_mca_parser.addFileArg(output);
+        const output = llvm_mca.captureStdOut(.{});
 
-    const llvm_mca_parser_step = b.step("parse_llvm_mca", "Parse llvm-mca output generator");
-    llvm_mca_parser_step.dependOn(&run_llvm_mca_parser.step);
+        const llvm_mca_parser = b.addExecutable(.{
+            .name = "parse_llvm_mca",
+            .root_module = llvm_mca_parser_root_module,
+        });
+
+        const run_llvm_mca_parser = b.addRunArtifact(llvm_mca_parser);
+        run_llvm_mca_parser.setCwd(misc_build_path);
+        run_llvm_mca_parser.addFileArg(output);
+
+        llvm_mca_parser_step.dependOn(&run_llvm_mca_parser.step);
+    } else {
+        const fail = b.addFail("parse_llvm_mca needs the lib asm, rerun with -Dmca");
+        llvm_mca_parser_step.dependOn(&fail.step);
+    }
 
     const llvm_mca_parser_test = b.addTest(.{
         .root_module = llvm_mca_parser_root_module,
@@ -198,6 +211,9 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("code/handmade/handmade_tests.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{ .name = "platform", .module = platform },
+            },
         }),
     });
     lib_tests.root_module.addImport("platform", platform);
@@ -207,5 +223,5 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run handmade tests");
     test_step.dependOn(&run_lib_test.step);
     test_step.dependOn(&run_llvm_mca_parser_test.step);
-    test_step.dependOn(&run_prepocess_profile_test.step);
+    test_step.dependOn(&run_preprocess_profile_test.step);
 }
