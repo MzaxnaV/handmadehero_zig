@@ -229,11 +229,11 @@ pub const z = struct {
     pub fn _mm_packs_epi32(a: i32x4, b: i32x4) i16x8 {
         var result: i16x8 = undefined;
 
-        for (0..4) |index| {
+        inline for (0..4) |index| {
             result[index] = @intCast(@max(minInt, @min(a[index], maxInt)));
         }
 
-        for (0..4) |index| {
+        inline for (0..4) |index| {
             result[index + 4] = @intCast(@max(minInt, @min(b[index], maxInt)));
         }
 

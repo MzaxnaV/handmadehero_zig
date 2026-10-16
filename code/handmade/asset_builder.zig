@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const s = @cImport({
-    @cInclude("stb_truetype.h");
-});
+const s = @import("stb_truetype");
 
 const win32 = @import("win32").everything;
 
@@ -105,20 +103,33 @@ const entire_file = struct {
     contents: []u8 = undefined,
 };
 
-fn ReadEntireFile(file: struct { name: []const u8, absolute: bool = false }, allocator: std.mem.Allocator) !entire_file {
+fn ReadEntireFile(
+    io: std.Io,
+    file: struct { name: []const u8, absolute: bool = false },
+    allocator: std.mem.Allocator,
+) !entire_file {
     var result = entire_file{};
 
     const prefix = if (file.absolute) "" else "../data/";
 
-    var pathBuffer: [std.fs.max_path_bytes]u8 = undefined;
-    const newFileName = try std.fmt.bufPrint(&pathBuffer, "{s}{s}", .{ prefix, file.name });
+    var pathBuffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const newFileName = try std.fmt.bufPrint(
+        &pathBuffer,
+        "{s}{s}",
+        .{ prefix, file.name },
+    );
 
-    result.contents = try std.fs.cwd().readFileAlloc(allocator, newFileName, platform.GigaBytes(8));
+    result.contents = try std.Io.Dir.cwd().readFileAlloc(
+        io,
+        newFileName,
+        allocator,
+        .limited(platform.GigaBytes(8)),
+    );
 
     return result;
 }
 
-fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !loaded_bitmap {
+fn LoadBMP(io: std.Io, fileName: []const u8, allocator: std.mem.Allocator) !loaded_bitmap {
     const bitmap_header = extern struct {
         fileType: u16 align(1),
         fileSize: u32 align(1),
@@ -144,7 +155,11 @@ fn LoadBMP(fileName: []const u8, allocator: std.mem.Allocator) !loaded_bitmap {
 
     var result = loaded_bitmap{};
 
-    const readResult = ReadEntireFile(.{ .name = fileName }, allocator) catch |err| {
+    const readResult = ReadEntireFile(
+        io,
+        .{ .name = fileName },
+        allocator,
+    ) catch |err| {
         std.log.err("{}\nFilename: {s}", .{ err, fileName });
         return err;
     };
@@ -235,15 +250,15 @@ fn LoadFont(fileName: [:0]const u8, fontName: [:0]const u8, pixelHeight: i32, al
         0,
         0,
         0,
-        win32.FW_NORMAL,
+        @intFromEnum(win32.FW_NORMAL),
         win32.FALSE,
         win32.FALSE,
         win32.FALSE,
-        win32.DEFAULT_CHARSET,
-        win32.OUT_DEFAULT_PRECIS,
-        win32.CLIP_DEFAULT_PRECIS,
-        win32.ANTIALIASED_QUALITY,
-        win32.FF_DONTCARE,
+        @intFromEnum(win32.DEFAULT_CHARSET),
+        @intFromEnum(win32.OUT_DEFAULT_PRECIS),
+        @as(u8, @bitCast(win32.CLIP_DEFAULT_PRECIS)),
+        @intFromEnum(win32.ANTIALIASED_QUALITY),
+        @intFromEnum(win32.FF_DONTCARE),
         fontName.ptr,
     );
 
@@ -338,7 +353,7 @@ fn InitializeFontDC() void {
         0,
     );
     _ = win32.SelectObject(global.fontDeviceContext, bitmap);
-    _ = win32.SetBkColor(global.fontDeviceContext, 0x00000000);
+    _ = win32.SetBkColor(global.fontDeviceContext, .black);
 }
 
 fn LoadGlyphBitmap(font: *loaded_font, codePoint: u32, asset: *h.FileFormats.hha_asset, allocator: std.mem.Allocator) !loaded_bitmap {
@@ -370,7 +385,7 @@ fn LoadGlyphBitmap(font: *loaded_font, codePoint: u32, asset: *h.FileFormats.hha
 
         // _ = win32.PatBlt(static.deviceContext, 0, 0, width, height, win32.BLACKNESS);
         // _ = win32.SetBkMode(static.deviceContext, win32.TRANSPARENT);
-        _ = win32.SetTextColor(global.fontDeviceContext, 0x00ffffff); // TODO: Make an RGB macro for this
+        _ = win32.SetTextColor(global.fontDeviceContext, .white);
         _ = win32.TextOutW(global.fontDeviceContext, preStepX, 0, cheesePoint[0..], 1);
 
         var minX: i32 = 10000;
@@ -557,7 +572,7 @@ fn LoadGlyphBitmap(font: *loaded_font, codePoint: u32, asset: *h.FileFormats.hha
     return result;
 }
 
-fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCount: u32, allocator: std.mem.Allocator) !loaded_sound {
+fn LoadWAV(io: std.Io, fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCount: u32, allocator: std.mem.Allocator) !loaded_sound {
     const wave_header = extern struct {
         riffID: u32 align(1),
         size: u32 align(1),
@@ -649,7 +664,7 @@ fn LoadWAV(fileName: []const u8, sectionFirstSampleIndex: u32, sectionSampleCoun
 
     var result = loaded_sound{};
 
-    const readResult: entire_file = ReadEntireFile(.{ .name = fileName }, allocator) catch |err| {
+    const readResult: entire_file = ReadEntireFile(io, .{ .name = fileName }, allocator) catch |err| {
         std.log.err("{}\nFilename: {s}", .{ err, fileName });
         return err;
     };
@@ -924,7 +939,7 @@ const game_assets = struct {
     }
 };
 
-fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
+fn WriteHHA(io: std.Io, assets: *game_assets, filename: []const u8) !void {
     var gpa: std.heap.DebugAllocator(.{ .verbose_log = true }) = .init;
     defer {
         const st = gpa.deinit();
@@ -932,11 +947,11 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
     }
     const allocator = gpa.allocator();
 
-    const out = try std.fs.cwd().createFile(filename, .{});
-    defer out.close();
+    const out = try std.Io.Dir.cwd().createFile(io, filename, .{});
+    defer out.close(io);
 
     var outBuffer: [4096]u8 = undefined;
-    var fileWriter = out.writer(&outBuffer);
+    var fileWriter = out.writer(io, &outBuffer);
     const writer = &fileWriter.interface;
 
     {
@@ -973,6 +988,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
             switch (source.t) {
                 .AssetType_Sound => {
                     const w = try LoadWAV(
+                        io,
                         source.data.sound.fileName,
                         source.data.sound.firstSampleIndex,
                         dest.data.sound.sampleCount,
@@ -1009,7 +1025,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
                             allocator,
                         )
                     else
-                        try LoadBMP(source.data.bitmap.fileName, allocator);
+                        try LoadBMP(io, source.data.bitmap.fileName, allocator);
 
                     defer if (b.free) |buf| allocator.free(buf);
 
@@ -1032,7 +1048,7 @@ fn WriteHHA(assets: *game_assets, filename: []const u8) !void {
     }
 }
 
-fn WriteFonts() void {
+fn WriteFonts(io: std.Io) void {
     var gpa: std.heap.DebugAllocator(.{ .verbose_log = false }) = .init;
     defer {
         const st = gpa.deinit();
@@ -1082,13 +1098,13 @@ fn WriteFonts() void {
 
     assets.EndAssetType();
 
-    WriteHHA(&assets, "testfonts.hha") catch |err| {
+    WriteHHA(io, &assets, "testfonts.hha") catch |err| {
         std.debug.print("{}\n", .{err});
         return;
     };
 }
 
-fn WriteHero() void {
+fn WriteHero(io: std.Io) void {
     var assets = game_assets{};
     assets.Initialize();
 
@@ -1132,13 +1148,13 @@ fn WriteHero() void {
     assets.AddTag(.FacingDirection, angleFront);
     assets.EndAssetType();
 
-    WriteHHA(&assets, "test1.hha") catch |err| {
+    WriteHHA(io, &assets, "test1.hha") catch |err| {
         std.debug.print("{}\n", .{err});
         return;
     };
 }
 
-fn WriteNonHero() void {
+fn WriteNonHero(io: std.Io) void {
     var assets = game_assets{};
     assets.Initialize();
 
@@ -1176,13 +1192,13 @@ fn WriteNonHero() void {
     _ = assets.AddDefaultBitmapAsset("test2/ground03.bmp");
     assets.EndAssetType();
 
-    WriteHHA(&assets, "test2.hha") catch |err| {
+    WriteHHA(io, &assets, "test2.hha") catch |err| {
         std.debug.print("{}\n", .{err});
         return;
     };
 }
 
-fn WriteSounds() void {
+fn WriteSounds(io: std.Io) void {
     var assets = game_assets{};
     assets.Initialize();
 
@@ -1232,17 +1248,18 @@ fn WriteSounds() void {
     _ = assets.AddDefaultSoundAsset("wave_stereo_test_1sec.wav");
     assets.EndAssetType();
 
-    WriteHHA(&assets, "test3.hha") catch |err| {
+    WriteHHA(io, &assets, "test3.hha") catch |err| {
         std.debug.print("{}\n", .{err});
         return;
     };
 }
 
-pub fn main() void {
+pub fn main(init: std.process.Init) void {
+    const io = init.io;
     InitializeFontDC();
 
-    WriteFonts();
-    WriteNonHero();
-    WriteHero();
-    WriteSounds();
+    WriteFonts(io);
+    WriteNonHero(io);
+    WriteHero(io);
+    WriteSounds(io);
 }

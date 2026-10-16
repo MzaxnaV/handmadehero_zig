@@ -1,8 +1,12 @@
 build
 
-.zig-cache
+# Zig build artifacts and caches
+.zig-cache/
+zig-cache/
+zig-out/
 
-zig-out
+# Package dependencies
+zig-pkg/
 
 *.rdbg
 

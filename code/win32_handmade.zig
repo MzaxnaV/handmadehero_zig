@@ -10,16 +10,25 @@ const INVALID_FIND_HANDLE_VALUE = @as(win32.FindFileHandle, -1);
 
 /// struct to keep definitions that doesn't conflict with win32 import
 extern "USER32" fn wsprintfW(
-    param0: ?win32.PWSTR,
+    param0: ?[*:0]u16,
     param1: ?[*:0]const u16,
     ...,
 ) callconv(.winapi) i32;
 
 extern "USER32" fn wsprintfA(
-    param0: ?win32.PSTR,
+    param0: ?[*:0]u8,
     param1: ?[*:0]const u8,
     ...,
 ) callconv(.winapi) i32;
+
+inline fn SUCCEEDED(hr: win32.HRESULT) bool {
+    return !hr.failed;
+}
+
+inline fn ButtonBits(flags: win32.XINPUT_GAMEPAD_BUTTON_FLAGS) DWORD {
+    // TODO: hack, find a good solution
+    return @as(u16, @bitCast(flags));
+}
 
 const atomic = std.atomic;
 const DWORD = std.os.windows.DWORD;
@@ -42,7 +51,7 @@ const win32_offscreen_buffer = struct {
             .biHeight = 0,
             .biPlanes = 0,
             .biBitCount = 0,
-            .biCompression = 0,
+            .biCompression = .RGB,
             .biSizeImage = 0,
             .biXPelsPerMeter = 0,
             .biYPelsPerMeter = 0,
@@ -208,7 +217,7 @@ fn DEBUGPlatformWriteEntireFile(fileName: [*:0]const u8, memorySize: u32, memory
 
     if (fileHandle != win32.INVALID_HANDLE_VALUE) {
         var bytesWritten: DWORD = 0;
-        if (win32.WriteFile(fileHandle, memory, memorySize, &bytesWritten, null) != 0) {
+        if (win32.WriteFile(fileHandle, @ptrCast(memory), memorySize, &bytesWritten, null) != 0) {
             result = (bytesWritten == memorySize);
         } else {
             // TODO: logging
@@ -263,7 +272,7 @@ fn DEBUGGetProcessState(process: Platform.debug_executing_process) Platform.debu
     if (hProcess.* != win32.INVALID_HANDLE_VALUE) {
         result.startedSuccessfully = true;
 
-        if (win32.WaitForSingleObject(hProcess.*, 0) == @intFromEnum(win32.WAIT_OBJECT_0)) {
+        if (win32.WaitForSingleObject(hProcess.*, 0) == win32.WAIT_OBJECT_0) {
             var returnCode: i32 = 0;
             _ = win32.GetExitCodeProcess(hProcess.*, @ptrCast(&returnCode));
             result.returnCode = returnCode;
@@ -381,11 +390,11 @@ fn Win32LoadXinput() void {
 fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) void {
     if (win32.LoadLibraryW(win32.L("dsound.dll"))) |DSoundLibrary| {
         if (win32.GetProcAddress(DSoundLibrary, "DirectSoundCreate")) |funcptr| {
-            const DirectSoundCreateFnPtrType = *const fn (?*const win32.Guid, ?*?*win32.IDirectSound, ?*win32.IUnknown) callconv(.winapi) i32;
+            const DirectSoundCreateFnPtrType = *const fn (?*const win32.Guid, ?*?*win32.IDirectSound, ?*win32.IUnknown) callconv(.winapi) win32.HRESULT;
             const DirectSoundCreate = @as(DirectSoundCreateFnPtrType, @ptrCast(funcptr));
 
             var dS: ?*win32.IDirectSound = null;
-            if (win32.SUCCEEDED(DirectSoundCreate(null, &dS, null))) {
+            if (SUCCEEDED(DirectSoundCreate(null, &dS, null))) {
                 if (dS) |directSound| {
                     var waveFormat = win32.WAVEFORMATEX{
                         .wFormatTag = win32.WAVE_FORMAT_PCM,
@@ -400,7 +409,7 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                     waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
 
                     const GUID_NULL = win32.Guid.initString("00000000-0000-0000-0000-000000000000");
-                    if (win32.SUCCEEDED(directSound.vtable.SetCooperativeLevel(directSound, window, win32.DSSCL_PRIORITY))) {
+                    if (SUCCEEDED(directSound.vtable.SetCooperativeLevel(directSound, window, win32.DSSCL_PRIORITY))) {
                         var bufferDescription = win32.DSBUFFERDESC{
                             .dwSize = @sizeOf(win32.DSBUFFERDESC),
                             .dwFlags = win32.DSBCAPS_PRIMARYBUFFER,
@@ -411,9 +420,9 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                         };
 
                         var pB: ?*win32.IDirectSoundBuffer = undefined;
-                        if (win32.SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &pB, null))) {
+                        if (SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &pB, null))) {
                             if (pB) |primaryBuffer| {
-                                if (win32.SUCCEEDED(primaryBuffer.vtable.SetFormat(primaryBuffer, &waveFormat))) {
+                                if (SUCCEEDED(primaryBuffer.vtable.SetFormat(primaryBuffer, &waveFormat))) {
                                     win32.OutputDebugStringA("Primary buffer format was set\n");
                                 } else {
                                     // TODO: diagnostic
@@ -440,7 +449,7 @@ fn Win32InitDSound(window: win32.HWND, samplesPerSecond: u32, bufferSize: u32) v
                     }
 
                     var secondaryBuffer: ?*win32.IDirectSoundBuffer = undefined;
-                    if (win32.SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &secondaryBuffer, null))) {
+                    if (SUCCEEDED(directSound.vtable.CreateSoundBuffer(directSound, &bufferDescription, &secondaryBuffer, null))) {
                         if (secondaryBuffer) |value| {
                             globalSecondaryBuffer = value;
                             win32.OutputDebugStringA("Secondary buffer created successfully\n");
@@ -593,7 +602,7 @@ fn Win32ClearBuffer(soundOutput: *win32_sound_output) void {
     var region2: ?*anyopaque = undefined;
     var region2Size: DWORD = undefined;
 
-    if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, 0, soundOutput.secondaryBufferSize, &region1, &region1Size, &region2, &region2Size, 0))) {
+    if (SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, 0, soundOutput.secondaryBufferSize, &region1, &region1Size, &region2, &region2Size, 0))) {
         if (region1) |ptr| {
             var destSample = @as([*]u8, @ptrCast(ptr));
             var byteIndex: DWORD = 0;
@@ -620,7 +629,7 @@ fn Win32FillSoundBuffer(soundOutput: *win32_sound_output, byteToLock: DWORD, byt
     var region2: ?*anyopaque = undefined;
     var region2Size: DWORD = undefined;
 
-    if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
+    if (SUCCEEDED(globalSecondaryBuffer.vtable.Lock(globalSecondaryBuffer, byteToLock, bytesToWrite, &region1, &region1Size, &region2, &region2Size, 0))) {
         if (region1) |ptr| {
             const region1SampleCount = region1Size / soundOutput.bytesPerSample;
             var destSample: [*]i16 = @ptrCast(@alignCast(ptr));
@@ -758,7 +767,7 @@ fn Win32EndInputPlayBack(state: *win32_state) void {
 
 fn Win32RecordInput(state: *win32_state, newInput: *Platform.input) void {
     var bytesWritten = @as(DWORD, 0);
-    _ = win32.WriteFile(state.recordingHandle, newInput, @sizeOf(@TypeOf(newInput.*)), &bytesWritten, null);
+    _ = win32.WriteFile(state.recordingHandle, @ptrCast(newInput), @sizeOf(@TypeOf(newInput.*)), &bytesWritten, null);
 }
 
 fn Win32PlayBackInput(state: *win32_state, newInput: *Platform.input) void {
@@ -1624,29 +1633,31 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
 
                                 const pad = &controllerState.Gamepad;
 
-                                newController.stickAverageX = Win32ProcessXInputStickValue(pad.sThumbLX, win32.XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
-                                newController.stickAverageY = Win32ProcessXInputStickValue(pad.sThumbLY, win32.XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+                                newController.stickAverageX = Win32ProcessXInputStickValue(pad.sThumbLX, ButtonBits(win32.XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));
+                                newController.stickAverageY = Win32ProcessXInputStickValue(pad.sThumbLY, ButtonBits(win32.XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE));
 
                                 if (newController.stickAverageX != 0 or newController.stickAverageY != 0) {
                                     newController.isAnalog = true;
                                 }
 
-                                if ((pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_UP) != 0) {
+                                const buttons = ButtonBits(pad.wButtons);
+
+                                if ((buttons & ButtonBits(win32.XINPUT_GAMEPAD_DPAD_UP)) != 0) {
                                     newController.stickAverageY = 1;
                                     newController.isAnalog = false;
                                 }
 
-                                if ((pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_DOWN) != 0) {
+                                if ((buttons & ButtonBits(win32.XINPUT_GAMEPAD_DPAD_DOWN)) != 0) {
                                     newController.stickAverageY = -1;
                                     newController.isAnalog = false;
                                 }
 
-                                if ((pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_LEFT) != 0) {
+                                if ((buttons & ButtonBits(win32.XINPUT_GAMEPAD_DPAD_LEFT)) != 0) {
                                     newController.stickAverageX = -1;
                                     newController.isAnalog = false;
                                 }
 
-                                if ((pad.wButtons & win32.XINPUT_GAMEPAD_DPAD_RIGHT) != 0) {
+                                if ((buttons & ButtonBits(win32.XINPUT_GAMEPAD_DPAD_RIGHT)) != 0) {
                                     newController.stickAverageX = 1;
                                     newController.isAnalog = false;
                                 }
@@ -1680,15 +1691,15 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                                     &newController.buttons.mapped.moveUp,
                                 );
 
-                                Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.actionDown, win32.XINPUT_GAMEPAD_A, &newController.buttons.mapped.actionDown);
-                                Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.actionRight, win32.XINPUT_GAMEPAD_B, &newController.buttons.mapped.actionRight);
-                                Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.actionLeft, win32.XINPUT_GAMEPAD_X, &newController.buttons.mapped.actionLeft);
-                                Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.actionUp, win32.XINPUT_GAMEPAD_Y, &newController.buttons.mapped.actionUp);
-                                Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.leftShoulder, win32.XINPUT_GAMEPAD_LEFT_SHOULDER, &newController.buttons.mapped.leftShoulder);
-                                Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.rightShoulder, win32.XINPUT_GAMEPAD_RIGHT_SHOULDER, &newController.buttons.mapped.rightShoulder);
+                                Win32ProcessXinputDigitalButton(buttons, &oldController.buttons.mapped.actionDown, ButtonBits(win32.XINPUT_GAMEPAD_A), &newController.buttons.mapped.actionDown);
+                                Win32ProcessXinputDigitalButton(buttons, &oldController.buttons.mapped.actionRight, ButtonBits(win32.XINPUT_GAMEPAD_B), &newController.buttons.mapped.actionRight);
+                                Win32ProcessXinputDigitalButton(buttons, &oldController.buttons.mapped.actionLeft, ButtonBits(win32.XINPUT_GAMEPAD_X), &newController.buttons.mapped.actionLeft);
+                                Win32ProcessXinputDigitalButton(buttons, &oldController.buttons.mapped.actionUp, ButtonBits(win32.XINPUT_GAMEPAD_Y), &newController.buttons.mapped.actionUp);
+                                Win32ProcessXinputDigitalButton(buttons, &oldController.buttons.mapped.leftShoulder, ButtonBits(win32.XINPUT_GAMEPAD_LEFT_SHOULDER), &newController.buttons.mapped.leftShoulder);
+                                Win32ProcessXinputDigitalButton(buttons, &oldController.buttons.mapped.rightShoulder, ButtonBits(win32.XINPUT_GAMEPAD_RIGHT_SHOULDER), &newController.buttons.mapped.rightShoulder);
 
-                                Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.start, win32.XINPUT_GAMEPAD_START, &newController.buttons.mapped.start);
-                                Win32ProcessXinputDigitalButton(pad.wButtons, &oldController.buttons.mapped.back, win32.XINPUT_GAMEPAD_BACK, &newController.buttons.mapped.back);
+                                Win32ProcessXinputDigitalButton(buttons, &oldController.buttons.mapped.start, ButtonBits(win32.XINPUT_GAMEPAD_START), &newController.buttons.mapped.start);
+                                Win32ProcessXinputDigitalButton(buttons, &oldController.buttons.mapped.back, ButtonBits(win32.XINPUT_GAMEPAD_BACK), &newController.buttons.mapped.back);
                             } else {
                                 newController.isConnected = false;
                             }
@@ -1758,7 +1769,7 @@ pub export fn wWinMain(hInstance: ?win32.HINSTANCE, _: ?win32.HINSTANCE, _: [*:0
                         var playCursor: DWORD = 0;
                         var writeCursor: DWORD = 0;
 
-                        if (win32.SUCCEEDED(globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor))) {
+                        if (SUCCEEDED(globalSecondaryBuffer.vtable.GetCurrentPosition(globalSecondaryBuffer, &playCursor, &writeCursor))) {
                             if (!soundIsValid) {
                                 soundOutput.runningSampleIndex = @divTrunc(writeCursor, soundOutput.bytesPerSample);
                                 soundIsValid = true;

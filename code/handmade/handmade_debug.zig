@@ -786,8 +786,8 @@ fn WriteHandmadeConfig(debugState: *debug_state) void {
     _ = h.Data.platformAPI.DEBUGWriteEntireFile("../code/handmade/handmade_config.zig", written, temp[0..written].ptr);
 
     if (!debugState.compiling) {
-        // NOTE (Manav): compilation is incredibly slow, wait for incremental compilation support (use -fincremental) in 0.14
-        const commandline = "/C zig build lib -p build -Dself_compilation=true -Doptimize=" ++ switch (@import("builtin").mode) {
+        // NOTE (Manav): compilation is incredibly slow (LLVM is the bottleneck)
+        const commandline = "/C zig build lib -p build -Dself_compilation=true -fincremental -Doptimize=" ++ switch (@import("builtin").mode) {
             .Debug => "Debug",
             .ReleaseFast => "ReleaseFast",
             .ReleaseSafe => "ReleaseSafe",
